@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment files — NEVER commit these
+.env
+.env.local
+.env.test
+.env.production
+
+# Supabase local dev
+supabase/.branches/
+supabase/.temp/
+supabase/functions/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build / cache
+.cache/
+dist/
+coverage/
+playwright-report/
+test-results/

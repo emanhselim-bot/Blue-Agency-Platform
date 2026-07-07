@@ -1,0 +1,13 @@
+{
+  "name": "blue-agency-platform",
+  "version": "1.0.0",
+  "description": "Multi-tenant marketing analytics dashboard for agencies — Shopify + Meta Ads",
+  "private": true,
+  "scripts": {
+    "start": "serve . -p ${PORT:-3000}",
+    "dev": "serve . -p 3000 --no-clipboard"
+  },
+  "dependencies": {
+    "serve": "^14.2.3"
+  }
+}

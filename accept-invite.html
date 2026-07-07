@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accept Invitation</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0f1117;
+      --surface:     #1a1d27;
+      --border:      #2a2d3a;
+      --accent:      #6366f1;
+      --accent-hover:#4f52d8;
+      --text:        #e8eaf0;
+      --text-muted:  #8b8fa8;
+      --error:       #ef4444;
+      --success:     #22c55e;
+      --radius:      12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      background: var(--accent);
+      border-radius: 12px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    .invite-badge {
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    .invite-badge .org-name {
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    .invite-badge .role-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .role-pill {
+      display: inline-block;
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: capitalize;
+      margin-left: 6px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left;
+      margin-bottom: 10px;
+    }
+
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus { border-color: var(--accent); }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      margin-top: 10px;
+    }
+    .btn-secondary:hover { border-color: var(--accent); }
+
+    .toggle-link {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 16px;
+    }
+
+    .toggle-link a {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .msg {
+      font-size: 13px;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    .msg.error   { background: color-mix(in srgb, var(--error) 15%, transparent);   color: var(--error); }
+    .msg.success { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+    .msg.info    { background: color-mix(in srgb, var(--accent) 12%, transparent);  color: var(--text-muted); }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* State sections */
+    #loading-state, #invite-preview, #auth-section, #success-state { display: none; }
+    #loading-state.active, #invite-preview.active,
+    #auth-section.active, #success-state.active { display: block; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    .expires-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">B</div>
+  <h1>You've been invited</h1>
+  <p class="subtitle">Accept the invitation to join your team's dashboard.</p>
+
+  <!-- Loading -->
+  <div id="loading-state" class="active">
+    <div class="msg info"><span class="spinner"></span>Validating invitation…</div>
+  </div>
+
+  <!-- Error / expired state -->
+  <div id="msg-area"></div>
+
+  <!-- Invite preview -->
+  <div id="invite-preview">
+    <div class="invite-badge">
+      <div class="org-name" id="org-name-display">—</div>
+      <div class="role-label">You're invited as <span class="role-pill" id="role-display">—</span></div>
+      <div class="expires-note" id="expires-display"></div>
+    </div>
+  </div>
+
+  <!-- Auth section (sign in or sign up) -->
+  <div id="auth-section">
+    <p class="section-label" id="auth-mode-label">Sign in to accept</p>
+
+    <input type="email"    id="email-input"    placeholder="Email address" autocomplete="email" />
+    <input type="password" id="password-input" placeholder="Password"      autocomplete="current-password" />
+
+    <button class="btn btn-primary" id="auth-btn">Accept Invitation</button>
+    <button class="btn btn-secondary" id="toggle-auth-btn">Don't have an account? Sign up instead</button>
+
+    <div class="toggle-link">
+      <a id="forgot-link">Forgot password?</a>
+    </div>
+  </div>
+
+  <!-- Already signed in: just accept -->
+  <div id="signed-in-accept" style="display:none">
+    <button class="btn btn-primary" id="accept-btn">Accept &amp; Join Organization</button>
+  </div>
+
+  <!-- Success state -->
+  <div id="success-state">
+    <div class="msg success" id="success-msg"></div>
+    <button class="btn btn-primary" id="go-to-dashboard-btn">Go to Dashboard</button>
+  </div>
+</div>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────────────────────
+  const SUPABASE_URL  = 'https://YOUR_PROJECT_REF.supabase.co';
+  const SUPABASE_ANON = 'YOUR_ANON_KEY_HERE';
+  const APP_URL       = window.location.origin; // or your dashboard URL
+
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  // ── State ────────────────────────────────────────────────────────────────────
+  const params    = new URLSearchParams(window.location.search);
+  const token     = params.get('token') || '';
+  let inviteData  = null;  // { role, org_name, expires_at }
+  let isSignUp    = false;
+  let acceptedOrg = null;  // { org_id, org_name, role }
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────────
+  const loadingState    = document.getElementById('loading-state');
+  const invitePreview   = document.getElementById('invite-preview');
+  const authSection     = document.getElementById('auth-section');
+  const signedInAccept  = document.getElementById('signed-in-accept');
+  const successState    = document.getElementById('success-state');
+  const msgArea         = document.getElementById('msg-area');
+  const orgNameDisplay  = document.getElementById('org-name-display');
+  const roleDisplay     = document.getElementById('role-display');
+  const expiresDisplay  = document.getElementById('expires-display');
+  const authModeLabel   = document.getElementById('auth-mode-label');
+  const emailInput      = document.getElementById('email-input');
+  const passwordInput   = document.getElementById('password-input');
+  const authBtn         = document.getElementById('auth-btn');
+  const toggleAuthBtn   = document.getElementById('toggle-auth-btn');
+  const forgotLink      = document.getElementById('forgot-link');
+  const acceptBtn       = document.getElementById('accept-btn');
+  const successMsg      = document.getElementById('success-msg');
+  const goDashBtn       = document.getElementById('go-to-dashboard-btn');
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function showMsg(text, type = 'error') {
+    msgArea.innerHTML = `<div class="msg ${type}">${text}</div>`;
+  }
+
+  function clearMsg() { msgArea.innerHTML = ''; }
+
+  function setLoading(el, loading, text = '') {
+    if (loading) {
+      el.disabled = true;
+      el.innerHTML = `<span class="spinner"></span>${text || el.textContent}`;
+    } else {
+      el.disabled = false;
+      el.textContent = text || el.textContent;
+    }
+  }
+
+  function formatExpiry(isoDate) {
+    const d = new Date(isoDate);
+    const diff = d - Date.now();
+    if (diff < 0) return 'Expired';
+    const hours = Math.floor(diff / 3600000);
+    if (hours < 24) return `Expires in ${hours} hour${hours !== 1 ? 's' : ''}`;
+    const days = Math.floor(hours / 24);
+    return `Expires in ${days} day${days !== 1 ? 's' : ''}`;
+  }
+
+  // ── Step 1: Validate token via invite-lookup ──────────────────────────────────
+  async function validateToken() {
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) {
+      loadingState.classList.remove('active');
+      showMsg('This invitation link is invalid or has expired.', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/invite-lookup?token=${token}`, {
+        headers: { apikey: SUPABASE_ANON }
+      });
+      const data = await res.json();
+
+      loadingState.classList.remove('active');
+
+      if (!res.ok || !data.valid) {
+        const msgs = {
+          'Invitation not found':    'This invitation link is invalid or has expired.',
+          'Invitation already accepted': 'This invitation has already been accepted.',
+          'Invitation expired':      'This invitation has expired. Ask an admin to send a new one.',
+        };
+        showMsg(msgs[data.error] || data.error || 'Invalid invitation.', 'error');
+        return;
+      }
+
+      inviteData = data;
+      orgNameDisplay.textContent = data.org_name;
+      roleDisplay.textContent    = data.role;
+      expiresDisplay.textContent = formatExpiry(data.expires_at);
+      invitePreview.classList.add('active');
+
+      // Check if already signed in
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.user) {
+        signedInAccept.style.display = 'block';
+        showMsg(`Signed in as ${session.user.email}. Click below to join.`, 'info');
+      } else {
+        authSection.classList.add('active');
+      }
+
+    } catch (e) {
+      loadingState.classList.remove('active');
+      showMsg('Network error — please try again.', 'error');
+    }
+  }
+
+  // ── Step 2: Accept the invitation ────────────────────────────────────────────
+  async function acceptInvite(jwt) {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/accept-invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwt}`,
+        'apikey': SUPABASE_ANON,
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to accept invitation');
+    return data;
+  }
+
+  // ── Auth: sign in ─────────────────────────────────────────────────────────────
+  authBtn.addEventListener('click', async () => {
+    const email    = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) return showMsg('Please enter your email and password.', 'error');
+
+    clearMsg();
+    setLoading(authBtn, true, isSignUp ? 'Creating account…' : 'Signing in…');
+
+    try {
+      let session;
+
+      if (isSignUp) {
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+
+        // If email confirmation is required, the session is null
+        if (!data.session) {
+          showMsg('Check your email to confirm your account, then return here to accept the invitation.', 'info');
+          setLoading(authBtn, false, 'Accept Invitation');
+          return;
+        }
+        session = data.session;
+      } else {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        session = data.session;
+      }
+
+      setLoading(authBtn, true, 'Accepting invitation…');
+      const result = await acceptInvite(session.access_token);
+      showSuccess(result);
+
+    } catch (e) {
+      showMsg(e.message || 'Authentication failed.', 'error');
+      setLoading(authBtn, false, isSignUp ? 'Create Account & Accept' : 'Accept Invitation');
+    }
+  });
+
+  // ── Already signed in: accept directly ───────────────────────────────────────
+  acceptBtn.addEventListener('click', async () => {
+    clearMsg();
+    setLoading(acceptBtn, true, 'Joining…');
+
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error('Session expired. Please refresh and try again.');
+      const result = await acceptInvite(session.access_token);
+      showSuccess(result);
+    } catch (e) {
+      showMsg(e.message, 'error');
+      setLoading(acceptBtn, false, 'Accept & Join Organization');
+    }
+  });
+
+  // ── Toggle sign in / sign up ─────────────────────────────────────────────────
+  toggleAuthBtn.addEventListener('click', () => {
+    isSignUp = !isSignUp;
+    if (isSignUp) {
+      authModeLabel.textContent     = 'Create an account to accept';
+      authBtn.textContent           = 'Create Account & Accept';
+      toggleAuthBtn.textContent     = 'Already have an account? Sign in';
+      passwordInput.autocomplete    = 'new-password';
+    } else {
+      authModeLabel.textContent     = 'Sign in to accept';
+      authBtn.textContent           = 'Accept Invitation';
+      toggleAuthBtn.textContent     = "Don't have an account? Sign up instead";
+      passwordInput.autocomplete    = 'current-password';
+    }
+    clearMsg();
+  });
+
+  // ── Forgot password ───────────────────────────────────────────────────────────
+  forgotLink.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    if (!email) return showMsg('Enter your email address first.', 'error');
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: `${APP_URL}/accept-invite.html?token=${token}`,
+    });
+    if (error) return showMsg(error.message, 'error');
+    showMsg('Password reset email sent. Check your inbox.', 'success');
+  });
+
+  // ── Success ───────────────────────────────────────────────────────────────────
+  function showSuccess(result) {
+    authSection.classList.remove('active');
+    signedInAccept.style.display = 'none';
+    invitePreview.classList.remove('active');
+    successState.classList.add('active');
+    acceptedOrg = result;
+    successMsg.textContent = `You've joined ${result.org_name} as ${result.role}. Welcome!`;
+  }
+
+  goDashBtn.addEventListener('click', () => {
+    window.location.href = APP_URL + '/dashboard.html' +
+      (acceptedOrg ? `?org_id=${acceptedOrg.org_id}` : '');
+  });
+
+  // ── Bootstrap ─────────────────────────────────────────────────────────────────
+  validateToken();
+</script>
+</body>
+</html>

@@ -1,0 +1,1894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blue Agency · Meta Ads Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <!-- Chart.js for trend visualisations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --blue-dark:   #083BBF;
+      --blue-mid:    #0557D9;
+      --blue-light:  #0573F5;
+      --blue-navy:   #0A1CA3;
+      --teal:        #179BB4;
+      --gold:        #FCBA00;
+      --orange:      #FA8500;
+      --coral:       #FF5759;
+      --bg:          #F0F2F6;
+      --surface:     #FFFFFF;
+      --text-main:   #111827;
+      --text-muted:  #6B7280;
+      --border:      #E5E7EB;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Open Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text-main); min-height: 100vh; }
+
+    /* ── TOP HEADER ── */
+    .header { background: var(--blue-dark); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand-logo { display: flex; align-items: center; gap: 3px; }
+    .brand-logo span { display: inline-block; width: 7px; height: 26px; border-radius: 2px; background: white; opacity: 0.95; }
+    .brand-logo span:nth-child(1) { height: 14px; background: var(--gold); opacity: 1; }
+    .brand-logo span:nth-child(2) { height: 22px; }
+    .brand-logo span:nth-child(3) { height: 26px; }
+    .brand-logo span:nth-child(4) { height: 18px; }
+    .brand-text { color: white; }
+    .brand-text .agency-name { font-size: 18px; font-weight: 700; letter-spacing: 4px; }
+    .brand-text .agency-sub  { font-size: 9px; font-weight: 300; letter-spacing: 2px; opacity: 0.75; margin-top: 1px; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    #auto-refresh-label { font-size: 11px; color: rgba(255,255,255,0.6); white-space: nowrap; }
+    .header-btn { background: none; border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.7); padding: 5px 12px; border-radius: 6px; font-size: 11px; font-family: inherit; cursor: pointer; font-weight: 600; transition: all 0.15s; }
+    .header-btn:hover { background: rgba(255,255,255,0.12); color: white; }
+
+    /* ── CONTROLS BAR ── */
+    .controls-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .controls-bar label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    select { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; color: var(--text-main); cursor: pointer; max-width: 230px; transition: border-color 0.15s; }
+    select:focus { outline: none; border-color: var(--blue-light); }
+
+    .period-tabs { display: flex; gap: 2px; background: var(--bg); border-radius: 10px; padding: 3px; }
+    .period-btn { padding: 6px 14px; border: none; background: transparent; border-radius: 8px; font-size: 12px; font-family: inherit; font-weight: 600; cursor: pointer; color: var(--text-muted); transition: all 0.15s; white-space: nowrap; }
+    .period-btn:hover { background: white; color: var(--blue-dark); }
+    .period-btn.active { background: var(--blue-dark); color: white; }
+
+    .custom-dates { display: none; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .custom-dates.visible { display: flex; }
+    .date-input { padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; color: var(--text-main); }
+    .date-input:focus { outline: none; border-color: var(--blue-light); }
+    .date-sep { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .date-apply-btn { padding: 7px 16px; background: var(--blue-dark); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .date-apply-btn:hover { background: var(--blue-mid); }
+
+    .refresh-btn { padding: 8px 18px; background: var(--blue-light); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px; font-family: inherit; transition: background 0.15s; white-space: nowrap; }
+    .refresh-btn:hover { background: var(--blue-mid); }
+    .refresh-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    /* ── DATE LABEL ── */
+    .date-bar { padding: 10px 24px 0; font-size: 12px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .date-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue-light); display: inline-block; }
+
+    /* ── CONTENT ── */
+    .content { padding: 16px 24px 32px; }
+    .section-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── KPI CARDS ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .kpi-card { background: var(--surface); border-radius: 12px; padding: 18px 20px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04); border-left: 4px solid var(--border); position: relative; overflow: hidden; }
+    .kpi-card::before { content: ''; position: absolute; top: 0; right: 0; width: 60px; height: 60px; border-radius: 0 0 0 60px; opacity: 0.06; }
+    .kpi-card.c-blue   { border-left-color: var(--blue-dark); } .kpi-card.c-blue::before   { background: var(--blue-dark); }
+    .kpi-card.c-sky    { border-left-color: var(--blue-light); } .kpi-card.c-sky::before    { background: var(--blue-light); }
+    .kpi-card.c-teal   { border-left-color: var(--teal); }      .kpi-card.c-teal::before   { background: var(--teal); }
+    .kpi-card.c-gold   { border-left-color: var(--gold); }      .kpi-card.c-gold::before   { background: var(--gold); }
+    .kpi-card.c-orange { border-left-color: var(--orange); }    .kpi-card.c-orange::before { background: var(--orange); }
+    .kpi-card.c-coral  { border-left-color: var(--coral); }     .kpi-card.c-coral::before  { background: var(--coral); }
+    .kpi-card.c-navy   { border-left-color: var(--blue-navy); } .kpi-card.c-navy::before   { background: var(--blue-navy); }
+    .kpi-card.c-green  { border-left-color: #16A34A; }          .kpi-card.c-green::before  { background: #16A34A; }
+    .kpi-icon { font-size: 20px; margin-bottom: 10px; }
+    .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 6px; }
+    .kpi-value { font-size: 22px; font-weight: 700; color: var(--text-main); line-height: 1.1; letter-spacing: -0.5px; }
+    .kpi-sub { font-size: 10px; color: var(--text-muted); margin-top: 5px; font-weight: 400; }
+
+    /* ── ANALYSIS METRICS ── */
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
+    .metric-card { background: var(--surface); border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-top: 2px solid transparent; }
+    .metric-card.hi { border-top-color: var(--blue-light); }
+    .metric-label { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .metric-value { font-size: 16px; font-weight: 700; color: var(--text-main); }
+
+    /* ── STATES ── */
+    .loading-state { display: flex; align-items: center; justify-content: center; padding: 80px 20px; color: var(--text-muted); font-size: 15px; gap: 14px; }
+    .spinner { width: 22px; height: 22px; border: 2.5px solid var(--border); border-top-color: var(--blue-light); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-state { background: #FFF8E1; border: 1px solid var(--gold); border-radius: 10px; padding: 16px 20px; font-size: 12px; color: #5D4037; font-family: monospace; white-space: pre-wrap; word-break: break-all; margin-top: 16px; }
+    .no-data { background: var(--surface); border-radius: 12px; padding: 48px 32px; text-align: center; color: var(--text-muted); font-size: 14px; margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .no-data strong { display: block; font-size: 16px; color: var(--text-main); margin-bottom: 6px; }
+
+    .shopify-badge { display: inline-flex; align-items: center; gap: 4px; background: #F0FDF4; color: #166534; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
+
+    /* ── AUTH OVERLAY ── */
+    .auth-overlay { position: fixed; inset: 0; background: var(--blue-dark); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    .auth-overlay.hidden { display: none; }
+    .auth-box { background: white; border-radius: 16px; padding: 40px 36px 36px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
+    .auth-logo { display: flex; align-items: center; justify-content: center; gap: 3px; margin-bottom: 20px; }
+    .auth-logo span { display: inline-block; width: 7px; border-radius: 2px; background: var(--blue-dark); }
+    .auth-logo span:nth-child(1) { height: 14px; background: var(--gold); }
+    .auth-logo span:nth-child(2) { height: 22px; }
+    .auth-logo span:nth-child(3) { height: 28px; }
+    .auth-logo span:nth-child(4) { height: 18px; }
+    .auth-title { font-size: 20px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+    .auth-sub { font-size: 12px; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 28px; }
+    .auth-input { width: 100%; padding: 12px 16px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; margin-bottom: 10px; transition: border-color 0.15s; }
+    .auth-input:focus { outline: none; border-color: var(--blue-light); }
+    .auth-btn { width: 100%; padding: 12px; background: var(--blue-dark); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; letter-spacing: 1px; transition: background 0.15s; }
+    .auth-btn:hover { background: var(--blue-mid); }
+    .auth-error { font-size: 12px; color: var(--coral); margin-top: 10px; min-height: 18px; font-weight: 600; }
+    .auth-link { font-size: 12px; color: var(--blue-light); cursor: pointer; margin-top: 12px; display: inline-block; }
+    .auth-link:hover { text-decoration: underline; }
+
+    /* ── SOCIAL AUTH ── */
+    .auth-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 12px; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
+    .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .auth-social-btn { width: 100%; padding: 11px 16px; background: white; color: var(--text-main); border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: background 0.15s; margin-bottom: 4px; }
+    .auth-social-btn:hover { background: var(--bg); border-color: #bbb; }
+    .auth-social-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    /* ── SETTINGS MODAL ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 8888; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: white; border-radius: 16px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+    .modal-header { padding: 24px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+    .modal-header h2 { font-size: 16px; font-weight: 700; }
+    .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 4px 8px; }
+    .modal-body { padding: 20px 24px 24px; }
+    .modal-section { margin-bottom: 24px; }
+    .modal-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; }
+    .connect-row { display: flex; gap: 8px; }
+    .connect-input { flex: 1; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
+    .connect-input:focus { outline: none; border-color: var(--blue-light); }
+    .connect-btn { padding: 9px 16px; background: var(--blue-dark); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; white-space: nowrap; }
+    .connect-btn:hover { background: var(--blue-mid); }
+    .connect-btn.secondary { background: #F3F4F6; color: var(--text-main); border: 1.5px solid var(--border); }
+    .connect-btn.secondary:hover { background: var(--border); }
+    .store-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .store-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--bg); border-radius: 8px; font-size: 13px; }
+    .store-item .store-domain { font-weight: 600; }
+    .store-item .store-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .badge-active { background: #D1FAE5; color: #065F46; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .modal-status { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 18px; }
+    .modal-status.error { color: var(--coral); }
+    .modal-status.success { color: #16A34A; }
+
+    /* ── ORG SELECTOR ── */
+    .org-selector { display: flex; align-items: center; gap: 6px; }
+    .org-label { font-size: 11px; color: rgba(255,255,255,0.6); }
+    #org-select { padding: 4px 10px; border-radius: 6px; font-size: 12px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); font-family: inherit; cursor: pointer; max-width: 160px; }
+    #org-select option { background: #083BBF; color: white; }
+
+    /* ── ONBOARDING OVERLAY ── */
+    .onboarding-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(3px); }
+    .onboarding-overlay.hidden { display: none; }
+    .onboarding-card { background: white; border-radius: 20px; width: 100%; max-width: 480px; padding: 40px; box-shadow: 0 24px 80px rgba(0,0,0,0.3); }
+    .onboarding-steps { display: flex; justify-content: center; gap: 8px; margin-bottom: 32px; }
+    .onboarding-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background 0.2s; }
+    .onboarding-step-dot.active { background: var(--blue-dark); }
+    .onboarding-step-dot.done   { background: #16A34A; }
+    .onboarding-icon { font-size: 40px; text-align: center; margin-bottom: 16px; }
+    .onboarding-title { font-size: 22px; font-weight: 700; text-align: center; color: var(--text-main); margin-bottom: 8px; }
+    .onboarding-sub { font-size: 14px; color: var(--text-muted); text-align: center; margin-bottom: 28px; line-height: 1.5; }
+    .onboarding-input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.15s; margin-bottom: 12px; }
+    .onboarding-input:focus { border-color: var(--blue-light); }
+    .onboarding-btn { width: 100%; padding: 13px; background: var(--blue-dark); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; transition: background 0.15s; margin-bottom: 10px; }
+    .onboarding-btn:hover:not(:disabled) { background: var(--blue-mid); }
+    .onboarding-btn:disabled { opacity: 0.5; cursor: default; }
+    .onboarding-btn.secondary { background: #F3F4F6; color: var(--text-main); border: 1.5px solid var(--border); }
+    .onboarding-btn.secondary:hover:not(:disabled) { background: var(--border); }
+    .onboarding-status { font-size: 13px; text-align: center; min-height: 20px; margin-bottom: 6px; color: var(--text-muted); }
+    .onboarding-status.error { color: var(--coral); }
+    .onboarding-status.success { color: #16A34A; }
+    .onboarding-skip { font-size: 12px; color: var(--text-muted); text-align: center; cursor: pointer; text-decoration: underline; margin-top: 6px; }
+    .onboarding-skip:hover { color: var(--text-main); }
+    /* Disconnect button in settings modal */
+    .disconnect-btn { padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--coral); background: none; border: 1px solid var(--coral); border-radius: 6px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s; }
+    .disconnect-btn:hover { background: var(--coral); color: white; }
+
+    /* ── TREND CHARTS ── */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    @media (max-width: 700px) { .charts-grid { grid-template-columns: 1fr; } }
+    .chart-wrapper { background: var(--surface); border-radius: 12px; padding: 16px 20px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04); }
+    .chart-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 10px; }
+    .chart-empty { display:flex; align-items:center; justify-content:center; height:120px; font-size:12px; color:var(--text-muted); }
+
+    /* ── CHART CANVAS HEIGHT (maintainAspectRatio:false requires explicit CSS height) ── */
+    .chart-wrapper canvas { display: block; height: 160px; }
+
+    /* ── DATA TABLE ── */
+    .table-wrapper { background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04); margin-bottom: 24px; overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th { padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); background: var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .data-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-main); white-space: nowrap; }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: #fafbff; }
+    .data-table tfoot td { padding: 10px 14px; font-weight: 700; background: var(--bg); border-top: 2px solid var(--border); }
+    .tr { text-align: right !important; }
+    .tl { text-align: left !important; }
+    .campaign-name-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+    .status-active   { background: #16A34A; }
+    .status-paused   { background: var(--gold); }
+    .status-archived { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER (unchanged visually) -->
+  <div class="header">
+    <div class="brand">
+      <div class="brand-logo"><span></span><span></span><span></span><span></span></div>
+      <div class="brand-text">
+        <div class="agency-name">B L U E</div>
+        <div class="agency-sub">DIGITAL PERFORMANCE MARKETING AGENCY</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="org-selector">
+        <span class="org-label">Org:</span>
+        <select id="org-select"><option value="">Loading…</option></select>
+      </div>
+      <span id="auto-refresh-label"></span>
+      <button class="header-btn" id="settings-btn">⚙ Settings</button>
+      <button class="header-btn" id="signout-btn">Sign out</button>
+    </div>
+  </div>
+
+  <!-- CONTROLS (unchanged) -->
+  <div class="controls-bar">
+    <label>Account</label>
+    <select id="account-select"><option value="">— Select Account —</option></select>
+    <div class="period-tabs" id="period-tabs">
+      <button class="period-btn active" data-period="today">Today</button>
+      <button class="period-btn" data-period="yesterday">Yesterday</button>
+      <button class="period-btn" data-period="this_month">This Month</button>
+      <button class="period-btn" data-period="last_month">Last Month</button>
+      <button class="period-btn" data-period="custom">Custom</button>
+    </div>
+    <div class="custom-dates" id="custom-dates">
+      <input type="date" id="date-from" class="date-input">
+      <span class="date-sep">→</span>
+      <input type="date" id="date-to" class="date-input">
+      <button class="date-apply-btn" id="date-apply">Apply</button>
+    </div>
+    <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
+  </div>
+
+  <!-- DATE LABEL (unchanged) -->
+  <div class="date-bar">
+    <span class="date-dot"></span>
+    <span id="date-label">Select an account to start</span>
+  </div>
+
+  <!-- MAIN CONTENT (unchanged) -->
+  <div class="content" id="content">
+    <div class="loading-state">Select an account above to load data.</div>
+  </div>
+
+  <!-- AUTH OVERLAY -->
+  <div class="auth-overlay" id="auth-overlay">
+    <div class="auth-box">
+      <div class="auth-logo"><span></span><span></span><span></span><span></span></div>
+      <div class="auth-title">B L U E</div>
+      <div class="auth-sub">DIGITAL PERFORMANCE MARKETING</div>
+      <div id="auth-form-login">
+        <!-- Social sign-in -->
+        <button class="auth-social-btn" id="google-btn">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Continue with Google
+        </button>
+        <div class="auth-divider">or sign in with email</div>
+        <!-- Email / password -->
+        <input type="email" class="auth-input" id="auth-email" placeholder="Email address" autocomplete="email">
+        <input type="password" class="auth-input" id="auth-password" placeholder="Password" autocomplete="current-password">
+        <button class="auth-btn" id="auth-btn">SIGN IN</button>
+        <div class="auth-error" id="auth-error"></div>
+        <span class="auth-link" id="forgot-link">Forgot password?</span>
+        &nbsp;·&nbsp;
+        <span class="auth-link" id="signup-link">Create account</span>
+      </div>
+      <div id="auth-form-signup" style="display:none">
+        <input type="text" class="auth-input" id="auth-name" placeholder="Full name">
+        <input type="email" class="auth-input" id="auth-email-2" placeholder="Email address">
+        <input type="password" class="auth-input" id="auth-password-2" placeholder="Password (min 8 chars)">
+        <button class="auth-btn" id="signup-btn">CREATE ACCOUNT</button>
+        <div class="auth-error" id="signup-error"></div>
+        <span class="auth-link" id="back-login-link">← Back to sign in</span>
+      </div>
+      <div id="auth-form-forgot" style="display:none">
+        <input type="email" class="auth-input" id="auth-email-forgot" placeholder="Your email address">
+        <button class="auth-btn" id="forgot-btn">SEND RESET LINK</button>
+        <div class="auth-error" id="forgot-status"></div>
+        <span class="auth-link" id="back-login-link-2">← Back to sign in</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay hidden" id="settings-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>⚙ Connections</h2>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Connect Shopify Store -->
+        <div class="modal-section">
+          <div class="modal-section-title">Shopify Stores</div>
+          <div class="connect-row">
+            <input type="text" class="connect-input" id="shopify-domain-input" placeholder="brand.myshopify.com">
+            <button class="connect-btn" id="connect-shopify-btn">Connect</button>
+          </div>
+          <div class="modal-status" id="shopify-status"></div>
+          <div class="store-list" id="shopify-store-list"></div>
+        </div>
+
+        <!-- Connect Meta Accounts -->
+        <div class="modal-section">
+          <div class="modal-section-title">Meta Ad Accounts</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+            Connect your Meta account to automatically import all your ad accounts.
+          </p>
+          <button class="connect-btn" id="connect-meta-btn">Connect Meta Account</button>
+          <div class="modal-status" id="meta-status"></div>
+          <div class="store-list" id="meta-account-list"></div>
+        </div>
+
+        <!-- Link Meta Account to Shopify Store -->
+        <div class="modal-section">
+          <div class="modal-section-title">Link Account → Store (for ROAS)</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+            Link a Meta ad account to a Shopify store to enable cross-channel ROAS, orders, and revenue.
+          </p>
+          <div class="connect-row">
+            <select class="connect-input" id="link-meta-select" style="flex:1"></select>
+            <span style="display:flex;align-items:center;padding:0 6px;color:var(--text-muted)">→</span>
+            <select class="connect-input" id="link-store-select" style="flex:1"></select>
+            <button class="connect-btn" id="link-btn">Link</button>
+          </div>
+          <div class="modal-status" id="link-status"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ONBOARDING OVERLAY -->
+  <div class="onboarding-overlay hidden" id="onboarding-overlay">
+    <div class="onboarding-card">
+      <div class="onboarding-steps">
+        <div class="onboarding-step-dot active" id="ob-dot-1"></div>
+        <div class="onboarding-step-dot"        id="ob-dot-2"></div>
+      </div>
+
+      <!-- Step 1: Create organisation -->
+      <div id="ob-step-1">
+        <div class="onboarding-icon">🏢</div>
+        <div class="onboarding-title">Create your organisation</div>
+        <div class="onboarding-sub">Give your team a name. You can invite members and change it later.</div>
+        <input type="text" class="onboarding-input" id="ob-org-name" placeholder="e.g. Blue Digital" maxlength="80" />
+        <div class="onboarding-status" id="ob-step1-status"></div>
+        <button class="onboarding-btn" id="ob-create-btn">Create Organisation →</button>
+      </div>
+
+      <!-- Step 2: Connect integrations -->
+      <div id="ob-step-2" style="display:none">
+        <div class="onboarding-icon">🔌</div>
+        <div class="onboarding-title">Connect your first store</div>
+        <div class="onboarding-sub">Connect Shopify and Meta to start pulling performance data. You can always add more from Settings later.</div>
+
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">Shopify</div>
+          <div class="connect-row">
+            <input type="text" class="onboarding-input" id="ob-shopify-domain" placeholder="brand.myshopify.com" style="margin-bottom:0;flex:1" />
+            <button class="connect-btn" id="ob-connect-shopify-btn" style="margin-left:8px">Connect</button>
+          </div>
+          <div class="onboarding-status" id="ob-shopify-status"></div>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">Meta</div>
+          <button class="onboarding-btn" id="ob-connect-meta-btn" style="margin-bottom:4px">Connect Meta Account</button>
+          <div class="onboarding-status" id="ob-meta-status"></div>
+        </div>
+
+        <button class="onboarding-btn" id="ob-finish-btn">Go to Dashboard →</button>
+        <div class="onboarding-skip" id="ob-skip-integrations">Skip for now — I'll connect later</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════════
+    // CONFIGURATION — Replace with your Supabase project values
+    // ══════════════════════════════════════════════════════════════
+    const SUPABASE_URL  = 'https://YOUR_PROJECT_REF.supabase.co';
+    const SUPABASE_ANON = 'YOUR_ANON_KEY_HERE';
+
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+    // ══════════════════════════════════════════════════════════════
+    // AUTH PROVIDER ABSTRACTION
+    // All authentication calls go through this object.
+    // To add a new provider (Google, Microsoft, Apple, SAML, etc.),
+    // update the methods below — no other code needs to change.
+    //
+    // Current provider: Supabase Auth
+    //   • Social OAuth: enable providers in Supabase Dashboard → Auth → Providers
+    //   • To swap to a different backend entirely (Auth0, Firebase, Clerk…),
+    //     re-implement each method and update `getToken` to return that SDK's JWT.
+    // ══════════════════════════════════════════════════════════════
+    const Auth = {
+
+      // ── Email / password ──
+      signIn:        (email, password) =>
+        sb.auth.signInWithPassword({ email, password }),
+
+      signUp:        (email, password, meta) =>
+        sb.auth.signUp({ email, password, options: { data: meta } }),
+
+      signOut:       () =>
+        sb.auth.signOut(),
+
+      resetPassword: (email) =>
+        sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href }),
+
+      // ── Session / token ──
+      getSession:    () => sb.auth.getSession(),
+
+      getToken:      async () => {
+        const { data } = await sb.auth.getSession();
+        return data.session?.access_token || '';
+      },
+
+      onAuthStateChange: (cb) => sb.auth.onAuthStateChange(cb),
+
+      // ── Social / OAuth providers ──
+      // Each method triggers a redirect to the provider's login page.
+      // Supabase handles the callback and creates/updates the user automatically.
+      //
+      // To activate: Supabase Dashboard → Auth → Providers → enable the provider
+      //              and paste its Client ID + Secret.
+      signInWithGoogle:    () => sb.auth.signInWithOAuth({
+        provider: 'google',
+        options:  { redirectTo: window.location.href },
+      }),
+
+      // Uncomment + enable in Supabase dashboard to activate:
+      // signInWithMicrosoft: () => sb.auth.signInWithOAuth({ provider: 'azure',   options: { redirectTo: window.location.href } }),
+      // signInWithApple:     () => sb.auth.signInWithOAuth({ provider: 'apple',   options: { redirectTo: window.location.href } }),
+      // signInWithGitHub:    () => sb.auth.signInWithOAuth({ provider: 'github',  options: { redirectTo: window.location.href } }),
+
+      // ── Role & permissions ──
+      // Returns the current user's role in an org ('owner','admin','analyst','viewer')
+      // by calling the user_role() DB helper function.
+      getRole: async (orgId) => {
+        const { data } = await sb.rpc('user_role', { _org_id: orgId });
+        return data || null;  // null = not a member
+      },
+
+      // Returns true if the user has a named permission in the org.
+      // Calls the has_permission() DB function backed by role_permissions table.
+      // Use this for UI gating: Auth.hasPermission(orgId, 'manage_integrations')
+      hasPermission: async (orgId, permission) => {
+        const { data } = await sb.rpc('has_permission', {
+          _org_id: orgId, _permission: permission,
+        });
+        return !!data;
+      },
+
+      // Returns the org's active plan tier ('free','starter','pro','enterprise')
+      getOrgPlan: async (orgId) => {
+        const { data } = await sb.rpc('org_plan', { _org_id: orgId });
+        return data || 'free';
+      },
+
+      // ── Dashboard settings ──
+      // Loads persisted user preferences for a given org.
+      // Returns null if no settings row exists yet (first login).
+      getDashboardSettings: async (userId, orgId) => {
+        const { data } = await sb
+          .from('dashboard_settings')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('organization_id', orgId)
+          .maybeSingle();
+        return data;  // null on first login
+      },
+
+      // Persists user preferences. Called when the user changes period,
+      // selects an account, or changes any UI preference.
+      saveDashboardSettings: async (userId, orgId, settings) => {
+        return sb
+          .from('dashboard_settings')
+          .upsert(
+            { user_id: userId, organization_id: orgId, ...settings },
+            { onConflict: 'user_id,organization_id' }
+          );
+      },
+
+      // Updates last_seen_at on the profile (called on each authenticated page load)
+      touchLastSeen: async (userId) => {
+        return sb
+          .from('profiles')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('id', userId);
+      },
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // STATE
+    // ─────────────────────────────────────────────────────────────
+    let currentUser    = null;
+    let currentOrgId   = localStorage.getItem('dash_org_id') || '';
+    let currentRole    = null;   // 'owner' | 'admin' | 'analyst' | 'viewer'
+    let currentPlan    = 'free'; // 'free' | 'starter' | 'pro' | 'enterprise'
+    let currentPeriod  = localStorage.getItem('dash_period') || 'today';
+    let customFrom     = localStorage.getItem('dash_custom_from') || '';
+    let customTo       = localStorage.getItem('dash_custom_to')   || '';
+    let timer          = null;
+    let nextAt         = null;
+    let accountMap     = {}; // dbId → { meta_account_id, currency, shopify_store_id }
+
+    const PERIOD_LABELS = {
+      today: 'Today', yesterday: 'Yesterday',
+      this_month: 'This Month', last_month: 'Last Month', custom: 'Custom Range'
+    };
+
+    const sel = document.getElementById('account-select');
+    const orgSel = document.getElementById('org-select');
+
+    // ─────────────────────────────────────────────────────────────
+    // UTILITY
+    // ─────────────────────────────────────────────────────────────
+    function parseNum(val) {
+      if (val === null || val === undefined) return null;
+      const s = String(val).trim();
+      if (!s || s === 'Not available' || s === 'N/A' || s === '—') return null;
+      return parseFloat(s.replace(/^[A-Z]{2,3}\s*/, '').replace(/,/g, '').replace(/%$/, ''));
+    }
+
+    function fmt(val, prefix, dec) {
+      if (val === null || val === undefined || isNaN(val)) return '—';
+      const d = dec === undefined ? 2 : dec;
+      return (prefix || '') + val.toLocaleString('en', { minimumFractionDigits: d, maximumFractionDigits: d });
+    }
+
+    function shopifyDR(period) {
+      const pad = n => String(n).padStart(2, '0');
+      const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+      if (period === 'today')      return 'SINCE today UNTIL today';
+      if (period === 'yesterday')  return 'SINCE yesterday UNTIL yesterday';
+      if (period === 'this_month') return `SINCE ${y}-${pad(m+1)}-01 UNTIL today`;
+      if (period === 'last_month') {
+        const lm = m === 0 ? 11 : m - 1, ly = m === 0 ? y - 1 : y;
+        const ld = new Date(ly, lm + 1, 0).getDate();
+        return `SINCE ${ly}-${pad(lm+1)}-01 UNTIL ${ly}-${pad(lm+1)}-${pad(ld)}`;
+      }
+      if (period === 'custom' && customFrom && customTo)
+        return `SINCE ${customFrom} UNTIL ${customTo}`;
+      return 'SINCE today UNTIL today';
+    }
+
+    function kpi(colorClass, icon, label, value, sub) {
+      return `<div class="kpi-card ${colorClass}">
+        <div class="kpi-icon">${icon}</div>
+        <div class="kpi-label">${label}</div>
+        <div class="kpi-value">${value}</div>
+        ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
+      </div>`;
+    }
+
+    function metric(label, value, hi) {
+      return `<div class="metric-card${hi ? ' hi' : ''}">
+        <div class="metric-label">${label}</div>
+        <div class="metric-value">${value}</div>
+      </div>`;
+    }
+
+    // XSS-safe HTML escaping — use for any untrusted strings in innerHTML
+    function escHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // AUTH
+    // ─────────────────────────────────────────────────────────────
+    function showAuthView(view) {
+      document.getElementById('auth-form-login').style.display  = view === 'login'  ? '' : 'none';
+      document.getElementById('auth-form-signup').style.display = view === 'signup' ? '' : 'none';
+      document.getElementById('auth-form-forgot').style.display = view === 'forgot' ? '' : 'none';
+    }
+
+    document.getElementById('signup-link').addEventListener('click', () => showAuthView('signup'));
+    document.getElementById('forgot-link').addEventListener('click', () => showAuthView('forgot'));
+    document.getElementById('back-login-link').addEventListener('click', () => showAuthView('login'));
+    document.getElementById('back-login-link-2').addEventListener('click', () => showAuthView('login'));
+
+    document.getElementById('google-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('auth-error');
+      errEl.textContent = '';
+      const { error } = await Auth.signInWithGoogle();
+      if (error) errEl.textContent = error.message;
+      // On success, Supabase redirects to the provider then back here;
+      // onAuthStateChange fires automatically when the page reloads.
+    });
+
+    document.getElementById('auth-btn').addEventListener('click', async () => {
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const errEl = document.getElementById('auth-error');
+      errEl.textContent = '';
+      if (!email || !password) { errEl.textContent = 'Email and password are required.'; return; }
+      const { error } = await Auth.signIn(email, password);
+      if (error) { errEl.textContent = error.message; }
+      // onAuthStateChange handles the rest
+    });
+
+    document.getElementById('auth-password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('auth-btn').click();
+    });
+
+    document.getElementById('signup-btn').addEventListener('click', async () => {
+      const name     = document.getElementById('auth-name').value.trim();
+      const email    = document.getElementById('auth-email-2').value.trim();
+      const password = document.getElementById('auth-password-2').value;
+      const errEl    = document.getElementById('signup-error');
+      errEl.textContent = '';
+      if (!name || !email || !password) { errEl.textContent = 'All fields are required.'; return; }
+      if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+      const { error } = await Auth.signUp(email, password, { full_name: name });
+      if (error) { errEl.textContent = error.message; }
+      else { errEl.style.color = '#16A34A'; errEl.textContent = 'Check your email to confirm your account.'; }
+    });
+
+    document.getElementById('forgot-btn').addEventListener('click', async () => {
+      const email  = document.getElementById('auth-email-forgot').value.trim();
+      const status = document.getElementById('forgot-status');
+      status.textContent = '';
+      if (!email) { status.textContent = 'Enter your email.'; return; }
+      const { error } = await Auth.resetPassword(email);
+      if (error) { status.style.color = 'var(--coral)'; status.textContent = error.message; }
+      else { status.style.color = '#16A34A'; status.textContent = 'Reset link sent — check your email.'; }
+    });
+
+    document.getElementById('signout-btn').addEventListener('click', async () => {
+      if (timer) clearInterval(timer);
+      await Auth.signOut();
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // ORGANISATIONS & ACCOUNTS (dynamic from DB)
+    // ─────────────────────────────────────────────────────────────
+    async function loadOrgs() {
+      const { data: memberships, error } = await sb
+        .from('organization_members')
+        .select('organization_id, role, organizations(id, name)')
+        .eq('user_id', currentUser.id)
+        .not('accepted_at', 'is', null);
+
+      if (error || !memberships?.length) {
+        orgSel.innerHTML = '<option value="">No organizations</option>';
+        showOnboarding();
+        return;
+      }
+
+      orgSel.innerHTML = '';
+      memberships.forEach(m => {
+        const org = m.organizations;
+        const opt = document.createElement('option');
+        opt.value = org.id;
+        opt.textContent = org.name;
+        if (org.id === currentOrgId) opt.selected = true;
+        orgSel.appendChild(opt);
+      });
+
+      // Validate that the saved org is still in the membership list (guards against
+      // deleted orgs or revoked memberships causing stale localStorage values).
+      const validOrgIds = memberships.map(m => m.organization_id);
+      if (!currentOrgId || !validOrgIds.includes(currentOrgId)) {
+        currentOrgId = memberships[0].organization_id;
+        localStorage.setItem('dash_org_id', currentOrgId);
+        orgSel.value = currentOrgId;
+      }
+
+      // Store the user's role for this org (used for UI gating below)
+      const activeMembership = memberships.find(m => m.organization_id === currentOrgId);
+      currentRole = activeMembership?.role || null;
+
+      await applyOrgContext();
+      await loadAccounts();
+    }
+
+    // Called whenever the active org changes.
+    // Loads plan tier, dashboard settings, and applies role-based UI gates.
+    async function applyOrgContext() {
+      if (!currentOrgId || !currentUser) return;
+
+      // Load plan tier (used for feature gating in the UI)
+      currentPlan = await Auth.getOrgPlan(currentOrgId);
+
+      // Gate the Settings button: only admins/owners can connect integrations
+      const canManageIntegrations = ['owner', 'admin'].includes(currentRole);
+      document.getElementById('settings-btn').style.display =
+        canManageIntegrations ? '' : 'none';
+
+      // Restore dashboard settings from DB (overrides localStorage)
+      const settings = await Auth.getDashboardSettings(currentUser.id, currentOrgId);
+      if (settings) {
+        currentPeriod = settings.default_period || currentPeriod;
+        customFrom    = settings.custom_from    || customFrom;
+        customTo      = settings.custom_to      || customTo;
+
+        // Apply restored period to tab UI
+        document.querySelectorAll('.period-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.period === currentPeriod);
+        });
+        if (currentPeriod === 'custom') {
+          document.getElementById('custom-dates').classList.add('visible');
+          if (customFrom) document.getElementById('date-from').value = customFrom;
+          if (customTo)   document.getElementById('date-to').value   = customTo;
+        } else {
+          document.getElementById('custom-dates').classList.remove('visible');
+        }
+
+        // Apply auto-refresh interval if different from the default
+        if (settings.auto_refresh_minutes && settings.auto_refresh_minutes !== 30) {
+          window._refreshMs = settings.auto_refresh_minutes * 60 * 1000;
+        }
+      }
+
+      // Touch last_seen_at (fire-and-forget)
+      Auth.touchLastSeen(currentUser.id);
+    }
+
+    async function loadAccounts() {
+      // Prefer DB-persisted account over localStorage
+      const dbSettings   = await Auth.getDashboardSettings(currentUser?.id, currentOrgId);
+      const savedAccount = dbSettings?.default_account_id
+        || localStorage.getItem('dash_account')
+        || '';
+
+      sel.innerHTML = '<option value="">— Select Account —</option>';
+      accountMap = {};
+
+      const { data: accounts } = await sb
+        .from('meta_ad_accounts_safe')  // safe view, no tokens
+        .select('id, meta_account_id, account_name, currency, shopify_store_id')
+        .eq('organization_id', currentOrgId)
+        .eq('is_active', true)
+        .order('account_name');
+
+      (accounts || []).forEach(acc => {
+        accountMap[acc.id] = acc;
+        const opt = document.createElement('option');
+        opt.value = acc.id;
+        opt.textContent = (acc.account_name || acc.meta_account_id) + ' (' + acc.currency + ')';
+        if (acc.id === savedAccount) opt.selected = true;
+        sel.appendChild(opt);
+      });
+
+      // Add "All Accounts" option when there are 2+ accounts
+      if ((accounts || []).length >= 2) {
+        const allOpt = document.createElement('option');
+        allOpt.value = '__all__';
+        allOpt.textContent = `All Accounts (${accounts.length})`;
+        if (savedAccount === '__all__') allOpt.selected = true;
+        sel.insertBefore(allOpt, sel.children[1]); // after the placeholder
+      }
+
+      if (savedAccount && (sel.value === savedAccount || (savedAccount === '__all__' && sel.value === '__all__'))) loadDataWithRefresh();
+    }
+
+    orgSel.addEventListener('change', async () => {
+      currentOrgId = orgSel.value;
+      localStorage.setItem('dash_org_id', currentOrgId);
+      // Update role for the newly selected org
+      currentRole = await Auth.getRole(currentOrgId);
+      sel.innerHTML = '<option value="">— Select Account —</option>';
+      await applyOrgContext();
+      loadAccounts();
+    });
+
+    sel.addEventListener('change', () => {
+      localStorage.setItem('dash_account', sel.value);
+      // Persist selected account to dashboard_settings
+      if (currentUser && currentOrgId && sel.value) {
+        Auth.saveDashboardSettings(currentUser.id, currentOrgId, {
+          default_account_id: sel.value,
+        });
+      }
+      loadData();
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // PERIOD / DATE CONTROLS (unchanged logic)
+    // ─────────────────────────────────────────────────────────────
+    if (customFrom) document.getElementById('date-from').value = customFrom;
+    if (customTo)   document.getElementById('date-to').value   = customTo;
+
+    document.querySelectorAll('.period-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.period === currentPeriod);
+    });
+    if (currentPeriod === 'custom') document.getElementById('custom-dates').classList.add('visible');
+
+    document.getElementById('period-tabs').addEventListener('click', e => {
+      if (!e.target.classList.contains('period-btn')) return;
+      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      currentPeriod = e.target.dataset.period;
+      localStorage.setItem('dash_period', currentPeriod);
+      // Persist to DB
+      if (currentUser && currentOrgId) {
+        Auth.saveDashboardSettings(currentUser.id, currentOrgId, { default_period: currentPeriod });
+      }
+      const customEl = document.getElementById('custom-dates');
+      if (currentPeriod === 'custom') { customEl.classList.add('visible'); }
+      else { customEl.classList.remove('visible'); loadData(); }
+    });
+
+    document.getElementById('date-apply').addEventListener('click', () => {
+      customFrom = document.getElementById('date-from').value;
+      customTo   = document.getElementById('date-to').value;
+      if (!customFrom || !customTo) return;
+      localStorage.setItem('dash_custom_from', customFrom);
+      localStorage.setItem('dash_custom_to', customTo);
+      // Persist custom range to DB
+      if (currentUser && currentOrgId) {
+        Auth.saveDashboardSettings(currentUser.id, currentOrgId, {
+          default_period: 'custom',
+          custom_from: customFrom,
+          custom_to:   customTo,
+        });
+      }
+      loadData();
+    });
+
+    document.getElementById('refresh-btn').addEventListener('click', loadDataWithRefresh);
+    document.getElementById('period-tabs').addEventListener('click', () => setTimeout(startAutoRefresh, 200), true);
+
+    // ─────────────────────────────────────────────────────────────
+    // DATA LOADING (calls Edge Functions instead of MCP tools)
+    // ─────────────────────────────────────────────────────────────
+    async function getJWT() {
+      return Auth.getToken();
+    }
+
+    async function callEdgeFunction(name, body) {
+      const jwt = await getJWT();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        const text = await res.text();
+        try { return JSON.parse(text); }
+        catch { return { error: `Non-JSON response (HTTP ${res.status}): ${text.slice(0, 200)}` }; }
+      } catch (err) {
+        clearTimeout(timeout);
+        return { error: err.name === 'AbortError' ? 'Request timed out after 30s' : (err.message || String(err)) };
+      }
+    }
+
+    // ── Chart lifecycle ──────────────────────────────────────────
+    window._dashCharts = {};
+
+    function destroyCharts() {
+      Object.values(window._dashCharts || {}).forEach(c => { if (c) c.destroy(); });
+      window._dashCharts = {};
+    }
+
+    // ── Campaign table HTML ──────────────────────────────────────
+    function renderCampaignTableHTML(campaigns, curr) {
+      if (!campaigns?.length) {
+        return '<div class="no-campaign-data" style="padding:28px;text-align:center;color:var(--text-muted);font-size:13px">No campaign data returned for this period.</div>';
+      }
+      const sorted = [...campaigns].sort((a, b) => (parseFloat(b.spend) || 0) - (parseFloat(a.spend) || 0));
+      const totSpend = sorted.reduce((s, c) => s + (parseFloat(c.spend) || 0), 0);
+      const totImp   = sorted.reduce((s, c) => s + (parseFloat(c.impressions) || 0), 0);
+      const totReach = sorted.reduce((s, c) => s + (parseFloat(c.reach) || 0), 0);
+      const totClk   = sorted.reduce((s, c) => s + (parseFloat(c.clicks) || 0), 0);
+      const rows = sorted.map(c => {
+        const spend = parseFloat(c.spend) || 0;
+        const pctOfTotal = totSpend > 0 ? (spend / totSpend * 100).toFixed(1) : '—';
+        return `<tr>
+          <td class="tl campaign-name-cell" title="${escHtml(c.campaign_name || c.campaign_id)}">${escHtml(c.campaign_name || c.campaign_id)}</td>
+          <td class="tr">${fmt(parseNum(c.spend), curr)}</td>
+          <td class="tr" style="color:var(--text-muted);font-size:11px">${pctOfTotal}%</td>
+          <td class="tr">${fmt(parseNum(c.impressions), '', 0)}</td>
+          <td class="tr">${fmt(parseNum(c.reach), '', 0)}</td>
+          <td class="tr">${fmt(parseNum(c.clicks), '', 0)}</td>
+          <td class="tr">${parseNum(c.ctr) !== null ? fmt(parseNum(c.ctr),'',2) + '%' : '—'}</td>
+          <td class="tr">${fmt(parseNum(c.cpc), curr)}</td>
+          <td class="tr">${fmt(parseNum(c.cpm), curr)}</td>
+        </tr>`;
+      }).join('');
+      return `<table class="data-table">
+        <thead><tr>
+          <th class="tl">Campaign</th>
+          <th class="tr">Spend</th>
+          <th class="tr">% Total</th>
+          <th class="tr">Impressions</th>
+          <th class="tr">Reach</th>
+          <th class="tr">Clicks</th>
+          <th class="tr">CTR</th>
+          <th class="tr">CPC</th>
+          <th class="tr">CPM</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td class="tl">Total (${sorted.length} campaigns)</td>
+          <td class="tr">${fmt(totSpend, curr)}</td>
+          <td class="tr">100%</td>
+          <td class="tr">${fmt(totImp, '', 0)}</td>
+          <td class="tr">${fmt(totReach, '', 0)}</td>
+          <td class="tr">${fmt(totClk, '', 0)}</td>
+          <td class="tr">—</td>
+          <td class="tr">—</td>
+          <td class="tr">—</td>
+        </tr></tfoot>
+      </table>`;
+    }
+
+    // ── Chart initialization (called after content innerHTML is set) ─
+    function initCharts(dailyData, dailySalesRows, shopifyEnabled, curr) {
+      if (!window.Chart || !dailyData?.length) return;
+
+      const chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 }, maxTicksLimit: 10, color: '#6B7280' }, grid: { display: false } },
+          y: { ticks: { font: { size: 10 }, color: '#6B7280' }, grid: { color: '#F0F2F6' } },
+        },
+      };
+
+      const labels = dailyData.map(d => {
+        const dt = new Date(d.date + 'T00:00:00');
+        return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+      });
+      const spendData = dailyData.map(d => parseFloat(d.spend) || 0);
+
+      // Chart 1: Daily Spend (area line)
+      const spendCanvas = document.getElementById('chart-spend');
+      if (spendCanvas) {
+        window._dashCharts.spend = new Chart(spendCanvas, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              data: spendData,
+              borderColor: '#083BBF',
+              backgroundColor: 'rgba(8,59,191,0.07)',
+              fill: true,
+              tension: 0.35,
+              pointRadius: spendData.length > 14 ? 0 : 3,
+              pointHoverRadius: 4,
+              borderWidth: 2,
+            }],
+          },
+          options: {
+            ...chartDefaults,
+            plugins: { ...chartDefaults.plugins,
+              tooltip: { ...chartDefaults.plugins.tooltip,
+                callbacks: { label: ctx => ' ' + curr.trim() + ' ' + ctx.parsed.y.toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2}) }
+              }
+            },
+            scales: { ...chartDefaults.scales,
+              y: { ...chartDefaults.scales.y,
+                ticks: { ...chartDefaults.scales.y.ticks, callback: v => curr.trim() + ' ' + (v/1000 >= 1 ? (v/1000).toFixed(1)+'k' : v.toFixed(0)) }
+              }
+            }
+          }
+        });
+      }
+
+      // Chart 2: ROAS (if Shopify) or Reach+Impressions
+      const chart2Canvas = document.getElementById('chart-roas-reach');
+      if (!chart2Canvas) return;
+
+      if (shopifyEnabled && dailySalesRows?.length) {
+        // Build date→revenue map from Shopify daily rows
+        // ShopifyQL "BY day" returns [date, revenue] rows
+        const revByDate = {};
+        for (const row of dailySalesRows) {
+          if (row[0]) revByDate[row[0]] = parseFloat(row[1]) || 0;
+        }
+        const roasData = dailyData.map(d => {
+          const spend = parseFloat(d.spend) || 0;
+          const rev   = revByDate[d.date] || 0;
+          return spend > 0 ? parseFloat((rev / spend).toFixed(2)) : null;
+        });
+        const hasRoasData = roasData.some(v => v !== null);
+        if (hasRoasData) {
+          window._dashCharts.roas = new Chart(chart2Canvas, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [{
+                data: roasData,
+                borderColor: '#16A34A',
+                backgroundColor: 'rgba(22,163,74,0.07)',
+                fill: true,
+                tension: 0.35,
+                pointRadius: roasData.length > 14 ? 0 : 3,
+                pointHoverRadius: 4,
+                borderWidth: 2,
+                spanGaps: true,
+              }],
+            },
+            options: {
+              ...chartDefaults,
+              plugins: { ...chartDefaults.plugins,
+                tooltip: { ...chartDefaults.plugins.tooltip,
+                  callbacks: { label: ctx => ctx.parsed.y !== null ? ' ' + ctx.parsed.y.toFixed(2) + 'x ROAS' : ' No data' }
+                }
+              },
+              scales: { ...chartDefaults.scales,
+                y: { ...chartDefaults.scales.y,
+                  ticks: { ...chartDefaults.scales.y.ticks, callback: v => v.toFixed(1) + 'x' }
+                }
+              }
+            }
+          });
+          return;
+        }
+      }
+
+      // Fallback: Reach + Impressions bar chart
+      const impressionsData = dailyData.map(d => parseInt(d.impressions) || 0);
+      const reachData       = dailyData.map(d => parseInt(d.reach)       || 0);
+      window._dashCharts.reach = new Chart(chart2Canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Impressions', data: impressionsData, backgroundColor: 'rgba(5,115,245,0.65)', borderRadius: 3 },
+            { label: 'Reach',       data: reachData,       backgroundColor: 'rgba(23,155,180,0.55)', borderRadius: 3 },
+          ],
+        },
+        options: {
+          ...chartDefaults,
+          plugins: { ...chartDefaults.plugins, legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } } },
+          scales: { ...chartDefaults.scales,
+            y: { ...chartDefaults.scales.y,
+              ticks: { ...chartDefaults.scales.y.ticks, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v }
+            }
+          }
+        }
+      });
+    }
+
+    async function loadData() {
+      const accountDbId = sel.value;
+      if (!accountDbId) return;
+      if (accountDbId === '__all__') return loadAllAccounts();
+
+      const account = accountMap[accountDbId];
+      if (!account) return;
+
+      const curr = (account.currency || 'USD') + ' ';
+      const shopifyStoreId = account.shopify_store_id || null;
+      const shopifyEnabled = !!shopifyStoreId;
+
+      destroyCharts();
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true; btn.textContent = '⏳ Loading…';
+
+      document.getElementById('content').innerHTML =
+        `<div class="loading-state"><div class="spinner"></div>Fetching ${PERIOD_LABELS[currentPeriod]} data…</div>`;
+
+      const dr = shopifyDR(currentPeriod);
+      const baseMeta = {
+        account_db_id: accountDbId,
+        period: currentPeriod,
+        custom_from: customFrom || undefined,
+        custom_to:   customTo   || undefined,
+      };
+
+      // 7 parallel calls: account + campaign + daily + 4 Shopify
+      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes] =
+        await Promise.allSettled([
+          callEdgeFunction('meta-data', baseMeta),
+          callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
+          callEdgeFunction('meta-data', { ...baseMeta, level: 'daily' }),
+          shopifyEnabled
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM sales SHOW orders, net_sales ${dr}` })
+            : Promise.resolve(null),
+          shopifyEnabled
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM inventory SHOW inventory_units_sold ${dr}` })
+            : Promise.resolve(null),
+          shopifyEnabled
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM sessions SHOW sessions, conversion_rate ${dr}` })
+            : Promise.resolve(null),
+          shopifyEnabled
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM sales SHOW net_sales ${dr} BY day` })
+            : Promise.resolve(null),
+        ]);
+
+      // ── Parse Meta account-level ──
+      if (metaRes.status === 'rejected' || metaRes.value?.error) {
+        const raw = metaRes.value?.error || metaRes.reason;
+        const msg = raw instanceof Error ? raw.message : (raw ? String(raw) : 'Unknown error');
+
+        // TOKEN_EXPIRED: show reconnect UI instead of generic error
+        if (msg === 'TOKEN_EXPIRED') {
+          document.getElementById('content').innerHTML =
+            renderTokenExpiredHTML(account.account_name || account.meta_account_id);
+          btn.disabled = false; btn.textContent = '↻ Refresh'; return;
+        }
+
+        document.getElementById('content').innerHTML =
+          `<div class="error-state">⚠️ Meta Ads error:\n${msg}</div>`;
+        btn.disabled = false; btn.textContent = '↻ Refresh'; return;
+      }
+
+      const d = metaRes.value?.ad_entity;
+      if (!d) {
+        document.getElementById('content').innerHTML =
+          `<div class="no-data"><strong>No data for this period</strong>Period: ${currentPeriod}</div>`;
+        btn.disabled = false; btn.textContent = '↻ Refresh'; return;
+      }
+
+      // ── Parse campaign and daily data ──
+      const campaigns = (campaignRes.status === 'fulfilled' && !campaignRes.value?.error)
+        ? (campaignRes.value?.campaigns || []) : [];
+      const dailyData = (dailyRes.status === 'fulfilled' && !dailyRes.value?.error)
+        ? (dailyRes.value?.daily || []) : [];
+      const dailySalesRows = (dailySalesRes.status === 'fulfilled' && !dailySalesRes.value?.error && dailySalesRes.value?.rows)
+        ? dailySalesRes.value.rows : null;
+
+      // ── Parse Shopify ──
+      let pieces = null, revenue = null, shopifyOrders = null, conversionRate = null;
+      const parseShopify = (res) => {
+        if (!res || res.status !== 'fulfilled' || !res.value || res.value.error) return null;
+        return res.value.rows || [];
+      };
+      const salesRows = parseShopify(salesRes);
+      if (salesRows?.[0]) { shopifyOrders = parseInt(salesRows[0][0]); revenue = parseFloat(salesRows[0][1]); }
+      const piecesRows = parseShopify(piecesRes);
+      if (piecesRows?.[0]) pieces = parseInt(piecesRows[0][0]);
+      const sessionsRows = parseShopify(sessionsRes);
+      if (sessionsRows?.[0]?.[1] !== undefined) conversionRate = parseFloat(sessionsRows[0][1]) * 100;
+
+      // ── Date label ──
+      let dateStr = '';
+      if (d.date_start) dateStr = d.date_start === d.date_stop ? d.date_start : d.date_start + ' – ' + d.date_stop;
+      const periodLabel = currentPeriod === 'custom' && customFrom && customTo
+        ? `${customFrom} → ${customTo}` : (PERIOD_LABELS[currentPeriod] || currentPeriod);
+      document.getElementById('date-label').textContent =
+        periodLabel + (dateStr ? '  ·  ' + dateStr : '') + '  ·  ' + (d.name || account.meta_account_id);
+
+      // ── Meta values ──
+      const spend          = parseNum(d.amount_spent);
+      const costPerEngage  = parseNum(d['cost_per_action_type:page_engagement']);
+      const costPerFollow  = parseNum(d['cost_per_action_type:like']);
+      const numLikes       = parseNum(d['actions:like']);
+      const numEngagements = parseNum(d['actions:page_engagement']);
+      const numComments    = parseNum(d['actions:comment']);
+      const numReactions   = parseNum(d['actions:post_reaction']);
+      const numLinkClicks  = parseNum(d['actions:link_click']);
+      const impressions    = parseNum(d.impressions);
+      const reach          = parseNum(d.reach);
+      const clicks         = parseNum(d.clicks);
+      const cpm            = parseNum(d.cpm);
+      const cpc            = parseNum(d.cpc);
+      const ctr            = parseNum(d.ctr);
+      const frequency      = parseNum(d.frequency);
+      const numMessages    = parseNum(d.results);
+      const costPerMessage = parseNum(d.cost_per_result);
+
+      const avgCostPerOrder = (spend && shopifyOrders) ? spend / shopifyOrders : null;
+      const avgCostPerPiece = (spend && pieces)        ? spend / pieces        : null;
+      const roas            = (revenue && spend)       ? revenue / spend       : null;
+
+      const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
+      const sfmtSub = text => !shopifyEnabled
+        ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
+        : text;
+      const shopifySubLabel = !shopifyEnabled
+        ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
+        : '<span class="shopify-badge">● Shopify</span>';
+
+      document.getElementById('content').innerHTML = `
+        <div class="section-label">Primary KPIs</div>
+        <div class="kpi-grid">
+          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(spend, curr),                   'Meta Ads')}
+          ${kpi('c-sky',    '🛒', 'Number of Orders',    sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Shopify orders'))}
+          ${kpi('c-teal',   '🧮', 'Number of Pieces',    sfmt(pieces, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ units sold'))}
+          ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
+          ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'))}
+          ${kpi('c-green',  '🎯', 'Conversion Rate',     sfmt(conversionRate, v => fmt(v,'',2) + '%'), shopifySubLabel)}
+        </div>
+
+        <div class="section-label">Performance Trends</div>
+        <div class="charts-grid">
+          <div class="chart-wrapper">
+            <div class="chart-title">Daily Spend (${curr.trim()})</div>
+            ${dailyData.length ? '<canvas id="chart-spend" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
+          </div>
+          <div class="chart-wrapper">
+            <div class="chart-title">${shopifyEnabled ? 'Daily ROAS' : 'Reach &amp; Impressions'}</div>
+            ${dailyData.length ? '<canvas id="chart-roas-reach" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
+          </div>
+        </div>
+
+        <div class="section-label">Campaign Breakdown</div>
+        <div class="table-wrapper">${renderCampaignTableHTML(campaigns, curr)}</div>
+
+        <div class="section-label">Analysis Factors</div>
+        <div class="metrics-grid">
+          ${metric('Impressions',             fmt(impressions,'',0), true)}
+          ${metric('Reach',                   fmt(reach,'',0))}
+          ${metric('Clicks (all)',            fmt(clicks,'',0))}
+          ${metric('Link Clicks',             fmt(numLinkClicks,'',0))}
+          ${metric('CTR',                     fmt(ctr) + '%', true)}
+          ${metric('Cost per Click (CPC)',    fmt(cpc, curr))}
+          ${metric('CPM (per 1K impr.)',      fmt(cpm, curr))}
+          ${metric('Frequency',               fmt(frequency))}
+          ${metric('Engagements',             fmt(numEngagements,'',0), true)}
+          ${metric('Avg Cost per Engagement', fmt(costPerEngage, curr))}
+          ${metric('Reactions',               fmt(numReactions,'',0))}
+          ${metric('Comments',                fmt(numComments,'',0))}
+          ${metric('Page Likes / Follows',    fmt(numLikes,'',0))}
+          ${metric('Avg Cost per Follow',     fmt(costPerFollow, curr))}
+          ${metric('Number of Messages',      fmt(numMessages,'',0), true)}
+          ${metric('Cost per Message',        fmt(costPerMessage, curr))}
+        </div>`;
+
+      // Initialize charts after DOM is updated
+      try {
+        initCharts(dailyData, dailySalesRows, shopifyEnabled, curr);
+      } catch (e) {
+        console.error('Chart init error:', e);
+      } finally {
+        btn.disabled = false; btn.textContent = '↻ Refresh';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ALL-ACCOUNTS AGGREGATION
+    // ─────────────────────────────────────────────────────────────
+    async function loadAllAccounts() {
+      const allAccounts = Object.values(accountMap);
+      if (!allAccounts.length) return;
+
+      destroyCharts();
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true; btn.textContent = '⏳ Loading…';
+
+      document.getElementById('content').innerHTML =
+        `<div class="loading-state"><div class="spinner"></div>Fetching data for all ${allAccounts.length} account(s)…</div>`;
+
+      const dr = shopifyDR(currentPeriod);
+      const metaBase = acc => ({
+        account_db_id: acc.id,
+        period: currentPeriod,
+        custom_from: customFrom || undefined,
+        custom_to:   customTo   || undefined,
+      });
+
+      // Parallel fetch: account-level + campaign-level + daily for every account
+      const [metaResults, campaignResults, dailyResults] = await Promise.all([
+        Promise.allSettled(allAccounts.map(acc => callEdgeFunction('meta-data', metaBase(acc)))),
+        Promise.allSettled(allAccounts.map(acc => callEdgeFunction('meta-data', { ...metaBase(acc), level: 'campaign' }))),
+        Promise.allSettled(allAccounts.map(acc => callEdgeFunction('meta-data', { ...metaBase(acc), level: 'daily' }))),
+      ]);
+
+      // Detect any TOKEN_EXPIRED responses across accounts
+      const expiredAccountNames = [];
+      for (let i = 0; i < metaResults.length; i++) {
+        const res = metaResults[i];
+        const errMsg = res.value?.error;
+        if (errMsg === 'TOKEN_EXPIRED') {
+          expiredAccountNames.push(allAccounts[i]?.account_name || allAccounts[i]?.meta_account_id || 'Unknown');
+        }
+      }
+
+      // Aggregate Meta account-level totals
+      let totSpend = 0, totImpressions = 0, totReach = 0, totClicks = 0;
+      let totLikes = 0, totEngagements = 0, totComments = 0, totReactions = 0, totLinkClicks = 0;
+      let totMessages = 0;
+      let dateStart = null, dateStop = null, accountsWithData = 0;
+
+      for (const res of metaResults) {
+        if (res.status !== 'fulfilled' || res.value?.error || !res.value?.ad_entity) continue;
+        const d = res.value.ad_entity;
+        accountsWithData++;
+        totSpend       += parseNum(d.amount_spent)                     || 0;
+        totImpressions += parseNum(d.impressions)                      || 0;
+        totReach       += parseNum(d.reach)                            || 0;
+        totClicks      += parseNum(d.clicks)                           || 0;
+        totLikes       += parseNum(d['actions:like'])                  || 0;
+        totEngagements += parseNum(d['actions:page_engagement'])       || 0;
+        totComments    += parseNum(d['actions:comment'])               || 0;
+        totReactions   += parseNum(d['actions:post_reaction'])         || 0;
+        totLinkClicks  += parseNum(d['actions:link_click'])            || 0;
+        totMessages    += parseNum(d.results)                          || 0;
+        if (!dateStart && d.date_start) dateStart = d.date_start;
+        if (!dateStop  && d.date_stop)  dateStop  = d.date_stop;
+      }
+
+      if (accountsWithData === 0) {
+        document.getElementById('content').innerHTML =
+          `<div class="no-data"><strong>No data for this period</strong>None of the ${allAccounts.length} account(s) returned data.</div>`;
+        btn.disabled = false; btn.textContent = '↻ Refresh'; return;
+      }
+
+      // Recompute derived metrics from totals (don't average rates)
+      const aggCTR = totImpressions > 0 ? (totClicks / totImpressions * 100)  : null;
+      const aggCPC = totClicks      > 0 ? (totSpend  / totClicks)             : null;
+      const aggCPM = totImpressions > 0 ? (totSpend  / totImpressions * 1000) : null;
+
+      // Aggregate daily data by date across all accounts
+      const dailyByDate = {};
+      for (const res of dailyResults) {
+        if (res.status !== 'fulfilled' || res.value?.error || !res.value?.daily) continue;
+        for (const row of res.value.daily) {
+          if (!row.date) continue;
+          if (!dailyByDate[row.date]) {
+            dailyByDate[row.date] = { date: row.date, spend: 0, impressions: 0, reach: 0 };
+          }
+          dailyByDate[row.date].spend       += parseFloat(row.spend)       || 0;
+          dailyByDate[row.date].impressions += parseFloat(row.impressions) || 0;
+          dailyByDate[row.date].reach       += parseFloat(row.reach)       || 0;
+        }
+      }
+      const aggregatedDailyData = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date));
+
+      // Unique Shopify stores across all linked accounts
+      const uniqueStoreIds = [...new Set(allAccounts.map(a => a.shopify_store_id).filter(Boolean))];
+      const shopifyEnabled = uniqueStoreIds.length > 0;
+
+      let totRevenue = null, totOrders = null, totPieces = null;
+      if (shopifyEnabled) {
+        const shopifyFetches = await Promise.allSettled(
+          uniqueStoreIds.flatMap(storeId => [
+            callEdgeFunction('shopify-data', { store_id: storeId, query: `FROM sales SHOW orders, net_sales ${dr}` }),
+            callEdgeFunction('shopify-data', { store_id: storeId, query: `FROM inventory SHOW inventory_units_sold ${dr}` }),
+          ])
+        );
+        for (let i = 0; i < uniqueStoreIds.length; i++) {
+          const sRes = shopifyFetches[i * 2];
+          const pRes = shopifyFetches[i * 2 + 1];
+          if (sRes.status === 'fulfilled' && sRes.value?.rows?.[0]) {
+            totOrders  = (totOrders  || 0) + (parseInt(sRes.value.rows[0][0])  || 0);
+            totRevenue = (totRevenue || 0) + (parseFloat(sRes.value.rows[0][1]) || 0);
+          }
+          if (pRes.status === 'fulfilled' && pRes.value?.rows?.[0]) {
+            totPieces = (totPieces || 0) + (parseInt(pRes.value.rows[0][0]) || 0);
+          }
+        }
+      }
+
+      const avgCostPerOrder = (totSpend && totOrders)  ? totSpend / totOrders  : null;
+      const avgCostPerPiece = (totSpend && totPieces)  ? totSpend / totPieces  : null;
+      const roas            = (totRevenue && totSpend) ? totRevenue / totSpend : null;
+
+      const allCampaigns = campaignResults.flatMap(r =>
+        (r.status === 'fulfilled' && !r.value?.error) ? (r.value?.campaigns || []) : []
+      );
+
+      const currencies  = [...new Set(allAccounts.map(a => a.currency).filter(Boolean))];
+      const curr        = currencies.length === 1 ? currencies[0] + ' ' : '';
+      const currLabel   = currencies.length === 1 ? currencies[0] : 'Mixed';
+
+      const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
+      const sfmtSub = text => !shopifyEnabled
+        ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
+        : text;
+      const shopifySubLabel = !shopifyEnabled
+        ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
+        : '<span class="shopify-badge">● Shopify</span>';
+
+      const periodLabel = currentPeriod === 'custom' && customFrom && customTo
+        ? `${customFrom} → ${customTo}` : (PERIOD_LABELS[currentPeriod] || currentPeriod);
+      const dateStr = (dateStart && dateStop && dateStart !== dateStop)
+        ? `${dateStart} – ${dateStop}` : (dateStart || '');
+      document.getElementById('date-label').textContent =
+        `${periodLabel}${dateStr ? '  ·  ' + dateStr : ''}  ·  All Accounts (${accountsWithData})`;
+
+      document.getElementById('content').innerHTML = `
+        ${expiredAccountNames.length ? `
+        <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px">
+          <span style="font-size:20px;flex-shrink:0">🔑</span>
+          <div style="flex:1">
+            <strong style="font-size:13px;color:#991B1B">Meta token expired</strong>
+            <p style="font-size:12px;color:#7F1D1D;margin:4px 0 10px;line-height:1.5">
+              ${expiredAccountNames.map(n => `<strong>${escHtml(n)}</strong>`).join(', ')}
+              ${expiredAccountNames.length === 1 ? 'is' : 'are'} excluded from this view — the access token has expired.
+              Go to <a href="#" onclick="document.getElementById('settings-btn').click();return false" style="color:#B91C1C;font-weight:600">Settings → Integrations</a> to reconnect, or select the account individually to reconnect from there.
+            </p>
+          </div>
+        </div>` : ''}
+        <div class="section-label">Primary KPIs · All Accounts Aggregated</div>
+        <div class="kpi-grid">
+          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(totSpend, curr),  `${currLabel} · ${accountsWithData} account(s)`)}
+          ${kpi('c-sky',    '🛒', 'Number of Orders',    sfmt(totOrders, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders'))}
+          ${kpi('c-teal',   '🧮', 'Number of Pieces',    sfmt(totPieces, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Units sold'))}
+          ${kpi('c-gold',   '💵', 'Revenue',             sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
+          ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
+          ${kpi('c-green',  '🎯', 'Impressions',         fmt(totImpressions,'',0), `Reach: ${fmt(totReach,'',0)}`)}
+        </div>
+
+        <div class="section-label">Performance Trends · All Accounts</div>
+        <div class="charts-grid">
+          <div class="chart-wrapper">
+            <div class="chart-title">Daily Spend (${currLabel})</div>
+            ${aggregatedDailyData.length ? '<canvas id="chart-spend" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
+          </div>
+          <div class="chart-wrapper">
+            <div class="chart-title">Reach &amp; Impressions</div>
+            ${aggregatedDailyData.length ? '<canvas id="chart-roas-reach" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
+          </div>
+        </div>
+
+        <div class="section-label">Campaign Breakdown · All Accounts</div>
+        <div class="table-wrapper">${renderCampaignTableHTML(allCampaigns, curr)}</div>
+
+        <div class="section-label">Analysis Factors</div>
+        <div class="metrics-grid">
+          ${metric('Total Impressions',    fmt(totImpressions,'',0), true)}
+          ${metric('Total Reach',          fmt(totReach,'',0))}
+          ${metric('Total Clicks',         fmt(totClicks,'',0))}
+          ${metric('Link Clicks',          fmt(totLinkClicks,'',0))}
+          ${metric('Avg CTR',              aggCTR !== null ? fmt(aggCTR) + '%' : '—', true)}
+          ${metric('Avg CPC',              fmt(aggCPC, curr))}
+          ${metric('Avg CPM',              fmt(aggCPM, curr))}
+          ${metric('Total Engagements',    fmt(totEngagements,'',0), true)}
+          ${metric('Total Reactions',      fmt(totReactions,'',0))}
+          ${metric('Total Comments',       fmt(totComments,'',0))}
+          ${metric('Page Likes / Follows', fmt(totLikes,'',0))}
+          ${metric('Total Messages',       fmt(totMessages,'',0), true)}
+          ${metric('Accounts w/ Data',     String(accountsWithData))}
+        </div>`;
+
+      // Initialize trend charts after DOM is updated
+      try {
+        if (aggregatedDailyData.length) {
+          initCharts(aggregatedDailyData, null, false, curr);
+        }
+      } catch (e) {
+        console.error('Chart init error (all accounts):', e);
+      } finally {
+        btn.disabled = false; btn.textContent = '↻ Refresh';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // AUTO-REFRESH
+    // Default: 30 min. Overridable via dashboard_settings.auto_refresh_minutes
+    // (applyOrgContext sets window._refreshMs if the DB setting differs).
+    // ─────────────────────────────────────────────────────────────
+    window._refreshMs = 30 * 60 * 1000;  // default; overwritten by DB settings
+    const REFRESH_MS = () => window._refreshMs || 30 * 60 * 1000;
+
+    function startAutoRefresh() {
+      if (timer) clearInterval(timer);
+      nextAt = Date.now() + REFRESH_MS();
+      timer = setInterval(() => {
+        const rem = nextAt - Date.now();
+        if (rem <= 0) { nextAt = Date.now() + REFRESH_MS(); loadData(); }
+        else {
+          const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+          const el = document.getElementById('auto-refresh-label');
+          if (el) el.textContent = `Auto-refresh in ${m}m ${s}s`;
+        }
+      }, 1000);
+    }
+
+    async function loadDataWithRefresh() { await loadData(); startAutoRefresh(); }
+
+    // ─────────────────────────────────────────────────────────────
+    // SETTINGS MODAL
+    // ─────────────────────────────────────────────────────────────
+    document.getElementById('settings-btn').addEventListener('click', async () => {
+      document.getElementById('settings-modal').classList.remove('hidden');
+      await refreshSettingsData();
+    });
+    document.getElementById('modal-close').addEventListener('click', () => {
+      document.getElementById('settings-modal').classList.add('hidden');
+    });
+    document.getElementById('settings-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('settings-modal'))
+        document.getElementById('settings-modal').classList.add('hidden');
+    });
+
+    async function refreshSettingsData() {
+      if (!currentOrgId) return;
+
+      // Load stores
+      const { data: stores } = await sb
+        .from('shopify_stores_safe')
+        .select('id, shop_domain, shop_name, is_active, connected_at')
+        .eq('organization_id', currentOrgId);
+
+      const storeList = document.getElementById('shopify-store-list');
+      storeList.innerHTML = (stores || []).map(s => `
+        <div class="store-item" id="store-row-${escHtml(s.id)}">
+          <div>
+            <div class="store-domain">${escHtml(s.shop_name || s.shop_domain)}</div>
+            <div class="store-meta">${escHtml(s.shop_domain)} · Connected ${new Date(s.connected_at).toLocaleDateString()}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="badge-active">Active</span>
+            <button class="disconnect-btn" onclick="disconnectShopify(${JSON.stringify(s.id)},${JSON.stringify(s.shop_domain)})">Disconnect</button>
+          </div>
+        </div>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No stores connected yet.</div>';
+
+      // Load meta accounts (active only — mirrors the main dropdown)
+      const { data: metaAccounts } = await sb
+        .from('meta_ad_accounts_safe')
+        .select('id, account_name, meta_account_id, currency, shopify_store_id')
+        .eq('organization_id', currentOrgId)
+        .eq('is_active', true);
+
+      const metaList = document.getElementById('meta-account-list');
+      metaList.innerHTML = (metaAccounts || []).map(a => `
+        <div class="store-item" id="meta-row-${escHtml(a.id)}">
+          <div>
+            <div class="store-domain">${escHtml(a.account_name || a.meta_account_id)}</div>
+            <div class="store-meta">${escHtml(a.meta_account_id)} · ${escHtml(a.currency)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="badge-active">Active</span>
+            <button class="disconnect-btn" onclick="disconnectMetaAccount(${JSON.stringify(a.id)},${JSON.stringify(a.account_name || a.meta_account_id)})">Disconnect</button>
+          </div>
+        </div>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No accounts connected yet.</div>';
+
+      // Populate link selects
+      const metaSel   = document.getElementById('link-meta-select');
+      const storeSel  = document.getElementById('link-store-select');
+      metaSel.innerHTML  = (metaAccounts || []).map(a => `<option value="${a.id}">${a.account_name || a.meta_account_id}</option>`).join('');
+      storeSel.innerHTML = `<option value="">No store (non-e-commerce)</option>` +
+        (stores || []).map(s => `<option value="${s.id}">${s.shop_name || s.shop_domain}</option>`).join('');
+    }
+
+    // Connect Shopify Store → trigger OAuth
+    document.getElementById('connect-shopify-btn').addEventListener('click', async () => {
+      const domain = document.getElementById('shopify-domain-input').value.trim();
+      const status = document.getElementById('shopify-status');
+      status.className = 'modal-status';
+      if (!domain) { status.textContent = 'Enter a store domain.'; return; }
+
+      status.textContent = 'Redirecting to Shopify…';
+      const jwt = await getJWT();
+      // Navigate to initiate OAuth (same tab — Shopify redirects back when done)
+      window.location.href = `${SUPABASE_URL}/functions/v1/shopify-oauth?shop=${encodeURIComponent(domain)}&org_id=${currentOrgId}&t=${jwt}`;
+    });
+
+    // Connect Meta → open popup
+    document.getElementById('connect-meta-btn').addEventListener('click', async () => {
+      const status = document.getElementById('meta-status');
+      status.className = 'modal-status';
+      status.textContent = 'Opening Meta login…';
+      const jwt = await getJWT();
+      const popup = window.open(
+        `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`,
+        'meta-oauth',
+        'width=600,height=700,scrollbars=yes'
+      );
+      const handler = async (e) => {
+        if (e.data?.event === 'meta_oauth_complete') {
+          window.removeEventListener('message', handler);
+          status.className = 'modal-status success';
+          status.textContent = `✓ ${e.data.accounts_connected} account(s) connected.`;
+          await refreshSettingsData();
+          await loadAccounts(); // refresh main dropdown
+        } else if (e.data?.event === 'meta_oauth_error') {
+          window.removeEventListener('message', handler);
+          status.className = 'modal-status error';
+          status.textContent = `Error: ${e.data.message}`;
+        }
+      };
+      window.addEventListener('message', handler);
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) { clearInterval(checkClosed); window.removeEventListener('message', handler); }
+      }, 500);
+    });
+
+    // Link account → store
+    document.getElementById('link-btn').addEventListener('click', async () => {
+      const accountId = document.getElementById('link-meta-select').value;
+      const storeId   = document.getElementById('link-store-select').value || null;
+      const status    = document.getElementById('link-status');
+      status.className = 'modal-status';
+      if (!accountId) { status.textContent = 'Select a Meta account.'; return; }
+      const { error } = await sb
+        .from('meta_ad_accounts')
+        .update({ shopify_store_id: storeId })
+        .eq('id', accountId);
+      if (error) { status.className = 'modal-status error'; status.textContent = error.message; }
+      else { status.className = 'modal-status success'; status.textContent = '✓ Link updated.'; await loadAccounts(); }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // DISCONNECT HELPERS
+    // ─────────────────────────────────────────────────────────────
+
+    async function disconnectShopify(storeId, shopDomain) {
+      if (!confirm(`Disconnect ${shopDomain}?\n\nThis will stop syncing data. You can reconnect at any time.`)) return;
+      const row = document.getElementById(`store-row-${storeId}`);
+      if (row) row.style.opacity = '0.5';
+      // Mark as inactive in the DB. We don't hard-delete so historical data is preserved.
+      const { error } = await sb
+        .from('shopify_stores')
+        .update({ is_active: false, status: 'disconnected' })
+        .eq('id', storeId)
+        .eq('organization_id', currentOrgId);
+      if (error) {
+        if (row) row.style.opacity = '1';
+        document.getElementById('shopify-status').className = 'modal-status error';
+        document.getElementById('shopify-status').textContent = error.message;
+      } else {
+        await refreshSettingsData();
+        await loadAccounts();
+        document.getElementById('shopify-status').className = 'modal-status success';
+        document.getElementById('shopify-status').textContent = `✓ ${shopDomain} disconnected.`;
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // META TOKEN EXPIRED UI
+    // ─────────────────────────────────────────────────────────────
+
+    function renderTokenExpiredHTML(accountName) {
+      return `<div class="no-data" style="padding:48px 32px;text-align:center">
+        <div style="font-size:44px;margin-bottom:16px">🔑</div>
+        <strong style="font-size:17px;display:block;margin-bottom:12px">Meta connection needs to be refreshed</strong>
+        <p style="margin:0 auto 24px;max-width:400px;font-size:14px;line-height:1.65;color:var(--text-muted)">
+          The Meta access token for <strong style="color:var(--text-main)">${escHtml(accountName)}</strong> has expired.
+          This happens every 60 days and requires re-authorization in Meta.
+          Your historical data is preserved — reconnecting takes under a minute.
+        </p>
+        <button onclick="reconnectMeta()"
+          style="padding:12px 28px;background:var(--blue-dark);color:white;border:none;
+                 border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
+                 transition:opacity 0.15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          Reconnect Meta Account
+        </button>
+      </div>`;
+    }
+
+    async function reconnectMeta() {
+      const jwt = await getJWT();
+      const popup = window.open(
+        `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`,
+        'meta-oauth',
+        'width=600,height=700,scrollbars=yes'
+      );
+      const content = document.getElementById('content');
+      content.innerHTML = `<div class="loading-state"><div class="spinner"></div>Waiting for Meta authorization…</div>`;
+      const handler = async (e) => {
+        if (e.data?.event === 'meta_oauth_complete') {
+          window.removeEventListener('message', handler);
+          content.innerHTML = `<div class="loading-state"><div class="spinner"></div>Token refreshed! Reloading data…</div>`;
+          await loadAccounts();       // refresh dropdown (account may have new token)
+          await loadData();           // reload with fresh token
+        } else if (e.data?.event === 'meta_oauth_error') {
+          window.removeEventListener('message', handler);
+          content.innerHTML = `<div class="error-state">⚠️ Meta reconnect failed: ${escHtml(e.data.message)}</div>`;
+        }
+      };
+      window.addEventListener('message', handler);
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handler);
+          // If popup closed with no event, show reconnect UI again
+          if (content.innerHTML.includes('Waiting for Meta')) {
+            const account = accountMap[sel.value];
+            content.innerHTML = renderTokenExpiredHTML(account?.account_name || account?.meta_account_id || '');
+          }
+        }
+      }, 500);
+    }
+
+    async function disconnectMetaAccount(accountId, accountName) {
+      if (!confirm(`Disconnect ${accountName}?\n\nThis will stop syncing ad data. You can reconnect via Connect Meta Account.`)) return;
+      const row = document.getElementById(`meta-row-${accountId}`);
+      if (row) row.style.opacity = '0.5';
+      const { error } = await sb
+        .from('meta_ad_accounts')
+        .update({ status: 'disconnected', is_active: false })
+        .eq('id', accountId)
+        .eq('organization_id', currentOrgId);
+      if (error) {
+        if (row) row.style.opacity = '1';
+        document.getElementById('meta-status').className = 'modal-status error';
+        document.getElementById('meta-status').textContent = error.message;
+      } else {
+        await refreshSettingsData();
+        await loadAccounts();
+        document.getElementById('meta-status').className = 'modal-status success';
+        document.getElementById('meta-status').textContent = `✓ ${accountName} disconnected.`;
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ONBOARDING FLOW
+    // ─────────────────────────────────────────────────────────────
+
+    function showOnboarding() {
+      document.getElementById('onboarding-overlay').classList.remove('hidden');
+      document.getElementById('ob-org-name').focus();
+    }
+
+    function hideOnboarding() {
+      document.getElementById('onboarding-overlay').classList.add('hidden');
+    }
+
+    function setObDot(step) {
+      // step 1 or 2
+      document.getElementById('ob-dot-1').className = 'onboarding-step-dot' + (step === 1 ? ' active' : ' done');
+      document.getElementById('ob-dot-2').className = 'onboarding-step-dot' + (step === 2 ? ' active' : '');
+    }
+
+    // Step 1: Create organisation
+    document.getElementById('ob-create-btn').addEventListener('click', async () => {
+      const name   = document.getElementById('ob-org-name').value.trim();
+      const status = document.getElementById('ob-step1-status');
+      if (!name) { status.className = 'onboarding-status error'; status.textContent = 'Please enter a name for your organisation.'; return; }
+
+      const btn = document.getElementById('ob-create-btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+      status.className = 'onboarding-status';
+      status.textContent = '';
+
+      const { data: newOrgId, error } = await sb.rpc('create_organization', { org_name: name });
+      if (error) {
+        status.className = 'onboarding-status error';
+        status.textContent = error.message || 'Failed to create organisation. Try again.';
+        btn.disabled = false;
+        btn.textContent = 'Create Organisation →';
+        return;
+      }
+
+      // Org created — update state and advance to step 2
+      currentOrgId = newOrgId;
+      currentRole  = 'owner';
+      localStorage.setItem('dash_org_id', currentOrgId);
+
+      document.getElementById('ob-step-1').style.display = 'none';
+      document.getElementById('ob-step-2').style.display = 'block';
+      setObDot(2);
+    });
+
+    // Step 2: Connect Shopify during onboarding
+    document.getElementById('ob-connect-shopify-btn').addEventListener('click', async () => {
+      const domain = document.getElementById('ob-shopify-domain').value.trim();
+      const status = document.getElementById('ob-shopify-status');
+      if (!domain) { status.className = 'onboarding-status error'; status.textContent = 'Enter your Shopify store domain.'; return; }
+      status.className = 'onboarding-status';
+      status.textContent = 'Redirecting to Shopify…';
+      const jwt = await getJWT();
+      window.location.href = `${SUPABASE_URL}/functions/v1/shopify-oauth?shop=${encodeURIComponent(domain)}&org_id=${currentOrgId}&t=${jwt}`;
+    });
+
+    // Step 2: Connect Meta during onboarding
+    document.getElementById('ob-connect-meta-btn').addEventListener('click', async () => {
+      const status = document.getElementById('ob-meta-status');
+      status.className = 'onboarding-status';
+      status.textContent = 'Opening Meta login…';
+      const jwt = await getJWT();
+      const popup = window.open(
+        `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`,
+        'meta-oauth',
+        'width=600,height=700,scrollbars=yes'
+      );
+      const handler = (e) => {
+        if (e.data?.event === 'meta_oauth_complete') {
+          window.removeEventListener('message', handler);
+          status.className = 'onboarding-status success';
+          status.textContent = `✓ ${e.data.accounts_connected} account(s) connected.`;
+        } else if (e.data?.event === 'meta_oauth_error') {
+          window.removeEventListener('message', handler);
+          status.className = 'onboarding-status error';
+          status.textContent = `Error: ${e.data.message}`;
+        }
+      };
+      window.addEventListener('message', handler);
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) { clearInterval(checkClosed); window.removeEventListener('message', handler); }
+      }, 500);
+    });
+
+    // Step 2: Finish onboarding
+    async function finishOnboarding() {
+      hideOnboarding();
+      await loadOrgs(); // Re-run full org load now that we have a membership
+    }
+
+    document.getElementById('ob-finish-btn').addEventListener('click', finishOnboarding);
+    document.getElementById('ob-skip-integrations').addEventListener('click', finishOnboarding);
+
+    // ─────────────────────────────────────────────────────────────
+    // HANDLE POST-OAUTH REDIRECTS (Shopify redirects back to APP_URL)
+    // ─────────────────────────────────────────────────────────────
+    const urlParams = new URLSearchParams(window.location.search);
+    const shopifyConnected = urlParams.get('shopify_connected');
+    const shopifyError     = urlParams.get('shopify_error');
+    if (shopifyConnected || shopifyError) {
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+      if (shopifyConnected) {
+        // Will be shown once settings modal opens after auth
+        localStorage.setItem('flash_success', `✓ ${shopifyConnected} connected successfully.`);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // AUTH STATE MACHINE (Supabase handles session persistence)
+    // ─────────────────────────────────────────────────────────────
+    Auth.onAuthStateChange(async (event, session) => {
+      const overlay = document.getElementById('auth-overlay');
+      if (session?.user) {
+        currentUser = session.user;
+        overlay.classList.add('hidden');
+        document.getElementById('auth-error').textContent = '';
+        await loadOrgs();
+
+        // Show flash message if returning from Shopify OAuth
+        const flash = localStorage.getItem('flash_success');
+        if (flash) {
+          localStorage.removeItem('flash_success');
+          setTimeout(async () => {
+            document.getElementById('settings-modal').classList.remove('hidden');
+            await refreshSettingsData();
+          }, 500);
+        }
+      } else {
+        currentUser = null;
+        if (timer) clearInterval(timer);
+        overlay.classList.remove('hidden');
+        setTimeout(() => document.getElementById('auth-email').focus(), 50);
+        orgSel.innerHTML = '<option value="">—</option>';
+        sel.innerHTML = '<option value="">— Select Account —</option>';
+        document.getElementById('content').innerHTML =
+          '<div class="loading-state">Select an account above to load data.</div>';
+        document.getElementById('auto-refresh-label').textContent = '';
+      }
+    });
+
+    // Initialize session (handles page reload with existing session)
+    Auth.getSession();
+  </script>
+</body>
+</html>
