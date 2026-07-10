@@ -760,10 +760,25 @@
       sel.innerHTML = '<option value="">— Select Account —</option>';
       accountMap = {};
 
+      // Auto-sync campaign flags if any account hasn't been synced in >24 h
+      // (runs in background — doesn't block account list from loading)
+      sb.from('meta_ad_accounts_safe')
+        .select('campaigns_last_synced_at')
+        .eq('organization_id', currentOrgId)
+        .eq('is_active', true)
+        .then(({ data: rows }) => {
+          const stale = (rows || []).some(r => {
+            if (!r.campaigns_last_synced_at) return true;
+            const age = Date.now() - new Date(r.campaigns_last_synced_at).getTime();
+            return age > 24 * 60 * 60 * 1000; // 24 hours
+          });
+          if (stale) syncCampaigns().then(() => loadAccounts());
+        });
+
       // Only show accounts with active campaigns (or not-yet-synced = null)
       const { data: accounts } = await sb
         .from('meta_ad_accounts_safe')  // safe view, no tokens
-        .select('id, meta_account_id, account_name, currency, shopify_store_id')
+        .select('id, meta_account_id, account_name, currency, shopify_store_id, campaigns_last_synced_at')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true)
         .or('has_active_campaigns.is.null,has_active_campaigns.eq.true')
@@ -862,6 +877,17 @@
     // ─────────────────────────────────────────────────────────────
     async function getJWT() {
       return Auth.getToken();
+    }
+
+    // Fires meta-campaigns-sync for the current org.
+    // Best-effort: errors are logged but not surfaced to the user.
+    async function syncCampaigns() {
+      if (!currentOrgId) return;
+      try {
+        await callEdgeFunction('meta-campaigns-sync', { organization_id: currentOrgId });
+      } catch (e) {
+        console.warn('meta-campaigns-sync skipped:', e);
+      }
     }
 
     async function callEdgeFunction(name, body) {
@@ -1594,9 +1620,11 @@
         if (e.data?.event === 'meta_oauth_complete') {
           window.removeEventListener('message', handler);
           status.className = 'modal-status success';
+          status.textContent = `✓ ${e.data.accounts_connected} account(s) connected. Syncing campaigns…`;
+          await syncCampaigns();  // mark which accounts have active campaigns
           status.textContent = `✓ ${e.data.accounts_connected} account(s) connected.`;
           await refreshSettingsData();
-          await loadAccounts(); // refresh main dropdown
+          await loadAccounts(); // refresh main dropdown (filtered to active campaigns)
         } else if (e.data?.event === 'meta_oauth_error') {
           window.removeEventListener('message', handler);
           status.className = 'modal-status error';
@@ -1685,6 +1713,7 @@
         if (e.data?.event === 'meta_oauth_complete') {
           window.removeEventListener('message', handler);
           content.innerHTML = `<div class="loading-state"><div class="spinner"></div>Token refreshed! Reloading data…</div>`;
+          await syncCampaigns();      // refresh active-campaign flags
           await loadAccounts();       // refresh dropdown (account may have new token)
           await loadData();           // reload with fresh token
         } else if (e.data?.event === 'meta_oauth_error') {
@@ -1799,11 +1828,12 @@
         'meta-oauth',
         'width=600,height=700,scrollbars=yes'
       );
-      const handler = (e) => {
+      const handler = async (e) => {
         if (e.data?.event === 'meta_oauth_complete') {
           window.removeEventListener('message', handler);
           status.className = 'onboarding-status success';
           status.textContent = `✓ ${e.data.accounts_connected} account(s) connected.`;
+          await syncCampaigns();  // mark which accounts have active campaigns
         } else if (e.data?.event === 'meta_oauth_error') {
           window.removeEventListener('message', handler);
           status.className = 'onboarding-status error';
