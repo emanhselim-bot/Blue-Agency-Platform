@@ -960,7 +960,9 @@
       };
 
       const labels = dailyData.map(d => {
+        if (!d.date) return '—';
         const dt = new Date(d.date + 'T00:00:00');
+        if (isNaN(dt.getTime())) return d.date;
         return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
       });
       const spendData = dailyData.map(d => parseFloat(d.spend) || 0);
@@ -1841,29 +1843,49 @@
     // ─────────────────────────────────────────────────────────────
     // AUTH STATE MACHINE (Supabase handles session persistence)
     // ─────────────────────────────────────────────────────────────
+    // Guard against concurrent loadOrgs() calls (e.g. TOKEN_REFRESHED during initial load)
+    let _orgsLoading = false;
+
     Auth.onAuthStateChange((event, session) => {
       const overlay = document.getElementById('auth-overlay');
       if (session?.user) {
         currentUser = session.user;
         overlay.classList.add('hidden');
         document.getElementById('auth-error').textContent = '';
-        // Defer loadOrgs() outside the Supabase session lock to prevent deadlock.
-        // The onAuthStateChange callback fires while the auth lock is still held;
-        // any sb.from() call inside it tries to re-acquire that lock → deadlock.
-        setTimeout(async () => {
-          await loadOrgs();
-          // Show flash message if returning from Shopify OAuth
-          const flash = localStorage.getItem('flash_success');
-          if (flash) {
-            localStorage.removeItem('flash_success');
-            setTimeout(async () => {
-              document.getElementById('settings-modal').classList.remove('hidden');
-              await refreshSettingsData();
-            }, 500);
-          }
-        }, 0);
+
+        // Only trigger a full org reload on INITIAL_SESSION or SIGNED_IN.
+        // TOKEN_REFRESHED fires periodically and must not re-run loadOrgs()
+        // while the user is actively using the dashboard.
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+          if (_orgsLoading) return;
+          _orgsLoading = true;
+          // Defer outside the Supabase navigator.locks session lock.
+          // The lock is held during onAuthStateChange; any sb.from() call
+          // inside it tries to re-acquire the same lock → deadlock.
+          // A 50 ms macrotask delay is enough to guarantee lock release.
+          setTimeout(async () => {
+            try {
+              await loadOrgs();
+              // Show flash message if returning from Shopify OAuth
+              const flash = localStorage.getItem('flash_success');
+              if (flash) {
+                localStorage.removeItem('flash_success');
+                setTimeout(async () => {
+                  document.getElementById('settings-modal').classList.remove('hidden');
+                  await refreshSettingsData();
+                }, 500);
+              }
+            } catch (e) {
+              console.error('loadOrgs error:', e);
+              orgSel.innerHTML = '<option value="">Error — please reload</option>';
+            } finally {
+              _orgsLoading = false;
+            }
+          }, 50);
+        }
       } else {
         currentUser = null;
+        _orgsLoading = false;
         if (timer) clearInterval(timer);
         overlay.classList.remove('hidden');
         setTimeout(() => document.getElementById('auth-email').focus(), 50);
