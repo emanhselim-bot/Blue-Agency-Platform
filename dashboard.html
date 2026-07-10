@@ -319,6 +319,7 @@
           <div style="display:flex;gap:4px;margin-bottom:12px">
             <button class="shopify-tab active" id="shopify-tab-oauth" onclick="setShopifyTab('oauth')">OAuth flow</button>
             <button class="shopify-tab" id="shopify-tab-partners" onclick="setShopifyTab('partners')">Partners access</button>
+            <button class="shopify-tab" id="shopify-tab-client" onclick="setShopifyTab('client')">📤 Send to client</button>
           </div>
 
           <!-- OAuth flow (existing) -->
@@ -341,6 +342,32 @@
               <input type="text" class="connect-input" id="shopify-partners-token" placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="font-family:monospace;font-size:12px">
             </div>
             <button class="connect-btn" id="connect-shopify-partners-btn" style="width:100%">Connect via Partners token</button>
+          </div>
+
+          <!-- Send to client (magic install link) -->
+          <div id="shopify-connect-client" style="display:none">
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+              Generate a one-click install link to send your client. They click it, approve on Shopify, and the store connects to your dashboard — <strong>no login required on their end</strong>.
+            </p>
+            <div class="connect-row">
+              <input type="text" class="connect-input" id="shopify-client-domain" placeholder="client-store.myshopify.com">
+              <button class="connect-btn" id="generate-client-link-btn">Generate Link</button>
+            </div>
+            <div class="modal-status" id="client-link-status"></div>
+            <div id="client-link-result" style="display:none;margin-top:10px">
+              <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;margin-bottom:10px">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Install link (valid 7 days)</div>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input type="text" id="client-link-url" readonly style="flex:1;background:transparent;border:none;color:#94a3b8;font-size:11px;font-family:monospace;outline:none;min-width:0" />
+                  <button id="copy-link-btn" onclick="copyClientLink(event)" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">Copy link</button>
+                </div>
+              </div>
+              <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Ready-to-send message</div>
+                <textarea id="client-message-text" readonly style="width:100%;background:transparent;border:none;color:#94a3b8;font-size:12px;line-height:1.6;resize:none;outline:none;height:130px"></textarea>
+                <button id="copy-msg-btn" onclick="copyClientMessage(event)" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;margin-top:4px">Copy message</button>
+              </div>
+            </div>
           </div>
 
           <div class="modal-status" id="shopify-status"></div>
@@ -1450,8 +1477,10 @@
     function setShopifyTab(mode) {
       document.getElementById('shopify-connect-oauth').style.display    = mode === 'oauth'    ? '' : 'none';
       document.getElementById('shopify-connect-partners').style.display = mode === 'partners' ? '' : 'none';
+      document.getElementById('shopify-connect-client').style.display   = mode === 'client'   ? '' : 'none';
       document.getElementById('shopify-tab-oauth').classList.toggle('active', mode === 'oauth');
       document.getElementById('shopify-tab-partners').classList.toggle('active', mode === 'partners');
+      document.getElementById('shopify-tab-client').classList.toggle('active', mode === 'client');
     }
     function setObShopifyTab(mode) {
       document.getElementById('ob-shopify-connect-oauth').style.display    = mode === 'oauth'    ? '' : 'none';
@@ -1515,6 +1544,71 @@
       const token  = document.getElementById('ob-shopify-partners-token').value.trim();
       await connectViaPartnersToken(domain, token, document.getElementById('ob-shopify-status'));
     });
+
+    // Generate client install link
+    document.getElementById('generate-client-link-btn').addEventListener('click', async () => {
+      const domain  = document.getElementById('shopify-client-domain').value.trim();
+      const statusEl = document.getElementById('client-link-status');
+      const resultEl = document.getElementById('client-link-result');
+
+      statusEl.className = 'modal-status';
+      statusEl.textContent = '';
+      resultEl.style.display = 'none';
+
+      if (!domain) {
+        statusEl.className = 'modal-status error';
+        statusEl.textContent = 'Enter the client\'s Shopify domain first.';
+        return;
+      }
+      if (!currentOrgId) {
+        statusEl.className = 'modal-status error';
+        statusEl.textContent = 'No organisation selected.';
+        return;
+      }
+
+      statusEl.textContent = 'Generating link…';
+
+      try {
+        const jwt = await getJWT();
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/shopify-install-link`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop_domain: domain, org_id: currentOrgId, expires_in_days: 7 }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to generate link');
+
+        const expiryDate = new Date(data.expires_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+        document.getElementById('client-link-url').value = data.url;
+        document.getElementById('client-message-text').value =
+          `Hi,\n\nPlease click the link below to connect your Shopify store to our dashboard.\n\n${data.url}\n\nThis link expires on ${expiryDate}. Once you click "Install" on Shopify, your store data will appear automatically — no account needed on your end.\n\nLet me know if you have any questions!`;
+
+        statusEl.textContent = '';
+        resultEl.style.display = '';
+      } catch (err) {
+        statusEl.className = 'modal-status error';
+        statusEl.textContent = '✗ ' + (err.message || 'Network error');
+      }
+    });
+
+    function copyClientLink(e) {
+      const url = document.getElementById('client-link-url').value;
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = document.getElementById('copy-link-btn');
+        btn.textContent = '✓ Copied!';
+        btn.style.background = '#22c55e';
+        setTimeout(() => { btn.textContent = 'Copy link'; btn.style.background = '#3b82f6'; }, 2000);
+      });
+    }
+
+    function copyClientMessage(e) {
+      const msg = document.getElementById('client-message-text').value;
+      navigator.clipboard.writeText(msg).then(() => {
+        const btn = document.getElementById('copy-msg-btn');
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => { btn.textContent = 'Copy message'; }, 2000);
+      });
+    }
 
     // Connect Meta → open popup
     document.getElementById('connect-meta-btn').addEventListener('click', async () => {
