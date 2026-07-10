@@ -10,7 +10,6 @@
  * The Meta access token is never exposed to the browser.
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const META_API = "https://graph.facebook.com/v21.0";
@@ -22,6 +21,7 @@ const INSIGHTS_FIELDS = [
   "impressions",
   "reach",
   "clicks",
+  "inline_link_clicks",   // direct link-click count (more reliable than actions array)
   "cpm",
   "cpc",
   "ctr",
@@ -81,7 +81,7 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   // ── 1. Authenticate ──
@@ -327,15 +327,16 @@ serve(async (req: Request) => {
       frequency: insight.frequency,
 
       // Results (messages / leads / purchases — context-dependent)
-      results: insight.results?.[0]?.value ?? null,
-      cost_per_result: insight.cost_per_result ?? null,
+      // cost_per_result is an array [{action_type, value}]; extract first value
+      results:          insight.results?.[0]?.value         ?? null,
+      cost_per_result:  insight.cost_per_result?.[0]?.value ?? null,
 
-      // Action breakdowns
-      "actions:like":             actions["like"] ?? null,
+      // Action breakdowns (inline_link_clicks is a reliable direct field fallback)
+      "actions:like":             actions["like"]            ?? null,
       "actions:page_engagement":  actions["page_engagement"] ?? null,
-      "actions:comment":          actions["comment"] ?? null,
-      "actions:post_reaction":    actions["post_reaction"] ?? null,
-      "actions:link_click":       actions["link_click"] ?? null,
+      "actions:comment":          actions["comment"]         ?? null,
+      "actions:post_reaction":    actions["post_reaction"]   ?? null,
+      "actions:link_click":       actions["link_click"]      ?? insight.inline_link_clicks ?? null,
 
       // Cost per action
       "cost_per_action_type:page_engagement": costPerAction["page_engagement"] ?? null,
