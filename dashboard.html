@@ -155,6 +155,8 @@
     .connect-btn:hover { background: var(--blue-mid); }
     .connect-btn.secondary { background: #F3F4F6; color: var(--text-main); border: 1.5px solid var(--border); }
     .connect-btn.secondary:hover { background: var(--border); }
+    .shopify-tab { padding: 5px 12px; font-size: 12px; font-weight: 600; font-family: inherit; border-radius: 6px; border: 1.5px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all .15s; }
+    .shopify-tab.active { background: var(--blue-dark); color: white; border-color: var(--blue-dark); }
     .store-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
     .store-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--bg); border-radius: 8px; font-size: 13px; }
     .store-item .store-domain { font-weight: 600; }
@@ -312,10 +314,35 @@
         <!-- Connect Shopify Store -->
         <div class="modal-section">
           <div class="modal-section-title">Shopify Stores</div>
-          <div class="connect-row">
-            <input type="text" class="connect-input" id="shopify-domain-input" placeholder="brand.myshopify.com">
-            <button class="connect-btn" id="connect-shopify-btn">Connect</button>
+
+          <!-- Connection method toggle -->
+          <div style="display:flex;gap:4px;margin-bottom:12px">
+            <button class="shopify-tab active" id="shopify-tab-oauth" onclick="setShopifyTab('oauth')">OAuth flow</button>
+            <button class="shopify-tab" id="shopify-tab-partners" onclick="setShopifyTab('partners')">Partners access</button>
           </div>
+
+          <!-- OAuth flow (existing) -->
+          <div id="shopify-connect-oauth">
+            <div class="connect-row">
+              <input type="text" class="connect-input" id="shopify-domain-input" placeholder="brand.myshopify.com">
+              <button class="connect-btn" id="connect-shopify-btn">Connect</button>
+            </div>
+          </div>
+
+          <!-- Partners access (direct token) -->
+          <div id="shopify-connect-partners" style="display:none">
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+              In your <strong>Shopify Partners Dashboard</strong>, go to the client store → <em>Apps → Develop apps → Create an app</em> → install it → copy the <strong>Admin API access token</strong>.
+            </p>
+            <div class="connect-row" style="margin-bottom:8px">
+              <input type="text" class="connect-input" id="shopify-partners-domain" placeholder="brand.myshopify.com">
+            </div>
+            <div style="margin-bottom:8px">
+              <input type="text" class="connect-input" id="shopify-partners-token" placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="font-family:monospace;font-size:12px">
+            </div>
+            <button class="connect-btn" id="connect-shopify-partners-btn" style="width:100%">Connect via Partners token</button>
+          </div>
+
           <div class="modal-status" id="shopify-status"></div>
           <div class="store-list" id="shopify-store-list"></div>
         </div>
@@ -376,10 +403,31 @@
 
         <div style="margin-bottom:16px">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">Shopify</div>
-          <div class="connect-row">
-            <input type="text" class="onboarding-input" id="ob-shopify-domain" placeholder="brand.myshopify.com" style="margin-bottom:0;flex:1" />
-            <button class="connect-btn" id="ob-connect-shopify-btn" style="margin-left:8px">Connect</button>
+
+          <!-- Onboarding connection method toggle -->
+          <div style="display:flex;gap:4px;margin-bottom:10px">
+            <button class="shopify-tab active" id="ob-tab-oauth" onclick="setObShopifyTab('oauth')">OAuth flow</button>
+            <button class="shopify-tab" id="ob-tab-partners" onclick="setObShopifyTab('partners')">Partners access</button>
           </div>
+
+          <!-- OAuth flow -->
+          <div id="ob-shopify-connect-oauth">
+            <div class="connect-row">
+              <input type="text" class="onboarding-input" id="ob-shopify-domain" placeholder="brand.myshopify.com" style="margin-bottom:0;flex:1" />
+              <button class="connect-btn" id="ob-connect-shopify-btn" style="margin-left:8px">Connect</button>
+            </div>
+          </div>
+
+          <!-- Partners access -->
+          <div id="ob-shopify-connect-partners" style="display:none">
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
+              Partners Dashboard → client store → <em>Apps → Develop apps → Create an app</em> → install → copy the Admin API access token.
+            </p>
+            <input type="text" class="onboarding-input" id="ob-shopify-partners-domain" placeholder="brand.myshopify.com" style="margin-bottom:6px" />
+            <input type="text" class="onboarding-input" id="ob-shopify-partners-token" placeholder="shpat_xxxx…" style="font-family:monospace;font-size:12px;margin-bottom:6px" />
+            <button class="connect-btn" id="ob-connect-shopify-partners-btn" style="width:100%">Connect via Partners token</button>
+          </div>
+
           <div class="onboarding-status" id="ob-shopify-status"></div>
         </div>
 
@@ -1398,6 +1446,49 @@
         (stores || []).map(s => `<option value="${s.id}">${s.shop_name || s.shop_domain}</option>`).join('');
     }
 
+    // ── Tab switchers ──
+    function setShopifyTab(mode) {
+      document.getElementById('shopify-connect-oauth').style.display    = mode === 'oauth'    ? '' : 'none';
+      document.getElementById('shopify-connect-partners').style.display = mode === 'partners' ? '' : 'none';
+      document.getElementById('shopify-tab-oauth').classList.toggle('active', mode === 'oauth');
+      document.getElementById('shopify-tab-partners').classList.toggle('active', mode === 'partners');
+    }
+    function setObShopifyTab(mode) {
+      document.getElementById('ob-shopify-connect-oauth').style.display    = mode === 'oauth'    ? '' : 'none';
+      document.getElementById('ob-shopify-connect-partners').style.display = mode === 'partners' ? '' : 'none';
+      document.getElementById('ob-tab-oauth').classList.toggle('active', mode === 'oauth');
+      document.getElementById('ob-tab-partners').classList.toggle('active', mode === 'partners');
+    }
+
+    // ── Shared Partners token connect logic ──
+    async function connectViaPartnersToken(domain, token, statusEl) {
+      statusEl.className = 'modal-status';
+      if (!domain) { statusEl.textContent = 'Enter a store domain.'; return; }
+      if (!token)  { statusEl.textContent = 'Enter the Admin API access token.'; return; }
+      statusEl.textContent = 'Validating token…';
+      try {
+        const jwt = await getJWT();
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/shopify-partners-connect`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ organization_id: currentOrgId, shop_domain: domain, access_token: token }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          statusEl.className = 'modal-status error';
+          statusEl.textContent = '✗ ' + (data.error || 'Connection failed');
+          return;
+        }
+        statusEl.className = 'modal-status success';
+        statusEl.textContent = `✓ ${data.shop_name || domain} connected.`;
+        await refreshSettingsData();
+        await loadAccounts();
+      } catch (e) {
+        statusEl.className = 'modal-status error';
+        statusEl.textContent = '✗ ' + (e.message || 'Network error');
+      }
+    }
+
     // Connect Shopify Store → trigger OAuth
     document.getElementById('connect-shopify-btn').addEventListener('click', async () => {
       const domain = document.getElementById('shopify-domain-input').value.trim();
@@ -1409,6 +1500,20 @@
       const jwt = await getJWT();
       // Navigate to initiate OAuth (same tab — Shopify redirects back when done)
       window.location.href = `${SUPABASE_URL}/functions/v1/shopify-oauth?shop=${encodeURIComponent(domain)}&org_id=${currentOrgId}&t=${jwt}`;
+    });
+
+    // Connect Shopify via Partners token (settings modal)
+    document.getElementById('connect-shopify-partners-btn').addEventListener('click', async () => {
+      const domain = document.getElementById('shopify-partners-domain').value.trim();
+      const token  = document.getElementById('shopify-partners-token').value.trim();
+      await connectViaPartnersToken(domain, token, document.getElementById('shopify-status'));
+    });
+
+    // Connect Shopify via Partners token (onboarding)
+    document.getElementById('ob-connect-shopify-partners-btn').addEventListener('click', async () => {
+      const domain = document.getElementById('ob-shopify-partners-domain').value.trim();
+      const token  = document.getElementById('ob-shopify-partners-token').value.trim();
+      await connectViaPartnersToken(domain, token, document.getElementById('ob-shopify-status'));
     });
 
     // Connect Meta → open popup
