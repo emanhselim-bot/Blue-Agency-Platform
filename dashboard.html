@@ -8,8 +8,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
-  <!-- Chart.js for trend visualisations -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -198,16 +196,6 @@
     /* Disconnect button in settings modal */
     .disconnect-btn { padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--coral); background: none; border: 1px solid var(--coral); border-radius: 6px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s; }
     .disconnect-btn:hover { background: var(--coral); color: white; }
-
-    /* ── TREND CHARTS ── */
-    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
-    @media (max-width: 700px) { .charts-grid { grid-template-columns: 1fr; } }
-    .chart-wrapper { background: var(--surface); border-radius: 12px; padding: 16px 20px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04); }
-    .chart-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 10px; }
-    .chart-empty { display:flex; align-items:center; justify-content:center; height:120px; font-size:12px; color:var(--text-muted); }
-
-    /* ── CHART CANVAS HEIGHT (maintainAspectRatio:false requires explicit CSS height) ── */
-    .chart-wrapper canvas { display: block; height: 160px; }
 
     /* ── DATA TABLE ── */
     .table-wrapper { background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04); margin-bottom: 24px; overflow-x: auto; }
@@ -911,14 +899,6 @@
       }
     }
 
-    // ── Chart lifecycle ──────────────────────────────────────────
-    window._dashCharts = {};
-
-    function destroyCharts() {
-      Object.values(window._dashCharts || {}).forEach(c => { if (c) c.destroy(); });
-      window._dashCharts = {};
-    }
-
     // ── Campaign table HTML ──────────────────────────────────────
     function renderCampaignTableHTML(campaigns, curr) {
       if (!campaigns?.length) {
@@ -971,138 +951,6 @@
       </table>`;
     }
 
-    // ── Chart initialization (called after content innerHTML is set) ─
-    function initCharts(dailyData, dailySalesRows, shopifyEnabled, curr) {
-      if (!window.Chart || !dailyData?.length) return;
-
-      const chartDefaults = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, maxTicksLimit: 10, color: '#6B7280' }, grid: { display: false } },
-          y: { ticks: { font: { size: 10 }, color: '#6B7280' }, grid: { color: '#F0F2F6' } },
-        },
-      };
-
-      const labels = dailyData.map(d => {
-        if (!d.date) return '—';
-        const dt = new Date(d.date + 'T00:00:00');
-        if (isNaN(dt.getTime())) return d.date;
-        return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-      });
-      const spendData = dailyData.map(d => parseFloat(d.spend) || 0);
-
-      // Chart 1: Daily Spend (area line)
-      const spendCanvas = document.getElementById('chart-spend');
-      if (spendCanvas) {
-        window._dashCharts.spend = new Chart(spendCanvas, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [{
-              data: spendData,
-              borderColor: '#083BBF',
-              backgroundColor: 'rgba(8,59,191,0.07)',
-              fill: true,
-              tension: 0.35,
-              pointRadius: spendData.length > 14 ? 0 : 3,
-              pointHoverRadius: 4,
-              borderWidth: 2,
-            }],
-          },
-          options: {
-            ...chartDefaults,
-            plugins: { ...chartDefaults.plugins,
-              tooltip: { ...chartDefaults.plugins.tooltip,
-                callbacks: { label: ctx => ' ' + curr.trim() + ' ' + ctx.parsed.y.toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2}) }
-              }
-            },
-            scales: { ...chartDefaults.scales,
-              y: { ...chartDefaults.scales.y,
-                ticks: { ...chartDefaults.scales.y.ticks, callback: v => curr.trim() + ' ' + (v/1000 >= 1 ? (v/1000).toFixed(1)+'k' : v.toFixed(0)) }
-              }
-            }
-          }
-        });
-      }
-
-      // Chart 2: ROAS (if Shopify) or Reach+Impressions
-      const chart2Canvas = document.getElementById('chart-roas-reach');
-      if (!chart2Canvas) return;
-
-      if (shopifyEnabled && dailySalesRows?.length) {
-        // Build date→revenue map from Shopify daily rows
-        // ShopifyQL "BY day" returns [date, revenue] rows
-        const revByDate = {};
-        for (const row of dailySalesRows) {
-          if (row[0]) revByDate[row[0]] = parseFloat(row[1]) || 0;
-        }
-        const roasData = dailyData.map(d => {
-          const spend = parseFloat(d.spend) || 0;
-          const rev   = revByDate[d.date] || 0;
-          return spend > 0 ? parseFloat((rev / spend).toFixed(2)) : null;
-        });
-        const hasRoasData = roasData.some(v => v !== null);
-        if (hasRoasData) {
-          window._dashCharts.roas = new Chart(chart2Canvas, {
-            type: 'line',
-            data: {
-              labels,
-              datasets: [{
-                data: roasData,
-                borderColor: '#16A34A',
-                backgroundColor: 'rgba(22,163,74,0.07)',
-                fill: true,
-                tension: 0.35,
-                pointRadius: roasData.length > 14 ? 0 : 3,
-                pointHoverRadius: 4,
-                borderWidth: 2,
-                spanGaps: true,
-              }],
-            },
-            options: {
-              ...chartDefaults,
-              plugins: { ...chartDefaults.plugins,
-                tooltip: { ...chartDefaults.plugins.tooltip,
-                  callbacks: { label: ctx => ctx.parsed.y !== null ? ' ' + ctx.parsed.y.toFixed(2) + 'x ROAS' : ' No data' }
-                }
-              },
-              scales: { ...chartDefaults.scales,
-                y: { ...chartDefaults.scales.y,
-                  ticks: { ...chartDefaults.scales.y.ticks, callback: v => v.toFixed(1) + 'x' }
-                }
-              }
-            }
-          });
-          return;
-        }
-      }
-
-      // Fallback: Reach + Impressions bar chart
-      const impressionsData = dailyData.map(d => parseInt(d.impressions) || 0);
-      const reachData       = dailyData.map(d => parseInt(d.reach)       || 0);
-      window._dashCharts.reach = new Chart(chart2Canvas, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            { label: 'Impressions', data: impressionsData, backgroundColor: 'rgba(5,115,245,0.65)', borderRadius: 3 },
-            { label: 'Reach',       data: reachData,       backgroundColor: 'rgba(23,155,180,0.55)', borderRadius: 3 },
-          ],
-        },
-        options: {
-          ...chartDefaults,
-          plugins: { ...chartDefaults.plugins, legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } } },
-          scales: { ...chartDefaults.scales,
-            y: { ...chartDefaults.scales.y,
-              ticks: { ...chartDefaults.scales.y.ticks, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v }
-            }
-          }
-        }
-      });
-    }
-
     async function loadData() {
       const accountDbId = sel.value;
       if (!accountDbId) return;
@@ -1115,7 +963,6 @@
       const shopifyStoreId = account.shopify_store_id || null;
       const shopifyEnabled = !!shopifyStoreId;
 
-      destroyCharts();
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
 
@@ -1247,18 +1094,6 @@
           ${kpi('c-green',  '🎯', 'Conversion Rate',     sfmt(conversionRate, v => fmt(v,'',2) + '%'), shopifySubLabel)}
         </div>
 
-        <div class="section-label">Performance Trends</div>
-        <div class="charts-grid">
-          <div class="chart-wrapper">
-            <div class="chart-title">Daily Spend (${curr.trim()})</div>
-            ${dailyData.length ? '<canvas id="chart-spend" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
-          </div>
-          <div class="chart-wrapper">
-            <div class="chart-title">${shopifyEnabled ? 'Daily ROAS' : 'Reach &amp; Impressions'}</div>
-            ${dailyData.length ? '<canvas id="chart-roas-reach" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
-          </div>
-        </div>
-
         <div class="section-label">Campaign Breakdown</div>
         <div class="table-wrapper">${renderCampaignTableHTML(campaigns, curr)}</div>
 
@@ -1282,13 +1117,7 @@
           ${metric('Cost per Message',        fmt(costPerMessage, curr))}
         </div>`;
 
-      // Initialize charts after DOM is updated
-      try {
-        initCharts(dailyData, dailySalesRows, shopifyEnabled, curr);
-      } catch (e) {
-        console.error('Chart init error:', e);
-      } finally {
-        btn.disabled = false; btn.textContent = '↻ Refresh';
+      btn.disabled = false; btn.textContent = '↻ Refresh';
       }
     }
 
@@ -1299,7 +1128,6 @@
       const allAccounts = Object.values(accountMap);
       if (!allAccounts.length) return;
 
-      destroyCharts();
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
 
@@ -1459,18 +1287,6 @@
           ${kpi('c-green',  '🎯', 'Impressions',         fmt(totImpressions,'',0), `Reach: ${fmt(totReach,'',0)}`)}
         </div>
 
-        <div class="section-label">Performance Trends · All Accounts</div>
-        <div class="charts-grid">
-          <div class="chart-wrapper">
-            <div class="chart-title">Daily Spend (${currLabel})</div>
-            ${aggregatedDailyData.length ? '<canvas id="chart-spend" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
-          </div>
-          <div class="chart-wrapper">
-            <div class="chart-title">Reach &amp; Impressions</div>
-            ${aggregatedDailyData.length ? '<canvas id="chart-roas-reach" height="120"></canvas>' : '<div class="chart-empty">No daily data for this period</div>'}
-          </div>
-        </div>
-
         <div class="section-label">Campaign Breakdown · All Accounts</div>
         <div class="table-wrapper">${renderCampaignTableHTML(allCampaigns, curr)}</div>
 
@@ -1491,14 +1307,7 @@
           ${metric('Accounts w/ Data',     String(accountsWithData))}
         </div>`;
 
-      // Initialize trend charts after DOM is updated
       try {
-        if (aggregatedDailyData.length) {
-          initCharts(aggregatedDailyData, null, false, curr);
-        }
-      } catch (e) {
-        console.error('Chart init error (all accounts):', e);
-      } finally {
         btn.disabled = false; btn.textContent = '↻ Refresh';
       }
     }
