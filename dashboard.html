@@ -471,6 +471,19 @@
   </div>
 
   <script>
+    // ── Shopify OAuth callback relay ─────────────────────────────
+    // Shopify redirects back to this Railway URL after OAuth.
+    // Detect the callback params and forward to the Supabase function.
+    (function () {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has('code') && p.has('hmac') && p.has('state') && p.has('shop')) {
+        window.location.replace(
+          'https://thtteysputwjiddqchcp.supabase.co/functions/v1/shopify-oauth-callback' +
+          window.location.search
+        );
+      }
+    })();
+
     // ══════════════════════════════════════════════════════════════
     // CONFIGURATION — Replace with your Supabase project values
     // ══════════════════════════════════════════════════════════════
