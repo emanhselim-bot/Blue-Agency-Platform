@@ -1242,7 +1242,6 @@
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Shopify · ${periodLabel}</span></div>
         <div class="kpi-grid">
-          ${kpi('c-navy',  '🌐', 'Sessions',         sessions       != null ? sessions.toLocaleString('en')       : (shopifyEnabled ? '0' : 'N/A'), shopifySubLabel)}
           ${kpi('c-teal',  '🛒', 'Add to Cart',      funnelAddToCart!= null ? funnelAddToCart.toLocaleString('en'): (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Initiated checkouts · Shopify'))}
           ${kpi('c-green', '💳', 'Checkout',         funnelCheckout != null ? funnelCheckout.toLocaleString('en') : (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Completed orders · Shopify'))}
           ${kpi('c-coral', '↩️', 'Abandoned Carts',  funnelAbandoned!= null ? funnelAbandoned.toLocaleString('en'): (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Left without buying · Shopify'))}
