@@ -1142,13 +1142,16 @@
       if (returnsRows?.[0]) returns = parseInt(returnsRows[0][0]);
 
       // ── Parse Clarity ──
-      let claritySessions = null, clarityMobile = null, clarityPages = null, clarityConfigured = false;
+      let clarityConfigured = false, claritySessions = null, clarityPageViews = null;
+      let clarityAddToCart = null, clarityCheckout = null, clarityRemoveFromCart = null;
       if (clarityRes?.status === 'fulfilled' && clarityRes.value && !clarityRes.value.error) {
         const c = clarityRes.value;
         clarityConfigured = c.configured !== false;
-        if (c.sessions != null)       claritySessions = c.sessions;
-        if (c.mobilePercent != null)  clarityMobile   = c.mobilePercent;
-        if (c.pagesPerSession != null) clarityPages   = c.pagesPerSession;
+        if (c.sessions      != null) claritySessions       = c.sessions;
+        if (c.pageViews     != null) clarityPageViews      = c.pageViews;
+        if (c.addToCart     != null) clarityAddToCart      = c.addToCart;
+        if (c.checkout      != null) clarityCheckout       = c.checkout;
+        if (c.removeFromCart!= null) clarityRemoveFromCart = c.removeFromCart;
       }
 
       // ── Date label ──
@@ -1206,13 +1209,13 @@
           ${kpi('c-navy',   '👁️', 'Sessions',            sfmt(sessions, v => v.toLocaleString('en')), shopifySubLabel)}
         </div>
 
-        ${clarityConfigured ? `
-        <div class="section-label">Website Analytics <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Microsoft Clarity · last 3 days</span></div>
+        <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Microsoft Clarity · last 3 days</span></div>
         <div class="kpi-grid">
-          ${kpi('c-navy',   '🌐', 'Website Sessions',   claritySessions != null ? claritySessions.toLocaleString('en') : '—', 'Microsoft Clarity')}
-          ${kpi('c-coral',  '📱', 'Mobile Traffic',     clarityMobile   != null ? clarityMobile.toFixed(1) + '%'        : '—', 'Microsoft Clarity')}
-          ${kpi('c-teal',   '📄', 'Pages / Session',    clarityPages    != null ? clarityPages.toFixed(2)               : '—', 'Microsoft Clarity')}
-        </div>` : ''}
+          ${kpi('c-navy',   '🌐', 'Page Views',        clarityPageViews     != null ? clarityPageViews.toLocaleString('en')     : '—', 'Microsoft Clarity')}
+          ${kpi('c-teal',   '🛒', 'Add to Cart',       clarityAddToCart     != null ? clarityAddToCart.toLocaleString('en')     : '—', 'Microsoft Clarity')}
+          ${kpi('c-green',  '💳', 'Checkout',          clarityCheckout      != null ? clarityCheckout.toLocaleString('en')      : '—', 'Microsoft Clarity')}
+          ${kpi('c-coral',  '↩️', 'Remove from Cart',  clarityRemoveFromCart!= null ? clarityRemoveFromCart.toLocaleString('en'): '—', 'Microsoft Clarity')}
+        </div>
 
         <div class="section-label">Campaign Breakdown</div>
         <div class="table-wrapper">${renderCampaignTableHTML(campaigns, curr)}</div>
