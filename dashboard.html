@@ -1191,6 +1191,8 @@
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching ${PERIOD_LABELS[currentPeriod]} data…</div>`;
 
+      try {
+
       const dr = shopifyDR(currentPeriod);
       const baseMeta = {
         account_db_id: accountDbId,
@@ -1403,10 +1405,17 @@
           ${metric('Cost per Message',        fmt(costPerMessage, curr))}
         </div>
 
-        ${renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr)}`;
+        ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}`;
 
       btn.disabled = false; btn.textContent = '↻ Refresh';
+    } catch (loadErr) {
+      console.error('[loadData error]', loadErr);
+      document.getElementById('content').innerHTML =
+        `<div class="error-state">⚠️ Dashboard render error:\n${escHtml(loadErr?.message || String(loadErr))}</div>`;
+      const btn2 = document.getElementById('refresh-btn');
+      if (btn2) { btn2.disabled = false; btn2.textContent = '↻ Refresh'; }
     }
+    }  // end loadData
 
     // ─────────────────────────────────────────────────────────────
     // ALL-ACCOUNTS AGGREGATION
