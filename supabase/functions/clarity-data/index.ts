@@ -35,7 +35,6 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-const CACHE_KEY = "clarity_metrics_v2";
 const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
 
 type MetricRow = Record<string, string | number>;
@@ -78,6 +77,17 @@ Deno.serve(async (req: Request) => {
   );
   if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
+  // 1b. Parse numOfDays from body (default: 1 = today)
+  let numOfDays = 1;
+  try {
+    const body = await req.json();
+    if (body?.numOfDays && Number.isInteger(body.numOfDays) && body.numOfDays > 0) {
+      numOfDays = Math.min(body.numOfDays, 90); // Clarity max is 90 days
+    }
+  } catch { /* no body / not JSON — use default */ }
+
+  const CACHE_KEY = `clarity_metrics_v3_${numOfDays}d`;
+
   // 2. Check cache
   const { data: cached } = await supabaseAdmin
     .from("system_cache")
@@ -104,7 +114,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const res = await fetch(
-      "https://www.clarity.ms/export-data/api/v1/project-live-insights?numOfDays=3&dimension1=Device",
+      `https://www.clarity.ms/export-data/api/v1/project-live-insights?numOfDays=${numOfDays}&dimension1=Device`,
       { headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" } }
     );
 

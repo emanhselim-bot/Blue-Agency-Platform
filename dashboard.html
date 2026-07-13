@@ -639,6 +639,22 @@
       return (prefix || '') + val.toLocaleString('en', { minimumFractionDigits: d, maximumFractionDigits: d });
     }
 
+    function clarityNumDays(period) {
+      const now = new Date(), m = now.getMonth(), y = now.getFullYear();
+      if (period === 'today')      return 1;
+      if (period === 'yesterday')  return 2;
+      if (period === 'this_month') return now.getDate();
+      if (period === 'last_month') {
+        const lm = m === 0 ? 11 : m - 1, ly = m === 0 ? y - 1 : y;
+        return new Date(ly, lm + 1, 0).getDate();
+      }
+      if (period === 'custom' && customFrom && customTo) {
+        const diff = (new Date(customTo) - new Date(customFrom)) / 86400000;
+        return Math.max(1, Math.round(diff) + 1);
+      }
+      return 1;
+    }
+
     function shopifyDR(period) {
       const pad = n => String(n).padStart(2, '0');
       const now = new Date(), y = now.getFullYear(), m = now.getMonth();
@@ -1086,7 +1102,7 @@
           shopifyEnabled
             ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM refunds SHOW returns_count ${dr}` })
             : Promise.resolve(null),
-          callEdgeFunction('clarity-data', {}),
+          callEdgeFunction('clarity-data', { numOfDays: clarityNumDays(currentPeriod) }),
         ]);
 
       // ── Parse Meta account-level ──
@@ -1209,7 +1225,7 @@
           ${kpi('c-navy',   '👁️', 'Sessions',            sfmt(sessions, v => v.toLocaleString('en')), shopifySubLabel)}
         </div>
 
-        <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Microsoft Clarity · last 3 days</span></div>
+        <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Microsoft Clarity · ${periodLabel}</span></div>
         <div class="kpi-grid">
           ${kpi('c-navy',   '🌐', 'Page Views',        clarityPageViews     != null ? clarityPageViews.toLocaleString('en')     : '—', 'Microsoft Clarity')}
           ${kpi('c-teal',   '🛒', 'Add to Cart',       clarityAddToCart     != null ? clarityAddToCart.toLocaleString('en')     : '—', 'Microsoft Clarity')}
