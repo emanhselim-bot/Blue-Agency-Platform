@@ -1170,6 +1170,7 @@
       const avgCostPerOrder = (spend && shopifyOrders) ? spend / shopifyOrders : null;
       const avgCostPerPiece = (spend && pieces)        ? spend / pieces        : null;
       const roas            = (revenue && spend)       ? revenue / spend       : null;
+      const adConversionRate = (shopifyOrders && numLinkClicks) ? (shopifyOrders / numLinkClicks) * 100 : null;
 
       const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
       const sfmtSub = text => !shopifyEnabled
@@ -1189,7 +1190,7 @@
           ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ units sold'))}
           ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'))}
-          ${kpi('c-green',  '🎯', 'Conversion Rate',     sfmt(conversionRate, v => fmt(v,'',2) + '%'), shopifySubLabel)}
+          ${kpi('c-green',  '🎯', 'Conversion Rate',     sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
           ${kpi('c-coral',  '↩️', 'Returns',             sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
           ${kpi('c-navy',   '👁️', 'Sessions',            sfmt(sessions, v => v.toLocaleString('en')), shopifySubLabel)}
         </div>
