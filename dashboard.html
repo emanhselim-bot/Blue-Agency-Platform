@@ -1081,8 +1081,8 @@
         custom_to:   customTo   || undefined,
       };
 
-      // 9 parallel calls: account + campaign + daily + 5 Shopify + Clarity
-      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes, returnsRes, clarityRes] =
+      // 10 parallel calls: account + campaign + daily + 6 Shopify + Clarity
+      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes, returnsRes, checkoutsRes, clarityRes] =
         await Promise.allSettled([
           callEdgeFunction('meta-data', baseMeta),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
@@ -1101,6 +1101,9 @@
             : Promise.resolve(null),
           shopifyEnabled
             ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM refunds SHOW returns_count ${dr}` })
+            : Promise.resolve(null),
+          shopifyEnabled
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM checkouts SHOW checkouts_count, abandoned_count, completed_count ${dr}` })
             : Promise.resolve(null),
           callEdgeFunction('clarity-data', { numOfDays: clarityNumDays(currentPeriod) }),
         ]);
@@ -1156,6 +1159,18 @@
       }
       const returnsRows = parseShopify(returnsRes);
       if (returnsRows?.[0]) returns = parseInt(returnsRows[0][0]);
+
+      // ── Parse Shopify Checkouts (funnel) ──
+      let funnelAddToCart = null, funnelCheckout = null, funnelAbandoned = null;
+      const checkoutsRows = parseShopify(checkoutsRes);
+      if (checkoutsRows?.[0]) {
+        const totalInitiations = parseInt(checkoutsRows[0][0]);
+        const abandonedCount   = parseInt(checkoutsRows[0][1]);
+        const completedCount   = parseInt(checkoutsRows[0][2]);
+        if (totalInitiations > 0) funnelAddToCart = totalInitiations;
+        if (completedCount   > 0) funnelCheckout  = completedCount;
+        if (abandonedCount   > 0) funnelAbandoned = abandonedCount;
+      }
 
       // ── Parse Clarity ──
       let clarityConfigured = false, claritySessions = null, clarityPageViews = null;
@@ -1225,14 +1240,12 @@
           ${kpi('c-navy',   '👁️', 'Sessions',            sfmt(sessions, v => v.toLocaleString('en')), shopifySubLabel)}
         </div>
 
-        <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Microsoft Clarity · ${periodLabel}</span></div>
+        <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Shopify · ${periodLabel}</span></div>
         <div class="kpi-grid">
-          ${clarityPageViews != null
-            ? kpi('c-navy', '🌐', 'Page Views',  clarityPageViews.toLocaleString('en'),  'Microsoft Clarity')
-            : kpi('c-navy', '👤', 'Sessions',    claritySessions  != null ? claritySessions.toLocaleString('en') : '—', 'Microsoft Clarity')}
-          ${kpi('c-teal',   '🛒', 'Add to Cart',       clarityAddToCart     != null ? clarityAddToCart.toLocaleString('en')     : '—', 'Microsoft Clarity')}
-          ${kpi('c-green',  '💳', 'Checkout',          clarityCheckout      != null ? clarityCheckout.toLocaleString('en')      : '—', 'Microsoft Clarity')}
-          ${kpi('c-coral',  '↩️', 'Remove from Cart',  clarityRemoveFromCart!= null ? clarityRemoveFromCart.toLocaleString('en'): '—', 'Microsoft Clarity')}
+          ${kpi('c-navy',  '🌐', 'Sessions',         sessions       != null ? sessions.toLocaleString('en')       : (shopifyEnabled ? '0' : 'N/A'), shopifySubLabel)}
+          ${kpi('c-teal',  '🛒', 'Add to Cart',      funnelAddToCart!= null ? funnelAddToCart.toLocaleString('en'): (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Initiated checkouts · Shopify'))}
+          ${kpi('c-green', '💳', 'Checkout',         funnelCheckout != null ? funnelCheckout.toLocaleString('en') : (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Completed orders · Shopify'))}
+          ${kpi('c-coral', '↩️', 'Abandoned Carts',  funnelAbandoned!= null ? funnelAbandoned.toLocaleString('en'): (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Left without buying · Shopify'))}
         </div>
 
         <div class="section-label">Campaign Breakdown</div>
