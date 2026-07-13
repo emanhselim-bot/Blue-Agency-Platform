@@ -1065,8 +1065,8 @@
         custom_to:   customTo   || undefined,
       };
 
-      // 7 parallel calls: account + campaign + daily + 4 Shopify
-      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes] =
+      // 8 parallel calls: account + campaign + daily + 5 Shopify
+      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes, returnsRes] =
         await Promise.allSettled([
           callEdgeFunction('meta-data', baseMeta),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
@@ -1082,6 +1082,9 @@
             : Promise.resolve(null),
           shopifyEnabled
             ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM sales SHOW net_sales ${dr} BY day` })
+            : Promise.resolve(null),
+          shopifyEnabled
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM refunds SHOW returns_count ${dr}` })
             : Promise.resolve(null),
         ]);
 
@@ -1118,7 +1121,7 @@
         ? dailySalesRes.value.rows : null;
 
       // ── Parse Shopify ──
-      let pieces = null, revenue = null, shopifyOrders = null, conversionRate = null;
+      let pieces = null, revenue = null, shopifyOrders = null, conversionRate = null, sessions = null, returns = null;
       const parseShopify = (res) => {
         if (!res || res.status !== 'fulfilled' || !res.value || res.value.error) return null;
         return res.value.rows || [];
@@ -1128,7 +1131,10 @@
       const piecesRows = parseShopify(piecesRes);
       if (piecesRows?.[0]) pieces = parseInt(piecesRows[0][0]);
       const sessionsRows = parseShopify(sessionsRes);
+      if (sessionsRows?.[0]?.[0] !== undefined) sessions = parseInt(sessionsRows[0][0]);
       if (sessionsRows?.[0]?.[1] !== undefined) conversionRate = parseFloat(sessionsRows[0][1]) * 100;
+      const returnsRows = parseShopify(returnsRes);
+      if (returnsRows?.[0]) returns = parseInt(returnsRows[0][0]);
 
       // ── Date label ──
       let dateStr = '';
@@ -1180,6 +1186,8 @@
           ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'))}
           ${kpi('c-green',  '🎯', 'Conversion Rate',     sfmt(conversionRate, v => fmt(v,'',2) + '%'), shopifySubLabel)}
+          ${kpi('c-coral',  '↩️', 'Returns',             sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-navy',   '👁️', 'Sessions',            sfmt(sessions, v => v.toLocaleString('en')), shopifySubLabel)}
         </div>
 
         <div class="section-label">Campaign Breakdown</div>
