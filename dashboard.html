@@ -1131,8 +1131,12 @@
       const piecesRows = parseShopify(piecesRes);
       if (piecesRows?.[0]) pieces = parseInt(piecesRows[0][0]);
       const sessionsRows = parseShopify(sessionsRes);
-      if (sessionsRows?.[0]?.[0] !== undefined) sessions = parseInt(sessionsRows[0][0]);
-      if (sessionsRows?.[0]?.[1] !== undefined) conversionRate = parseFloat(sessionsRows[0][1]) * 100;
+      if (sessionsRows?.[0]) {
+        const rawSessions = parseInt(sessionsRows[0][0]);
+        const rawCR = parseFloat(sessionsRows[0][1]);
+        if (rawSessions > 0) sessions = rawSessions;
+        if (!isNaN(rawCR) && rawCR > 0) conversionRate = rawCR * 100;
+      }
       const returnsRows = parseShopify(returnsRes);
       if (returnsRows?.[0]) returns = parseInt(returnsRows[0][0]);
 
