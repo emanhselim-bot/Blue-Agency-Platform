@@ -137,7 +137,7 @@ interface ShopifyOrder {
   total_price:      string;
   total_discounts:  string;
   financial_status: string;
-  line_items: Array<{ quantity: number; price: string }>;
+  line_items: Array<{ quantity: number; price: string; title?: string; product_id?: number }>;
 }
 
 async function fetchOrders(
@@ -406,6 +406,27 @@ Deno.serve(async (req: Request) => {
         return "0";
       });
       return jsonResponse({ rows: row.length ? [row] : [] });
+    }
+
+    // ── FROM products ─────────────────────────────────────────────────────────
+    // Aggregates line items across orders → returns top products by quantity sold.
+    // Row format: [title, quantity, revenue]
+    if (source === "products") {
+      const orders = await fetchOrders(store.shop_domain, store.access_token, since, until, shopTimezone);
+      const productMap: Record<string, { quantity: number; revenue: number }> = {};
+      for (const order of orders) {
+        for (const item of order.line_items) {
+          const title = item.title || "Unknown";
+          if (!productMap[title]) productMap[title] = { quantity: 0, revenue: 0 };
+          productMap[title].quantity += item.quantity;
+          productMap[title].revenue  += parseFloat(item.price || "0") * item.quantity;
+        }
+      }
+      const rows = Object.entries(productMap)
+        .sort(([, a], [, b]) => b.quantity - a.quantity)
+        .slice(0, 10)
+        .map(([title, v]) => [title, String(v.quantity), v.revenue.toFixed(2)]);
+      return jsonResponse({ rows });
     }
 
     // Unrecognised source — return empty

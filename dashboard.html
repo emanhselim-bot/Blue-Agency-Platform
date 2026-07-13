@@ -1003,6 +1003,124 @@
       }
     }
 
+    // ── Analysis section HTML ────────────────────────────────────
+    function renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr) {
+      const p = n => parseFloat(n) || 0;
+      const fmtN = (v, c, d) => fmt(v, c ?? '', d ?? 2);
+
+      // ── Helpers ──────────────────────────────────────────────
+      function analysisCard(title, content) {
+        return `<div style="background:var(--surface);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px">${title}</div>
+          ${content}</div>`;
+      }
+      function grid2(a, b) {
+        return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px">${a}${b}</div>`;
+      }
+      function miniTable(headers, rows, emptyMsg) {
+        if (!rows.length) return `<div style="padding:12px 0;color:var(--text-muted);font-size:12px">${emptyMsg || 'No data for this period'}</div>`;
+        return `<table class="data-table" style="font-size:11px">
+          <thead><tr>${headers.map(h => `<th${h.right ? ' class="tr"' : ''}>${h.label}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'tl' : 'tr'}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${c}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>`;
+      }
+
+      // ── Best Creatives (ads) ─────────────────────────────────
+      const adsByResults = [...ads].filter(a => a.results).sort((a,b) => p(b.results) - p(a.results)).slice(0, 5);
+      const adsByCost    = [...ads].filter(a => a.cost_per_result).sort((a,b) => p(a.cost_per_result) - p(b.cost_per_result)).slice(0, 5);
+      const adHeaders    = [{label:'Creative'}, {label:'Results', right:true}, {label:'Spend', right:true}];
+      const adCostHeaders = [{label:'Creative'}, {label:'Cost/Result', right:true}, {label:'Spend', right:true}];
+
+      const creativesSection = grid2(
+        analysisCard('🎨 Best Creatives — by Orders / Results',
+          miniTable(adHeaders,
+            adsByResults.map(a => [escHtml((a.ad_name||'').substring(0,40)||a.ad_id), fmt(p(a.results),'',0), fmt(p(a.spend), curr)]),
+            'No ad-level data for this period'
+          )
+        ),
+        analysisCard('💸 Best Creatives — by Cost per Result',
+          miniTable(adCostHeaders,
+            adsByCost.map(a => [escHtml((a.ad_name||'').substring(0,40)||a.ad_id), fmt(p(a.cost_per_result), curr), fmt(p(a.spend), curr)]),
+            'No ad-level data for this period'
+          )
+        )
+      );
+
+      // ── Best Platform ────────────────────────────────────────
+      const platRows = platforms.map(pl => [
+        (pl.platform || '—').charAt(0).toUpperCase() + (pl.platform||'').slice(1),
+        fmt(p(pl.spend), curr),
+        fmt(p(pl.impressions),'',0),
+        fmt(p(pl.results),'',0),
+        pl.cost_per_result ? fmt(p(pl.cost_per_result), curr) : '—',
+      ]);
+      const platformSection = analysisCard('📱 Best Platform',
+        miniTable(
+          [{label:'Platform'},{label:'Spend',right:true},{label:'Impressions',right:true},{label:'Results',right:true},{label:'Cost/Result',right:true}],
+          platRows,
+          'No platform breakdown available'
+        )
+      );
+
+      // ── Best Seller Product ──────────────────────────────────
+      const productSection = analysisCard('🏆 Best Seller Product',
+        topProductRows.length
+          ? miniTable(
+              [{label:'Product'},{label:'Units Sold',right:true},{label:'Revenue',right:true}],
+              topProductRows.slice(0,8).map(r => [escHtml((r[0]||'').substring(0,40)), r[1], fmt(parseFloat(r[2]||0), curr)]),
+              ''
+            )
+          : `<div style="padding:12px 0;color:var(--text-muted);font-size:12px">Connect Shopify to see product rankings</div>`
+      );
+
+      // ── Best Regions / Cities ────────────────────────────────
+      const regHeaders = [{label:'Region / Governorate'},{label:'Spend',right:true},{label:'Results',right:true},{label:'Cost/Result',right:true}];
+      const regRows = regions.slice(0,10).map(r => [
+        escHtml((r.region||'Unknown').replace(' Governorate','').replace(' Province','')),
+        fmt(p(r.spend), curr),
+        r.results ? fmt(p(r.results),'',0) : '—',
+        r.cost_per_result ? fmt(p(r.cost_per_result), curr) : '—',
+      ]);
+      const regionsSection = grid2(
+        analysisCard('🗺️ Best Regions',
+          miniTable(regHeaders, regRows.slice(0,5), 'No regional data for this period')
+        ),
+        analysisCard('🏙️ Best Cities',
+          miniTable(regHeaders, regRows.slice(5,10).length ? regRows.slice(5,10) : regRows.slice(0,5), 'No city data for this period')
+        )
+      );
+
+      // ── Best Campaign by Results ─────────────────────────────
+      const campByResults = [...campaigns].filter(c => c['actions:link_click']).sort((a,b) => p(b['actions:link_click']) - p(a['actions:link_click'])).slice(0,5);
+      const campByCost    = [...campaigns].filter(c => c['cost_per_action_type:link_click']).sort((a,b) => p(a['cost_per_action_type:link_click']) - p(b['cost_per_action_type:link_click'])).slice(0,5);
+      const campSection = grid2(
+        analysisCard('🏅 Best Campaign — by Results',
+          miniTable(
+            [{label:'Campaign'},{label:'Link Clicks',right:true},{label:'Spend',right:true}],
+            campByResults.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c['actions:link_click']),'',0), fmt(p(c.spend), curr)]),
+            'No campaign result data for this period'
+          )
+        ),
+        analysisCard('💰 Best Campaign — by Cost per Result',
+          miniTable(
+            [{label:'Campaign'},{label:'Cost/Click',right:true},{label:'Spend',right:true}],
+            campByCost.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c['cost_per_action_type:link_click']), curr), fmt(p(c.spend), curr)]),
+            'No campaign cost data for this period'
+          )
+        )
+      );
+
+      return `
+        <div class="section-label" style="margin-top:8px">Performance Analysis <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Meta · ${curr.trim()}</span></div>
+        ${creativesSection}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px">
+          ${platformSection}
+          ${productSection}
+        </div>
+        ${regionsSection}
+        ${campSection}`;
+    }
+
     // ── Campaign table HTML ──────────────────────────────────────
     function renderCampaignTableHTML(campaigns, curr) {
       if (!campaigns?.length) {
@@ -1081,8 +1199,8 @@
         custom_to:   customTo   || undefined,
       };
 
-      // 10 parallel calls: account + campaign + daily + 6 Shopify + Clarity
-      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes, returnsRes, checkoutsRes, clarityRes] =
+      // 14 parallel calls: account + campaign + daily + platform + region + ad + 6 Shopify + Clarity
+      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes, returnsRes, checkoutsRes, clarityRes, platformRes, regionRes, adRes, productsRes] =
         await Promise.allSettled([
           callEdgeFunction('meta-data', baseMeta),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
@@ -1106,6 +1224,12 @@
             ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM checkouts SHOW checkouts_count, abandoned_count, completed_count ${dr}` })
             : Promise.resolve(null),
           callEdgeFunction('clarity-data', { numOfDays: clarityNumDays(currentPeriod) }),
+          callEdgeFunction('meta-data', { ...baseMeta, level: 'platform' }),
+          callEdgeFunction('meta-data', { ...baseMeta, level: 'region' }),
+          callEdgeFunction('meta-data', { ...baseMeta, level: 'ad' }),
+          shopifyEnabled
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM products SHOW quantity ${dr}` })
+            : Promise.resolve(null),
         ]);
 
       // ── Parse Meta account-level ──
@@ -1184,6 +1308,15 @@
         if (c.checkout      != null) clarityCheckout       = c.checkout;
         if (c.removeFromCart!= null) clarityRemoveFromCart = c.removeFromCart;
       }
+
+      // ── Parse Analysis breakdowns ──
+      const platforms    = (platformRes?.status === 'fulfilled' && !platformRes.value?.error) ? (platformRes.value?.platforms || []) : [];
+      const regions      = (regionRes?.status   === 'fulfilled' && !regionRes.value?.error)   ? (regionRes.value?.regions   || []) : [];
+      const ads          = (adRes?.status        === 'fulfilled' && !adRes.value?.error)        ? (adRes.value?.ads           || []) : [];
+      const topProductRows = (() => {
+        if (!productsRes || productsRes.status !== 'fulfilled' || !productsRes.value || productsRes.value.error) return [];
+        return productsRes.value.rows || [];
+      })();
 
       // ── Date label ──
       let dateStr = '';
@@ -1268,7 +1401,9 @@
           ${metric('Avg Cost per Follow',     fmt(costPerFollow, curr))}
           ${metric('Number of Messages',      fmt(numMessages,'',0), true)}
           ${metric('Cost per Message',        fmt(costPerMessage, curr))}
-        </div>`;
+        </div>
+
+        ${renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr)}`;
 
       btn.disabled = false; btn.textContent = '↻ Refresh';
     }

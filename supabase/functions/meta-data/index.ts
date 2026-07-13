@@ -268,6 +268,91 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ daily, currency: account.currency });
   }
 
+  // ── level = "platform": publisher_platform breakdown ────────────────
+  if (level === "platform") {
+    const PLATFORM_FIELDS = "spend,impressions,reach,clicks,actions,cost_per_action_type";
+    let platBody: Record<string, unknown>;
+    try {
+      platBody = await callMeta(PLATFORM_FIELDS, { breakdowns: "publisher_platform" }) as Record<string, unknown>;
+    } catch (e: unknown) {
+      const err = e as Error & { isTokenExpired?: boolean };
+      if (err.isTokenExpired) { if (bm?.id) await markTokenExpired(bm.id); return jsonResponse({ error: "TOKEN_EXPIRED" }, 401); }
+      return jsonResponse({ error: err.message }, 502);
+    }
+    const platforms = ((platBody.data as Record<string, unknown>[]) ?? []).map(p => {
+      const acts: Record<string, string> = {};
+      for (const a of (p.actions as {action_type: string; value: string}[]) ?? []) acts[a.action_type] = a.value;
+      const cpa: Record<string, string> = {};
+      for (const a of (p.cost_per_action_type as {action_type: string; value: string}[]) ?? []) cpa[a.action_type] = a.value;
+      return {
+        platform:        p.publisher_platform as string,
+        spend:           p.spend,
+        impressions:     p.impressions,
+        reach:           p.reach,
+        clicks:          p.clicks,
+        results:         acts["link_click"] ?? acts["omni_purchase"] ?? null,
+        cost_per_result: cpa["link_click"]  ?? cpa["omni_purchase"]  ?? null,
+      };
+    }).sort((a, b) => parseFloat(String(b.spend ?? 0)) - parseFloat(String(a.spend ?? 0)));
+    return jsonResponse({ platforms, currency: account.currency });
+  }
+
+  // ── level = "region": geographic breakdown ───────────────────────────
+  if (level === "region") {
+    const REGION_FIELDS = "spend,impressions,reach,clicks,actions,cost_per_action_type";
+    let regBody: Record<string, unknown>;
+    try {
+      regBody = await callMeta(REGION_FIELDS, { breakdowns: "region", limit: "50" }) as Record<string, unknown>;
+    } catch (e: unknown) {
+      const err = e as Error & { isTokenExpired?: boolean };
+      if (err.isTokenExpired) { if (bm?.id) await markTokenExpired(bm.id); return jsonResponse({ error: "TOKEN_EXPIRED" }, 401); }
+      return jsonResponse({ error: err.message }, 502);
+    }
+    const regions = ((regBody.data as Record<string, unknown>[]) ?? []).map(r => {
+      const acts: Record<string, string> = {};
+      for (const a of (r.actions as {action_type: string; value: string}[]) ?? []) acts[a.action_type] = a.value;
+      const cpa: Record<string, string> = {};
+      for (const a of (r.cost_per_action_type as {action_type: string; value: string}[]) ?? []) cpa[a.action_type] = a.value;
+      return {
+        region:          r.region as string,
+        spend:           r.spend,
+        impressions:     r.impressions,
+        results:         acts["link_click"] ?? acts["omni_purchase"] ?? null,
+        cost_per_result: cpa["link_click"]  ?? cpa["omni_purchase"]  ?? null,
+      };
+    }).sort((a, b) => parseFloat(String(b.spend ?? 0)) - parseFloat(String(a.spend ?? 0)));
+    return jsonResponse({ regions, currency: account.currency });
+  }
+
+  // ── level = "ad": per-ad breakdown ──────────────────────────────────
+  if (level === "ad") {
+    const AD_FIELDS = "ad_id,ad_name,spend,impressions,clicks,actions,cost_per_action_type";
+    let adBody: Record<string, unknown>;
+    try {
+      adBody = await callMeta(AD_FIELDS, { level: "ad", limit: "50" }) as Record<string, unknown>;
+    } catch (e: unknown) {
+      const err = e as Error & { isTokenExpired?: boolean };
+      if (err.isTokenExpired) { if (bm?.id) await markTokenExpired(bm.id); return jsonResponse({ error: "TOKEN_EXPIRED" }, 401); }
+      return jsonResponse({ error: err.message }, 502);
+    }
+    const ads = ((adBody.data as Record<string, unknown>[]) ?? []).map(a => {
+      const acts: Record<string, string> = {};
+      for (const act of (a.actions as {action_type: string; value: string}[]) ?? []) acts[act.action_type] = act.value;
+      const cpa: Record<string, string> = {};
+      for (const act of (a.cost_per_action_type as {action_type: string; value: string}[]) ?? []) cpa[act.action_type] = act.value;
+      return {
+        ad_id:           a.ad_id as string,
+        ad_name:         a.ad_name as string,
+        spend:           a.spend,
+        impressions:     a.impressions,
+        clicks:          a.clicks,
+        results:         acts["link_click"] ?? acts["omni_purchase"] ?? null,
+        cost_per_result: cpa["link_click"]  ?? cpa["omni_purchase"]  ?? null,
+      };
+    });
+    return jsonResponse({ ads, currency: account.currency });
+  }
+
   // ── level = "account" (default): existing aggregate behaviour ───
   let metaRes: Response;
   try {
