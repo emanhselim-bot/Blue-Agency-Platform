@@ -132,21 +132,30 @@ Deno.serve(async (req: Request) => {
     const data = await res.json();
     const allMetrics: ClarityMetric[] = Array.isArray(data) ? data : [];
 
-    // Log all returned metric names to help debug / discover undocumented metrics
+    // Log all returned metric names + Traffic row keys for debugging
     console.log("Clarity metric names:", allMetrics.map(m => m.metricName).join(", "));
+    const trafficMetricObj = allMetrics.find(m => (m.metricName ?? "").toLowerCase() === "traffic");
+    if (trafficMetricObj?.information?.[0]) {
+      console.log("Traffic row keys:", Object.keys(trafficMetricObj.information[0]).join(", "));
+      console.log("Traffic row[0]:", JSON.stringify(trafficMetricObj.information[0]));
+    }
 
     // ── Traffic ──────────────────────────────────────────────────────────────
-    const trafficRows = findMetric(allMetrics, "Traffic") ?? [];
-    const totalSessions  = sumField(trafficRows, "totalSessionCount");
-    const mobileSessions = trafficRows
-      .filter(r => String(r.Device ?? "").toLowerCase() === "mobile")
-      .reduce((s, r) => {
-        const n = parseInt(String(r.totalSessionCount ?? "0"), 10);
-        return s + (isNaN(n) ? 0 : n);
-      }, 0);
-    const avgPagesArr = trafficRows
-      .map(r => parseFloat(String(r.PagesPerSessionPercentage ?? "0")))
-      .filter(v => !isNaN(v) && v > 0);
+    const trafficRows = trafficMetricObj?.information ?? [];
+    const totalSessions = sumField(trafficRows, "totalSessionCount");
+
+    // Pages per session — try every possible field name Clarity might use
+    const AVG_PAGE_FIELDS = [
+      "PagesPerSessionPercentage", "pagesPerSession", "avgPages",
+      "avgPageViews", "pageViewsPerSession", "pages",
+    ];
+    const avgPagesArr = trafficRows.map(r => {
+      for (const f of AVG_PAGE_FIELDS) {
+        const v = parseFloat(String(r[f] ?? ""));
+        if (!isNaN(v) && v > 0) return v;
+      }
+      return 0;
+    }).filter(v => v > 0);
     const avgPages = avgPagesArr.length > 0
       ? avgPagesArr.reduce((a, b) => a + b, 0) / avgPagesArr.length
       : 0;
@@ -155,11 +164,13 @@ Deno.serve(async (req: Request) => {
     // Try a dedicated metric first; fall back to sessions × avg pages per session
     const pvRows = findMetric(allMetrics,
       "PageViews", "Page Views", "Pageviews", "page_views",
-      "PopularPages", "Popular Pages");
+      "Pages", "PopularPages", "Popular Pages");
     let pageViews: number | null = null;
     if (pvRows && pvRows.length > 0) {
+      console.log("PV metric rows[0]:", JSON.stringify(pvRows[0]));
       const total = sumField(pvRows,
-        "totalPageViewCount", "pageViewCount", "PageViews", "pageViews", "count", "totalCount");
+        "totalPageViewCount", "pageViewCount", "PageViews", "pageViews",
+        "count", "totalCount", "totalSessionCount");
       if (total > 0) pageViews = total;
     }
     if (!pageViews && totalSessions > 0 && avgPages > 0) {

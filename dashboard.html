@@ -1227,7 +1227,9 @@
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Microsoft Clarity · ${periodLabel}</span></div>
         <div class="kpi-grid">
-          ${kpi('c-navy',   '🌐', 'Page Views',        clarityPageViews     != null ? clarityPageViews.toLocaleString('en')     : '—', 'Microsoft Clarity')}
+          ${clarityPageViews != null
+            ? kpi('c-navy', '🌐', 'Page Views',  clarityPageViews.toLocaleString('en'),  'Microsoft Clarity')
+            : kpi('c-navy', '👤', 'Sessions',    claritySessions  != null ? claritySessions.toLocaleString('en') : '—', 'Microsoft Clarity')}
           ${kpi('c-teal',   '🛒', 'Add to Cart',       clarityAddToCart     != null ? clarityAddToCart.toLocaleString('en')     : '—', 'Microsoft Clarity')}
           ${kpi('c-green',  '💳', 'Checkout',          clarityCheckout      != null ? clarityCheckout.toLocaleString('en')      : '—', 'Microsoft Clarity')}
           ${kpi('c-coral',  '↩️', 'Remove from Cart',  clarityRemoveFromCart!= null ? clarityRemoveFromCart.toLocaleString('en'): '—', 'Microsoft Clarity')}
