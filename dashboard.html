@@ -272,11 +272,12 @@
       position: fixed; right: 0; top: 50%; transform: translateY(-50%);
       z-index: 400; background: var(--blue-dark); color: white;
       border: none; border-radius: 10px 0 0 10px;
-      padding: 18px 8px; cursor: pointer;
+      padding: 18px 8px; cursor: grab;
       display: flex; flex-direction: column; align-items: center; gap: 10px;
       font-size: 10px; font-family: inherit; font-weight: 700; letter-spacing: 0.5px;
       writing-mode: vertical-rl; text-orientation: mixed; white-space: nowrap;
       box-shadow: -3px 0 12px rgba(0,0,0,0.18); transition: background 0.15s, opacity 0.2s;
+      user-select: none; touch-action: none;
     }
     #ai-toggle:hover { background: var(--blue-mid); }
     #ai-toggle .ai-icon { writing-mode: horizontal-tb; font-size: 18px; }
@@ -2513,7 +2514,7 @@
   </script>
 
   <!-- ── ASK CLAUDE SIDEBAR ── -->
-  <button id="ai-toggle" onclick="toggleAISidebar()" aria-label="Ask Claude">
+  <button id="ai-toggle" aria-label="Ask Claude">
     <span class="ai-icon">💬</span>Ask Claude
   </button>
   <div id="ai-panel">
@@ -2534,5 +2535,83 @@
       <button id="ai-send" onclick="aiSend()">Send ↑</button>
     </div>
   </div>
+
+  <script>
+  // ── Draggable Ask Claude button ──────────────────────────────
+  (function() {
+    const btn = document.getElementById('ai-toggle');
+    if (!btn) return;
+
+    // Restore saved position
+    const savedTop = localStorage.getItem('ai-toggle-top');
+    if (savedTop) { btn.style.top = savedTop; btn.style.transform = 'none'; }
+
+    let startY, startBtnTop, hasDragged = false;
+
+    // Capture-phase click guard — fires before inline handlers
+    btn.addEventListener('click', e => {
+      if (hasDragged) { e.stopImmediatePropagation(); hasDragged = false; }
+      else { toggleAISidebar(); }
+    }, true);
+
+    btn.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      startY      = e.clientY;
+      startBtnTop = btn.getBoundingClientRect().top;
+      hasDragged  = false;
+      e.preventDefault();
+
+      const onMove = e => {
+        const dy = e.clientY - startY;
+        if (!hasDragged && Math.abs(dy) < 5) return;
+        hasDragged = true;
+        btn.style.cursor = 'grabbing';
+        btn.style.transition = 'opacity 0.2s';
+        let newTop = Math.max(8, Math.min(window.innerHeight - btn.offsetHeight - 8, startBtnTop + dy));
+        btn.style.top = newTop + 'px';
+        btn.style.transform = 'none';
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        btn.style.cursor = 'grab';
+        btn.style.transition = 'background 0.15s, opacity 0.2s';
+        if (hasDragged) localStorage.setItem('ai-toggle-top', btn.style.top);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Touch support
+    btn.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      startY      = t.clientY;
+      startBtnTop = btn.getBoundingClientRect().top;
+      hasDragged  = false;
+
+      const onMove = e => {
+        const t = e.touches[0];
+        const dy = t.clientY - startY;
+        if (!hasDragged && Math.abs(dy) < 5) return;
+        hasDragged = true;
+        e.preventDefault();
+        let newTop = Math.max(8, Math.min(window.innerHeight - btn.offsetHeight - 8, startBtnTop + dy));
+        btn.style.top = newTop + 'px';
+        btn.style.transform = 'none';
+      };
+
+      const onEnd = () => {
+        btn.removeEventListener('touchmove', onMove);
+        btn.removeEventListener('touchend', onEnd);
+        if (hasDragged) localStorage.setItem('ai-toggle-top', btn.style.top);
+      };
+
+      btn.addEventListener('touchmove', onMove, { passive: false });
+      btn.addEventListener('touchend', onEnd);
+    }, { passive: true });
+  })();
+  </script>
 </body>
 </html>
