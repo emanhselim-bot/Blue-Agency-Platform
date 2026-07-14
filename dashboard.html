@@ -208,6 +208,14 @@
     /* Disconnect button in settings modal */
     .disconnect-btn { padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--coral); background: none; border: 1px solid var(--coral); border-radius: 6px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s; }
     .disconnect-btn:hover { background: var(--coral); color: white; }
+    /* Settings tab navigation */
+    .settings-tabs { display: flex; gap: 2px; padding: 0 20px; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; }
+    .settings-tab { display: flex; align-items: center; gap: 6px; padding: 12px 14px; font-size: 13px; font-weight: 500; color: var(--text-muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; transition: color 0.15s, border-color 0.15s; margin-bottom: -1px; }
+    .settings-tab:hover { color: var(--text-main); }
+    .settings-tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+    .settings-tab-icon { font-size: 15px; }
+    .settings-panel { display: none; }
+    .settings-panel.active { display: block; }
 
     /* ── DATA TABLE ── */
     .table-wrapper { background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04); margin-bottom: 24px; overflow-x: auto; }
@@ -765,9 +773,20 @@
         <h2>⚙ Connections</h2>
         <button class="modal-close" id="modal-close">✕</button>
       </div>
+
+      <!-- Tab navigation -->
+      <div class="settings-tabs">
+        <button class="settings-tab active" id="stab-shopify"   onclick="setSettingsTab('shopify')"><span class="settings-tab-icon">🛍️</span> Shopify</button>
+        <button class="settings-tab"        id="stab-meta"      onclick="setSettingsTab('meta')"><span class="settings-tab-icon">📊</span> Meta</button>
+        <button class="settings-tab"        id="stab-clarity"   onclick="setSettingsTab('clarity')"><span class="settings-tab-icon">🔍</span> Clarity</button>
+        <button class="settings-tab"        id="stab-link"      onclick="setSettingsTab('link')"><span class="settings-tab-icon">🔗</span> Link</button>
+        <button class="settings-tab"        id="stab-agencies"  onclick="setSettingsTab('agencies')"><span class="settings-tab-icon">🏢</span> Agencies</button>
+      </div>
+
       <div class="modal-body">
 
-        <!-- Connect Shopify Store -->
+        <!-- ── TAB: Shopify ── -->
+        <div class="settings-panel active" id="spanel-shopify">
         <div class="modal-section">
           <div class="modal-section-title">Shopify Stores</div>
 
@@ -829,8 +848,10 @@
           <div class="modal-status" id="shopify-status"></div>
           <div class="store-list" id="shopify-store-list"></div>
         </div>
+        </div><!-- /spanel-shopify -->
 
-        <!-- Connect Meta Accounts -->
+        <!-- ── TAB: Meta ── -->
+        <div class="settings-panel" id="spanel-meta">
         <div class="modal-section">
           <div class="modal-section-title">Meta Ad Accounts</div>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
@@ -840,8 +861,10 @@
           <div class="modal-status" id="meta-status"></div>
           <div class="store-list" id="meta-account-list"></div>
         </div>
+        </div><!-- /spanel-meta -->
 
-        <!-- Microsoft Clarity -->
+        <!-- ── TAB: Clarity ── -->
+        <div class="settings-panel" id="spanel-clarity">
         <div class="modal-section">
           <div class="modal-section-title">Microsoft Clarity</div>
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
@@ -857,8 +880,10 @@
           <div class="modal-status" id="clarity-status"></div>
           <div class="store-list" id="clarity-account-list"></div>
         </div>
+        </div><!-- /spanel-clarity -->
 
-        <!-- Link Meta Account to Shopify Store -->
+        <!-- ── TAB: Link ── -->
+        <div class="settings-panel" id="spanel-link">
         <div class="modal-section">
           <div class="modal-section-title">Link Account → Store (for ROAS)</div>
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
@@ -872,8 +897,10 @@
           </div>
           <div class="modal-status" id="link-status"></div>
         </div>
+        </div><!-- /spanel-link -->
 
-        <!-- Agency Workspaces -->
+        <!-- ── TAB: Agencies ── -->
+        <div class="settings-panel" id="spanel-agencies">
         <div class="modal-section" id="agency-settings-section">
           <div class="modal-section-title">Agency Workspaces</div>
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
@@ -897,6 +924,7 @@
             <div id="account-agency-rows"></div>
           </div>
         </div>
+        </div><!-- /spanel-agencies -->
 
       </div>
     </div>
@@ -2713,6 +2741,13 @@
       if (e.target === document.getElementById('settings-modal'))
         document.getElementById('settings-modal').classList.add('hidden');
     });
+
+    function setSettingsTab(name) {
+      ['shopify','meta','clarity','link','agencies'].forEach(t => {
+        document.getElementById('stab-'   + t).classList.toggle('active', t === name);
+        document.getElementById('spanel-' + t).classList.toggle('active', t === name);
+      });
+    }
 
     // ── Agency Settings UI ──────────────────────────────────────────────────
     function renderAgencySettings() {
