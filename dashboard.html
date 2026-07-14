@@ -1204,7 +1204,7 @@
     }
 
     // ── Analysis section HTML ────────────────────────────────────
-    function renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr) {
+    function renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel) {
       const p = n => parseFloat(n) || 0;
       const fmtN = (v, c, d) => fmt(v, c ?? '', d ?? 2);
 
@@ -1311,7 +1311,7 @@
       );
 
       return `
-        <div class="section-label" style="margin-top:8px">Performance Analysis <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Meta · ${curr.trim()}</span></div>
+        <div class="section-label" style="margin-top:8px">Performance Analysis <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Meta · ${periodLabel || ''} · ${curr.trim()}</span></div>
         ${creativesSection}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px">
           ${platformSection}
@@ -1585,7 +1585,7 @@
           ${metric('Cost per Message',        fmt(costPerMessage, curr))}
         </div>
 
-        ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}`;
+        ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}`;
 
       // ── Capture context for Ask Claude sidebar ──
       try {
