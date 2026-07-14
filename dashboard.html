@@ -856,6 +856,31 @@
           <div class="modal-status" id="link-status"></div>
         </div>
 
+        <!-- Agency Workspaces -->
+        <div class="modal-section" id="agency-settings-section">
+          <div class="modal-section-title">Agency Workspaces</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+            Create agencies and assign your ad accounts to each one. Team members can be restricted to specific agencies.
+          </p>
+
+          <!-- Existing agencies list -->
+          <div id="agency-settings-list" style="margin-bottom:16px"></div>
+
+          <!-- Create new agency -->
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <input type="text" class="connect-input" id="new-agency-icon" placeholder="🏢" maxlength="4"
+              style="width:52px;flex:none;text-align:center;font-size:18px;padding:6px 4px">
+            <input type="text" class="connect-input" id="new-agency-name" placeholder="Agency name…" style="flex:1">
+            <button class="connect-btn" onclick="createAgencyFromModal()">+ Add</button>
+          </div>
+
+          <!-- Assign accounts to agencies -->
+          <div id="agency-account-assignments">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:10px">Assign Accounts → Agency</div>
+            <div id="account-agency-rows"></div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -2649,6 +2674,7 @@
     // ─────────────────────────────────────────────────────────────
     document.getElementById('settings-btn').addEventListener('click', async () => {
       document.getElementById('settings-modal').classList.remove('hidden');
+      renderAgencySettings();
       await refreshSettingsData();
     });
     document.getElementById('modal-close').addEventListener('click', () => {
@@ -2658,6 +2684,89 @@
       if (e.target === document.getElementById('settings-modal'))
         document.getElementById('settings-modal').classList.add('hidden');
     });
+
+    // ── Agency Settings UI ──────────────────────────────────────────────────
+    function renderAgencySettings() {
+      if (!currentOrgId) return;
+      const agencies = getAgencies(currentOrgId);
+      const accounts = Object.values(accountMap);
+
+      // Agency list
+      const listEl = document.getElementById('agency-settings-list');
+      if (listEl) {
+        listEl.innerHTML = agencies.map(a => `
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;margin-bottom:6px">
+            <span style="font-size:16px;width:24px;text-align:center">${a.icon || '📊'}</span>
+            <input type="text" value="${escHtml(a.name)}" data-id="${a.id}"
+              style="flex:1;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--text);outline:none;padding:2px 4px;border-bottom:1px solid transparent"
+              onfocus="this.style.borderBottomColor='var(--blue)'"
+              onblur="this.style.borderBottomColor='transparent';renameAgencyFromSettings('${a.id}',this.value)"
+              onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="font-size:11px;color:var(--text-muted)">${accounts.filter(acc=>(localStorage.getItem('acct_agency_'+currentOrgId+'_'+acc.id)||agencies[0]?.id)===a.id).length} accounts</span>
+            ${agencies.length > 1 ? `<button onclick="deleteAgencyFromSettings('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:2px 4px" title="Remove agency">🗑</button>` : ''}
+          </div>`).join('');
+      }
+
+      // Account → Agency assignment rows
+      const rowsEl = document.getElementById('account-agency-rows');
+      if (rowsEl) {
+        if (!accounts.length) {
+          rowsEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">No ad accounts connected yet.</div>';
+        } else {
+          rowsEl.innerHTML = accounts.map(acc => {
+            const assigned = localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`) || agencies[0]?.id || '';
+            const opts = agencies.map(a => `<option value="${a.id}" ${assigned===a.id?'selected':''}>${a.icon||'📊'} ${escHtml(a.name)}</option>`).join('');
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+              <span style="flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((acc.account_name||acc.meta_account_id||'').substring(0,40))}</span>
+              <select data-acct="${acc.id}" onchange="setAccountAgencyId(currentOrgId,this.dataset.acct,this.value);renderAgencyNav()"
+                style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
+                ${opts}
+              </select>
+            </div>`;
+          }).join('');
+        }
+      }
+    }
+
+    function createAgencyFromModal() {
+      const nameInput = document.getElementById('new-agency-name');
+      const iconInput = document.getElementById('new-agency-icon');
+      const name = (nameInput?.value || '').trim();
+      if (!name) return;
+      const icon = (iconInput?.value || '').trim() || '📊';
+      const id = 'agency_' + Date.now();
+      const agencies = getAgencies(currentOrgId);
+      agencies.push({ id, name, icon });
+      saveAgencies(currentOrgId, agencies);
+      if (nameInput) nameInput.value = '';
+      if (iconInput) iconInput.value = '';
+      renderAgencyNav();
+      renderAgencySettings();
+    }
+
+    function renameAgencyFromSettings(id, newName) {
+      if (!newName.trim()) return;
+      const agencies = getAgencies(currentOrgId);
+      const a = agencies.find(a => a.id === id);
+      if (a) { a.name = newName.trim(); saveAgencies(currentOrgId, agencies); renderAgencyNav(); }
+    }
+
+    function deleteAgencyFromSettings(id) {
+      if (!confirm('Remove this agency? Accounts assigned to it will move to the first agency.')) return;
+      let agencies = getAgencies(currentOrgId);
+      agencies = agencies.filter(a => a.id !== id);
+      if (!agencies.length) return; // Keep at least one
+      // Reassign accounts from deleted agency to first remaining
+      const fallback = agencies[0].id;
+      Object.keys(accountMap).forEach(accId => {
+        const cur = localStorage.getItem(`acct_agency_${currentOrgId}_${accId}`);
+        if (cur === id) setAccountAgencyId(currentOrgId, accId, fallback);
+      });
+      saveAgencies(currentOrgId, agencies);
+      if (currentAgencyId === id) setActiveAgency(fallback);
+      renderAgencyNav();
+      renderAgencySettings();
+    }
 
     async function refreshSettingsData() {
       if (!currentOrgId) return;
