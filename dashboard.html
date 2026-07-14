@@ -45,6 +45,16 @@
     .header-btn { background: none; border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.7); padding: 5px 12px; border-radius: 6px; font-size: 11px; font-family: inherit; cursor: pointer; font-weight: 600; transition: all 0.15s; }
     .header-btn:hover { background: rgba(255,255,255,0.12); color: white; }
 
+    /* ── ACTIVE AGENCY BADGE (header) ── */
+    .agency-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px; padding: 5px 12px;
+      font-size: 12px; font-weight: 700; color: white; white-space: nowrap;
+    }
+    .agency-badge-icon { font-size: 13px; line-height: 1; }
+    .agency-badge-divider { width: 1px; height: 16px; background: rgba(255,255,255,0.25); margin: 0 2px; }
+
     /* ── CONTROLS BAR ── */
     .controls-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .controls-bar label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -443,6 +453,12 @@
       </div>
     </div>
     <div class="header-right">
+      <!-- Active agency badge — always visible, shows current workspace context -->
+      <div class="agency-badge" id="header-agency-badge">
+        <span class="agency-badge-icon" id="header-agency-icon">💙</span>
+        <span id="header-agency-name">Blue Ad Agency</span>
+      </div>
+      <div class="agency-badge-divider"></div>
       <div class="org-selector">
         <span class="org-label">Org:</span>
         <select id="org-select"><option value="">Loading…</option></select>
@@ -876,7 +892,7 @@
     // ─────────────────────────────────────────────────────────────
     let currentUser      = null;
     let currentOrgId     = localStorage.getItem('dash_org_id')    || '';
-    let currentAgencyId  = localStorage.getItem('dash_agency_id') || 'all';
+    let currentAgencyId  = localStorage.getItem('dash_agency_id') || 'agency_blue';
     let currentRole      = null;   // 'owner' | 'admin' | 'analyst' | 'viewer'
     let currentPlan      = 'free'; // 'free' | 'starter' | 'pro' | 'enterprise'
     let currentPeriod    = localStorage.getItem('dash_period') || 'today';
@@ -936,7 +952,8 @@
     }
 
     // Render the horizontal agency navigation bar.
-    // Each agency becomes a tab. Switching tabs isolates the account list.
+    // Each agency is a separate workspace tab. Blue Ad Agency is the home/umbrella agency.
+    // Kepler, Wolves Ground etc. are partner agencies the team collaborates with.
     function renderAgencyNav() {
       const nav = document.getElementById('agency-nav');
       if (!nav) return;
@@ -944,7 +961,6 @@
       const allAccounts = Object.values(accountMap);
 
       function countForAgency(agencyId) {
-        if (agencyId === 'all') return allAccounts.length;
         const v = allAccounts.filter(acc => {
           const assigned = getAccountAgencyId(currentOrgId, acc.id);
           return !assigned || assigned === agencyId;
@@ -952,12 +968,10 @@
         return v.length || allAccounts.length;
       }
 
-      const tabs = [{ id: 'all', name: 'All Agencies', icon: '🏢' }, ...agencies];
-
-      nav.innerHTML = tabs.map(a => {
+      nav.innerHTML = agencies.map(a => {
         const count = countForAgency(a.id);
         const isActive = currentAgencyId === a.id;
-        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="setActiveAgency('${escHtml(a.id)}')" title="${escHtml(a.name)}">
+        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
           <span class="agency-tab-icon">${a.icon || '📊'}</span>
           <span class="agency-tab-name">${escHtml(a.name)}</span>
           ${count > 0 ? `<span class="agency-tab-count">${count}</span>` : ''}
@@ -967,6 +981,20 @@
        <button class="add-agency-tab" onclick="promptAddAgency()">
          <span class="add-agency-tab-plus">+</span> Add Agency
        </button>`;
+
+      // Also update the header badge to reflect the active agency
+      updateHeaderAgencyBadge();
+    }
+
+    // Keep the header badge in sync with the active agency workspace.
+    function updateHeaderAgencyBadge() {
+      const agencies = getAgencies(currentOrgId);
+      const active = agencies.find(a => a.id === currentAgencyId) || agencies[0];
+      if (!active) return;
+      const iconEl = document.getElementById('header-agency-icon');
+      const nameEl = document.getElementById('header-agency-name');
+      if (iconEl) iconEl.textContent = active.icon || '📊';
+      if (nameEl) nameEl.textContent = active.name;
     }
 
     // Switch the active agency: updates state, re-renders nav, filters accounts.
@@ -994,31 +1022,28 @@
       filterAccountsByAgency();
     }
 
-    // Filter the account <select> to only show accounts belonging to the active agency.
-    // Unassigned accounts appear under every agency (graceful default before assignment).
+    // Filter the account <select> to accounts belonging to the active agency.
+    // Unassigned accounts appear in every agency context until explicitly assigned.
     function filterAccountsByAgency() {
       const agencies = getAgencies(currentOrgId);
       const agencyId = currentAgencyId;
       const all = Object.values(accountMap);
+      const activeAgency = agencies.find(a => a.id === agencyId);
 
-      let visible;
-      if (agencyId === 'all') {
-        visible = all;
-      } else {
-        visible = all.filter(acc => {
-          const assigned = getAccountAgencyId(currentOrgId, acc.id);
-          return !assigned || assigned === agencyId;
-        });
-        if (!visible.length) visible = all; // never leave the user with an empty list
-      }
+      const visible = all.filter(acc => {
+        const assigned = getAccountAgencyId(currentOrgId, acc.id);
+        return !assigned || assigned === agencyId;
+      });
+      // Graceful fallback: if no accounts match (nothing assigned yet), show all
+      const toShow = visible.length ? visible : all;
 
       const prevVal = sel.value;
       sel.innerHTML = '<option value="">— Select Account —</option>';
-      if (visible.length > 1) {
-        const agencyName = agencyId !== 'all' ? agencies.find(a => a.id === agencyId)?.name || 'Agency' : 'Accounts';
-        sel.innerHTML += `<option value="__all__">All ${agencyName}</option>`;
+      if (toShow.length > 1) {
+        const label = activeAgency?.name || 'Accounts';
+        sel.innerHTML += `<option value="__all__">All ${label} Accounts</option>`;
       }
-      visible.forEach(acc => {
+      toShow.forEach(acc => {
         const opt = document.createElement('option');
         opt.value = acc.id;
         opt.textContent = acc.account_name || acc.meta_account_id;
@@ -1026,7 +1051,7 @@
         sel.appendChild(opt);
       });
 
-      if (prevVal && !visible.find(a => a.id === prevVal) && prevVal !== '__all__') {
+      if (prevVal && !toShow.find(a => a.id === prevVal) && prevVal !== '__all__') {
         sel.value = '';
       }
     }
