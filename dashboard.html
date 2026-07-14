@@ -24,7 +24,47 @@
       --text-main:   #111827;
       --text-muted:  #6B7280;
       --border:      #E5E7EB;
+      --table-hover: #fafbff;
+      --chart-bg:    #ffffff;
     }
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg:          #0F172A;
+      --surface:     #1E293B;
+      --text-main:   #F1F5F9;
+      --text-muted:  #94A3B8;
+      --border:      #334155;
+      --table-hover: #1E293B;
+      --chart-bg:    #1E293B;
+    }
+    [data-theme="dark"] body { background: var(--bg); color: var(--text-main); }
+    [data-theme="dark"] .modal { background: var(--surface); }
+    [data-theme="dark"] .modal-header { background: var(--surface); border-bottom-color: var(--border); }
+    [data-theme="dark"] .modal-body { background: var(--surface); }
+    [data-theme="dark"] .settings-tabs { background: var(--surface); }
+    [data-theme="dark"] .connect-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
+    [data-theme="dark"] .connect-input option { background: var(--surface); }
+    [data-theme="dark"] .auth-card { background: var(--surface); border-color: var(--border); }
+    [data-theme="dark"] .auth-social-btn { background: var(--surface); color: var(--text-main); border-color: var(--border); }
+    [data-theme="dark"] .auth-social-btn:hover { background: var(--bg); }
+    [data-theme="dark"] .kpi-card { background: var(--surface); }
+    [data-theme="dark"] .section { background: var(--surface); }
+    [data-theme="dark"] .data-table th { background: var(--bg); }
+    [data-theme="dark"] .data-table tfoot td { background: var(--bg); }
+    [data-theme="dark"] .data-table tbody tr:hover { background: var(--table-hover); }
+    [data-theme="dark"] .controls-bar { background: var(--surface); border-bottom-color: var(--border); }
+    [data-theme="dark"] .period-tabs { background: var(--bg); }
+    [data-theme="dark"] .period-btn.active { background: var(--surface); color: var(--text-main); }
+    [data-theme="dark"] .agency-nav { background: var(--surface); border-bottom-color: var(--border); }
+    [data-theme="dark"] .agency-tab { color: var(--text-muted); }
+    [data-theme="dark"] .agency-tab.active { color: var(--blue-light); border-bottom-color: var(--blue-light); }
+    [data-theme="dark"] .onboarding-card { background: var(--surface); }
+    [data-theme="dark"] .onboarding-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
+    [data-theme="dark"] .ai-panel { background: var(--surface); border-left-color: var(--border); }
+    [data-theme="dark"] .ai-input-row { background: var(--surface); border-top-color: var(--border); }
+    [data-theme="dark"] .ai-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
+    [data-theme="dark"] .ai-msg.assistant { background: var(--bg); }
+    [data-theme="dark"] select { background: var(--bg); color: var(--text-main); border-color: var(--border); }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Open Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text-main); min-height: 100vh; }
 
@@ -223,7 +263,7 @@
     .data-table th { padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); background: var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap; }
     .data-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-main); white-space: nowrap; }
     .data-table tbody tr:last-child td { border-bottom: none; }
-    .data-table tbody tr:hover { background: #fafbff; }
+    .data-table tbody tr:hover { background: var(--table-hover); }
     .data-table tfoot td { padding: 10px 14px; font-weight: 700; background: var(--bg); border-top: 2px solid var(--border); }
     .tr { text-align: right !important; }
     .tl { text-align: left !important; }
@@ -591,7 +631,7 @@
     <div class="header-right">
       <!-- Active agency badge — always visible, shows current workspace context -->
       <div class="agency-badge" id="header-agency-badge">
-        <span class="agency-badge-icon" id="header-agency-icon">💙</span>
+        <span class="agency-badge-icon" id="header-agency-icon" style="display:none"></span>
         <span id="header-agency-name">Blue Ad Agency</span>
       </div>
       <div class="agency-badge-divider"></div>
@@ -601,6 +641,7 @@
       </div>
       <span id="auto-refresh-label"></span>
       <button class="header-btn" id="team-btn" style="display:none">👥 Team</button>
+      <button class="header-btn" id="darkmode-btn" title="Toggle dark mode">🌙</button>
       <button class="header-btn" id="settings-btn">⚙ Settings</button>
       <button class="header-btn" id="signout-btn">Sign out</button>
     </div>
@@ -997,6 +1038,12 @@
   </div>
 
   <script>
+    // ── Dark mode ────────────────────────────────────────────────
+    (function () {
+      const saved = localStorage.getItem('theme');
+      if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    })();
+
     // ── Shopify OAuth callback relay ─────────────────────────────
     // Shopify redirects back to this Railway URL after OAuth.
     // Detect the callback params and forward to the Supabase function.
@@ -1234,7 +1281,10 @@
       if (!active) return;
       const iconEl = document.getElementById('header-agency-icon');
       const nameEl = document.getElementById('header-agency-name');
-      if (iconEl) iconEl.textContent = active.icon || '📊';
+      if (iconEl) {
+        iconEl.textContent = active.icon || '';
+        iconEl.style.display = active.icon ? '' : 'none';
+      }
       if (nameEl) nameEl.textContent = active.name;
     }
 
@@ -2727,6 +2777,24 @@
     document.getElementById('team-btn').addEventListener('click', openTeamPanel);
 
     // ─────────────────────────────────────────────────────────────
+    // DARK MODE TOGGLE
+    document.getElementById('darkmode-btn').addEventListener('click', () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+        document.getElementById('darkmode-btn').textContent = '🌙';
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+        document.getElementById('darkmode-btn').textContent = '☀️';
+      }
+    });
+    // Init button icon on load
+    if (document.documentElement.getAttribute('data-theme') === 'dark') {
+      document.getElementById('darkmode-btn').textContent = '☀️';
+    }
+
     // SETTINGS MODAL
     // ─────────────────────────────────────────────────────────────
     document.getElementById('settings-btn').addEventListener('click', async () => {
