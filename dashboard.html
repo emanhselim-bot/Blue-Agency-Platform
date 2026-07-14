@@ -1404,37 +1404,19 @@
         custom_to:   customTo   || undefined,
       };
 
-      // 14 parallel calls: account + campaign + daily + platform + region + ad + 6 Shopify + Clarity
-      const [metaRes, campaignRes, dailyRes, salesRes, piecesRes, sessionsRes, dailySalesRes, returnsRes, checkoutsRes, clarityRes, platformRes, regionRes, adRes, productsRes] =
+      // 8 parallel calls: account + campaign + daily + 1 Shopify batch + Clarity + platform + region + ad
+      const [metaRes, campaignRes, dailyRes, shopifyAllRes, clarityRes, platformRes, regionRes, adRes] =
         await Promise.allSettled([
           callEdgeFunction('meta-data', baseMeta),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'daily' }),
           shopifyEnabled
-            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM sales SHOW orders, net_sales ${dr}` })
-            : Promise.resolve(null),
-          shopifyEnabled
-            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM inventory SHOW inventory_units_sold ${dr}` })
-            : Promise.resolve(null),
-          shopifyEnabled
-            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM sessions SHOW sessions, conversion_rate ${dr}` })
-            : Promise.resolve(null),
-          shopifyEnabled
-            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM sales SHOW net_sales ${dr} BY day` })
-            : Promise.resolve(null),
-          shopifyEnabled
-            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM refunds SHOW returns_count ${dr}` })
-            : Promise.resolve(null),
-          shopifyEnabled
-            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM checkouts SHOW checkouts_count, abandoned_count, completed_count ${dr}` })
+            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM all ${dr}` })
             : Promise.resolve(null),
           callEdgeFunction('clarity-data', { numOfDays: clarityNumDays(currentPeriod) }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'platform' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'region' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'ad' }),
-          shopifyEnabled
-            ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM products SHOW quantity ${dr}` })
-            : Promise.resolve(null),
         ]);
 
       // ── Parse Meta account-level ──
@@ -1466,32 +1448,30 @@
         ? (campaignRes.value?.campaigns || []) : [];
       const dailyData = (dailyRes.status === 'fulfilled' && !dailyRes.value?.error)
         ? (dailyRes.value?.daily || []) : [];
-      const dailySalesRows = (dailySalesRes.status === 'fulfilled' && !dailySalesRes.value?.error && dailySalesRes.value?.rows)
-        ? dailySalesRes.value.rows : null;
+      // ── Parse Shopify (single batch response) ──
+      const shopifyBatch = (shopifyAllRes?.status === 'fulfilled' && shopifyAllRes.value && !shopifyAllRes.value.error) ? shopifyAllRes.value : null;
+      const getShopifyRows = (key) => shopifyBatch?.[key]?.rows ?? null;
 
-      // ── Parse Shopify ──
+      const dailySalesRows = getShopifyRows('daily_sales');
+
       let pieces = null, revenue = null, shopifyOrders = null, conversionRate = null, sessions = null, returns = null;
-      const parseShopify = (res) => {
-        if (!res || res.status !== 'fulfilled' || !res.value || res.value.error) return null;
-        return res.value.rows || [];
-      };
-      const salesRows = parseShopify(salesRes);
+      const salesRows = getShopifyRows('sales');
       if (salesRows?.[0]) { shopifyOrders = parseInt(salesRows[0][0]); revenue = parseFloat(salesRows[0][1]); }
-      const piecesRows = parseShopify(piecesRes);
+      const piecesRows = getShopifyRows('inventory');
       if (piecesRows?.[0]) pieces = parseInt(piecesRows[0][0]);
-      const sessionsRows = parseShopify(sessionsRes);
+      const sessionsRows = getShopifyRows('sessions');
       if (sessionsRows?.[0]) {
         const rawSessions = parseInt(sessionsRows[0][0]);
         const rawCR = parseFloat(sessionsRows[0][1]);
         if (rawSessions > 0) sessions = rawSessions;
         if (!isNaN(rawCR) && rawCR > 0) conversionRate = rawCR * 100;
       }
-      const returnsRows = parseShopify(returnsRes);
+      const returnsRows = getShopifyRows('refunds');
       if (returnsRows?.[0]) returns = parseInt(returnsRows[0][0]);
 
       // ── Parse Shopify Checkouts (funnel) ──
       let funnelAddToCart = null, funnelCheckout = null, funnelAbandoned = null;
-      const checkoutsRows = parseShopify(checkoutsRes);
+      const checkoutsRows = getShopifyRows('checkouts');
       if (checkoutsRows?.[0]) {
         const totalInitiations = parseInt(checkoutsRows[0][0]);
         const abandonedCount   = parseInt(checkoutsRows[0][1]);
@@ -1518,10 +1498,7 @@
       const platforms    = (platformRes?.status === 'fulfilled' && !platformRes.value?.error) ? (platformRes.value?.platforms || []) : [];
       const regions      = (regionRes?.status   === 'fulfilled' && !regionRes.value?.error)   ? (regionRes.value?.regions   || []) : [];
       const ads          = (adRes?.status        === 'fulfilled' && !adRes.value?.error)        ? (adRes.value?.ads           || []) : [];
-      const topProductRows = (() => {
-        if (!productsRes || productsRes.status !== 'fulfilled' || !productsRes.value || productsRes.value.error) return [];
-        return productsRes.value.rows || [];
-      })();
+      const topProductRows = getShopifyRows('products') ?? [];
 
       // ── Date label ──
       let dateStr = '';

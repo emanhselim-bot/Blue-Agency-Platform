@@ -446,6 +446,49 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ rows });
     }
 
+    // ── FROM all (batch) ─────────────────────────────────────────────────────
+    // Fetches all data in 2 parallel Shopify API calls instead of ~15.
+    // Returns a single JSON with all metric buckets keyed by source name so
+    // the dashboard can make ONE call per page load instead of 7.
+    if (source === "all") {
+      const [allOrders, abandonedCount] = await Promise.all([
+        fetchOrders(store.shop_domain, store.access_token, since, until, shopTimezone),
+        fetchAbandonedCheckouts(store.shop_domain, store.access_token, since, until, shopTimezone),
+      ]);
+
+      // Derive refunded orders from the full set (avoids 2 extra API calls)
+      const refundedOrders = allOrders.filter(o =>
+        o.financial_status === "refunded" || o.financial_status === "partially_refunded"
+      );
+
+      // Build top-products map
+      const productMap: Record<string, { quantity: number; revenue: number }> = {};
+      for (const order of allOrders) {
+        for (const item of order.line_items) {
+          const title = item.title || "Unknown";
+          if (!productMap[title]) productMap[title] = { quantity: 0, revenue: 0 };
+          productMap[title].quantity += item.quantity;
+          productMap[title].revenue  += parseFloat(item.price || "0") * item.quantity;
+        }
+      }
+      const topProducts = Object.entries(productMap)
+        .sort(([, a], [, b]) => b.quantity - a.quantity)
+        .slice(0, 10)
+        .map(([title, v]) => [title, String(v.quantity), v.revenue.toFixed(2)]);
+
+      const totalCheckouts = abandonedCount + allOrders.length;
+
+      return jsonResponse({
+        sales:       { rows: [[String(calcOrderCount(allOrders)), calcNetSales(allOrders).toFixed(2)]] },
+        inventory:   { rows: [[String(calcUnitsSold(allOrders))]] },
+        sessions:    { rows: [["0", "0"]] },
+        daily_sales: { rows: calcDailySales(allOrders, shopTimezone) },
+        refunds:     { rows: [[String(refundedOrders.length)]] },
+        checkouts:   { rows: [[String(totalCheckouts), String(abandonedCount), String(allOrders.length)]] },
+        products:    { rows: topProducts },
+      });
+    }
+
     // Unrecognised source — return empty
     return jsonResponse({ rows: [] });
 
