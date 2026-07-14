@@ -439,6 +439,134 @@
     .ai-msg.assistant li { margin: 2px 0; }
     .ai-msg.assistant .ai-h1, .ai-msg.assistant .ai-h2 { font-weight: 700; display: block; margin-top: 8px; }
     .ai-msg.assistant .ai-h3 { font-weight: 700; display: block; margin-top: 6px; }
+
+    /* ── TEAM CONTROL PANEL ── */
+    #team-panel {
+      position: fixed; inset: 0; z-index: 900;
+      background: rgba(0,0,0,0.45); backdrop-filter: blur(3px);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 32px 16px; overflow-y: auto;
+    }
+    #team-panel.hidden { display: none; }
+    .team-panel-inner {
+      background: white; border-radius: 16px; width: 100%; max-width: 860px;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.18); overflow: hidden;
+    }
+    .team-panel-header {
+      background: linear-gradient(135deg, #0837BB 0%, #083BBF 100%);
+      padding: 20px 28px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .team-panel-header h2 { color: white; font-size: 18px; font-weight: 700; margin: 0; }
+    .team-panel-header .tph-sub { color: rgba(255,255,255,0.7); font-size: 12px; margin-top: 2px; }
+    .team-panel-close { background: rgba(255,255,255,0.15); border: none; color: white;
+      width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+    .team-panel-close:hover { background: rgba(255,255,255,0.25); }
+    .team-panel-body { padding: 28px; }
+    .team-section-title {
+      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .team-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .member-card {
+      border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+    }
+    .member-card-top {
+      display: flex; align-items: center; gap: 14px; padding: 14px 18px;
+      cursor: pointer; user-select: none; background: white; transition: background 0.15s;
+    }
+    .member-card-top:hover { background: #f9faff; }
+    .member-avatar {
+      width: 38px; height: 38px; border-radius: 50%; background: var(--blue-light);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; color: var(--blue-dark); flex-shrink: 0;
+    }
+    .member-info { flex: 1; min-width: 0; }
+    .member-email { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .member-name  { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .member-role-badge {
+      font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .role-owner  { background: #fef3c7; color: #92400e; }
+    .role-admin  { background: #dbeafe; color: #1e40af; }
+    .role-analyst { background: #f0fdf4; color: #166534; }
+    .role-viewer  { background: #f5f3ff; color: #5b21b6; }
+    .status-badge {
+      font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
+    }
+    .status-active  { background: #dcfce7; color: #15803d; }
+    .status-pending { background: #fef9c3; color: #854d0e; }
+    .member-expand-icon { color: var(--text-muted); font-size: 11px; transition: transform 0.2s; }
+    .member-card.expanded .member-expand-icon { transform: rotate(180deg); }
+    .member-card-body { display: none; padding: 0 18px 18px; border-top: 1px solid var(--border); }
+    .member-card.expanded .member-card-body { display: block; }
+    .access-section { margin-top: 14px; }
+    .access-section h4 { font-size: 11px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .access-toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .access-all-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px;
+      font-weight: 600; color: var(--blue-dark); cursor: pointer; }
+    .access-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin-top: 8px; }
+    .access-checkbox { display: flex; align-items: center; gap: 7px; padding: 6px 10px;
+      border: 1px solid var(--border); border-radius: 8px; font-size: 12px; cursor: pointer;
+      transition: background 0.12s, border-color 0.12s; }
+    .access-checkbox:hover { background: #f0f4ff; border-color: var(--blue-dark); }
+    .access-checkbox input { margin: 0; accent-color: var(--blue-dark); cursor: pointer; }
+    .access-checkbox.checked { background: #eff3ff; border-color: var(--blue-dark); font-weight: 600; color: var(--blue-dark); }
+    .member-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+    .btn-save-access { background: var(--blue-dark); color: white; border: none;
+      padding: 8px 18px; border-radius: 8px; font-size: 12px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s; }
+    .btn-save-access:hover { opacity: 0.85; }
+    .btn-remove-member { background: none; border: 1px solid #ef4444; color: #ef4444;
+      padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s; }
+    .btn-remove-member:hover { background: #fef2f2; }
+    .invite-box {
+      background: #f9faff; border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+    }
+    .invite-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .invite-email-input {
+      flex: 1; min-width: 200px; padding: 9px 14px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 13px; font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .invite-email-input:focus { outline: none; border-color: var(--blue-dark); }
+    .invite-role-select {
+      padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 12px; font-family: inherit; background: white; cursor: pointer;
+    }
+    .btn-send-invite {
+      background: var(--blue-dark); color: white; border: none; padding: 9px 18px;
+      border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .btn-send-invite:hover { opacity: 0.85; }
+    .btn-send-invite:disabled { opacity: 0.5; cursor: not-allowed; }
+    .invite-result {
+      margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 12px;
+      display: none;
+    }
+    .invite-result.success { background: #dcfce7; color: #15803d; display: block; }
+    .invite-result.error   { background: #fee2e2; color: #991b1b; display: block; }
+    .invite-link-box {
+      background: white; border: 1px solid #86efac; border-radius: 8px;
+      padding: 10px 14px; margin-top: 10px; font-size: 11px; word-break: break-all;
+      color: var(--blue-dark); font-weight: 600; display: none; cursor: pointer;
+    }
+    .invite-link-box:hover { background: #f0fdf4; }
+    .access-restrict-note { font-size: 11px; color: var(--text-muted); margin-top: 6px; font-style: italic; }
+    .team-owner-badge { background: linear-gradient(135deg,#FFD700,#FFA500); color: #7c2d12;
+      font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+    .pending-invite-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .btn-copy-link { background: none; border: 1px solid var(--blue-dark); color: var(--blue-dark);
+      padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .btn-copy-link:hover { background: #eff3ff; }
+    .btn-revoke-invite { background: none; border: 1px solid #ef4444; color: #ef4444;
+      padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .btn-revoke-invite:hover { background: #fef2f2; }
   </style>
 </head>
 <body>
@@ -464,6 +592,7 @@
         <select id="org-select"><option value="">Loading…</option></select>
       </div>
       <span id="auto-refresh-label"></span>
+      <button class="header-btn" id="team-btn" style="display:none">👥 Team</button>
       <button class="header-btn" id="settings-btn">⚙ Settings</button>
       <button class="header-btn" id="signout-btn">Sign out</button>
     </div>
@@ -584,6 +713,47 @@
         <button class="auth-btn" id="forgot-btn">SEND RESET LINK</button>
         <div class="auth-error" id="forgot-status"></div>
         <span class="auth-link" id="back-login-link-2">← Back to sign in</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEAM CONTROL PANEL -->
+  <div id="team-panel" class="hidden">
+    <div class="team-panel-inner">
+      <div class="team-panel-header">
+        <div>
+          <h2>👥 Team Control Panel</h2>
+          <div class="tph-sub">Manage members, send invites, and control data access per user</div>
+        </div>
+        <button class="team-panel-close" onclick="closeTeamPanel()">✕</button>
+      </div>
+      <div class="team-panel-body">
+        <!-- Members list — populated by loadTeamPanel() -->
+        <div id="team-members-section">
+          <div class="team-section-title">Current Members</div>
+          <div id="team-members-list"><div style="color:var(--text-muted);font-size:13px">Loading…</div></div>
+        </div>
+
+        <!-- Invite new member -->
+        <div style="margin-top:28px">
+          <div class="team-section-title">Invite New Member</div>
+          <div class="invite-box">
+            <div style="font-size:13px;color:var(--text-primary);font-weight:600">Send an invite link by email</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">The user will receive an invite link. You can also copy and share it manually.</div>
+            <div class="invite-row">
+              <input type="email" class="invite-email-input" id="invite-email" placeholder="colleague@example.com">
+              <select class="invite-role-select" id="invite-role">
+                <option value="analyst">Analyst</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button class="btn-send-invite" id="invite-submit-btn" onclick="submitInvite()">Send Invite →</button>
+            </div>
+            <div class="invite-result" id="invite-result"></div>
+            <div class="invite-link-box" id="invite-link-box" onclick="copyInviteLink(this)">
+              🔗 Click to copy invite link
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -957,7 +1127,8 @@
     function renderAgencyNav() {
       const nav = document.getElementById('agency-nav');
       if (!nav) return;
-      const agencies = getAgencies(currentOrgId);
+      // Apply agency access restrictions for non-owners
+      const agencies = applyAgencyAccessRestrictions(getAgencies(currentOrgId));
       const allAccounts = Object.values(accountMap);
 
       function countForAgency(agencyId) {
@@ -1292,6 +1463,13 @@
       document.getElementById('settings-btn').style.display =
         canManageIntegrations ? '' : 'none';
 
+      // Gate the Team button: only owners can manage team access
+      document.getElementById('team-btn').style.display =
+        currentRole === 'owner' ? '' : 'none';
+
+      // Load current user's access restrictions (for non-owners)
+      await loadMyAccess();
+
       // Restore dashboard settings from DB (overrides localStorage)
       const settings = await Auth.getDashboardSettings(currentUser.id, currentOrgId);
       if (settings) {
@@ -1354,8 +1532,9 @@
         .or('has_active_campaigns.is.null,has_active_campaigns.eq.true')
         .order('account_name');
 
-      // Populate accountMap
-      (accounts || []).forEach(acc => { accountMap[acc.id] = acc; });
+      // Populate accountMap — apply per-user access restrictions for non-owners
+      const filteredAccounts = applyAccountAccessRestrictions(accounts || []);
+      filteredAccounts.forEach(acc => { accountMap[acc.id] = acc; });
 
       // Render agency nav, then filter accounts by active agency
       renderAgencyNav();
@@ -2179,6 +2358,293 @@
     }
 
     async function loadDataWithRefresh() { await loadData(); startAutoRefresh(); }
+
+    // ─────────────────────────────────────────────────────────────
+    // TEAM CONTROL PANEL
+    // ─────────────────────────────────────────────────────────────
+
+    // Access restrictions for the current user (null = unrestricted)
+    let currentMemberAccess = null; // { role, allowed_account_ids, allowed_agency_ids }
+
+    // Load current user's member record (called after org is set)
+    async function loadMyAccess() {
+      if (!currentOrgId || !currentUser) return;
+      try {
+        const { data } = await sb
+          .from('organization_members')
+          .select('role, allowed_account_ids, allowed_agency_ids')
+          .eq('organization_id', currentOrgId)
+          .eq('user_id', currentUser.id)
+          .single();
+        currentMemberAccess = data || null;
+      } catch { currentMemberAccess = null; }
+    }
+
+    // Apply account access restrictions for non-owner users
+    function applyAccountAccessRestrictions(accounts) {
+      if (!currentMemberAccess) return accounts;
+      const allowed = currentMemberAccess.allowed_account_ids;
+      if (!allowed || allowed.length === 0 || currentMemberAccess.role === 'owner') return accounts;
+      return accounts.filter(a => allowed.includes(a.id));
+    }
+
+    // Apply agency access restrictions for non-owner users
+    function applyAgencyAccessRestrictions(agencies) {
+      if (!currentMemberAccess) return agencies;
+      const allowed = currentMemberAccess.allowed_agency_ids;
+      if (!allowed || allowed.length === 0 || currentMemberAccess.role === 'owner') return agencies;
+      return agencies.filter(a => allowed.includes(a.id));
+    }
+
+    function openTeamPanel() {
+      document.getElementById('team-panel').classList.remove('hidden');
+      loadTeamPanel();
+    }
+
+    function closeTeamPanel() {
+      document.getElementById('team-panel').classList.add('hidden');
+    }
+
+    // Close on backdrop click
+    document.getElementById('team-panel').addEventListener('click', e => {
+      if (e.target === document.getElementById('team-panel')) closeTeamPanel();
+    });
+
+    async function loadTeamPanel() {
+      document.getElementById('team-members-list').innerHTML =
+        '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading team…</div>';
+      const res = await callEdgeFunction('team-manage', { action: 'list', org_id: currentOrgId });
+      if (res.error) {
+        document.getElementById('team-members-list').innerHTML =
+          `<div style="color:#dc2626;font-size:13px">${escHtml(res.error)}</div>`;
+        return;
+      }
+      renderTeamMembers(res.members || []);
+    }
+
+    function renderTeamMembers(members) {
+      const allAccounts = Object.values(accountMap);
+      const allAgencies = getAgencies(currentOrgId);
+      const container   = document.getElementById('team-members-list');
+      if (!members.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No team members yet.</div>';
+        return;
+      }
+
+      container.innerHTML = members.map(m => {
+        const initials = (m.email || '?').substring(0, 2).toUpperCase();
+        const roleBadge = m.is_pending
+          ? `<span class="status-badge status-pending">Pending</span>`
+          : `<span class="member-role-badge role-${m.role}">${m.role}</span>
+             <span class="status-badge status-active">Active</span>`;
+
+        const isOwner = m.role === 'owner';
+        const expandBtn = !m.is_pending && !isOwner
+          ? `<span class="member-expand-icon">▼</span>` : '';
+
+        const topSection = `
+          <div class="member-card-top" ${(!m.is_pending && !isOwner) ? `onclick="toggleMemberCard('${m.id}')"` : ''}>
+            <div class="member-avatar">${initials}</div>
+            <div class="member-info">
+              <div class="member-email">${escHtml(m.email)}</div>
+              ${m.full_name ? `<div class="member-name">${escHtml(m.full_name)}</div>` : ''}
+            </div>
+            ${isOwner ? '<span class="team-owner-badge">👑 Owner — Full Access</span>' : roleBadge}
+            ${expandBtn}
+          </div>`;
+
+        // Pending invite body
+        if (m.is_pending) {
+          return `<div class="member-card" id="mc_${m.id}">
+            ${topSection}
+            <div style="padding:10px 18px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+              ${m.invite_url ? `
+              <button class="btn-copy-link" onclick="copyText('${escHtml(m.invite_url)}',this)">📋 Copy Invite Link</button>` : ''}
+              <button class="btn-revoke-invite" onclick="revokeInvite('${m.id}')">Revoke Invite</button>
+            </div>
+          </div>`;
+        }
+
+        // Owner card — no body
+        if (isOwner) {
+          return `<div class="member-card" id="mc_${m.id}">${topSection}</div>`;
+        }
+
+        // Non-owner member — expandable access editor
+        const curAccounts = Array.isArray(m.allowed_account_ids) ? m.allowed_account_ids : null;
+        const curAgencies = Array.isArray(m.allowed_agency_ids)  ? m.allowed_agency_ids  : null;
+        const hasFullAccountAccess = curAccounts === null;
+        const hasFullAgencyAccess  = curAgencies === null;
+
+        const accountCheckboxes = allAccounts.map(a =>
+          `<label class="access-checkbox${curAccounts && curAccounts.includes(a.id) ? ' checked' : ''}">
+            <input type="checkbox" data-member="${m.id}" data-type="account" value="${a.id}"
+              ${hasFullAccountAccess || (curAccounts && curAccounts.includes(a.id)) ? 'checked' : ''}>
+            ${escHtml((a.account_name || a.meta_account_id || '').substring(0,30))}
+          </label>`
+        ).join('');
+
+        const agencyCheckboxes = allAgencies.map(ag =>
+          `<label class="access-checkbox${curAgencies && curAgencies.includes(ag.id) ? ' checked' : ''}">
+            <input type="checkbox" data-member="${m.id}" data-type="agency" value="${ag.id}"
+              ${hasFullAgencyAccess || (curAgencies && curAgencies.includes(ag.id)) ? 'checked' : ''}>
+            ${ag.icon || '📊'} ${escHtml(ag.name)}
+          </label>`
+        ).join('');
+
+        return `<div class="member-card" id="mc_${m.id}">
+          ${topSection}
+          <div class="member-card-body">
+            <div class="access-section">
+              <h4>Account Access</h4>
+              <label class="access-all-toggle">
+                <input type="checkbox" id="allAccounts_${m.id}" ${hasFullAccountAccess ? 'checked' : ''}
+                  onchange="toggleAllAccess('${m.id}','account',this.checked)">
+                Full access — all current and future accounts
+              </label>
+              <div class="access-grid" id="accountGrid_${m.id}" style="${hasFullAccountAccess ? 'opacity:0.4;pointer-events:none' : ''}">
+                ${accountCheckboxes || '<div style="color:var(--text-muted);font-size:12px">No accounts connected yet</div>'}
+              </div>
+            </div>
+            <div class="access-section" style="margin-top:14px">
+              <h4>Agency Access</h4>
+              <label class="access-all-toggle">
+                <input type="checkbox" id="allAgencies_${m.id}" ${hasFullAgencyAccess ? 'checked' : ''}
+                  onchange="toggleAllAccess('${m.id}','agency',this.checked)">
+                Full access — all agencies
+              </label>
+              <div class="access-grid" id="agencyGrid_${m.id}" style="${hasFullAgencyAccess ? 'opacity:0.4;pointer-events:none' : ''}">
+                ${agencyCheckboxes}
+              </div>
+            </div>
+            <div class="member-actions">
+              <button class="btn-remove-member" onclick="removeMember('${m.id}')">🗑 Remove Member</button>
+              <button class="btn-save-access" onclick="saveAccess('${m.id}')">Save Access</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Wire up checkbox visual updates
+      container.querySelectorAll('.access-checkbox input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          cb.closest('.access-checkbox').classList.toggle('checked', cb.checked);
+        });
+      });
+    }
+
+    function toggleMemberCard(memberId) {
+      document.getElementById(`mc_${memberId}`)?.classList.toggle('expanded');
+    }
+
+    function toggleAllAccess(memberId, type, isAll) {
+      const grid = document.getElementById(`${type === 'account' ? 'accountGrid' : 'agencyGrid'}_${memberId}`);
+      if (grid) {
+        grid.style.opacity = isAll ? '0.4' : '1';
+        grid.style.pointerEvents = isAll ? 'none' : 'auto';
+        if (isAll) grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+          cb.checked = true;
+          cb.closest('.access-checkbox').classList.add('checked');
+        });
+      }
+    }
+
+    async function saveAccess(memberId) {
+      const btn = document.querySelector(`#mc_${memberId} .btn-save-access`);
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+      const allAccountsCb = document.getElementById(`allAccounts_${memberId}`);
+      const allAgenciesCb = document.getElementById(`allAgencies_${memberId}`);
+
+      const allowedAccounts = allAccountsCb?.checked ? null
+        : Array.from(document.querySelectorAll(`[data-member="${memberId}"][data-type="account"]:checked`)).map(cb => cb.value);
+      const allowedAgencies = allAgenciesCb?.checked ? null
+        : Array.from(document.querySelectorAll(`[data-member="${memberId}"][data-type="agency"]:checked`)).map(cb => cb.value);
+
+      const res = await callEdgeFunction('team-manage', {
+        action: 'update_access',
+        org_id: currentOrgId,
+        member_id: memberId,
+        allowed_account_ids: allowedAccounts,
+        allowed_agency_ids:  allowedAgencies,
+      });
+
+      if (btn) { btn.disabled = false; btn.textContent = res.error ? '✗ Error' : '✓ Saved'; }
+      if (!res.error) setTimeout(() => { if (btn) btn.textContent = 'Save Access'; }, 2000);
+    }
+
+    async function removeMember(memberId) {
+      if (!confirm('Remove this member from the organization? They will lose all access.')) return;
+      const res = await callEdgeFunction('team-manage', {
+        action: 'remove',
+        org_id: currentOrgId,
+        member_id: memberId,
+      });
+      if (res.error) { alert('Error: ' + res.error); return; }
+      document.getElementById(`mc_${memberId}`)?.remove();
+    }
+
+    async function revokeInvite(inviteId) {
+      if (!confirm('Revoke this invite? The link will stop working.')) return;
+      const res = await callEdgeFunction('team-manage', {
+        action: 'revoke_invite',
+        org_id: currentOrgId,
+        invite_id: inviteId,
+      });
+      if (res.error) { alert('Error: ' + res.error); return; }
+      document.getElementById(`mc_${inviteId}`)?.remove();
+    }
+
+    async function submitInvite() {
+      const email = document.getElementById('invite-email').value.trim();
+      const role  = document.getElementById('invite-role').value;
+      const btn   = document.getElementById('invite-submit-btn');
+      const result = document.getElementById('invite-result');
+      const linkBox = document.getElementById('invite-link-box');
+
+      if (!email) { result.className = 'invite-result error'; result.textContent = 'Please enter an email address.'; return; }
+
+      btn.disabled = true; btn.textContent = 'Sending…';
+      result.className = 'invite-result'; result.textContent = ''; result.style.display = 'none';
+      linkBox.style.display = 'none';
+
+      const res = await callEdgeFunction('team-manage', { action: 'invite', org_id: currentOrgId, email, role });
+
+      btn.disabled = false; btn.textContent = 'Send Invite →';
+
+      if (res.error) {
+        result.className = 'invite-result error';
+        result.textContent = res.error;
+        return;
+      }
+
+      result.className = 'invite-result success';
+      result.textContent = res.reused
+        ? `Invite already sent to ${email}. Link below:`
+        : `Invite created for ${email}. Share the link below:`;
+
+      linkBox.dataset.link = res.invite_url;
+      linkBox.innerHTML = `🔗 ${res.invite_url} — click to copy`;
+      linkBox.style.display = 'block';
+
+      document.getElementById('invite-email').value = '';
+
+      // Reload the member list to show the new pending invite
+      loadTeamPanel();
+    }
+
+    function copyInviteLink(el) {
+      const url = el.dataset.link || el.textContent;
+      copyText(url, el);
+    }
+
+    function copyText(text, el) {
+      navigator.clipboard.writeText(text).then(() => {
+        if (el) { const orig = el.textContent; el.textContent = '✓ Copied!'; setTimeout(() => el.textContent = orig, 2000); }
+      }).catch(() => { alert('Copy manually: ' + text); });
+    }
+
+    document.getElementById('team-btn').addEventListener('click', openTeamPanel);
 
     // ─────────────────────────────────────────────────────────────
     // SETTINGS MODAL
