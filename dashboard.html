@@ -269,25 +269,25 @@
 
     /* ── ASK CLAUDE SIDEBAR ── */
     #ai-toggle {
-      position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+      position: fixed; right: 0; top: 50%; transform: translateY(-50%);
       z-index: 400; background: var(--blue-dark); color: white;
-      border: none; border-radius: 0 10px 10px 0;
+      border: none; border-radius: 10px 0 0 10px;
       padding: 18px 8px; cursor: pointer;
       display: flex; flex-direction: column; align-items: center; gap: 10px;
       font-size: 10px; font-family: inherit; font-weight: 700; letter-spacing: 0.5px;
       writing-mode: vertical-rl; text-orientation: mixed; white-space: nowrap;
-      box-shadow: 3px 0 12px rgba(0,0,0,0.18); transition: background 0.15s, opacity 0.2s;
+      box-shadow: -3px 0 12px rgba(0,0,0,0.18); transition: background 0.15s, opacity 0.2s;
     }
     #ai-toggle:hover { background: var(--blue-mid); }
     #ai-toggle .ai-icon { writing-mode: horizontal-tb; font-size: 18px; }
     #ai-panel {
-      position: fixed; left: -380px; top: 0; bottom: 0; width: 360px;
+      position: fixed; right: -380px; top: 0; bottom: 0; width: 360px;
       background: white; z-index: 450;
       display: flex; flex-direction: column;
-      box-shadow: 4px 0 24px rgba(0,0,0,0.16);
-      transition: left 0.28s cubic-bezier(.4,0,.2,1);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.16);
+      transition: right 0.28s cubic-bezier(.4,0,.2,1);
     }
-    #ai-panel.open { left: 0; }
+    #ai-panel.open { right: 0; }
     #ai-toggle.panel-open { opacity: 0; pointer-events: none; }
     .ai-panel-header {
       background: var(--blue-dark); color: white;
