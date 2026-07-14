@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Blue Agency · Meta Ads Dashboard</title>
+  <title>Blue Ad · Performance Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
   <!-- Supabase JS SDK -->
@@ -74,7 +74,7 @@
     body { font-family: 'Open Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text-main); min-height: 100vh; }
 
     /* ── TOP HEADER ── */
-    .header { background: var(--blue-dark); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .header { background: linear-gradient(135deg, #0573F5 0%, #083BBF 55%, #0A1CA3 100%); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
     .brand { display: flex; align-items: center; gap: 14px; }
     .brand-logo { display: flex; align-items: center; gap: 3px; }
     .brand-logo span { display: inline-block; width: 7px; height: 26px; border-radius: 2px; background: white; opacity: 0.95; }
@@ -83,8 +83,8 @@
     .brand-logo span:nth-child(3) { height: 26px; }
     .brand-logo span:nth-child(4) { height: 18px; }
     .brand-text { color: white; }
-    .brand-text .agency-name { font-size: 18px; font-weight: 700; letter-spacing: 4px; }
-    .brand-text .agency-sub  { font-size: 9px; font-weight: 300; letter-spacing: 2px; opacity: 0.75; margin-top: 1px; }
+    .brand-text .agency-name { font-size: 19px; font-weight: 700; letter-spacing: 6px; text-transform: uppercase; }
+    .brand-text .agency-sub  { font-size: 8.5px; font-weight: 400; letter-spacing: 2.5px; opacity: 0.7; margin-top: 2px; text-transform: uppercase; }
     .header-right { display: flex; align-items: center; gap: 8px; }
     #auto-refresh-label { font-size: 11px; color: rgba(255,255,255,0.6); white-space: nowrap; }
     .header-btn { background: none; border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.7); padding: 5px 12px; border-radius: 6px; font-size: 11px; font-family: inherit; cursor: pointer; font-weight: 600; transition: all 0.15s; }
@@ -167,7 +167,7 @@
     .shopify-badge { display: inline-flex; align-items: center; gap: 4px; background: #F0FDF4; color: #166534; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
 
     /* ── AUTH OVERLAY ── */
-    .auth-overlay { position: fixed; inset: 0; background: var(--blue-dark); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    .auth-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #0573F5 0%, #083BBF 55%, #0A1CA3 100%); z-index: 9999; display: flex; align-items: center; justify-content: center; }
     .auth-overlay.hidden { display: none; }
     .auth-box { background: white; border-radius: 16px; padding: 40px 36px 36px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
     .auth-logo { display: flex; align-items: center; justify-content: center; gap: 3px; margin-bottom: 20px; }
@@ -176,8 +176,8 @@
     .auth-logo span:nth-child(2) { height: 22px; }
     .auth-logo span:nth-child(3) { height: 28px; }
     .auth-logo span:nth-child(4) { height: 18px; }
-    .auth-title { font-size: 20px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
-    .auth-sub { font-size: 12px; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 28px; }
+    .auth-title { font-size: 20px; font-weight: 700; letter-spacing: 6px; color: var(--text-main); margin-bottom: 4px; }
+    .auth-sub { font-size: 8.5px; color: var(--text-muted); letter-spacing: 2.5px; margin-bottom: 28px; text-transform: uppercase; }
     .auth-input { width: 100%; padding: 12px 16px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; margin-bottom: 10px; transition: border-color 0.15s; }
     .auth-input:focus { outline: none; border-color: var(--blue-light); }
     .auth-btn { width: 100%; padding: 12px; background: var(--blue-dark); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; letter-spacing: 1px; transition: background 0.15s; }
@@ -645,7 +645,7 @@
       <!-- Active agency badge — always visible, shows current workspace context -->
       <div class="agency-badge" id="header-agency-badge">
         <span class="agency-badge-icon" id="header-agency-icon" style="display:none"></span>
-        <span id="header-agency-name">Blue Ad Agency</span>
+        <span id="header-agency-name">Blue Ad</span>
       </div>
       <div class="agency-badge-divider"></div>
       <div class="org-selector">
@@ -747,7 +747,7 @@
     <div class="auth-box">
       <div class="auth-logo"><span></span><span></span><span></span><span></span></div>
       <div class="auth-title">B L U E</div>
-      <div class="auth-sub">DIGITAL PERFORMANCE MARKETING</div>
+      <div class="auth-sub">DIGITAL PERFORMANCE MARKETING AGENCY</div>
       <div id="auth-form-login">
         <!-- Email / password -->
         <input type="email" class="auth-input" id="auth-email" placeholder="Email address" autocomplete="email">
@@ -823,7 +823,7 @@
   <!-- SETTINGS MODAL -->
   <div class="modal-overlay hidden" id="settings-modal">
     <div class="modal">
-      <div class="modal-header" style="background:#1c1f26;border-bottom:1px solid rgba(255,255,255,0.07);border-radius:16px 16px 0 0">
+      <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
         <h2 style="color:#e6edf3;font-size:15px">⚙ Settings</h2>
         <button class="modal-close" id="modal-close" style="color:rgba(255,255,255,0.45)">✕</button>
       </div>
@@ -1254,7 +1254,7 @@
     // Architecture: Organization (Supabase DB) → Agencies → Accounts
     // ─────────────────────────────────────────────────────────────
     const DEFAULT_AGENCIES = [
-      { id: 'agency_blue',   name: 'Blue Ad Agency', icon: '' },
+      { id: 'agency_blue',   name: 'Blue Ad', icon: '' },
       { id: 'agency_kepler', name: 'Kepler',          icon: '🔭' },
       { id: 'agency_wolves', name: 'Wolves Ground',   icon: '🐺' },
     ];
@@ -1275,7 +1275,7 @@
 
     // Migration: strip legacy icons from built-in agencies
     (function migrateAgencyIcons() {
-      const patches = { agency_blue: '' };
+      const patches = { agency_blue: { icon: '', name: 'Blue Ad' } };
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key || !key.startsWith('agencies_')) continue;
@@ -1284,8 +1284,10 @@
           if (!Array.isArray(list)) continue;
           let changed = false;
           list.forEach(a => {
-            if (a.id in patches && a.icon !== patches[a.id]) {
-              a.icon = patches[a.id]; changed = true;
+            if (a.id in patches) {
+              const p = patches[a.id];
+              if (a.icon !== p.icon) { a.icon = p.icon; changed = true; }
+              if (a.name !== p.name) { a.name = p.name; changed = true; }
             }
           });
           if (changed) localStorage.setItem(key, JSON.stringify(list));
