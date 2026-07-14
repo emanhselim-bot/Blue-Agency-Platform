@@ -1328,48 +1328,60 @@
         return '<div class="no-campaign-data" style="padding:28px;text-align:center;color:var(--text-muted);font-size:13px">No campaign data returned for this period.</div>';
       }
       const sorted = [...campaigns].sort((a, b) => (parseFloat(b.spend) || 0) - (parseFloat(a.spend) || 0));
-      const totSpend = sorted.reduce((s, c) => s + (parseFloat(c.spend) || 0), 0);
-      const totImp   = sorted.reduce((s, c) => s + (parseFloat(c.impressions) || 0), 0);
-      const totReach = sorted.reduce((s, c) => s + (parseFloat(c.reach) || 0), 0);
-      const totClk   = sorted.reduce((s, c) => s + (parseFloat(c.clicks) || 0), 0);
+
+      // Detect which optional column groups are needed
+      const hasMessages = sorted.some(c => parseNum(c.messages) > 0);
+      const hasReach    = sorted.some(c => parseNum(c.reach) > 0);
+
+      // Totals
+      const totSpend    = sorted.reduce((s, c) => s + (parseNum(c.spend)    || 0), 0);
+      const totImp      = sorted.reduce((s, c) => s + (parseNum(c.impressions) || 0), 0);
+      const totReach    = sorted.reduce((s, c) => s + (parseNum(c.reach)    || 0), 0);
+      const totResults  = sorted.reduce((s, c) => s + (parseNum(c.results)  || 0), 0);
+      const totMessages = sorted.reduce((s, c) => s + (parseNum(c.messages) || 0), 0);
+
+      const fmtN = (v, d=0) => v != null && !isNaN(v) && v > 0 ? Number(v).toLocaleString('en', {minimumFractionDigits:d,maximumFractionDigits:d}) : '—';
+      const fmtC = (v) => v != null && !isNaN(v) && v > 0 ? curr + Number(v).toLocaleString('en', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
       const rows = sorted.map(c => {
-        const spend = parseFloat(c.spend) || 0;
-        const pctOfTotal = totSpend > 0 ? (spend / totSpend * 100).toFixed(1) : '—';
+        const spend     = parseNum(c.spend)          || 0;
+        const reach     = parseNum(c.reach)          || 0;
+        const cpr       = (spend && reach)           ? spend / reach : null; // cost per reach
         return `<tr>
           <td class="tl campaign-name-cell" title="${escHtml(c.campaign_name || c.campaign_id)}">${escHtml(c.campaign_name || c.campaign_id)}</td>
-          <td class="tr">${fmt(parseNum(c.spend), curr)}</td>
-          <td class="tr" style="color:var(--text-muted);font-size:11px">${pctOfTotal}%</td>
-          <td class="tr">${fmt(parseNum(c.impressions), '', 0)}</td>
-          <td class="tr">${fmt(parseNum(c.reach), '', 0)}</td>
-          <td class="tr">${fmt(parseNum(c.clicks), '', 0)}</td>
-          <td class="tr">${parseNum(c.ctr) !== null ? fmt(parseNum(c.ctr),'',2) + '%' : '—'}</td>
-          <td class="tr">${fmt(parseNum(c.cpc), curr)}</td>
-          <td class="tr">${fmt(parseNum(c.cpm), curr)}</td>
+          <td class="tr">${fmtC(spend)}</td>
+          <td class="tr">${fmtN(parseNum(c.results))}</td>
+          <td class="tr">${fmtC(parseNum(c.cost_per_result))}</td>
+          <td class="tr">${fmtN(parseNum(c.reach))}</td>
+          <td class="tr">${fmtN(parseNum(c.impressions))}</td>
+          ${hasReach    ? `<td class="tr">${fmtC(cpr)}</td>` : ''}
+          ${hasMessages ? `<td class="tr">${fmtN(parseNum(c.messages))}</td><td class="tr">${fmtC(parseNum(c.cost_per_message))}</td>` : ''}
         </tr>`;
       }).join('');
+
+      const totCPR = totSpend && totReach ? totSpend / totReach : null;
+
       return `<table class="data-table">
         <thead><tr>
           <th class="tl">Campaign</th>
           <th class="tr">Spend</th>
-          <th class="tr">% Total</th>
-          <th class="tr">Impressions</th>
+          <th class="tr">Results</th>
+          <th class="tr">Cost/Result</th>
           <th class="tr">Reach</th>
-          <th class="tr">Clicks</th>
-          <th class="tr">CTR</th>
-          <th class="tr">CPC</th>
-          <th class="tr">CPM</th>
+          <th class="tr">Impressions</th>
+          ${hasReach    ? '<th class="tr">Cost/Reach</th>' : ''}
+          ${hasMessages ? '<th class="tr">Messages</th><th class="tr">Cost/Message</th>' : ''}
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr>
-          <td class="tl">Total (${sorted.length} campaigns)</td>
-          <td class="tr">${fmt(totSpend, curr)}</td>
-          <td class="tr">100%</td>
-          <td class="tr">${fmt(totImp, '', 0)}</td>
-          <td class="tr">${fmt(totReach, '', 0)}</td>
-          <td class="tr">${fmt(totClk, '', 0)}</td>
-          <td class="tr">—</td>
-          <td class="tr">—</td>
-          <td class="tr">—</td>
+          <td class="tl">Total (${sorted.length} campaign${sorted.length !== 1 ? 's' : ''})</td>
+          <td class="tr">${fmtC(totSpend)}</td>
+          <td class="tr">${fmtN(totResults)}</td>
+          <td class="tr">${totResults ? fmtC(totSpend / totResults) : '—'}</td>
+          <td class="tr">${fmtN(totReach)}</td>
+          <td class="tr">${fmtN(totImp)}</td>
+          ${hasReach    ? `<td class="tr">${fmtC(totCPR)}</td>` : ''}
+          ${hasMessages ? `<td class="tr">${fmtN(totMessages)}</td><td class="tr">${totMessages ? fmtC(totSpend / totMessages) : '—'}</td>` : ''}
         </tr></tfoot>
       </table>`;
     }

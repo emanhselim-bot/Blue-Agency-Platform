@@ -48,6 +48,8 @@ const CAMPAIGN_FIELDS = [
   "frequency",
   "actions",
   "cost_per_action_type",
+  "results",
+  "cost_per_result",
   "date_start",
   "date_stop",
 ].join(",");
@@ -218,19 +220,30 @@ Deno.serve(async (req: Request) => {
       for (const a of (c.actions as {action_type:string;value:string}[]) ?? []) acts[a.action_type] = a.value;
       const cpa: Record<string, string> = {};
       for (const a of (c.cost_per_action_type as {action_type:string;value:string}[]) ?? []) cpa[a.action_type] = a.value;
+      // Meta returns results/cost_per_result as [{action_type, value}] arrays
+      const resultsArr     = (c.results         as {action_type:string;value:string}[]) ?? [];
+      const cprArr         = (c.cost_per_result  as {action_type:string;value:string}[]) ?? [];
+      const resultsVal     = resultsArr[0]?.value ?? null;
+      const costPerResult  = cprArr[0]?.value     ?? null;
+      // Messaging: conversations started (7-day click window)
+      const MSG_KEY = "onsite_conversion.messaging_conversation_started_7d";
       return {
-        campaign_id:   c.campaign_id,
-        campaign_name: c.campaign_name,
-        spend:        c.spend,
-        impressions:  c.impressions,
-        reach:        c.reach,
-        clicks:       c.clicks,
-        ctr:          c.ctr,
-        cpc:          c.cpc,
-        cpm:          c.cpm,
-        frequency:    c.frequency,
-        date_start:   c.date_start,
-        date_stop:    c.date_stop,
+        campaign_id:      c.campaign_id,
+        campaign_name:    c.campaign_name,
+        spend:            c.spend,
+        impressions:      c.impressions,
+        reach:            c.reach,
+        clicks:           c.clicks,
+        ctr:              c.ctr,
+        cpc:              c.cpc,
+        cpm:              c.cpm,
+        frequency:        c.frequency,
+        date_start:       c.date_start,
+        date_stop:        c.date_stop,
+        results:          resultsVal,
+        cost_per_result:  costPerResult,
+        messages:         acts[MSG_KEY] ?? null,
+        cost_per_message: cpa[MSG_KEY]  ?? null,
         "actions:link_click":       acts["link_click"] ?? null,
         "actions:page_engagement":  acts["page_engagement"] ?? null,
         "cost_per_action_type:link_click": cpa["link_click"] ?? null,
