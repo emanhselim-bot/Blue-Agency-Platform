@@ -17,7 +17,7 @@ const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-const APP_URL = Deno.env.get("APP_URL") || "https://blue-agency-platform.up.railway.app";
+const APP_URL = Deno.env.get("APP_URL") || "https://web-production-b4926.up.railway.app";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
       .from("organization_members")
       .select(`
         id, user_id, role, accepted_at, allowed_account_ids, allowed_agency_ids,
-        profiles ( email, full_name )
+        profiles!organization_members_user_id_fkey ( email, full_name )
       `)
       .eq("organization_id", org_id)
       .not("accepted_at", "is", null)
