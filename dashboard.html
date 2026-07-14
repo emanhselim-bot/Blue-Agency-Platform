@@ -1254,7 +1254,7 @@
     // Architecture: Organization (Supabase DB) → Agencies → Accounts
     // ─────────────────────────────────────────────────────────────
     const DEFAULT_AGENCIES = [
-      { id: 'agency_blue',   name: 'Blue Ad Agency', icon: '💙' },
+      { id: 'agency_blue',   name: 'Blue Ad Agency', icon: '' },
       { id: 'agency_kepler', name: 'Kepler',          icon: '🔭' },
       { id: 'agency_wolves', name: 'Wolves Ground',   icon: '🐺' },
     ];
@@ -1304,7 +1304,7 @@
         const count = countForAgency(a.id);
         const isActive = currentAgencyId === a.id;
         return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
-          <span class="agency-tab-icon">${a.icon || '📊'}</span>
+          ${a.icon ? `<span class="agency-tab-icon">${a.icon}</span>` : ''}
           <span class="agency-tab-name">${escHtml(a.name)}</span>
           ${count > 0 ? `<span class="agency-tab-count">${count}</span>` : ''}
         </button>`;
