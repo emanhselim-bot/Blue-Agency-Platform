@@ -353,13 +353,52 @@
       padding: 24px 20px; line-height: 1.6;
     }
 
-    /* ── AGENCY SELECTOR ── */
-    .agency-selector-wrap { display: flex; align-items: center; gap: 4px; }
-    #agency-select { padding: 8px 14px; border: 1.5px solid var(--blue-light); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; color: var(--text-main); cursor: pointer; max-width: 180px; font-weight: 600; }
-    #agency-select:focus { outline: none; border-color: var(--blue-dark); }
-    .add-agency-btn { padding: 7px 10px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--blue-dark); font-weight: 700; transition: all 0.15s; line-height: 1; }
-    .add-agency-btn:hover { background: var(--blue-dark); color: white; border-color: var(--blue-dark); }
-    .agency-divider { width: 1px; height: 28px; background: var(--border); margin: 0 4px; }
+    /* ── AGENCY NAVIGATION BAR ── */
+    .agency-nav {
+      background: white;
+      border-bottom: 2px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: stretch;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+    }
+    .agency-nav::-webkit-scrollbar { display: none; }
+
+    .agency-tab {
+      display: flex; align-items: center; gap: 7px;
+      padding: 0 20px; height: 46px;
+      border: none; border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      background: transparent; font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .agency-tab:hover { color: var(--blue-dark); background: #f4f6ff; }
+    .agency-tab.active { color: var(--blue-dark); border-bottom-color: var(--blue-dark); }
+    .agency-tab-icon { font-size: 15px; line-height: 1; }
+    .agency-tab-name { /* text node */ }
+    .agency-tab-count {
+      background: var(--blue-dark); color: white;
+      font-size: 9px; font-weight: 700;
+      padding: 1px 5px; border-radius: 20px; line-height: 1.5;
+    }
+    .agency-tab.active .agency-tab-count { background: var(--blue-light); }
+
+    .agency-nav-spacer { flex: 1; }
+
+    .add-agency-tab {
+      display: flex; align-items: center; gap: 6px;
+      padding: 0 18px; height: 46px;
+      border: none; border-left: 1px solid var(--border);
+      background: transparent; font-family: inherit; font-size: 12px; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; white-space: nowrap;
+      transition: color 0.15s, background 0.15s; flex-shrink: 0;
+    }
+    .add-agency-tab:hover { color: var(--blue-dark); background: #f4f6ff; }
+    .add-agency-tab-plus { font-size: 18px; font-weight: 300; line-height: 1; }
 
     /* ── FUNNEL ── */
     .funnel-flow { display: flex; align-items: stretch; margin-bottom: 24px; gap: 0; overflow-x: auto; padding-bottom: 4px; }
@@ -414,14 +453,13 @@
     </div>
   </div>
 
+  <!-- AGENCY NAVIGATION -->
+  <div class="agency-nav" id="agency-nav">
+    <!-- Populated by renderAgencyNav() after accounts load -->
+  </div>
+
   <!-- CONTROLS -->
   <div class="controls-bar">
-    <label>Agency</label>
-    <div class="agency-selector-wrap">
-      <select id="agency-select"><option value="all">All Agencies</option></select>
-      <button class="add-agency-btn" id="add-agency-btn" title="Add Agency">+</button>
-    </div>
-    <div class="agency-divider"></div>
     <label>Account</label>
     <select id="account-select"><option value="">— Select Account —</option></select>
     <div class="period-tabs" id="period-tabs">
@@ -863,15 +901,15 @@
 
     const sel = document.getElementById('account-select');
     const orgSel = document.getElementById('org-select');
-    const agencySel = document.getElementById('agency-select');
 
     // ─────────────────────────────────────────────────────────────
-    // AGENCY MANAGEMENT (localStorage-backed, designed for future DB integration)
+    // AGENCY MANAGEMENT — localStorage-backed, designed for future DB integration.
+    // Architecture: Organization (Supabase DB) → Agencies → Accounts
     // ─────────────────────────────────────────────────────────────
     const DEFAULT_AGENCIES = [
-      { id: 'agency_blue',   name: 'Blue Ad Agency' },
-      { id: 'agency_kepler', name: 'Kepler' },
-      { id: 'agency_wolves', name: 'Wolves Ground' },
+      { id: 'agency_blue',   name: 'Blue Ad Agency', icon: '💙' },
+      { id: 'agency_kepler', name: 'Kepler',          icon: '🔭' },
+      { id: 'agency_wolves', name: 'Wolves Ground',   icon: '🐺' },
     ];
 
     function getAgencies(orgId) {
@@ -880,7 +918,6 @@
       if (stored) {
         try { return JSON.parse(stored); } catch { /* fall through */ }
       }
-      // First time — seed defaults and save
       localStorage.setItem(`agencies_${orgId}`, JSON.stringify(DEFAULT_AGENCIES));
       return DEFAULT_AGENCIES;
     }
@@ -898,48 +935,89 @@
       else          localStorage.removeItem(`acct_agency_${orgId}_${accountId}`);
     }
 
-    function loadAgenciesUI() {
+    // Render the horizontal agency navigation bar.
+    // Each agency becomes a tab. Switching tabs isolates the account list.
+    function renderAgencyNav() {
+      const nav = document.getElementById('agency-nav');
+      if (!nav) return;
       const agencies = getAgencies(currentOrgId);
-      const savedId = currentAgencyId;
-      agencySel.innerHTML = '<option value="all">All Agencies</option>' +
-        agencies.map(a => `<option value="${escHtml(a.id)}"${a.id === savedId ? ' selected' : ''}>${escHtml(a.name)}</option>`).join('');
+      const allAccounts = Object.values(accountMap);
+
+      function countForAgency(agencyId) {
+        if (agencyId === 'all') return allAccounts.length;
+        const v = allAccounts.filter(acc => {
+          const assigned = getAccountAgencyId(currentOrgId, acc.id);
+          return !assigned || assigned === agencyId;
+        });
+        return v.length || allAccounts.length;
+      }
+
+      const tabs = [{ id: 'all', name: 'All Agencies', icon: '🏢' }, ...agencies];
+
+      nav.innerHTML = tabs.map(a => {
+        const count = countForAgency(a.id);
+        const isActive = currentAgencyId === a.id;
+        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="setActiveAgency('${escHtml(a.id)}')" title="${escHtml(a.name)}">
+          <span class="agency-tab-icon">${a.icon || '📊'}</span>
+          <span class="agency-tab-name">${escHtml(a.name)}</span>
+          ${count > 0 ? `<span class="agency-tab-count">${count}</span>` : ''}
+        </button>`;
+      }).join('') +
+      `<div class="agency-nav-spacer"></div>
+       <button class="add-agency-tab" onclick="promptAddAgency()">
+         <span class="add-agency-tab-plus">+</span> Add Agency
+       </button>`;
+    }
+
+    // Switch the active agency: updates state, re-renders nav, filters accounts.
+    function setActiveAgency(agencyId) {
+      currentAgencyId = agencyId;
+      localStorage.setItem('dash_agency_id', agencyId);
+      renderAgencyNav();
+      filterAccountsByAgency();
+      if (sel.value) loadData();
+    }
+
+    function promptAddAgency() {
+      const name = prompt('New agency name:');
+      if (name && name.trim()) addAgency(name.trim());
     }
 
     function addAgency(name) {
       const id = 'agency_' + Date.now();
       const agencies = getAgencies(currentOrgId);
-      agencies.push({ id, name });
+      agencies.push({ id, name, icon: '📊' });
       saveAgencies(currentOrgId, agencies);
       currentAgencyId = id;
       localStorage.setItem('dash_agency_id', id);
-      loadAgenciesUI();
+      renderAgencyNav();
       filterAccountsByAgency();
     }
 
-    // Filter the account <select> based on the selected agency.
-    // Accounts without an explicit assignment show under "All Agencies".
+    // Filter the account <select> to only show accounts belonging to the active agency.
+    // Unassigned accounts appear under every agency (graceful default before assignment).
     function filterAccountsByAgency() {
       const agencies = getAgencies(currentOrgId);
       const agencyId = currentAgencyId;
       const all = Object.values(accountMap);
 
-      // Determine which accounts to show
       let visible;
       if (agencyId === 'all') {
         visible = all;
       } else {
         visible = all.filter(acc => {
           const assigned = getAccountAgencyId(currentOrgId, acc.id);
-          // Show if explicitly assigned to this agency, or if unassigned (no assignment yet)
           return !assigned || assigned === agencyId;
         });
-        // If nothing visible, fall back to all so the user isn't left with an empty list
-        if (!visible.length) visible = all;
+        if (!visible.length) visible = all; // never leave the user with an empty list
       }
 
       const prevVal = sel.value;
       sel.innerHTML = '<option value="">— Select Account —</option>';
-      if (visible.length > 1) sel.innerHTML += `<option value="__all__">All ${agencyId !== 'all' ? agencies.find(a=>a.id===agencyId)?.name || 'Agency' : 'Accounts'}</option>`;
+      if (visible.length > 1) {
+        const agencyName = agencyId !== 'all' ? agencies.find(a => a.id === agencyId)?.name || 'Agency' : 'Accounts';
+        sel.innerHTML += `<option value="__all__">All ${agencyName}</option>`;
+      }
       visible.forEach(acc => {
         const opt = document.createElement('option');
         opt.value = acc.id;
@@ -948,23 +1026,10 @@
         sel.appendChild(opt);
       });
 
-      // If previous selection is no longer visible, clear it
       if (prevVal && !visible.find(a => a.id === prevVal) && prevVal !== '__all__') {
         sel.value = '';
       }
     }
-
-    agencySel.addEventListener('change', () => {
-      currentAgencyId = agencySel.value;
-      localStorage.setItem('dash_agency_id', currentAgencyId);
-      filterAccountsByAgency();
-      if (sel.value) loadData();
-    });
-
-    document.getElementById('add-agency-btn').addEventListener('click', () => {
-      const name = prompt('Agency name:');
-      if (name && name.trim()) addAgency(name.trim());
-    });
 
     // ─────────────────────────────────────────────────────────────
     // UTILITY
@@ -1267,8 +1332,8 @@
       // Populate accountMap
       (accounts || []).forEach(acc => { accountMap[acc.id] = acc; });
 
-      // Load agency selector, then filter accounts by current agency
-      loadAgenciesUI();
+      // Render agency nav, then filter accounts by active agency
+      renderAgencyNav();
       filterAccountsByAgency();
 
       // Restore saved account selection
