@@ -333,17 +333,26 @@ async function fetchShopifyAnalytics(
     }
     const json = await resp.json();
     const ql   = json?.data?.shopifyqlQuery;
-    if (!ql || !ql.rowData?.length) {
-      console.warn("[shopify-data] ShopifyQL empty:", JSON.stringify(json?.errors ?? ql));
+    // ParseError or missing data → analytics not available for this store/plan
+    if (!ql || ql.parseErrors?.length) {
+      console.warn("[shopify-data] ShopifyQL error:", JSON.stringify(json?.errors ?? ql));
       return { sessions: null, conversionRate: null };
+    }
+    // Empty rowData means no sessions in the period (genuine 0), not a failure
+    if (!ql.rowData?.length) {
+      console.log("[shopify-data] ShopifyQL empty rowData — 0 sessions in period");
+      return { sessions: 0, conversionRate: 0 };
     }
     // rowData may be [[...]] or [...] depending on Shopify version
     const row  = Array.isArray(ql.rowData[0]) ? ql.rowData[0] : ql.rowData;
     const cols: string[] = (ql.columns ?? []).map((c: { name: string }) => c.name);
     const sessIdx = cols.indexOf("sessions");
     const crIdx   = cols.indexOf("conversion_rate");
-    const sessions       = sessIdx >= 0 ? (parseInt(row[sessIdx])   || null) : null;
-    const conversionRate = crIdx   >= 0 ? (parseFloat(row[crIdx])   || null) : null;
+    const sessVal = sessIdx >= 0 ? parseInt(row[sessIdx])   : NaN;
+    const crVal   = crIdx   >= 0 ? parseFloat(row[crIdx])   : NaN;
+    // Preserve 0 as a valid value (|| null would incorrectly drop 0)
+    const sessions       = isNaN(sessVal) ? null : sessVal;
+    const conversionRate = isNaN(crVal)   ? null : crVal;
     console.log("[shopify-data] ShopifyQL sessions:", sessions, "CR:", conversionRate);
     return { sessions, conversionRate };
   } catch (e) {
@@ -539,9 +548,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({
         sales:       { rows: [[String(calcOrderCount(allOrders)), calcNetSales(allOrders).toFixed(2)]] },
         inventory:   { rows: [[String(calcUnitsSold(allOrders))]] },
-        sessions:    { rows: analytics.sessions != null
-                         ? [[String(analytics.sessions), analytics.conversionRate != null ? String(analytics.conversionRate) : "0"]]
-                         : [["0", "0"]] },
+        sessions:    { rows: analytics.sessions !== null
+                         ? [[String(analytics.sessions), String(analytics.conversionRate ?? 0)]]
+                         : null },
         daily_sales: { rows: calcDailySales(allOrders, shopTimezone) },
         refunds:     { rows: [[String(refundedOrders.length)]] },
         checkouts:   { rows: [[String(totalCheckouts), String(abandonedCount), String(allOrders.length)]] },

@@ -1476,8 +1476,8 @@
       if (sessionsRows?.[0]) {
         const rawSessions = parseInt(sessionsRows[0][0]);
         const rawCR = parseFloat(sessionsRows[0][1]);
-        if (rawSessions > 0) sessions = rawSessions;
-        if (!isNaN(rawCR) && rawCR > 0) conversionRate = rawCR * 100;
+        if (!isNaN(rawSessions)) sessions = rawSessions;      // keep 0 as valid
+        if (!isNaN(rawCR))       conversionRate = rawCR * 100; // keep 0 as valid
       }
       const returnsRows = getShopifyRows('refunds');
       if (returnsRows?.[0]) returns = parseInt(returnsRows[0][0]);
