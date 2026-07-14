@@ -215,6 +215,58 @@
     .status-paused   { background: var(--gold); }
     .status-archived { background: var(--text-muted); }
 
+    /* ── CLAUDE RECOMMENDATIONS SECTION ── */
+    #recs-section { display: none; padding: 0 24px 40px; }
+    .recs-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .recs-title {
+      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 1px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .recs-title::after { content: ''; flex: 1; height: 1px; background: var(--border); min-width: 40px; }
+    .recs-regenerate {
+      padding: 6px 14px; background: white; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;
+      font-family: inherit; color: var(--blue-dark); transition: all 0.15s; white-space: nowrap;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .recs-regenerate:hover { background: var(--blue-dark); color: white; border-color: var(--blue-dark); }
+    .recs-regenerate:disabled { color: var(--text-muted); cursor: not-allowed; background: white; border-color: var(--border); }
+    .recs-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    }
+    @media (max-width: 1100px) { .recs-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 640px)  { .recs-grid { grid-template-columns: 1fr; } }
+    .rec-card {
+      background: white; border-radius: 14px; padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04);
+      border-top: 3px solid transparent; display: flex; flex-direction: column; gap: 10px;
+    }
+    .rec-card.c-blue   { border-top-color: var(--blue-dark); }
+    .rec-card.c-teal   { border-top-color: var(--teal); }
+    .rec-card.c-gold   { border-top-color: var(--gold); }
+    .rec-card.c-green  { border-top-color: #16A34A; }
+    .rec-card-header { display: flex; align-items: center; gap: 8px; }
+    .rec-card-icon { font-size: 20px; line-height: 1; }
+    .rec-card-title { font-size: 12px; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.5px; }
+    .rec-card-body {
+      font-size: 13px; line-height: 1.65; color: var(--text-main);
+      flex: 1; white-space: pre-wrap;
+    }
+    .rec-card-body.loading {
+      color: var(--text-muted); font-style: italic;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+    .rec-error { color: var(--coral); font-size: 12px; }
+    .recs-powered {
+      margin-top: 12px; text-align: right;
+      font-size: 10px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.3px;
+    }
+
     /* ── ASK CLAUDE SIDEBAR ── */
     #ai-toggle {
       position: fixed; left: 0; top: 50%; transform: translateY(-50%);
@@ -352,6 +404,47 @@
   <!-- MAIN CONTENT (unchanged) -->
   <div class="content" id="content">
     <div class="loading-state">Select an account above to load data.</div>
+  </div>
+
+  <!-- CLAUDE RECOMMENDATIONS SECTION -->
+  <div id="recs-section">
+    <div class="recs-header">
+      <div class="recs-title">✦ Claude Recommendations</div>
+      <button class="recs-regenerate" id="recs-regenerate-btn" onclick="loadRecommendations()" disabled>
+        ↻ Regenerate
+      </button>
+    </div>
+    <div class="recs-grid">
+      <div class="rec-card c-blue" id="rec-account">
+        <div class="rec-card-header">
+          <span class="rec-card-icon">📊</span>
+          <span class="rec-card-title">Account Performance</span>
+        </div>
+        <div class="rec-card-body loading" id="rec-account-body">Generating…</div>
+      </div>
+      <div class="rec-card c-teal" id="rec-creative">
+        <div class="rec-card-header">
+          <span class="rec-card-icon">🎨</span>
+          <span class="rec-card-title">Creative Recommendations</span>
+        </div>
+        <div class="rec-card-body loading" id="rec-creative-body">Generating…</div>
+      </div>
+      <div class="rec-card c-gold" id="rec-targeting">
+        <div class="rec-card-header">
+          <span class="rec-card-icon">🎯</span>
+          <span class="rec-card-title">Targeting Recommendations</span>
+        </div>
+        <div class="rec-card-body loading" id="rec-targeting-body">Generating…</div>
+      </div>
+      <div class="rec-card c-green" id="rec-improve">
+        <div class="rec-card-header">
+          <span class="rec-card-icon">🚀</span>
+          <span class="rec-card-title">How to Improve</span>
+        </div>
+        <div class="rec-card-body loading" id="rec-improve-body">Generating…</div>
+      </div>
+    </div>
+    <div class="recs-powered">Powered by Claude AI · Based on live account data</div>
   </div>
 
   <!-- AUTH OVERLAY -->
@@ -1273,6 +1366,9 @@
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
 
+      // Hide recommendations while loading
+      document.getElementById('recs-section').style.display = 'none';
+
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching ${PERIOD_LABELS[currentPeriod]} data…</div>`;
 
@@ -1532,6 +1628,9 @@
           topProducts: topProductRows.slice(0, 8),
         };
       } catch(ctxErr) { console.warn('[context capture]', ctxErr); }
+
+      // Auto-generate recommendations (non-blocking)
+      loadRecommendations();
 
       btn.disabled = false; btn.textContent = '↻ Refresh';
     } catch (loadErr) {
@@ -2349,6 +2448,69 @@
     document.getElementById('ai-input').addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); }
     });
+
+    // ─────────────────────────────────────────────────────────────
+    // CLAUDE RECOMMENDATIONS SECTION
+    // ─────────────────────────────────────────────────────────────
+    const REC_PROMPT = `Analyse this Meta Ads account data and respond with ONLY a valid JSON object — no markdown, no explanation, just raw JSON — with exactly these four keys:
+{
+  "account": "2-3 sentences summarising overall account performance: key metrics, what is working, and what is underperforming.",
+  "creative": "2-3 specific creative recommendations based on the ad-level data: which ad types or messages to invest in, which to pause, and why.",
+  "targeting": "2-3 specific targeting recommendations: audiences, platforms, or regions to prioritise or avoid based on the performance data.",
+  "improve": "2-3 concrete next steps the account manager should take this week to improve results."
+}`;
+
+    function recsSetLoading() {
+      ['account','creative','targeting','improve'].forEach(k => {
+        const el = document.getElementById(`rec-${k}-body`);
+        if (el) { el.textContent = 'Generating…'; el.className = 'rec-card-body loading'; }
+      });
+      const btn = document.getElementById('recs-regenerate-btn');
+      if (btn) btn.disabled = true;
+    }
+
+    function recsRender(parsed) {
+      const map = { account: 'account', creative: 'creative', targeting: 'targeting', improve: 'improve' };
+      Object.entries(map).forEach(([key, elKey]) => {
+        const el = document.getElementById(`rec-${elKey}-body`);
+        if (!el) return;
+        el.className = 'rec-card-body';
+        el.textContent = parsed[key] || '—';
+      });
+      const btn = document.getElementById('recs-regenerate-btn');
+      if (btn) btn.disabled = false;
+    }
+
+    function recsError(msg) {
+      ['account','creative','targeting','improve'].forEach(k => {
+        const el = document.getElementById(`rec-${k}-body`);
+        if (el) { el.className = 'rec-card-body rec-error'; el.textContent = msg; }
+      });
+      const btn = document.getElementById('recs-regenerate-btn');
+      if (btn) btn.disabled = false;
+    }
+
+    async function loadRecommendations() {
+      if (!_dashContext) return;
+      document.getElementById('recs-section').style.display = 'block';
+      recsSetLoading();
+      try {
+        const result = await callEdgeFunction('ai-chat', {
+          message: REC_PROMPT,
+          context: _dashContext,
+        });
+        if (result?.error) { recsError('⚠️ ' + result.error); return; }
+        const text = result?.reply || '';
+        // Parse JSON — strip any accidental markdown fences
+        const clean = text.replace(/```json|```/g, '').trim();
+        let parsed;
+        try { parsed = JSON.parse(clean); }
+        catch { recsError('Could not parse recommendations. Try regenerating.'); return; }
+        recsRender(parsed);
+      } catch(err) {
+        recsError('⚠️ ' + (err?.message || String(err)));
+      }
+    }
   </script>
 
   <!-- ── ASK CLAUDE SIDEBAR ── -->
