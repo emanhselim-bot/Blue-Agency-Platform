@@ -2030,7 +2030,9 @@
       const adConversionRate      = (shopifyOrders && numLinkClicks) ? (shopifyOrders / numLinkClicks) * 100 : null;
       // sessions & conversionRate come from Shopify Analytics (ShopifyQL)
       // conversionRate is already a decimal from Shopify (e.g. 0.045 = 4.5%) × 100 = 4.5
-      const displaySessions       = sessions;  // from Shopify Analytics
+      // Fall back to Clarity sessions when ShopifyQL is unavailable (dev/Basic plan stores)
+      const displaySessions       = sessions ?? claritySessions;
+      const sessionsFromClarity   = sessions === null && claritySessions !== null;
       const shopifyConversionRate = conversionRate; // Shopify's own CR (already * 100)
       const shopifySubLabel = !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
@@ -2057,19 +2059,19 @@
           ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
           ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sfmtSub('Shopify Orders ÷ Sessions'))}
           ${kpi('c-coral',  '↩️', 'Returns',                 sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
-          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), shopifySubLabel)}
+          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? '<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>' : shopifySubLabel)}
         </div>
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
         ${(()=>{
           // Funnel data sources:
-          //  View Content      → Shopify Sessions (ShopifyQL Analytics)
+          //  View Content      → Shopify Sessions (ShopifyQL Analytics) or Clarity fallback
           //  Add to Cart       → Clarity add-to-cart events
           //  Remove from Cart  → Clarity remove-from-cart events
           //  Initiate Checkout → Shopify initiated checkouts
           //  Purchase          → Shopify orders
           const fSteps = [
-            { icon:'👁️', label:'View Content',      val: displaySessions,       src:'Shopify Analytics', color:'#0573F5', shopify: true, isAnalytics: true },
+            { icon:'👁️', label:'View Content',      val: displaySessions,       src: sessionsFromClarity ? 'Microsoft Clarity' : 'Shopify Analytics', color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity },
             { icon:'🛒', label:'Add to Cart',        val: clarityAddToCart,      src:'Microsoft Clarity', color:'#179BB4', shopify: false, isAnalytics: false },
             { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false, isAnalytics: false },
             { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true, isAnalytics: false },
