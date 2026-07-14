@@ -160,6 +160,8 @@ async function fetchOrders(
   const minDate = `${since}T00:00:00${offset}`;
   const maxDate = `${until}T23:59:59${offset}`;
 
+  console.log(`[shopify-data] Fetching orders: shop=${shopDomain} since=${minDate} until=${maxDate} tz=${timezone} offset=${offset}`);
+
   const params: Record<string, string> = {
     status:         "any",
     created_at_min: minDate,
@@ -176,14 +178,28 @@ async function fetchOrders(
     `https://${shopDomain}/admin/api/${SHOPIFY_API}/orders.json?${baseParams}`;
 
   while (url) {
-    const res: Response = await fetch(url, { headers });
+    // Retry up to 3 times on 429 rate-limit responses
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await fetch(url, { headers });
+      if (res.status !== 429) break;
+      const retryAfter = parseInt(res.headers.get("Retry-After") ?? "2", 10);
+      console.warn(`[shopify-data] 429 rate limit — retrying after ${retryAfter}s (attempt ${attempt + 1})`);
+      await new Promise(r => setTimeout(r, retryAfter * 1000));
+    }
+    if (!res) break;
+
     if (!res.ok) {
       const text = await res.text();
-      console.error(`Shopify orders API error ${res.status}:`, text);
-      break;
+      const errMsg = `Shopify API ${res.status}: ${text.slice(0, 200)}`;
+      console.error(`[shopify-data] ${errMsg}`);
+      // Throw so the caller can return a proper error response
+      throw new Error(errMsg);
     }
     const json = await res.json();
-    orders.push(...(json.orders ?? []));
+    const page = json.orders ?? [];
+    orders.push(...page);
+    console.log(`[shopify-data] Page fetched: ${page.length} orders (total so far: ${orders.length})`);
 
     // Parse cursor-based pagination from Link header
     // Link: <https://...?page_info=abc>; rel="next"
@@ -192,6 +208,7 @@ async function fetchOrders(
     url = nextMatch ? nextMatch[1] : null;
   }
 
+  console.log(`[shopify-data] Done: ${orders.length} total orders for ${shopDomain}`);
   return orders;
 }
 
@@ -433,7 +450,8 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ rows: [] });
 
   } catch (e) {
-    console.error("shopify-data error:", e);
-    return jsonResponse({ error: (e as Error).message ?? "Internal error" }, 502);
+    const msg = (e as Error).message ?? "Internal error";
+    console.error("[shopify-data] Unhandled error:", msg);
+    return jsonResponse({ error: msg }, 502);
   }
 });
