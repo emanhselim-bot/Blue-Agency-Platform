@@ -42,6 +42,8 @@
     [data-theme="dark"] .modal-header { background: var(--surface); border-bottom-color: var(--border); }
     [data-theme="dark"] .modal-body { background: var(--surface); }
     [data-theme="dark"] .settings-tabs { background: var(--surface); }
+    [data-theme="dark"] .settings-sidebar { background: var(--bg); border-right-color: var(--border); }
+    [data-theme="dark"] .settings-nav-item.active { background: var(--surface); }
     [data-theme="dark"] .connect-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
     [data-theme="dark"] .connect-input option { background: var(--surface); }
     [data-theme="dark"] .auth-card { background: var(--surface); border-color: var(--border); }
@@ -191,11 +193,18 @@
     /* ── SETTINGS MODAL ── */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 8888; display: flex; align-items: center; justify-content: center; padding: 20px; }
     .modal-overlay.hidden { display: none; }
-    .modal { background: white; border-radius: 16px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
-    .modal-header { padding: 24px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+    .modal { background: white; border-radius: 16px; width: 100%; max-width: 860px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+    .modal-header { padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .modal-header h2 { font-size: 16px; font-weight: 700; }
     .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 4px 8px; }
-    .modal-body { padding: 20px 24px 24px; }
+    .settings-layout { display: flex; flex: 1; overflow: hidden; }
+    .settings-sidebar { width: 210px; flex-shrink: 0; background: var(--bg); border-right: 1px solid var(--border); overflow-y: auto; padding: 10px 0; }
+    .settings-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-muted); background: none; border: none; text-align: left; cursor: pointer; transition: background 0.12s, color 0.12s; white-space: nowrap; font-family: inherit; }
+    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: var(--text-main); }
+    .settings-nav-item.active { background: var(--surface); color: var(--blue-light); font-weight: 600; border-right: 2px solid var(--blue-light); }
+    .settings-nav-icon { font-size: 15px; }
+    .settings-content { flex: 1; overflow-y: auto; }
+    .modal-body { padding: 20px 24px 28px; }
     .modal-section { margin-bottom: 24px; }
     .modal-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; }
     .connect-row { display: flex; gap: 8px; }
@@ -811,23 +820,49 @@
   <div class="modal-overlay hidden" id="settings-modal">
     <div class="modal">
       <div class="modal-header">
-        <h2>⚙ Connections</h2>
+        <h2>⚙ Settings</h2>
         <button class="modal-close" id="modal-close">✕</button>
       </div>
 
-      <!-- Tab navigation -->
-      <div class="settings-tabs">
-        <button class="settings-tab active" id="stab-shopify"   onclick="setSettingsTab('shopify')"><span class="settings-tab-icon">🛍️</span> Shopify</button>
-        <button class="settings-tab"        id="stab-meta"      onclick="setSettingsTab('meta')"><span class="settings-tab-icon">📊</span> Meta</button>
-        <button class="settings-tab"        id="stab-clarity"   onclick="setSettingsTab('clarity')"><span class="settings-tab-icon">🔍</span> Clarity</button>
-        <button class="settings-tab"        id="stab-link"      onclick="setSettingsTab('link')"><span class="settings-tab-icon">🔗</span> Link</button>
-        <button class="settings-tab"        id="stab-agencies"  onclick="setSettingsTab('agencies')"><span class="settings-tab-icon">🏢</span> Agencies</button>
-      </div>
+      <div class="settings-layout">
+        <!-- Sidebar nav -->
+        <div class="settings-sidebar">
+          <button class="settings-nav-item active" id="snav-teams"    onclick="setSettingsTab('teams')">   <span class="settings-nav-icon">👥</span> Teams</button>
+          <button class="settings-nav-item"        id="snav-shopify"  onclick="setSettingsTab('shopify')"> <span class="settings-nav-icon">🛍️</span> Shopify Stores</button>
+          <button class="settings-nav-item"        id="snav-clarity"  onclick="setSettingsTab('clarity')"> <span class="settings-nav-icon">🔍</span> Microsoft Clarity</button>
+          <button class="settings-nav-item"        id="snav-meta"     onclick="setSettingsTab('meta')">    <span class="settings-nav-icon">📊</span> Meta Accounts</button>
+          <button class="settings-nav-item"        id="snav-link"     onclick="setSettingsTab('link')">    <span class="settings-nav-icon">🔗</span> Link Account</button>
+          <button class="settings-nav-item"        id="snav-agencies" onclick="setSettingsTab('agencies')"><span class="settings-nav-icon">🏢</span> Agency Workspaces</button>
+        </div>
 
-      <div class="modal-body">
+        <!-- Content area -->
+        <div class="settings-content">
+        <div class="modal-body">
 
-        <!-- ── TAB: Shopify ── -->
-        <div class="settings-panel active" id="spanel-shopify">
+        <!-- ── PANEL: Teams ── -->
+        <div class="settings-panel active" id="spanel-teams">
+        <div class="modal-section">
+          <div class="modal-section-title">Team Members</div>
+          <div id="tm-members-list"><div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading team…</div></div>
+        </div>
+        <div class="modal-section" style="margin-top:8px">
+          <div class="modal-section-title">Invite New Member</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">Send an invite link by email. The recipient clicks it to join this organisation.</div>
+          <div class="connect-row" style="flex-wrap:wrap;gap:8px">
+            <input type="email" class="connect-input" id="tm-invite-email" placeholder="colleague@example.com" style="flex:2;min-width:180px">
+            <select class="connect-input" id="tm-invite-role" style="flex:1;min-width:110px">
+              <option value="analyst">Analyst</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button class="connect-btn" onclick="submitSettingsInvite()">Send Invite →</button>
+          </div>
+          <div class="modal-status" id="tm-invite-result"></div>
+          <div id="tm-invite-link-box" style="display:none;margin-top:10px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:monospace;cursor:pointer;color:var(--text-muted)" onclick="copySettingsInviteLink(this)">🔗 Click to copy invite link</div>
+        </div>
+        </div><!-- /spanel-teams -->
+
+        <!-- ── PANEL: Shopify ── -->
+        <div class="settings-panel" id="spanel-shopify">
         <div class="modal-section">
           <div class="modal-section-title">Shopify Stores</div>
 
@@ -967,7 +1002,9 @@
         </div>
         </div><!-- /spanel-agencies -->
 
-      </div>
+        </div><!-- /modal-body -->
+        </div><!-- /settings-content -->
+      </div><!-- /settings-layout -->
     </div>
   </div>
 
@@ -2768,6 +2805,75 @@
       copyText(url, el);
     }
 
+    // ── Settings-panel team functions ─────────────────────────────
+    async function loadSettingsTeam() {
+      const container = document.getElementById('tm-members-list');
+      if (!container) return;
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading…</div>';
+      const res = await callEdgeFunction('team-manage', { action: 'list', org_id: currentOrgId });
+      if (res.error) {
+        container.innerHTML = `<div style="color:#dc2626;font-size:13px">${escHtml(res.error)}</div>`;
+        return;
+      }
+      const members = res.members || [];
+      if (!members.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No team members yet.</div>';
+        return;
+      }
+      container.innerHTML = members.map(m => {
+        const initials  = (m.email || '?').substring(0, 2).toUpperCase();
+        const isOwner   = m.role === 'owner';
+        const isPending = !!m.is_pending;
+        const badge = isOwner
+          ? '<span class="team-owner-badge">👑 Owner</span>'
+          : isPending
+            ? '<span class="status-badge status-pending">Pending</span>'
+            : `<span class="member-role-badge role-${m.role}">${m.role}</span> <span class="status-badge status-active">Active</span>`;
+        const actions = isPending && m.invite_url
+          ? `<button class="btn-copy-link" onclick="copyText('${escHtml(m.invite_url)}',this)" style="font-size:11px;padding:4px 10px">📋 Copy link</button>
+             <button class="btn-revoke-invite" onclick="revokeInvite('${m.id}')" style="font-size:11px;padding:4px 10px">Revoke</button>`
+          : '';
+        return `<div class="member-card" id="mc_${m.id}" style="margin-bottom:8px">
+          <div class="member-card-top">
+            <div class="member-avatar">${initials}</div>
+            <div class="member-info">
+              <div class="member-email">${escHtml(m.email)}</div>
+              ${m.full_name ? `<div class="member-name">${escHtml(m.full_name)}</div>` : ''}
+            </div>
+            ${badge}
+          </div>
+          ${actions ? `<div style="padding:8px 16px 12px;display:flex;gap:8px">${actions}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    async function submitSettingsInvite() {
+      const email   = document.getElementById('tm-invite-email').value.trim();
+      const role    = document.getElementById('tm-invite-role').value;
+      const result  = document.getElementById('tm-invite-result');
+      const linkBox = document.getElementById('tm-invite-link-box');
+
+      if (!email) { result.className = 'modal-status error'; result.textContent = 'Enter an email address.'; return; }
+      result.className = 'modal-status'; result.textContent = 'Sending…';
+      linkBox.style.display = 'none';
+
+      const res = await callEdgeFunction('team-manage', { action: 'invite', org_id: currentOrgId, email, role });
+
+      if (res.error) { result.className = 'modal-status error'; result.textContent = res.error; return; }
+
+      result.className = 'modal-status success';
+      result.textContent = res.reused ? `Invite already sent to ${email}.` : `Invite sent to ${email}.`;
+      linkBox.dataset.link = res.invite_url;
+      linkBox.textContent  = `🔗 ${res.invite_url} — click to copy`;
+      linkBox.style.display = 'block';
+      document.getElementById('tm-invite-email').value = '';
+      loadSettingsTeam();
+    }
+
+    function copySettingsInviteLink(el) {
+      copyText(el.dataset.link || el.textContent, el);
+    }
+
     function copyText(text, el) {
       navigator.clipboard.writeText(text).then(() => {
         if (el) { const orig = el.textContent; el.textContent = '✓ Copied!'; setTimeout(() => el.textContent = orig, 2000); }
@@ -2799,6 +2905,7 @@
     // ─────────────────────────────────────────────────────────────
     document.getElementById('settings-btn').addEventListener('click', async () => {
       document.getElementById('settings-modal').classList.remove('hidden');
+      setSettingsTab('teams');
       renderAgencySettings();
       await refreshSettingsData();
     });
@@ -2811,10 +2918,11 @@
     });
 
     function setSettingsTab(name) {
-      ['shopify','meta','clarity','link','agencies'].forEach(t => {
-        document.getElementById('stab-'   + t).classList.toggle('active', t === name);
+      ['teams','shopify','clarity','meta','link','agencies'].forEach(t => {
+        document.getElementById('snav-'   + t).classList.toggle('active', t === name);
         document.getElementById('spanel-' + t).classList.toggle('active', t === name);
       });
+      if (name === 'teams') loadSettingsTeam();
     }
 
     // ── Agency Settings UI ──────────────────────────────────────────────────
