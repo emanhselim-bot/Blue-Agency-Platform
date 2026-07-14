@@ -1531,7 +1531,10 @@
       const avgCostPerOrder = (spend && shopifyOrders) ? spend / shopifyOrders : null;
       const avgCostPerPiece = (spend && pieces)        ? spend / pieces        : null;
       const roas            = (revenue && spend)       ? revenue / spend       : null;
-      const adConversionRate = (shopifyOrders && numLinkClicks) ? (shopifyOrders / numLinkClicks) * 100 : null;
+      const adConversionRate      = (shopifyOrders && numLinkClicks) ? (shopifyOrders / numLinkClicks) * 100 : null;
+      const displaySessions       = claritySessions ?? sessions;
+      const shopifyConversionRate = (shopifyOrders && displaySessions) ? (shopifyOrders / displaySessions) * 100 : null;
+      const sessionsSubLabel      = claritySessions != null ? '● Microsoft Clarity' : shopifySubLabel;
 
       const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
       const sfmtSub = text => !shopifyEnabled
@@ -1551,9 +1554,10 @@
           ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ units sold'))}
           ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'))}
-          ${kpi('c-green',  '🎯', 'Conversion Rate',     sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
-          ${kpi('c-coral',  '↩️', 'Returns',             sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
-          ${kpi('c-navy',   '👁️', 'Sessions',            sfmt(sessions, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
+          ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (shopifyEnabled && displaySessions == null ? '—' : (shopifyEnabled ? '—' : 'N/A')), sfmtSub('Shopify Orders ÷ Sessions'))}
+          ${kpi('c-coral',  '↩️', 'Returns',                 sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : '—', sessionsSubLabel)}
         </div>
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Shopify · ${periodLabel}</span></div>
