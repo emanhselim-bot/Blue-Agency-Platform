@@ -352,6 +352,44 @@
       font-size: 12px; color: var(--text-muted); text-align: center;
       padding: 24px 20px; line-height: 1.6;
     }
+
+    /* ── AGENCY SELECTOR ── */
+    .agency-selector-wrap { display: flex; align-items: center; gap: 4px; }
+    #agency-select { padding: 8px 14px; border: 1.5px solid var(--blue-light); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; color: var(--text-main); cursor: pointer; max-width: 180px; font-weight: 600; }
+    #agency-select:focus { outline: none; border-color: var(--blue-dark); }
+    .add-agency-btn { padding: 7px 10px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--blue-dark); font-weight: 700; transition: all 0.15s; line-height: 1; }
+    .add-agency-btn:hover { background: var(--blue-dark); color: white; border-color: var(--blue-dark); }
+    .agency-divider { width: 1px; height: 28px; background: var(--border); margin: 0 4px; }
+
+    /* ── FUNNEL ── */
+    .funnel-flow { display: flex; align-items: stretch; margin-bottom: 24px; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+    .funnel-step {
+      background: var(--surface); border-radius: 12px; padding: 16px 14px 14px;
+      text-align: center; flex: 1; min-width: 130px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04);
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .funnel-step-icon { font-size: 20px; line-height: 1; }
+    .funnel-step-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); line-height: 1.3; margin-top: 2px; }
+    .funnel-step-value { font-size: 22px; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px; line-height: 1.1; margin: 2px 0; }
+    .funnel-step-source { font-size: 9px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.3px; }
+    .funnel-connector {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 0 6px; flex-shrink: 0; gap: 3px; min-width: 52px;
+    }
+    .funnel-cr { font-size: 11px; font-weight: 700; color: var(--blue-dark); background: #EFF6FF; border-radius: 20px; padding: 2px 7px; white-space: nowrap; }
+    .funnel-cr.na { color: var(--text-muted); background: var(--bg); }
+    .funnel-arr { font-size: 18px; color: var(--border); font-weight: 300; }
+
+    /* ── MARKDOWN in AI chat ── */
+    .ai-msg.assistant strong { font-weight: 700; }
+    .ai-msg.assistant em { font-style: italic; }
+    .ai-msg.assistant code { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 11px; }
+    .ai-msg.assistant pre { background: #1e293b; color: #e2e8f0; padding: 10px 12px; border-radius: 8px; font-size: 11px; overflow-x: auto; white-space: pre; font-family: monospace; margin: 6px 0; }
+    .ai-msg.assistant ul, .ai-msg.assistant ol { padding-left: 16px; margin: 4px 0; }
+    .ai-msg.assistant li { margin: 2px 0; }
+    .ai-msg.assistant .ai-h1, .ai-msg.assistant .ai-h2 { font-weight: 700; display: block; margin-top: 8px; }
+    .ai-msg.assistant .ai-h3 { font-weight: 700; display: block; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -376,15 +414,26 @@
     </div>
   </div>
 
-  <!-- CONTROLS (unchanged) -->
+  <!-- CONTROLS -->
   <div class="controls-bar">
+    <label>Agency</label>
+    <div class="agency-selector-wrap">
+      <select id="agency-select"><option value="all">All Agencies</option></select>
+      <button class="add-agency-btn" id="add-agency-btn" title="Add Agency">+</button>
+    </div>
+    <div class="agency-divider"></div>
     <label>Account</label>
     <select id="account-select"><option value="">— Select Account —</option></select>
     <div class="period-tabs" id="period-tabs">
       <button class="period-btn active" data-period="today">Today</button>
       <button class="period-btn" data-period="yesterday">Yesterday</button>
+      <button class="period-btn" data-period="last_7_days">7 Days</button>
+      <button class="period-btn" data-period="last_30_days">30 Days</button>
       <button class="period-btn" data-period="this_month">This Month</button>
       <button class="period-btn" data-period="last_month">Last Month</button>
+      <button class="period-btn" data-period="this_quarter">This Quarter</button>
+      <button class="period-btn" data-period="last_quarter">Last Quarter</button>
+      <button class="period-btn" data-period="this_year">This Year</button>
       <button class="period-btn" data-period="custom">Custom</button>
     </div>
     <div class="custom-dates" id="custom-dates">
@@ -787,24 +836,135 @@
     // ─────────────────────────────────────────────────────────────
     // STATE
     // ─────────────────────────────────────────────────────────────
-    let currentUser    = null;
-    let currentOrgId   = localStorage.getItem('dash_org_id') || '';
-    let currentRole    = null;   // 'owner' | 'admin' | 'analyst' | 'viewer'
-    let currentPlan    = 'free'; // 'free' | 'starter' | 'pro' | 'enterprise'
-    let currentPeriod  = localStorage.getItem('dash_period') || 'today';
-    let customFrom     = localStorage.getItem('dash_custom_from') || '';
-    let customTo       = localStorage.getItem('dash_custom_to')   || '';
-    let timer          = null;
-    let nextAt         = null;
-    let accountMap     = {}; // dbId → { meta_account_id, currency, shopify_store_id }
+    let currentUser      = null;
+    let currentOrgId     = localStorage.getItem('dash_org_id')    || '';
+    let currentAgencyId  = localStorage.getItem('dash_agency_id') || 'all';
+    let currentRole      = null;   // 'owner' | 'admin' | 'analyst' | 'viewer'
+    let currentPlan      = 'free'; // 'free' | 'starter' | 'pro' | 'enterprise'
+    let currentPeriod    = localStorage.getItem('dash_period') || 'today';
+    let customFrom       = localStorage.getItem('dash_custom_from') || '';
+    let customTo         = localStorage.getItem('dash_custom_to')   || '';
+    let timer            = null;
+    let nextAt           = null;
+    let accountMap       = {}; // dbId → { meta_account_id, currency, shopify_store_id }
 
     const PERIOD_LABELS = {
-      today: 'Today', yesterday: 'Yesterday',
-      this_month: 'This Month', last_month: 'Last Month', custom: 'Custom Range'
+      today:        'Today',
+      yesterday:    'Yesterday',
+      last_7_days:  'Last 7 Days',
+      last_30_days: 'Last 30 Days',
+      this_month:   'This Month',
+      last_month:   'Last Month',
+      this_quarter: 'This Quarter',
+      last_quarter: 'Last Quarter',
+      this_year:    'This Year',
+      custom:       'Custom Range',
     };
 
     const sel = document.getElementById('account-select');
     const orgSel = document.getElementById('org-select');
+    const agencySel = document.getElementById('agency-select');
+
+    // ─────────────────────────────────────────────────────────────
+    // AGENCY MANAGEMENT (localStorage-backed, designed for future DB integration)
+    // ─────────────────────────────────────────────────────────────
+    const DEFAULT_AGENCIES = [
+      { id: 'agency_blue',   name: 'Blue Ad Agency' },
+      { id: 'agency_kepler', name: 'Kepler' },
+      { id: 'agency_wolves', name: 'Wolves Ground' },
+    ];
+
+    function getAgencies(orgId) {
+      if (!orgId) return DEFAULT_AGENCIES;
+      const stored = localStorage.getItem(`agencies_${orgId}`);
+      if (stored) {
+        try { return JSON.parse(stored); } catch { /* fall through */ }
+      }
+      // First time — seed defaults and save
+      localStorage.setItem(`agencies_${orgId}`, JSON.stringify(DEFAULT_AGENCIES));
+      return DEFAULT_AGENCIES;
+    }
+
+    function saveAgencies(orgId, agencies) {
+      localStorage.setItem(`agencies_${orgId}`, JSON.stringify(agencies));
+    }
+
+    function getAccountAgencyId(orgId, accountId) {
+      return localStorage.getItem(`acct_agency_${orgId}_${accountId}`) || null;
+    }
+
+    function setAccountAgencyId(orgId, accountId, agencyId) {
+      if (agencyId) localStorage.setItem(`acct_agency_${orgId}_${accountId}`, agencyId);
+      else          localStorage.removeItem(`acct_agency_${orgId}_${accountId}`);
+    }
+
+    function loadAgenciesUI() {
+      const agencies = getAgencies(currentOrgId);
+      const savedId = currentAgencyId;
+      agencySel.innerHTML = '<option value="all">All Agencies</option>' +
+        agencies.map(a => `<option value="${escHtml(a.id)}"${a.id === savedId ? ' selected' : ''}>${escHtml(a.name)}</option>`).join('');
+    }
+
+    function addAgency(name) {
+      const id = 'agency_' + Date.now();
+      const agencies = getAgencies(currentOrgId);
+      agencies.push({ id, name });
+      saveAgencies(currentOrgId, agencies);
+      currentAgencyId = id;
+      localStorage.setItem('dash_agency_id', id);
+      loadAgenciesUI();
+      filterAccountsByAgency();
+    }
+
+    // Filter the account <select> based on the selected agency.
+    // Accounts without an explicit assignment show under "All Agencies".
+    function filterAccountsByAgency() {
+      const agencies = getAgencies(currentOrgId);
+      const agencyId = currentAgencyId;
+      const all = Object.values(accountMap);
+
+      // Determine which accounts to show
+      let visible;
+      if (agencyId === 'all') {
+        visible = all;
+      } else {
+        visible = all.filter(acc => {
+          const assigned = getAccountAgencyId(currentOrgId, acc.id);
+          // Show if explicitly assigned to this agency, or if unassigned (no assignment yet)
+          return !assigned || assigned === agencyId;
+        });
+        // If nothing visible, fall back to all so the user isn't left with an empty list
+        if (!visible.length) visible = all;
+      }
+
+      const prevVal = sel.value;
+      sel.innerHTML = '<option value="">— Select Account —</option>';
+      if (visible.length > 1) sel.innerHTML += `<option value="__all__">All ${agencyId !== 'all' ? agencies.find(a=>a.id===agencyId)?.name || 'Agency' : 'Accounts'}</option>`;
+      visible.forEach(acc => {
+        const opt = document.createElement('option');
+        opt.value = acc.id;
+        opt.textContent = acc.account_name || acc.meta_account_id;
+        if (acc.id === prevVal) opt.selected = true;
+        sel.appendChild(opt);
+      });
+
+      // If previous selection is no longer visible, clear it
+      if (prevVal && !visible.find(a => a.id === prevVal) && prevVal !== '__all__') {
+        sel.value = '';
+      }
+    }
+
+    agencySel.addEventListener('change', () => {
+      currentAgencyId = agencySel.value;
+      localStorage.setItem('dash_agency_id', currentAgencyId);
+      filterAccountsByAgency();
+      if (sel.value) loadData();
+    });
+
+    document.getElementById('add-agency-btn').addEventListener('click', () => {
+      const name = prompt('Agency name:');
+      if (name && name.trim()) addAgency(name.trim());
+    });
 
     // ─────────────────────────────────────────────────────────────
     // UTILITY
@@ -824,13 +984,21 @@
 
     function clarityNumDays(period) {
       const now = new Date(), m = now.getMonth(), y = now.getFullYear();
-      if (period === 'today')      return 1;
-      if (period === 'yesterday')  return 2;
-      if (period === 'this_month') return now.getDate();
+      if (period === 'today')        return 1;
+      if (period === 'yesterday')    return 2;
+      if (period === 'last_7_days')  return 7;
+      if (period === 'last_30_days') return 30;
+      if (period === 'this_month')   return now.getDate();
       if (period === 'last_month') {
         const lm = m === 0 ? 11 : m - 1, ly = m === 0 ? y - 1 : y;
         return new Date(ly, lm + 1, 0).getDate();
       }
+      if (period === 'this_quarter') {
+        const qStart = new Date(y, Math.floor(m/3)*3, 1);
+        return Math.floor((now - qStart) / 86400000) + 1;
+      }
+      if (period === 'last_quarter') return 91;
+      if (period === 'this_year')    return Math.floor((now - new Date(y, 0, 1)) / 86400000) + 1;
       if (period === 'custom' && customFrom && customTo) {
         const diff = (new Date(customTo) - new Date(customFrom)) / 86400000;
         return Math.max(1, Math.round(diff) + 1);
@@ -840,15 +1008,35 @@
 
     function shopifyDR(period) {
       const pad = n => String(n).padStart(2, '0');
+      const fmtD = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
       const now = new Date(), y = now.getFullYear(), m = now.getMonth();
       if (period === 'today')      return 'SINCE today UNTIL today';
       if (period === 'yesterday')  return 'SINCE yesterday UNTIL yesterday';
+      if (period === 'last_7_days') {
+        const s = new Date(now); s.setDate(s.getDate()-6);
+        return `SINCE ${fmtD(s)} UNTIL today`;
+      }
+      if (period === 'last_30_days') {
+        const s = new Date(now); s.setDate(s.getDate()-29);
+        return `SINCE ${fmtD(s)} UNTIL today`;
+      }
       if (period === 'this_month') return `SINCE ${y}-${pad(m+1)}-01 UNTIL today`;
       if (period === 'last_month') {
         const lm = m === 0 ? 11 : m - 1, ly = m === 0 ? y - 1 : y;
         const ld = new Date(ly, lm + 1, 0).getDate();
         return `SINCE ${ly}-${pad(lm+1)}-01 UNTIL ${ly}-${pad(lm+1)}-${pad(ld)}`;
       }
+      if (period === 'this_quarter') {
+        const q = Math.floor(m/3), s = new Date(y, q*3, 1);
+        return `SINCE ${fmtD(s)} UNTIL today`;
+      }
+      if (period === 'last_quarter') {
+        const q = Math.floor(m/3);
+        const lqy = q === 0 ? y-1 : y, lqm = q === 0 ? 9 : (q-1)*3;
+        const s = new Date(lqy, lqm, 1), e = new Date(lqy, lqm+3, 0);
+        return `SINCE ${fmtD(s)} UNTIL ${fmtD(e)}`;
+      }
+      if (period === 'this_year') return `SINCE ${y}-01-01 UNTIL today`;
       if (period === 'custom' && customFrom && customTo)
         return `SINCE ${customFrom} UNTIL ${customTo}`;
       return 'SINCE today UNTIL today';
@@ -1050,7 +1238,6 @@
         || localStorage.getItem('dash_account')
         || '';
 
-      sel.innerHTML = '<option value="">— Select Account —</option>';
       accountMap = {};
 
       // Auto-sync campaign flags if any account hasn't been synced in >24 h
@@ -1077,25 +1264,19 @@
         .or('has_active_campaigns.is.null,has_active_campaigns.eq.true')
         .order('account_name');
 
-      (accounts || []).forEach(acc => {
-        accountMap[acc.id] = acc;
-        const opt = document.createElement('option');
-        opt.value = acc.id;
-        opt.textContent = (acc.account_name || acc.meta_account_id) + ' (' + acc.currency + ')';
-        if (acc.id === savedAccount) opt.selected = true;
-        sel.appendChild(opt);
-      });
+      // Populate accountMap
+      (accounts || []).forEach(acc => { accountMap[acc.id] = acc; });
 
-      // Add "All Accounts" option when there are 2+ accounts
-      if ((accounts || []).length >= 2) {
-        const allOpt = document.createElement('option');
-        allOpt.value = '__all__';
-        allOpt.textContent = `All Accounts (${accounts.length})`;
-        if (savedAccount === '__all__') allOpt.selected = true;
-        sel.insertBefore(allOpt, sel.children[1]); // after the placeholder
+      // Load agency selector, then filter accounts by current agency
+      loadAgenciesUI();
+      filterAccountsByAgency();
+
+      // Restore saved account selection
+      if (savedAccount && sel.querySelector(`option[value="${CSS.escape(savedAccount)}"]`)) {
+        sel.value = savedAccount;
       }
 
-      if (savedAccount && (sel.value === savedAccount || (savedAccount === '__all__' && sel.value === '__all__'))) loadDataWithRefresh();
+      if (sel.value && (sel.value === savedAccount || sel.value === '__all__')) loadDataWithRefresh();
     }
 
     orgSel.addEventListener('change', async () => {
@@ -1104,6 +1285,7 @@
       // Update role for the newly selected org
       currentRole = await Auth.getRole(currentOrgId);
       sel.innerHTML = '<option value="">— Select Account —</option>';
+      currentAgencyId = localStorage.getItem(`dash_agency_id_${currentOrgId}`) || 'all';
       await applyOrgContext();
       loadAccounts();
     });
@@ -1574,12 +1756,41 @@
           ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : '—', sessionsSubLabel)}
         </div>
 
-        <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Shopify · ${periodLabel}</span></div>
-        <div class="kpi-grid">
-          ${kpi('c-teal',  '🛒', 'Add to Cart',      funnelAddToCart!= null ? funnelAddToCart.toLocaleString('en'): (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Initiated checkouts · Shopify'))}
-          ${kpi('c-green', '💳', 'Checkout',         funnelCheckout != null ? funnelCheckout.toLocaleString('en') : (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Completed orders · Shopify'))}
-          ${kpi('c-coral', '↩️', 'Abandoned Carts',  funnelAbandoned!= null ? funnelAbandoned.toLocaleString('en'): (shopifyEnabled ? '0' : 'N/A'), sfmtSub('Left without buying · Shopify'))}
-        </div>
+        <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
+        ${(()=>{
+          // Funnel data sources:
+          //  View Content      → Shopify Sessions (ShopifyQL Analytics)
+          //  Add to Cart       → Clarity add-to-cart events
+          //  Remove from Cart  → Clarity remove-from-cart events
+          //  Initiate Checkout → Shopify initiated checkouts
+          //  Purchase          → Shopify orders
+          const fSteps = [
+            { icon:'👁️', label:'View Content',      val: displaySessions,       src:'Shopify Analytics', color:'#0573F5', shopify: true },
+            { icon:'🛒', label:'Add to Cart',        val: clarityAddToCart,      src:'Microsoft Clarity', color:'#179BB4', shopify: false },
+            { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false },
+            { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true },
+            { icon:'✅', label:'Purchase',           val: shopifyOrders,         src:'Shopify',           color:'#16A34A', shopify: true },
+          ];
+          return '<div class="funnel-flow">' + fSteps.map((step, i) => {
+            const displayVal = (!shopifyEnabled && step.shopify)
+              ? 'N/A'
+              : (step.val !== null && step.val !== undefined && !isNaN(step.val) ? Number(step.val).toLocaleString('en') : '—');
+            const prevStep = i > 0 ? fSteps[i-1] : null;
+            const prevVal = prevStep?.val;
+            const cr = (prevVal != null && !isNaN(prevVal) && prevVal > 0 && step.val != null && !isNaN(step.val))
+              ? Math.round(step.val / prevVal * 100) : null;
+            return (i > 0 ? `<div class="funnel-connector">
+              <div class="funnel-cr${cr === null ? ' na' : ''}">${cr !== null ? cr + '%' : '·'}</div>
+              <div class="funnel-arr">→</div>
+            </div>` : '') +
+            `<div class="funnel-step" style="border-top:3px solid ${step.color}">
+              <div class="funnel-step-icon">${step.icon}</div>
+              <div class="funnel-step-label">${step.label}</div>
+              <div class="funnel-step-value">${displayVal}</div>
+              <div class="funnel-step-source">${step.src}</div>
+            </div>`;
+          }).join('') + '</div>';
+        })()}
 
         <div class="section-label">Campaign Breakdown</div>
         <div class="table-wrapper">${renderCampaignTableHTML(campaigns, curr)}</div>
@@ -2424,11 +2635,46 @@
       }
     }
 
+    function aiRenderMarkdown(raw) {
+      if (!raw) return '';
+      // 1. Escape HTML to prevent XSS
+      let s = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      // 2. Fenced code blocks  ``` ... ```
+      s = s.replace(/```[^\n]*\n([\s\S]*?)```/g,
+        (_,c) => `<pre>${c.trimEnd()}</pre>`);
+      // 3. Inline code  `...`
+      s = s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+      // 4. Bold + italic  ***...*** **...** *...*
+      s = s.replace(/\*\*\*([^*\n]+)\*\*\*/g,'<strong><em>$1</em></strong>');
+      s = s.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
+      s = s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+      // 5. Headings
+      s = s.replace(/^### (.+)$/gm,'<b class="ai-h3">$1</b>');
+      s = s.replace(/^## (.+)$/gm, '<b class="ai-h2">$1</b>');
+      s = s.replace(/^# (.+)$/gm,  '<b class="ai-h1">$1</b>');
+      // 6. Unordered lists
+      s = s.replace(/^[ \t]*[-•\*] (.+)$/gm,'<li>$1</li>');
+      // 7. Ordered lists
+      s = s.replace(/^[ \t]*\d+\. (.+)$/gm,'<li>$1</li>');
+      // 8. Wrap consecutive <li> in <ul>
+      s = s.replace(/(<li>(?:(?!<li>)[\s\S])*?<\/li>(?:\s*<li>(?:(?!<li>)[\s\S])*?<\/li>)*)/g,
+        '<ul>$1</ul>');
+      // 9. Paragraph breaks
+      s = s.replace(/\n\n+/g,'<br><br>').replace(/\n/g,'<br>');
+      return s;
+    }
+
     function aiAppendMsg(role, text) {
       const msgs = document.getElementById('ai-messages');
       const div  = document.createElement('div');
       div.className = `ai-msg ${role}`;
-      div.textContent = text;
+      if (role === 'assistant' || role === 'assistant thinking') {
+        div.innerHTML = role === 'assistant thinking'
+          ? escHtml(text)  // thinking state: plain text, will be replaced
+          : aiRenderMarkdown(text);
+      } else {
+        div.textContent = text;  // user messages always plain text
+      }
       msgs.appendChild(div);
       msgs.scrollTop = msgs.scrollHeight;
       return div;
@@ -2454,10 +2700,10 @@
           context: _dashContext || {},
         });
         thinkEl.classList.remove('thinking');
-        thinkEl.textContent = result?.reply || result?.error || 'No response received.';
+        thinkEl.innerHTML = aiRenderMarkdown(result?.reply || result?.error || 'No response received.');
       } catch (err) {
         thinkEl.classList.remove('thinking');
-        thinkEl.textContent = 'Error: ' + (err?.message || String(err));
+        thinkEl.innerHTML = aiRenderMarkdown('Error: ' + (err?.message || String(err)));
       }
       sendBtn.disabled = false;
       document.getElementById('ai-messages').scrollTop = 9999;
