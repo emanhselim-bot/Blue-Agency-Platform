@@ -205,7 +205,11 @@ Deno.serve(async (req: Request) => {
   if (level === "campaign") {
     let metaBody: Record<string, unknown>;
     try {
-      metaBody = await callMeta(CAMPAIGN_FIELDS, { level: "campaign", limit: "50" }) as Record<string, unknown>;
+      metaBody = await callMeta(CAMPAIGN_FIELDS, {
+        level:     "campaign",
+        limit:     "50",
+        filtering: JSON.stringify([{ field: "campaign.effective_status", operator: "IN", value: ["ACTIVE"] }]),
+      }) as Record<string, unknown>;
     } catch (e: unknown) {
       const err = e as Error & { isTokenExpired?: boolean };
       if (err.isTokenExpired) {
