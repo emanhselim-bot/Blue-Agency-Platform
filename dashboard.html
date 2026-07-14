@@ -1273,6 +1273,26 @@
       localStorage.setItem(`agencies_${orgId}`, JSON.stringify(agencies));
     }
 
+    // Migration: strip legacy icons from built-in agencies
+    (function migrateAgencyIcons() {
+      const patches = { agency_blue: '' };
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith('agencies_')) continue;
+        try {
+          const list = JSON.parse(localStorage.getItem(key));
+          if (!Array.isArray(list)) continue;
+          let changed = false;
+          list.forEach(a => {
+            if (a.id in patches && a.icon !== patches[a.id]) {
+              a.icon = patches[a.id]; changed = true;
+            }
+          });
+          if (changed) localStorage.setItem(key, JSON.stringify(list));
+        } catch { /* ignore */ }
+      }
+    })();
+
     function getAccountAgencyId(orgId, accountId) {
       return localStorage.getItem(`acct_agency_${orgId}_${accountId}`) || null;
     }
