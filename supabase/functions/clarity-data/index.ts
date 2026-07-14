@@ -107,14 +107,27 @@ Deno.serve(async (req: Request) => {
   }
 
   // 3. Resolve Clarity API token: per-org first, then global env var fallback
-  let token = Deno.env.get("CLARITY_API_TOKEN");
+  const globalToken = Deno.env.get("CLARITY_API_TOKEN");
+  let token = globalToken;
+  let usedGlobalFallback = false;
+
   if (orgId) {
     const { data: org } = await supabaseAdmin
       .from("organizations")
       .select("clarity_api_token")
       .eq("id", orgId)
       .single();
-    if (org?.clarity_api_token) token = org.clarity_api_token;
+
+    if (org?.clarity_api_token) {
+      token = org.clarity_api_token;
+    } else if (globalToken) {
+      // Auto-bootstrap: save the global token to this org so per-org settings work
+      usedGlobalFallback = true;
+      await supabaseAdmin
+        .from("organizations")
+        .update({ clarity_api_token: globalToken })
+        .eq("id", orgId);
+    }
   }
 
   if (!token) {
