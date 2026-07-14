@@ -1482,9 +1482,10 @@
       const fmtN = (v, c, d) => fmt(v, c ?? '', d ?? 2);
 
       // ── Helpers ──────────────────────────────────────────────
-      function analysisCard(title, content) {
+      const periodBadge = `<span style="margin-left:8px;font-size:9px;font-weight:600;color:var(--blue-dark);background:#e8eeff;padding:2px 6px;border-radius:20px;vertical-align:middle;text-transform:none;letter-spacing:0">${periodLabel}</span>`;
+      function analysisCard(title, content, showPeriod = false) {
         return `<div style="background:var(--surface);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px">${title}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px">${title}${showPeriod ? periodBadge : ''}</div>
           ${content}</div>`;
       }
       function grid2(a, b) {
@@ -1509,13 +1510,13 @@
           miniTable(adHeaders,
             adsByResults.map(a => [escHtml((a.ad_name||'').substring(0,40)||a.ad_id), fmt(p(a.results),'',0), fmt(p(a.spend), curr)]),
             'No ad-level data for this period'
-          )
+          ), true
         ),
         analysisCard('💸 Best Creatives — by Cost per Result',
           miniTable(adCostHeaders,
             adsByCost.map(a => [escHtml((a.ad_name||'').substring(0,40)||a.ad_id), fmt(p(a.cost_per_result), curr), fmt(p(a.spend), curr)]),
             'No ad-level data for this period'
-          )
+          ), true
         )
       );
 
@@ -1532,7 +1533,7 @@
           [{label:'Platform'},{label:'Spend',right:true},{label:'Impressions',right:true},{label:'Results',right:true},{label:'Cost/Result',right:true}],
           platRows,
           'No platform breakdown available'
-        )
+        ), true
       );
 
       // ── Best Seller Product ──────────────────────────────────
@@ -1543,7 +1544,8 @@
               topProductRows.slice(0,8).map(r => [escHtml((r[0]||'').substring(0,40)), r[1], fmt(parseFloat(r[2]||0), curr)]),
               ''
             )
-          : `<div style="padding:12px 0;color:var(--text-muted);font-size:12px">Connect Shopify to see product rankings</div>`
+          : `<div style="padding:12px 0;color:var(--text-muted);font-size:12px">Connect Shopify to see product rankings</div>`,
+        true
       );
 
       // ── Best Regions / Cities ────────────────────────────────
@@ -1555,11 +1557,11 @@
         r.cost_per_result ? fmt(p(r.cost_per_result), curr) : '—',
       ]);
       const regionsSection = grid2(
-        analysisCard('🗺️ Best Regions',
-          miniTable(regHeaders, regRows.slice(0,5), 'No regional data for this period')
+        analysisCard('🗺️ Best Regions — Top 5',
+          miniTable(regHeaders, regRows.slice(0,5), 'No regional data for this period'), true
         ),
-        analysisCard('🏙️ Best Cities',
-          miniTable(regHeaders, regRows.slice(5,10).length ? regRows.slice(5,10) : regRows.slice(0,5), 'No city data for this period')
+        analysisCard('🗺️ More Regions — Rank 6–10',
+          miniTable(regHeaders, regRows.slice(5,10).length ? regRows.slice(5,10) : [], 'No additional regions for this period'), true
         )
       );
 
@@ -1572,19 +1574,23 @@
             [{label:'Campaign'},{label:'Link Clicks',right:true},{label:'Spend',right:true}],
             campByResults.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c['actions:link_click']),'',0), fmt(p(c.spend), curr)]),
             'No campaign result data for this period'
-          )
+          ), true
         ),
         analysisCard('💰 Best Campaign — by Cost per Result',
           miniTable(
             [{label:'Campaign'},{label:'Cost/Click',right:true},{label:'Spend',right:true}],
             campByCost.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c['cost_per_action_type:link_click']), curr), fmt(p(c.spend), curr)]),
             'No campaign cost data for this period'
-          )
+          ), true
         )
       );
 
       return `
-        <div class="section-label" style="margin-top:8px">Performance Analysis <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Meta · ${periodLabel || ''} · ${curr.trim()}</span></div>
+        <div class="section-label" style="margin-top:8px;display:flex;align-items:center;gap:10px">
+          Performance Analysis
+          <span style="font-size:10px;font-weight:700;color:var(--blue-dark);background:#e8eeff;padding:3px 9px;border-radius:20px;letter-spacing:0">📅 ${periodLabel || ''}</span>
+          <span style="font-size:10px;color:var(--text-muted);font-weight:500">Meta Ads · ${curr.trim()}</span>
+        </div>
         ${creativesSection}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px">
           ${platformSection}
