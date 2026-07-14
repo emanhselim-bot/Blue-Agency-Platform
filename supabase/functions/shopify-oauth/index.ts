@@ -172,7 +172,7 @@ Deno.serve(async (req: Request) => {
     // Build signed state param (prevents CSRF)
     const state = await signState({ org_id: orgId, user_id: user.id, shop: shopDomain });
 
-    const callbackUrl = Deno.env.get("APP_URL") || `${Deno.env.get("SUPABASE_URL")}/functions/v1/shopify-oauth-callback`;
+    const callbackUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/shopify-oauth-callback`;
     const shopifyAuthUrl =
       `https://${shopDomain}/admin/oauth/authorize?` +
       new URLSearchParams({

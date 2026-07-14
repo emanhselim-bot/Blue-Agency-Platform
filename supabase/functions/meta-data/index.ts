@@ -166,11 +166,20 @@ Deno.serve(async (req: Request) => {
   if (!member) return jsonResponse({ error: "Forbidden" }, 403);
 
   // ── 4. Build Meta API date parameters ──
+  // Meta Marketing API date_preset values:
+  //   today, yesterday, last_7_days, last_14_days, last_28_days, last_30_days,
+  //   last_90_days, this_month, last_month, this_quarter, last_quarter,
+  //   this_year, last_year, last_3d, last_7d, last_14d, last_28d, last_30d
   const META_DATE_PRESETS: Record<string, string> = {
-    today: "today",
-    yesterday: "yesterday",
-    this_month: "this_month",
-    last_month: "last_month",
+    today:        "today",
+    yesterday:    "yesterday",
+    last_7_days:  "last_7_days",
+    last_30_days: "last_30_days",
+    this_month:   "this_month",
+    last_month:   "last_month",
+    this_quarter: "this_quarter",
+    last_quarter: "last_quarter",
+    this_year:    "this_year",
   };
 
   const dateParams: Record<string, string> =
