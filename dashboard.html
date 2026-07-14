@@ -462,6 +462,10 @@
         <span class="auth-link" id="forgot-link">Forgot password?</span>
         &nbsp;·&nbsp;
         <span class="auth-link" id="signup-link">Create account</span>
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+          <button class="auth-btn" id="magic-btn" style="background:white;color:var(--blue-dark);border:1.5px solid var(--blue-dark);letter-spacing:0.5px">✉ SEND MAGIC LINK</button>
+          <div class="auth-error" id="magic-status" style="margin-top:8px"></div>
+        </div>
       </div>
       <div id="auth-form-signup" style="display:none">
         <input type="text" class="auth-input" id="auth-name" placeholder="Full name">
@@ -928,6 +932,24 @@
       const { error } = await Auth.resetPassword(email);
       if (error) { status.style.color = 'var(--coral)'; status.textContent = error.message; }
       else { status.style.color = '#16A34A'; status.textContent = 'Reset link sent — check your email.'; }
+    });
+
+    document.getElementById('magic-btn').addEventListener('click', async () => {
+      const email  = document.getElementById('auth-email').value.trim();
+      const status = document.getElementById('magic-status');
+      status.style.color = 'var(--coral)';
+      if (!email) { status.textContent = 'Enter your email above first.'; return; }
+      const btn = document.getElementById('magic-btn');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+      if (error) {
+        status.textContent = error.message;
+        btn.disabled = false; btn.textContent = '✉ SEND MAGIC LINK';
+      } else {
+        status.style.color = '#16A34A';
+        status.textContent = '✓ Magic link sent — check your email and click the link.';
+        btn.textContent = '✉ SEND MAGIC LINK'; btn.disabled = false;
+      }
     });
 
     document.getElementById('signout-btn').addEventListener('click', async () => {
