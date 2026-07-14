@@ -1532,9 +1532,11 @@
       const avgCostPerPiece = (spend && pieces)        ? spend / pieces        : null;
       const roas            = (revenue && spend)       ? revenue / spend       : null;
       const adConversionRate      = (shopifyOrders && numLinkClicks) ? (shopifyOrders / numLinkClicks) * 100 : null;
-      const displaySessions       = claritySessions ?? sessions;
-      const shopifyConversionRate = (shopifyOrders && displaySessions) ? (shopifyOrders / displaySessions) * 100 : null;
-      const sessionsSubLabel      = claritySessions != null ? '● Microsoft Clarity' : shopifySubLabel;
+      // sessions & conversionRate come from Shopify Analytics (ShopifyQL)
+      // conversionRate is already a decimal from Shopify (e.g. 0.045 = 4.5%) × 100 = 4.5
+      const displaySessions       = sessions;  // from Shopify Analytics
+      const shopifyConversionRate = conversionRate; // Shopify's own CR (already * 100)
+      const sessionsSubLabel      = shopifySubLabel;
 
       const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
       const sfmtSub = text => !shopifyEnabled

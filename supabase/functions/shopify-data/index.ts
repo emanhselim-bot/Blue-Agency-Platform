@@ -295,6 +295,63 @@ async function fetchAbandonedCheckouts(
   return count;
 }
 
+// ── ShopifyQL Analytics (sessions + conversion rate) ─────────────────────────
+// Requires read_analytics scope. Uses Shopify's GraphQL Admin API with ShopifyQL.
+async function fetchShopifyAnalytics(
+  shopDomain:  string,
+  accessToken: string,
+  since:       string, // YYYY-MM-DD
+  until:       string, // YYYY-MM-DD
+): Promise<{ sessions: number | null; conversionRate: number | null }> {
+  const gql = `{
+    shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${since} UNTIL ${until}") {
+      ... on TableData {
+        columns { name dataType }
+        rowData
+      }
+      ... on ParseError {
+        parseErrors { code message }
+      }
+    }
+  }`;
+
+  try {
+    const resp = await fetch(
+      `https://${shopDomain}/admin/api/${SHOPIFY_API}/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "X-Shopify-Access-Token": accessToken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: gql }),
+      }
+    );
+    if (!resp.ok) {
+      console.warn("[shopify-data] ShopifyQL HTTP", resp.status);
+      return { sessions: null, conversionRate: null };
+    }
+    const json = await resp.json();
+    const ql   = json?.data?.shopifyqlQuery;
+    if (!ql || !ql.rowData?.length) {
+      console.warn("[shopify-data] ShopifyQL empty:", JSON.stringify(json?.errors ?? ql));
+      return { sessions: null, conversionRate: null };
+    }
+    // rowData may be [[...]] or [...] depending on Shopify version
+    const row  = Array.isArray(ql.rowData[0]) ? ql.rowData[0] : ql.rowData;
+    const cols: string[] = (ql.columns ?? []).map((c: { name: string }) => c.name);
+    const sessIdx = cols.indexOf("sessions");
+    const crIdx   = cols.indexOf("conversion_rate");
+    const sessions       = sessIdx >= 0 ? (parseInt(row[sessIdx])   || null) : null;
+    const conversionRate = crIdx   >= 0 ? (parseFloat(row[crIdx])   || null) : null;
+    console.log("[shopify-data] ShopifyQL sessions:", sessions, "CR:", conversionRate);
+    return { sessions, conversionRate };
+  } catch (e) {
+    console.warn("[shopify-data] ShopifyQL error:", (e as Error).message);
+    return { sessions: null, conversionRate: null };
+  }
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -451,9 +508,10 @@ Deno.serve(async (req: Request) => {
     // Returns a single JSON with all metric buckets keyed by source name so
     // the dashboard can make ONE call per page load instead of 7.
     if (source === "all") {
-      const [allOrders, abandonedCount] = await Promise.all([
+      const [allOrders, abandonedCount, analytics] = await Promise.all([
         fetchOrders(store.shop_domain, store.access_token, since, until, shopTimezone),
         fetchAbandonedCheckouts(store.shop_domain, store.access_token, since, until, shopTimezone),
+        fetchShopifyAnalytics(store.shop_domain, store.access_token, since, until),
       ]);
 
       // Derive refunded orders from the full set (avoids 2 extra API calls)
@@ -481,7 +539,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({
         sales:       { rows: [[String(calcOrderCount(allOrders)), calcNetSales(allOrders).toFixed(2)]] },
         inventory:   { rows: [[String(calcUnitsSold(allOrders))]] },
-        sessions:    { rows: [["0", "0"]] },
+        sessions:    { rows: analytics.sessions != null
+                         ? [[String(analytics.sessions), analytics.conversionRate != null ? String(analytics.conversionRate) : "0"]]
+                         : [["0", "0"]] },
         daily_sales: { rows: calcDailySales(allOrders, shopTimezone) },
         refunds:     { rows: [[String(refundedOrders.length)]] },
         checkouts:   { rows: [[String(totalCheckouts), String(abandonedCount), String(allOrders.length)]] },
