@@ -77,16 +77,20 @@ Deno.serve(async (req: Request) => {
   );
   if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  // 1b. Parse numOfDays from body (default: 1 = today)
+  // 1b. Parse body: numOfDays + orgId
   let numOfDays = 1;
+  let orgId: string | null = null;
   try {
     const body = await req.json();
     if (body?.numOfDays && Number.isInteger(body.numOfDays) && body.numOfDays > 0) {
       numOfDays = Math.min(body.numOfDays, 90); // Clarity max is 90 days
     }
+    if (body?.orgId && typeof body.orgId === "string") orgId = body.orgId;
   } catch { /* no body / not JSON — use default */ }
 
-  const CACHE_KEY = `clarity_metrics_v3_${numOfDays}d`;
+  const CACHE_KEY = orgId
+    ? `clarity_metrics_v3_${orgId}_${numOfDays}d`
+    : `clarity_metrics_v3_${numOfDays}d`;
 
   // 2. Check cache
   const { data: cached } = await supabaseAdmin
@@ -102,8 +106,17 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // 3. Fetch from Clarity Export API (counts as 1 of 10 daily calls)
-  const token = Deno.env.get("CLARITY_API_TOKEN");
+  // 3. Resolve Clarity API token: per-org first, then global env var fallback
+  let token = Deno.env.get("CLARITY_API_TOKEN");
+  if (orgId) {
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("clarity_api_token")
+      .eq("id", orgId)
+      .single();
+    if (org?.clarity_api_token) token = org.clarity_api_token;
+  }
+
   if (!token) {
     return jsonResponse({
       sessions: null, pageViews: null,

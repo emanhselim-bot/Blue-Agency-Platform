@@ -841,6 +841,23 @@
           <div class="store-list" id="meta-account-list"></div>
         </div>
 
+        <!-- Microsoft Clarity -->
+        <div class="modal-section">
+          <div class="modal-section-title">Microsoft Clarity</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+            Connect Clarity to pull website sessions and funnel events (Add to Cart, Checkout, Remove from Cart) for this account.
+            Get your token in <a href="https://clarity.microsoft.com/" target="_blank" style="color:#3b82f6">Clarity → Settings → Data Export → Generate API token</a>.
+          </p>
+          <div class="connect-row">
+            <input type="password" class="connect-input" id="clarity-token-input"
+              placeholder="Clarity Export API token"
+              style="font-family:monospace;font-size:12px;flex:1">
+            <button class="connect-btn" id="save-clarity-btn">Save</button>
+          </div>
+          <div class="modal-status" id="clarity-status"></div>
+          <div class="store-list" id="clarity-account-list"></div>
+        </div>
+
         <!-- Link Meta Account to Shopify Store -->
         <div class="modal-section">
           <div class="modal-section-title">Link Account → Store (for ROAS)</div>
@@ -1908,7 +1925,7 @@
           shopifyEnabled
             ? callEdgeFunction('shopify-data', { store_id: shopifyStoreId, query: `FROM all ${dr}` })
             : Promise.resolve(null),
-          callEdgeFunction('clarity-data', { numOfDays: clarityNumDays(currentPeriod) }),
+          callEdgeFunction('clarity-data', { numOfDays: clarityNumDays(currentPeriod), orgId: currentOrgId }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'platform' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'region' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'ad' }),
@@ -2780,6 +2797,42 @@
       renderAgencySettings();
     }
 
+    // ── Clarity token save / disconnect ─────────────────────────────────────
+    document.getElementById('save-clarity-btn').addEventListener('click', async () => {
+      const token  = document.getElementById('clarity-token-input').value.trim();
+      const status = document.getElementById('clarity-status');
+      if (!token) { status.textContent = 'Enter a Clarity API token.'; status.className = 'modal-status error'; return; }
+      status.textContent = 'Saving…'; status.className = 'modal-status';
+      try {
+        const { error } = await sb.rpc('save_clarity_token', { p_org_id: currentOrgId, p_token: token });
+        if (error) throw error;
+        // Bust the clarity cache so next dashboard load pulls fresh data with new token
+        await sb.from('system_cache').delete().like('cache_key', `clarity_metrics_v3_${currentOrgId}_%`);
+        status.className = 'modal-status success';
+        status.textContent = '✓ Clarity connected. Sessions data will refresh shortly.';
+        document.getElementById('clarity-token-input').value = '';
+        await refreshSettingsData();
+      } catch (e) {
+        status.className = 'modal-status error';
+        status.textContent = '✗ ' + (e.message || 'Save failed');
+      }
+    });
+
+    async function disconnectClarity() {
+      const status = document.getElementById('clarity-status');
+      try {
+        const { error } = await sb.rpc('save_clarity_token', { p_org_id: currentOrgId, p_token: '' });
+        if (error) throw error;
+        await sb.from('system_cache').delete().like('cache_key', `clarity_metrics_v3_${currentOrgId}_%`);
+        status.className = 'modal-status success';
+        status.textContent = '✓ Clarity disconnected.';
+        await refreshSettingsData();
+      } catch (e) {
+        status.className = 'modal-status error';
+        status.textContent = '✗ ' + (e.message || 'Disconnect failed');
+      }
+    }
+
     async function refreshSettingsData() {
       if (!currentOrgId) return;
 
@@ -2821,6 +2874,27 @@
             <button class="disconnect-btn" onclick="disconnectMetaAccount(${JSON.stringify(a.id)},${JSON.stringify(a.account_name || a.meta_account_id)})">Disconnect</button>
           </div>
         </div>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No accounts connected yet.</div>';
+
+      // Load Clarity connection status (view exposes boolean, never the raw token)
+      const { data: clarityStatus } = await sb
+        .from('organizations_clarity_status')
+        .select('clarity_connected')
+        .eq('id', currentOrgId)
+        .single();
+      const clarityConnected = !!clarityStatus?.clarity_connected;
+      const clarityList = document.getElementById('clarity-account-list');
+      clarityList.innerHTML = clarityConnected
+        ? `<div class="store-item">
+            <div>
+              <div class="store-domain">Microsoft Clarity</div>
+              <div class="store-meta">API token saved · Sessions &amp; funnel events enabled</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="badge-active">Active</span>
+              <button class="disconnect-btn" onclick="disconnectClarity()">Disconnect</button>
+            </div>
+           </div>`
+        : '<div style="font-size:13px;color:var(--text-muted)">No Clarity account connected yet.</div>';
 
       // Populate link selects
       const metaSel   = document.getElementById('link-meta-select');
