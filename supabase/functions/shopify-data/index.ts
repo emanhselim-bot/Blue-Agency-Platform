@@ -302,7 +302,7 @@ async function fetchShopifyAnalytics(
   accessToken: string,
   since:       string, // YYYY-MM-DD
   until:       string, // YYYY-MM-DD
-): Promise<{ sessions: number | null; conversionRate: number | null }> {
+): Promise<{ sessions: number | null; conversionRate: number | null; analyticsError?: string }> {
   const gql = `{
     shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${since} UNTIL ${until}") {
       ... on TableData {
@@ -328,16 +328,38 @@ async function fetchShopifyAnalytics(
       }
     );
     if (!resp.ok) {
-      console.warn("[shopify-data] ShopifyQL HTTP", resp.status);
-      return { sessions: null, conversionRate: null };
+      const errText = await resp.text();
+      console.warn("[shopify-data] ShopifyQL HTTP error:", resp.status, errText.slice(0, 500));
+      return { sessions: null, conversionRate: null, analyticsError: `HTTP ${resp.status}` };
     }
     const json = await resp.json();
-    const ql   = json?.data?.shopifyqlQuery;
-    // ParseError or missing data → analytics not available for this store/plan
-    if (!ql || ql.parseErrors?.length) {
-      console.warn("[shopify-data] ShopifyQL error:", JSON.stringify(json?.errors ?? ql));
-      return { sessions: null, conversionRate: null };
+
+    // Log full response for diagnostics (truncated to avoid log overflow)
+    console.log("[shopify-data] ShopifyQL raw response:", JSON.stringify(json).slice(0, 3000));
+
+    // Top-level GraphQL errors (e.g. auth failure, field not found on this plan)
+    if (json?.errors?.length) {
+      const errMsg = json.errors[0]?.message ?? "GraphQL error";
+      console.warn("[shopify-data] ShopifyQL GraphQL errors:", JSON.stringify(json.errors));
+      return { sessions: null, conversionRate: null, analyticsError: errMsg };
     }
+
+    const ql = json?.data?.shopifyqlQuery;
+
+    // shopifyqlQuery returns null when the store plan doesn't include Analytics
+    if (ql === null || ql === undefined) {
+      const msg = "Shopify Analytics not available on this store plan (requires Shopify plan or higher)";
+      console.warn("[shopify-data] ShopifyQL:", msg);
+      return { sessions: null, conversionRate: null, analyticsError: msg };
+    }
+
+    // ParseError object returned by ShopifyQL for invalid query syntax
+    if (ql.parseErrors?.length) {
+      const errMsg = ql.parseErrors[0]?.message ?? "ShopifyQL parse error";
+      console.warn("[shopify-data] ShopifyQL parseErrors:", JSON.stringify(ql.parseErrors));
+      return { sessions: null, conversionRate: null, analyticsError: errMsg };
+    }
+
     // Empty rowData means no sessions in the period (genuine 0), not a failure
     if (!ql.rowData?.length) {
       console.log("[shopify-data] ShopifyQL empty rowData — 0 sessions in period");
@@ -356,8 +378,9 @@ async function fetchShopifyAnalytics(
     console.log("[shopify-data] ShopifyQL sessions:", sessions, "CR:", conversionRate);
     return { sessions, conversionRate };
   } catch (e) {
-    console.warn("[shopify-data] ShopifyQL error:", (e as Error).message);
-    return { sessions: null, conversionRate: null };
+    const msg = (e as Error).message;
+    console.warn("[shopify-data] ShopifyQL exception:", msg);
+    return { sessions: null, conversionRate: null, analyticsError: msg };
   }
 }
 
@@ -548,9 +571,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({
         sales:       { rows: [[String(calcOrderCount(allOrders)), calcNetSales(allOrders).toFixed(2)]] },
         inventory:   { rows: [[String(calcUnitsSold(allOrders))]] },
-        sessions:    { rows: analytics.sessions !== null
-                         ? [[String(analytics.sessions), String(analytics.conversionRate ?? 0)]]
-                         : null },
+        sessions:    {
+          rows: analytics.sessions !== null
+            ? [[String(analytics.sessions), String(analytics.conversionRate ?? 0)]]
+            : null,
+          analyticsError: analytics.analyticsError ?? null,
+        },
         daily_sales: { rows: calcDailySales(allOrders, shopTimezone) },
         refunds:     { rows: [[String(refundedOrders.length)]] },
         checkouts:   { rows: [[String(totalCheckouts), String(abandonedCount), String(allOrders.length)]] },

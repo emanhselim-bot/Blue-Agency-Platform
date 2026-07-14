@@ -1946,6 +1946,8 @@
       // ── Parse Shopify (single batch response) ──
       const shopifyBatch = (shopifyAllRes?.status === 'fulfilled' && shopifyAllRes.value && !shopifyAllRes.value.error) ? shopifyAllRes.value : null;
       const getShopifyRows = (key) => shopifyBatch?.[key]?.rows ?? null;
+      // analyticsError is set when ShopifyQL is unavailable (e.g. store plan too low)
+      const analyticsError = shopifyBatch?.sessions?.analyticsError ?? null;
 
       const dailySalesRows = getShopifyRows('daily_sales');
 
@@ -2037,6 +2039,10 @@
       const sfmtSub = text => !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : text;
+      // Label shown when ShopifyQL Analytics is unavailable on the store's plan
+      const analyticsUnavailableLabel = shopifyEnabled && analyticsError
+        ? `<span title="${analyticsError.replace(/"/g,'&quot;')}" style="font-size:10px;color:var(--text-muted);font-weight:600;cursor:help">Analytics N/A ⓘ</span>`
+        : '—';
 
       document.getElementById('content').innerHTML = `
         <div class="section-label">Primary KPIs</div>
@@ -2049,9 +2055,9 @@
           ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'))}
           ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
-          ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (shopifyEnabled && displaySessions == null ? '—' : (shopifyEnabled ? '—' : 'N/A')), sfmtSub('Shopify Orders ÷ Sessions'))}
+          ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sfmtSub('Shopify Orders ÷ Sessions'))}
           ${kpi('c-coral',  '↩️', 'Returns',                 sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
-          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : '—', shopifySubLabel)}
+          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), shopifySubLabel)}
         </div>
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
@@ -2063,16 +2069,20 @@
           //  Initiate Checkout → Shopify initiated checkouts
           //  Purchase          → Shopify orders
           const fSteps = [
-            { icon:'👁️', label:'View Content',      val: displaySessions,       src:'Shopify Analytics', color:'#0573F5', shopify: true },
-            { icon:'🛒', label:'Add to Cart',        val: clarityAddToCart,      src:'Microsoft Clarity', color:'#179BB4', shopify: false },
-            { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false },
-            { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true },
-            { icon:'✅', label:'Purchase',           val: shopifyOrders,         src:'Shopify',           color:'#16A34A', shopify: true },
+            { icon:'👁️', label:'View Content',      val: displaySessions,       src:'Shopify Analytics', color:'#0573F5', shopify: true, isAnalytics: true },
+            { icon:'🛒', label:'Add to Cart',        val: clarityAddToCart,      src:'Microsoft Clarity', color:'#179BB4', shopify: false, isAnalytics: false },
+            { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false, isAnalytics: false },
+            { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true, isAnalytics: false },
+            { icon:'✅', label:'Purchase',           val: shopifyOrders,         src:'Shopify',           color:'#16A34A', shopify: true, isAnalytics: false },
           ];
           return '<div class="funnel-flow">' + fSteps.map((step, i) => {
             const displayVal = (!shopifyEnabled && step.shopify)
               ? 'N/A'
-              : (step.val !== null && step.val !== undefined && !isNaN(step.val) ? Number(step.val).toLocaleString('en') : '—');
+              : (step.val !== null && step.val !== undefined && !isNaN(step.val)
+                  ? Number(step.val).toLocaleString('en')
+                  : (step.isAnalytics && shopifyEnabled && analyticsError
+                      ? `<span title="${analyticsError.replace(/"/g,'&quot;')}" style="font-size:11px;color:var(--text-muted);cursor:help">Analytics N/A ⓘ</span>`
+                      : '—'));
             const prevStep = i > 0 ? fSteps[i-1] : null;
             const prevVal = prevStep?.val;
             const cr = (prevVal != null && !isNaN(prevVal) && prevVal > 0 && step.val != null && !isNaN(step.val))
