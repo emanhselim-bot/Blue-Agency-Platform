@@ -838,7 +838,8 @@
           <button class="settings-nav-item"        id="snav-clarity"  onclick="setSettingsTab('clarity')"> <span class="settings-nav-icon">🔍</span> Microsoft Clarity</button>
           <button class="settings-nav-item"        id="snav-meta"     onclick="setSettingsTab('meta')">    <span class="settings-nav-icon">📊</span> Meta Accounts</button>
           <div class="settings-nav-section">Configuration</div>
-          <button class="settings-nav-item"        id="snav-link"     onclick="setSettingsTab('link')">    <span class="settings-nav-icon">🔗</span> Link Account</button>
+          <button class="settings-nav-item"        id="snav-linked"   onclick="setSettingsTab('linked')">  <span class="settings-nav-icon">🔗</span> Linked Accounts</button>
+          <button class="settings-nav-item"        id="snav-link"     onclick="setSettingsTab('link')">    <span class="settings-nav-icon">⛓</span> Quick Link</button>
           <button class="settings-nav-item"        id="snav-agencies" onclick="setSettingsTab('agencies')"><span class="settings-nav-icon">🏢</span> Agency Workspaces</button>
         </div>
 
@@ -949,21 +950,45 @@
         <!-- ── TAB: Clarity ── -->
         <div class="settings-panel" id="spanel-clarity">
         <div class="modal-section">
-          <div class="modal-section-title">Microsoft Clarity</div>
+          <div class="modal-section-title">Microsoft Clarity Projects</div>
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
-            Connect Clarity to pull website sessions and funnel events (Add to Cart, Checkout, Remove from Cart) for this account.
+            Connect one or more Clarity projects. Each project can be linked to a Shopify store for cross-channel funnel data.
             Get your token in <a href="https://clarity.microsoft.com/" target="_blank" style="color:#3b82f6">Clarity → Settings → Data Export → Generate API token</a>.
           </p>
-          <div class="connect-row">
-            <input type="password" class="connect-input" id="clarity-token-input"
-              placeholder="Clarity Export API token"
-              style="font-family:monospace;font-size:12px;flex:1">
-            <button class="connect-btn" id="save-clarity-btn">Save</button>
-          </div>
-          <div class="modal-status" id="clarity-status"></div>
+          <!-- Connected projects list -->
           <div class="store-list" id="clarity-account-list"></div>
+          <!-- Add new project form -->
+          <div style="margin-top:14px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Add Clarity Project</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input type="text" class="connect-input" id="clarity-project-name"
+                placeholder="Project name (e.g., Main Website)" style="width:100%">
+              <input type="password" class="connect-input" id="clarity-token-input"
+                placeholder="Clarity Export API token" style="font-family:monospace;font-size:12px;width:100%">
+              <div style="display:flex;gap:8px">
+                <select class="connect-input" id="clarity-shopify-link" style="flex:1">
+                  <option value="">No Shopify link</option>
+                </select>
+                <button class="connect-btn" id="save-clarity-btn" style="flex-shrink:0">+ Add Project</button>
+              </div>
+            </div>
+            <div class="modal-status" id="clarity-status"></div>
+          </div>
         </div>
         </div><!-- /spanel-clarity -->
+
+        <!-- ── TAB: Linked Accounts ── -->
+        <div class="settings-panel" id="spanel-linked">
+        <div class="modal-section">
+          <div class="modal-section-title">Linked Accounts</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+            Link each Meta ad account to a Shopify store and a Microsoft Clarity project.
+            These connections power ROAS calculations and cross-channel funnel data.
+          </p>
+          <div id="linked-accounts-table"></div>
+          <div class="modal-status" id="linked-status" style="margin-top:10px"></div>
+        </div>
+        </div><!-- /spanel-linked -->
 
         <!-- ── TAB: Link ── -->
         <div class="settings-panel" id="spanel-link">
@@ -2947,11 +2972,14 @@
     });
 
     function setSettingsTab(name) {
-      ['teams','shopify','clarity','meta','link','agencies'].forEach(t => {
-        document.getElementById('snav-'   + t).classList.toggle('active', t === name);
-        document.getElementById('spanel-' + t).classList.toggle('active', t === name);
+      ['teams','shopify','clarity','meta','linked','link','agencies'].forEach(t => {
+        const nav = document.getElementById('snav-'   + t);
+        const pan = document.getElementById('spanel-' + t);
+        if (nav) nav.classList.toggle('active', t === name);
+        if (pan) pan.classList.toggle('active', t === name);
       });
-      if (name === 'teams') loadSettingsTeam();
+      if (name === 'teams')  loadSettingsTeam();
+      if (name === 'linked') loadLinkedAccountsTab();
     }
 
     // ── Agency Settings UI ──────────────────────────────────────────────────
@@ -3037,40 +3065,141 @@
       renderAgencySettings();
     }
 
-    // ── Clarity token save / disconnect ─────────────────────────────────────
+    // ── Clarity: add project ─────────────────────────────────────────────────
     document.getElementById('save-clarity-btn').addEventListener('click', async () => {
-      const token  = document.getElementById('clarity-token-input').value.trim();
-      const status = document.getElementById('clarity-status');
+      const name     = document.getElementById('clarity-project-name').value.trim();
+      const token    = document.getElementById('clarity-token-input').value.trim();
+      const storeId  = document.getElementById('clarity-shopify-link').value || null;
+      const status   = document.getElementById('clarity-status');
+      if (!name)  { status.textContent = 'Enter a project name.'; status.className = 'modal-status error'; return; }
       if (!token) { status.textContent = 'Enter a Clarity API token.'; status.className = 'modal-status error'; return; }
-      status.textContent = 'Saving…'; status.className = 'modal-status';
+      status.textContent = 'Adding…'; status.className = 'modal-status';
       try {
-        const { error } = await sb.rpc('save_clarity_token', { p_org_id: currentOrgId, p_token: token });
+        const { error } = await sb.from('clarity_projects').insert({
+          organization_id: currentOrgId,
+          project_name:    name,
+          api_token:       token,
+          shopify_store_id: storeId,
+          connected_by:    (await sb.auth.getUser()).data.user?.id,
+        });
         if (error) throw error;
-        // Bust the clarity cache so next dashboard load pulls fresh data with new token
-        await sb.from('system_cache').delete().like('cache_key', `clarity_metrics_v3_${currentOrgId}_%`);
+        // Bust clarity cache
+        await sb.from('system_cache').delete().like('cache_key', `clarity_metrics_v4_${currentOrgId}_%`);
         status.className = 'modal-status success';
-        status.textContent = '✓ Clarity connected. Sessions data will refresh shortly.';
-        document.getElementById('clarity-token-input').value = '';
+        status.textContent = '✓ Clarity project added.';
+        document.getElementById('clarity-project-name').value = '';
+        document.getElementById('clarity-token-input').value  = '';
+        document.getElementById('clarity-shopify-link').value = '';
         await refreshSettingsData();
       } catch (e) {
         status.className = 'modal-status error';
-        status.textContent = '✗ ' + (e.message || 'Save failed');
+        status.textContent = '✗ ' + (e.message || 'Failed to add project');
       }
     });
 
-    async function disconnectClarity() {
+    async function disconnectClarityProject(projectId, projectName) {
+      if (!confirm(`Disconnect "${projectName}"? This will remove it from Clarity data.`)) return;
       const status = document.getElementById('clarity-status');
       try {
-        const { error } = await sb.rpc('save_clarity_token', { p_org_id: currentOrgId, p_token: '' });
+        const { error } = await sb.from('clarity_projects')
+          .update({ is_active: false })
+          .eq('id', projectId)
+          .eq('organization_id', currentOrgId);
         if (error) throw error;
-        await sb.from('system_cache').delete().like('cache_key', `clarity_metrics_v3_${currentOrgId}_%`);
+        await sb.from('system_cache').delete().like('cache_key', `clarity_metrics_v4_${currentOrgId}_%`);
         status.className = 'modal-status success';
-        status.textContent = '✓ Clarity disconnected.';
+        status.textContent = '✓ Project disconnected.';
         await refreshSettingsData();
       } catch (e) {
         status.className = 'modal-status error';
         status.textContent = '✗ ' + (e.message || 'Disconnect failed');
       }
+    }
+
+    // Legacy single-token disconnect (kept for backward compat)
+    async function disconnectClarity() {
+      const first = document.querySelector('[data-clarity-project-id]');
+      if (first) return disconnectClarityProject(first.dataset.clarityProjectId, 'Default Clarity Project');
+    }
+
+    // ── Linked Accounts: save Meta→Shopify + Meta→Clarity links ─────────────
+    async function saveLinkedAccount(metaAccountId, shopifyStoreId, clarityProjectId) {
+      const status = document.getElementById('linked-status');
+      try {
+        const update = {};
+        if (shopifyStoreId !== undefined) update.shopify_store_id  = shopifyStoreId  || null;
+        if (clarityProjectId !== undefined) update.clarity_project_id = clarityProjectId || null;
+        const { error } = await sb.from('meta_ad_accounts')
+          .update(update)
+          .eq('id', metaAccountId)
+          .eq('organization_id', currentOrgId);
+        if (error) throw error;
+        status.className = 'modal-status success';
+        status.textContent = '✓ Link saved.';
+        setTimeout(() => { status.textContent = ''; status.className = 'modal-status'; }, 2500);
+      } catch (e) {
+        status.className = 'modal-status error';
+        status.textContent = '✗ ' + (e.message || 'Failed to save link');
+      }
+    }
+
+    async function loadLinkedAccountsTab() {
+      const container = document.getElementById('linked-accounts-table');
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
+
+      const [{ data: metaAccs }, { data: stores }, { data: clarityProjs }] = await Promise.all([
+        sb.from('meta_ad_accounts_safe')
+          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id')
+          .eq('organization_id', currentOrgId).eq('is_active', true),
+        sb.from('shopify_stores_safe')
+          .select('id, shop_name, shop_domain')
+          .eq('organization_id', currentOrgId).eq('is_active', true),
+        sb.from('clarity_projects')
+          .select('id, project_name')
+          .eq('organization_id', currentOrgId).eq('is_active', true),
+      ]);
+
+      if (!metaAccs?.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No Meta ad accounts connected yet.</div>';
+        return;
+      }
+
+      const storeOpts  = `<option value="">— No store —</option>` +
+        (stores||[]).map(s => `<option value="${escHtml(s.id)}">${escHtml(s.shop_name||s.shop_domain)}</option>`).join('');
+      const clarityOpts = `<option value="">— No Clarity —</option>` +
+        (clarityProjs||[]).map(p => `<option value="${escHtml(p.id)}">${escHtml(p.project_name)}</option>`).join('');
+
+      container.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-size:11px;border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:6px 8px 8px">Meta Account</th>
+              <th style="text-align:left;padding:6px 8px 8px">Shopify Store</th>
+              <th style="text-align:left;padding:6px 8px 8px">Clarity Project</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(metaAccs||[]).map(a => `
+              <tr style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
+                <td style="padding:10px 8px">
+                  <div style="font-weight:600;color:var(--text)">${escHtml(a.account_name||a.meta_account_id)}</div>
+                  <div style="color:var(--text-muted);font-size:11px">${escHtml(a.meta_account_id)} · ${escHtml(a.currency)}</div>
+                </td>
+                <td style="padding:10px 8px">
+                  <select class="connect-input" style="font-size:12px;padding:4px 8px"
+                    onchange="saveLinkedAccount(${JSON.stringify(a.id)}, this.value, undefined)">
+                    ${storeOpts.replace(`value="${escHtml(a.shopify_store_id||'')}"`,`value="${escHtml(a.shopify_store_id||'')}" selected`)}
+                  </select>
+                </td>
+                <td style="padding:10px 8px">
+                  <select class="connect-input" style="font-size:12px;padding:4px 8px"
+                    onchange="saveLinkedAccount(${JSON.stringify(a.id)}, undefined, this.value)">
+                    ${clarityOpts.replace(`value="${escHtml(a.clarity_project_id||'')}"`,`value="${escHtml(a.clarity_project_id||'')}" selected`)}
+                  </select>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
     }
 
     async function refreshSettingsData() {
@@ -3098,7 +3227,7 @@
       // Load meta accounts (active only — mirrors the main dropdown)
       const { data: metaAccounts } = await sb
         .from('meta_ad_accounts_safe')
-        .select('id, account_name, meta_account_id, currency, shopify_store_id')
+        .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true);
 
@@ -3115,28 +3244,40 @@
           </div>
         </div>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No accounts connected yet.</div>';
 
-      // Load Clarity connection status (view exposes boolean, never the raw token)
-      const { data: clarityStatus } = await sb
-        .from('organizations_clarity_status')
-        .select('clarity_connected')
-        .eq('id', currentOrgId)
-        .single();
-      const clarityConnected = !!clarityStatus?.clarity_connected;
+      // Load Clarity projects
+      const { data: clarityProjects } = await sb
+        .from('clarity_projects')
+        .select('id, project_name, clarity_project_id, shopify_store_id, connected_at')
+        .eq('organization_id', currentOrgId)
+        .eq('is_active', true)
+        .order('connected_at');
+
       const clarityList = document.getElementById('clarity-account-list');
-      clarityList.innerHTML = clarityConnected
-        ? `<div class="store-item">
+      if (clarityProjects?.length) {
+        const storeMap = Object.fromEntries((stores||[]).map(s => [s.id, s.shop_name||s.shop_domain]));
+        clarityList.innerHTML = clarityProjects.map(p => `
+          <div class="store-item" data-clarity-project-id="${escHtml(p.id)}">
             <div>
-              <div class="store-domain">Microsoft Clarity</div>
-              <div class="store-meta">API token saved · Sessions &amp; funnel events enabled</div>
+              <div class="store-domain">${escHtml(p.project_name)}</div>
+              <div class="store-meta">${p.shopify_store_id ? '🛍 ' + escHtml(storeMap[p.shopify_store_id]||p.shopify_store_id) : 'No Shopify link'} · Added ${new Date(p.connected_at).toLocaleDateString()}</div>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <span class="badge-active">Active</span>
-              <button class="disconnect-btn" onclick="disconnectClarity()">Disconnect</button>
+              <button class="disconnect-btn" onclick="disconnectClarityProject(${JSON.stringify(p.id)},${JSON.stringify(p.project_name)})">Disconnect</button>
             </div>
-           </div>`
-        : '<div style="font-size:13px;color:var(--text-muted)">No Clarity account connected yet.</div>';
+          </div>`).join('');
+      } else {
+        clarityList.innerHTML = '<div style="font-size:13px;color:var(--text-muted);margin-bottom:4px">No Clarity projects connected yet.</div>';
+      }
 
-      // Populate link selects
+      // Populate clarity shopify dropdown in the add-project form
+      const clarityStoreSel = document.getElementById('clarity-shopify-link');
+      if (clarityStoreSel) {
+        clarityStoreSel.innerHTML = `<option value="">No Shopify link</option>` +
+          (stores||[]).map(s => `<option value="${s.id}">${escHtml(s.shop_name||s.shop_domain)}</option>`).join('');
+      }
+
+      // Populate quick-link selects
       const metaSel   = document.getElementById('link-meta-select');
       const storeSel  = document.getElementById('link-store-select');
       metaSel.innerHTML  = (metaAccounts || []).map(a => `<option value="${a.id}">${a.account_name || a.meta_account_id}</option>`).join('');
