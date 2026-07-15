@@ -2963,12 +2963,16 @@
       renderAgencySettings();
       await refreshSettingsData();
     });
-    document.getElementById('modal-close').addEventListener('click', () => {
+    function closeSettingsModal() {
       document.getElementById('settings-modal').classList.add('hidden');
-    });
+      renderAgencyNav();
+      filterAccountsByAgency();
+      if (sel.value) loadData();
+    }
+    document.getElementById('modal-close').addEventListener('click', closeSettingsModal);
     document.getElementById('settings-modal').addEventListener('click', e => {
       if (e.target === document.getElementById('settings-modal'))
-        document.getElementById('settings-modal').classList.add('hidden');
+        closeSettingsModal();
     });
 
     function setSettingsTab(name) {
@@ -3015,7 +3019,7 @@
             const opts = agencies.map(a => `<option value="${a.id}" ${assigned===a.id?'selected':''}>${a.icon||'📊'} ${escHtml(a.name)}</option>`).join('');
             return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
               <span style="flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((acc.account_name||acc.meta_account_id||'').substring(0,40))}</span>
-              <select data-acct="${acc.id}" onchange="setAccountAgencyId(currentOrgId,this.dataset.acct,this.value);renderAgencyNav()"
+              <select data-acct="${acc.id}" onchange="setAccountAgencyId(currentOrgId,this.dataset.acct,this.value);renderAgencyNav();filterAccountsByAgency();if(sel.value)loadData();"
                 style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
                 ${opts}
               </select>
