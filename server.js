@@ -131,7 +131,11 @@ http.createServer((req, res) => {
       data = data.replace(AUTH_DEADLOCK_OLD, AUTH_DEADLOCK_NEW);
       data = data.replace(CREATE_CLIENT_OLD, CREATE_CLIENT_NEW);
     }
-    res.writeHead(200, { 'Content-Type': contentType });
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      // Allow Shopify Admin to embed this page in an iframe
+      'Content-Security-Policy': "frame-ancestors https://admin.shopify.com https://*.myshopify.com 'self'",
+    });
     res.end(data);
   });
 }).listen(port, () => console.log('Listening on port ' + port));
