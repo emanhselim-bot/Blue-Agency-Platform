@@ -3378,20 +3378,39 @@
 
     async function reconnectMeta() {
       const jwt = await getJWT();
-      const popup = window.open(
-        `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`,
-        'meta-oauth',
-        'width=600,height=700,scrollbars=yes'
-      );
+      const oauthUrl = `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`;
+      const popup = window.open(oauthUrl, 'meta-oauth', 'width=600,height=700,scrollbars=yes');
       const content = document.getElementById('content');
+
+      // Popup blocked — show a direct link instead of going dark
+      if (!popup || popup.closed) {
+        const account = accountMap[sel.value];
+        content.innerHTML = `<div class="no-data" style="padding:48px 32px;text-align:center">
+          <div style="font-size:44px;margin-bottom:16px">🔑</div>
+          <strong style="font-size:17px;display:block;margin-bottom:12px">Popup blocked</strong>
+          <p style="margin:0 auto 24px;max-width:400px;font-size:14px;line-height:1.65;color:var(--text-muted)">
+            Your browser blocked the Meta login popup. Please allow popups for this site, then click the button below.
+          </p>
+          <a href="${escHtml(oauthUrl)}" target="_blank"
+            style="display:inline-block;padding:12px 28px;background:var(--blue-dark);color:white;text-decoration:none;
+                   border-radius:10px;font-size:14px;font-weight:700;font-family:inherit">
+            Open Meta Login →
+          </a>
+          <p style="margin:16px 0 0;font-size:12px;color:var(--text-muted)">
+            After connecting, refresh this page.
+          </p>
+        </div>`;
+        return;
+      }
+
       content.innerHTML = `<div class="loading-state"><div class="spinner"></div>Waiting for Meta authorization…</div>`;
       const handler = async (e) => {
         if (e.data?.event === 'meta_oauth_complete') {
           window.removeEventListener('message', handler);
           content.innerHTML = `<div class="loading-state"><div class="spinner"></div>Token refreshed! Reloading data…</div>`;
-          await syncCampaigns();      // refresh active-campaign flags
-          await loadAccounts();       // refresh dropdown (account may have new token)
-          await loadData();           // reload with fresh token
+          await syncCampaigns();
+          await loadAccounts();
+          await loadData();
         } else if (e.data?.event === 'meta_oauth_error') {
           window.removeEventListener('message', handler);
           content.innerHTML = `<div class="error-state">⚠️ Meta reconnect failed: ${escHtml(e.data.message)}</div>`;
@@ -3402,7 +3421,6 @@
         if (popup?.closed) {
           clearInterval(checkClosed);
           window.removeEventListener('message', handler);
-          // If popup closed with no event, show reconnect UI again
           if (content.innerHTML.includes('Waiting for Meta')) {
             const account = accountMap[sel.value];
             content.innerHTML = renderTokenExpiredHTML(account?.account_name || account?.meta_account_id || '');
