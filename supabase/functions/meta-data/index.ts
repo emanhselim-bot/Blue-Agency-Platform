@@ -136,12 +136,6 @@ Deno.serve(async (req: Request) => {
   const accessToken = bm?.access_token;
   if (!accessToken) return jsonResponse({ error: "No access token found for this account" }, 422);
 
-  // If the business manager is already marked expired, skip the API call entirely
-  // and return immediately so the dashboard can show the reconnect prompt.
-  if (bm?.status === "expired") {
-    return jsonResponse({ error: "TOKEN_EXPIRED" }, 401);
-  }
-
   // ── Helper: mark a business manager's token as expired ──────────────────────
   // Called whenever Meta returns error code 190 (OAuthException).
   // Uses the service role so it bypasses RLS — this write happens from the
