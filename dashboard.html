@@ -2245,7 +2245,7 @@
           ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
           ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sfmtSub('Shopify Orders ÷ Sessions'))}
           ${kpi('c-coral',  '↩️', 'Returns',                 sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
-          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? '<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>' : shopifySubLabel)}
+          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
         </div>
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
@@ -2256,8 +2256,21 @@
           //  Remove from Cart  → Clarity remove-from-cart events
           //  Initiate Checkout → Shopify initiated checkouts
           //  Purchase          → Shopify orders
+          // Build View Content source label — includes a ⚠ tooltip when Clarity is a fallback
+          // because ShopifyQL analytics failed (e.g. store plan doesn't include Analytics API),
+          // and a rolling-window note when Clarity numOfDays > 1 (can't isolate a single day).
+          const clarityWarningIcon = sessionsFromClarity && analyticsError
+            ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:11px;vertical-align:middle">⚠</span>`
+            : '';
+          const clarityDays = clarityNumDays(currentPeriod);
+          const clarityWindowNote = sessionsFromClarity && clarityDays > 1
+            ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px;line-height:1.3">rolling ${clarityDays}-day window</div>`
+            : '';
+          const viewContentSrc = sessionsFromClarity
+            ? `Microsoft Clarity${clarityWarningIcon}${clarityWindowNote}`
+            : 'Shopify Analytics';
           const fSteps = [
-            { icon:'👁️', label:'View Content',      val: displaySessions,       src: sessionsFromClarity ? 'Microsoft Clarity' : 'Shopify Analytics', color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity },
+            { icon:'👁️', label:'View Content',      val: displaySessions,       src: viewContentSrc, color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity },
             { icon:'🛒', label:'Add to Cart',        val: clarityAddToCart,      src:'Microsoft Clarity', color:'#179BB4', shopify: false, isAnalytics: false },
             { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false, isAnalytics: false },
             { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true, isAnalytics: false },
