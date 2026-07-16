@@ -1131,6 +1131,9 @@
     // ══════════════════════════════════════════════════════════════
     const SUPABASE_URL  = 'https://thtteysputwjiddqchcp.supabase.co';
     const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRodHRleXNwdXR3amlkZHFjaGNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1MzUzMDEsImV4cCI6MjA5OTExMTMwMX0.p8Q8uYyRlvjb9DAqYUyxszXbRxRgbEzyv89b8ile7ek';
+    // Shopify App Client ID — injected by server.js from SHOPIFY_CLIENT_ID env var.
+    // Required for App Bridge auto-login when the dashboard is embedded in Shopify Admin.
+    const SHOPIFY_CLIENT_ID = 'YOUR_SHOPIFY_CLIENT_ID';
 
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -3721,6 +3724,90 @@
         localStorage.setItem('flash_success', `✓ ${shopifyConnected} connected successfully.`);
       }
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // SHOPIFY APP BRIDGE AUTO-AUTH
+    // When the dashboard is embedded in Shopify Admin (?shop=X&host=Y),
+    // use App Bridge to get a verified session token and exchange it for
+    // a Supabase session — no login form required.
+    // ─────────────────────────────────────────────────────────────
+    (async function shopifyAutoAuth() {
+      const p = new URLSearchParams(window.location.search);
+      const shopDomain = p.get('shop');
+      const shopHost   = p.get('host');
+
+      // Only run inside a Shopify Admin embed
+      if (!shopDomain || !shopHost || !SHOPIFY_CLIENT_ID || SHOPIFY_CLIENT_ID === 'YOUR_SHOPIFY_CLIENT_ID') return;
+
+      // Check if already signed in — no need to re-authenticate
+      const { data: existing } = await sb.auth.getSession();
+      if (existing?.session?.user) return;
+
+      // Show a "Connecting via Shopify…" state in the auth overlay
+      const authOverlay = document.getElementById('auth-overlay');
+      const authBox = authOverlay?.querySelector('.auth-box');
+      if (authBox) {
+        authBox.innerHTML = `
+          <div class="auth-logo"><span></span><span></span><span></span><span></span></div>
+          <div style="font-size:18px;font-weight:700;letter-spacing:4px;color:#083BBF;margin-bottom:6px">Blue Ad</div>
+          <div style="font-size:12px;color:#6B7280;margin-bottom:24px">Connecting via Shopify…</div>
+          <div style="width:40px;height:40px;border:3px solid #E5E7EB;border-top-color:#0573F5;border-radius:50%;margin:0 auto;animation:spin 0.8s linear infinite"></div>
+          <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+        `;
+      }
+
+      try {
+        // Load Shopify App Bridge from CDN
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = `https://cdn.shopify.com/shopifycloud/app-bridge.js`;
+          s.setAttribute('data-api-key', SHOPIFY_CLIENT_ID);
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+
+        // Wait for App Bridge to initialise (it sets window.shopify)
+        await new Promise(r => setTimeout(r, 300));
+
+        // Get session token from App Bridge
+        let sessionToken = null;
+        if (window.shopify && typeof window.shopify.idToken === 'function') {
+          sessionToken = await window.shopify.idToken();
+        } else if (window.ShopifyAppBridge) {
+          // Fallback for older App Bridge version
+          const app = window.ShopifyAppBridge.createApp({ apiKey: SHOPIFY_CLIENT_ID, host: shopHost });
+          const { SessionToken } = window.ShopifyAppBridge.actions;
+          sessionToken = await SessionToken.request(app);
+        }
+
+        if (!sessionToken) throw new Error('No session token from App Bridge');
+
+        // Exchange Shopify session token for a Supabase one-time token
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/shopify-session-exchange`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
+          body: JSON.stringify({ session_token: sessionToken }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.token_hash) throw new Error(data.error || 'Exchange failed');
+
+        // Sign in with the one-time token (fires onAuthStateChange → dashboard loads)
+        const { error: otpErr } = await sb.auth.verifyOtp({
+          token_hash: data.token_hash,
+          type: 'email',
+        });
+        if (otpErr) throw otpErr;
+
+        // onAuthStateChange will hide the overlay and load the dashboard
+        console.log('[shopify-auto-auth] Signed in via Shopify for', data.email);
+
+      } catch (err) {
+        console.warn('[shopify-auto-auth] Auto-auth failed, falling back to login form:', err.message);
+        // Restore normal login form
+        if (authBox) location.reload();
+      }
+    })();
 
     // ─────────────────────────────────────────────────────────────
     // AUTH STATE MACHINE (Supabase handles session persistence)

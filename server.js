@@ -6,6 +6,9 @@ const port = process.env.PORT || 3000;
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || '';
+// Shopify App Client ID — required for App Bridge embedded auto-auth.
+// Set this as a Railway env var: SHOPIFY_CLIENT_ID=your_api_key_here
+const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '';
 
 const mime = {
   '.html': 'text/html',
@@ -124,6 +127,9 @@ http.createServer((req, res) => {
       if (SUPABASE_URL) {
         data = data.replace(/https:\/\/YOUR_PROJECT_REF\.supabase\.co/g, SUPABASE_URL);
         data = data.replace(/YOUR_ANON_KEY_HERE/g, SUPABASE_ANON);
+      }
+      if (SHOPIFY_CLIENT_ID) {
+        data = data.replace(/YOUR_SHOPIFY_CLIENT_ID/g, SHOPIFY_CLIENT_ID);
       }
       data = data.replace(GOOGLE_BTN,        '        <!-- Email / password -->');
       data = data.replace(GOOGLE_JS_OLD,     "    document.getElementById('auth-btn')");

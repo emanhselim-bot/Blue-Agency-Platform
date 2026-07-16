@@ -103,12 +103,22 @@ function resolveDate(token: string, tz: string): string {
 // ── DSL parser ───────────────────────────────────────────────────────────────
 
 interface DSL {
-  source:  string;   // sales | inventory | sessions
-  metrics: string[]; // e.g. ["orders","net_sales"]
-  since:   string;   // YYYY-MM-DD (in store's local timezone)
-  until:   string;   // YYYY-MM-DD (in store's local timezone)
-  byDay:   boolean;
+  source:     string;   // sales | inventory | sessions
+  metrics:    string[]; // e.g. ["orders","net_sales"]
+  since:      string;   // YYYY-MM-DD (in store's local timezone)
+  until:      string;   // YYYY-MM-DD (in store's local timezone)
+  sinceToken: string;   // raw token before resolution (e.g. "yesterday")
+  untilToken: string;   // raw token before resolution (e.g. "yesterday")
+  byDay:      boolean;
 }
+
+// ShopifyQL supports these native date keywords directly in SINCE/UNTIL clauses.
+const SHOPIFYQL_DATE_KEYWORDS = new Set([
+  "today", "yesterday",
+  "last_7_days", "last_30_days", "last_90_days", "last_365_days",
+  "this_week", "this_month", "this_quarter", "this_year",
+  "last_week", "last_month", "last_quarter", "last_year",
+]);
 
 function parseDSL(query: string, tz: string): DSL {
   const fromM   = query.match(/FROM\s+(\w+)/i);
@@ -117,11 +127,16 @@ function parseDSL(query: string, tz: string): DSL {
   const untilM  = query.match(/UNTIL\s+(\S+)/i);
   const byDay   = /BY\s+day/i.test(query);
 
+  const sinceToken = sinceM?.[1] ?? "today";
+  const untilToken = untilM?.[1] ?? "today";
+
   return {
-    source:  (fromM?.[1]  ?? "sales").toLowerCase(),
-    metrics: (showM?.[1]  ?? "").split(",").map(m => m.trim().toLowerCase()).filter(Boolean),
-    since:   resolveDate(sinceM?.[1] ?? "today", tz),
-    until:   resolveDate(untilM?.[1] ?? "today", tz),
+    source:     (fromM?.[1]  ?? "sales").toLowerCase(),
+    metrics:    (showM?.[1]  ?? "").split(",").map(m => m.trim().toLowerCase()).filter(Boolean),
+    since:      resolveDate(sinceToken, tz),
+    until:      resolveDate(untilToken, tz),
+    sinceToken,
+    untilToken,
     byDay,
   };
 }
@@ -297,14 +312,25 @@ async function fetchAbandonedCheckouts(
 
 // ── ShopifyQL Analytics (sessions + conversion rate) ─────────────────────────
 // Requires read_analytics scope. Uses Shopify's GraphQL Admin API with ShopifyQL.
+// Prefers native ShopifyQL date keywords (e.g. "yesterday") over resolved dates
+// because Shopify's internal keyword handling matches what the Admin UI shows.
 async function fetchShopifyAnalytics(
-  shopDomain:  string,
-  accessToken: string,
-  since:       string, // YYYY-MM-DD
-  until:       string, // YYYY-MM-DD
+  shopDomain:   string,
+  accessToken:  string,
+  since:        string, // YYYY-MM-DD (resolved, used as fallback)
+  until:        string, // YYYY-MM-DD (resolved, used as fallback)
+  sinceToken?:  string, // raw token from DSL — used directly if it's a ShopifyQL keyword
+  untilToken?:  string, // raw token from DSL — used directly if it's a ShopifyQL keyword
 ): Promise<{ sessions: number | null; conversionRate: number | null; analyticsError?: string }> {
+  // Use native ShopifyQL keywords when available — they match the Admin UI's
+  // timezone handling precisely (e.g. "yesterday" = store's previous calendar day).
+  const sinceStr = sinceToken && SHOPIFYQL_DATE_KEYWORDS.has(sinceToken) ? sinceToken : since;
+  const untilStr = untilToken && SHOPIFYQL_DATE_KEYWORDS.has(untilToken) ? untilToken : until;
+
+  console.log(`[shopify-data] ShopifyQL date range: SINCE ${sinceStr} UNTIL ${untilStr} (raw tokens: ${sinceToken}/${untilToken})`);
+
   const gql = `{
-    shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${since} UNTIL ${until}") {
+    shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${sinceStr} UNTIL ${untilStr}") {
       ... on TableData {
         columns { name dataType }
         rowData
@@ -346,10 +372,12 @@ async function fetchShopifyAnalytics(
 
     const ql = json?.data?.shopifyqlQuery;
 
-    // shopifyqlQuery returns null when the store plan doesn't include Analytics
+    // shopifyqlQuery returns null when the store plan doesn't include Analytics.
+    // Include a raw snippet of the response to make diagnosis easier.
     if (ql === null || ql === undefined) {
-      const msg = "Shopify Analytics not available on this store plan (requires Shopify plan or higher)";
-      console.warn("[shopify-data] ShopifyQL:", msg);
+      const rawSnippet = JSON.stringify(json).slice(0, 400);
+      const msg = `Shopify Analytics not available (requires Shopify plan or higher). Raw: ${rawSnippet}`;
+      console.warn("[shopify-data] ShopifyQL null result:", rawSnippet);
       return { sessions: null, conversionRate: null, analyticsError: msg };
     }
 
@@ -543,7 +571,7 @@ Deno.serve(async (req: Request) => {
       const [allOrders, abandonedCount, analytics] = await Promise.all([
         fetchOrders(store.shop_domain, store.access_token, since, until, shopTimezone),
         fetchAbandonedCheckouts(store.shop_domain, store.access_token, since, until, shopTimezone),
-        fetchShopifyAnalytics(store.shop_domain, store.access_token, since, until),
+        fetchShopifyAnalytics(store.shop_domain, store.access_token, since, until, dsl.sinceToken, dsl.untilToken),
       ]);
 
       // Derive refunded orders from the full set (avoids 2 extra API calls)
