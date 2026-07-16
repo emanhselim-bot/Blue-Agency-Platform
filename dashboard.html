@@ -833,6 +833,7 @@
         <div class="settings-sidebar">
           <div class="settings-nav-section">People</div>
           <button class="settings-nav-item active" id="snav-teams"    onclick="setSettingsTab('teams')">   <span class="settings-nav-icon">👥</span> Teams</button>
+          <button class="settings-nav-item"        id="snav-clients"  onclick="setSettingsTab('clients')"> <span class="settings-nav-icon">🔑</span> Client Accounts</button>
           <div class="settings-nav-section">Integrations</div>
           <button class="settings-nav-item"        id="snav-shopify"  onclick="setSettingsTab('shopify')"> <span class="settings-nav-icon">🛍️</span> Shopify Stores</button>
           <button class="settings-nav-item"        id="snav-clarity"  onclick="setSettingsTab('clarity')"> <span class="settings-nav-icon">🔍</span> Microsoft Clarity</button>
@@ -868,6 +869,20 @@
           <div id="tm-invite-link-box" style="display:none;margin-top:10px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:monospace;cursor:pointer;color:var(--text-muted)" onclick="copySettingsInviteLink(this)">🔗 Click to copy invite link</div>
         </div>
         </div><!-- /spanel-teams -->
+
+        <!-- ── PANEL: Client Accounts ── -->
+        <div class="settings-panel" id="spanel-clients">
+        <div class="modal-section">
+          <div class="modal-section-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Client Accounts</span>
+            <button class="connect-btn" style="font-size:12px;padding:6px 14px" onclick="openAddClientModal()">+ Add Client</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
+            Each client gets their own email + password login. They only see data for their assigned stores.
+          </div>
+          <div id="clients-list"><div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading…</div></div>
+        </div>
+        </div><!-- /spanel-clients -->
 
         <!-- ── PANEL: Shopify ── -->
         <div class="settings-panel" id="spanel-shopify">
@@ -1037,6 +1052,62 @@
         </div><!-- /modal-body -->
         </div><!-- /settings-content -->
       </div><!-- /settings-layout -->
+    </div>
+  </div>
+
+  <!-- ADD CLIENT MODAL -->
+  <div class="modal-overlay hidden" id="add-client-modal">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
+        <h2 style="color:#e6edf3;font-size:15px" id="add-client-modal-title">🔑 Add Client Account</h2>
+        <button class="modal-close" onclick="closeAddClientModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:24px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Full Name</label>
+            <input type="text" id="ac-name" class="connect-input" placeholder="e.g. Dafa Store" style="width:100%;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Email Address</label>
+            <input type="email" id="ac-email" class="connect-input" placeholder="client@example.com" style="width:100%;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Password</label>
+            <div style="position:relative">
+              <input type="password" id="ac-password" class="connect-input" placeholder="Min. 8 characters" style="width:100%;box-sizing:border-box;padding-right:40px">
+              <button onclick="toggleAcPassword()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px" title="Show/hide password">👁</button>
+            </div>
+          </div>
+          <div id="ac-error" style="font-size:12px;color:#F87171;display:none"></div>
+          <button class="connect-btn" style="width:100%;padding:10px;font-size:14px" id="ac-submit-btn" onclick="submitAddClient()">Create Account →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESET PASSWORD MODAL -->
+  <div class="modal-overlay hidden" id="reset-pwd-modal">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
+        <h2 style="color:#e6edf3;font-size:15px">🔒 Reset Password</h2>
+        <button class="modal-close" onclick="closeResetPwdModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:24px">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Set a new password for <strong id="reset-pwd-email" style="color:var(--text-primary)"></strong></div>
+        <input type="hidden" id="reset-pwd-user-id">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">New Password</label>
+            <div style="position:relative">
+              <input type="password" id="rp-password" class="connect-input" placeholder="Min. 8 characters" style="width:100%;box-sizing:border-box;padding-right:40px">
+              <button onclick="toggleRpPassword()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px" title="Show/hide password">👁</button>
+            </div>
+          </div>
+          <div id="rp-error" style="font-size:12px;color:#F87171;display:none"></div>
+          <button class="connect-btn" style="width:100%;padding:10px;font-size:14px" id="rp-submit-btn" onclick="submitResetPassword()">Update Password →</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2992,15 +3063,209 @@
     });
 
     function setSettingsTab(name) {
-      ['teams','shopify','clarity','meta','linked','link','agencies'].forEach(t => {
+      ['teams','clients','shopify','clarity','meta','linked','link','agencies'].forEach(t => {
         const nav = document.getElementById('snav-'   + t);
         const pan = document.getElementById('spanel-' + t);
         if (nav) nav.classList.toggle('active', t === name);
         if (pan) pan.classList.toggle('active', t === name);
       });
-      if (name === 'teams')  loadSettingsTeam();
-      if (name === 'linked') loadLinkedAccountsTab();
+      if (name === 'teams')   loadSettingsTeam();
+      if (name === 'clients') loadClientAccounts();
+      if (name === 'linked')  loadLinkedAccountsTab();
     }
+
+    // ── Client Accounts ─────────────────────────────────────────────────────
+    let _clientsCache = [];
+
+    async function callManageUsers(payload) {
+      const { data: { session } } = await sb.auth.getSession();
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/manage-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': SUPABASE_ANON,
+        },
+        body: JSON.stringify(payload),
+      });
+      return resp.json();
+    }
+
+    async function loadClientAccounts() {
+      const el = document.getElementById('clients-list');
+      if (!el) return;
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
+      const result = await callManageUsers({ action: 'list' });
+      if (result.error) { el.innerHTML = `<div style="color:#F87171;font-size:13px">${escHtml(result.error)}</div>`; return; }
+      _clientsCache = result.users || [];
+      renderClientsList();
+    }
+
+    function renderClientsList() {
+      const el = document.getElementById('clients-list');
+      if (!el) return;
+      const clients = _clientsCache;
+      if (!clients.length) {
+        el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">No client accounts yet. Click "+ Add Client" to create one.</div>';
+        return;
+      }
+      el.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Name / Email</th>
+              <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Role</th>
+              <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Last Login</th>
+              <th style="padding:8px 6px;width:140px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${clients.map(u => `
+              <tr style="border-bottom:1px solid var(--border)" data-uid="${escHtml(u.user_id)}">
+                <td style="padding:10px 6px">
+                  <div style="font-weight:600;color:var(--text-primary)">${escHtml(u.name || '—')}</div>
+                  <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${escHtml(u.email)}</div>
+                </td>
+                <td style="padding:10px 6px">
+                  <span style="background:${u.role==='owner'?'rgba(5,115,245,0.15)':'var(--surface)'};color:${u.role==='owner'?'#0573F5':'var(--text-muted)'};border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;text-transform:capitalize">${escHtml(u.role)}</span>
+                </td>
+                <td style="padding:10px 6px;color:var(--text-muted);font-size:12px">${u.last_sign_in ? new Date(u.last_sign_in).toLocaleDateString() : 'Never'}</td>
+                <td style="padding:10px 6px;text-align:right">
+                  ${u.role !== 'owner' ? `
+                    <button onclick="openResetPwdModal('${escHtml(u.user_id)}','${escHtml(u.email)}')"
+                      style="background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:6px"
+                      onmouseover="this.style.borderColor='#0573F5';this.style.color='#0573F5'"
+                      onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">
+                      🔒 Reset
+                    </button>
+                    <button onclick="deleteClientUser('${escHtml(u.user_id)}','${escHtml(u.email)}')"
+                      style="background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer"
+                      onmouseover="this.style.borderColor='#F87171';this.style.color='#F87171'"
+                      onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">
+                      🗑 Remove
+                    </button>
+                  ` : '<span style="font-size:11px;color:var(--text-muted)">Owner</span>'}
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function openAddClientModal() {
+      document.getElementById('ac-name').value = '';
+      document.getElementById('ac-email').value = '';
+      document.getElementById('ac-password').value = '';
+      document.getElementById('ac-error').style.display = 'none';
+      document.getElementById('ac-submit-btn').disabled = false;
+      document.getElementById('ac-submit-btn').textContent = 'Create Account →';
+      document.getElementById('add-client-modal').classList.remove('hidden');
+    }
+
+    function closeAddClientModal() {
+      document.getElementById('add-client-modal').classList.add('hidden');
+    }
+
+    function toggleAcPassword() {
+      const f = document.getElementById('ac-password');
+      f.type = f.type === 'password' ? 'text' : 'password';
+    }
+
+    async function submitAddClient() {
+      const name     = document.getElementById('ac-name').value.trim();
+      const email    = document.getElementById('ac-email').value.trim();
+      const password = document.getElementById('ac-password').value;
+      const errEl    = document.getElementById('ac-error');
+      const btn      = document.getElementById('ac-submit-btn');
+      errEl.style.display = 'none';
+      if (!email)         { errEl.textContent = 'Email is required.'; errEl.style.display='block'; return; }
+      if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display='block'; return; }
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+      const result = await callManageUsers({ action: 'create', name, email, password });
+      if (result.error) {
+        errEl.textContent = result.error;
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Create Account →';
+        return;
+      }
+      closeAddClientModal();
+      // Add to local cache and re-render
+      _clientsCache.push({ user_id: result.user_id, email: result.email, name: result.name, role: 'member', last_sign_in: null });
+      renderClientsList();
+    }
+
+    function openResetPwdModal(userId, email) {
+      document.getElementById('reset-pwd-user-id').value = userId;
+      document.getElementById('reset-pwd-email').textContent = email;
+      document.getElementById('rp-password').value = '';
+      document.getElementById('rp-error').style.display = 'none';
+      document.getElementById('rp-submit-btn').disabled = false;
+      document.getElementById('rp-submit-btn').textContent = 'Update Password →';
+      document.getElementById('reset-pwd-modal').classList.remove('hidden');
+    }
+
+    function closeResetPwdModal() {
+      document.getElementById('reset-pwd-modal').classList.add('hidden');
+    }
+
+    function toggleRpPassword() {
+      const f = document.getElementById('rp-password');
+      f.type = f.type === 'password' ? 'text' : 'password';
+    }
+
+    async function submitResetPassword() {
+      const userId   = document.getElementById('reset-pwd-user-id').value;
+      const password = document.getElementById('rp-password').value;
+      const errEl    = document.getElementById('rp-error');
+      const btn      = document.getElementById('rp-submit-btn');
+      errEl.style.display = 'none';
+      if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display='block'; return; }
+      btn.disabled = true;
+      btn.textContent = 'Updating…';
+      const result = await callManageUsers({ action: 'set_password', user_id: userId, password });
+      if (result.error) {
+        errEl.textContent = result.error;
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Update Password →';
+        return;
+      }
+      closeResetPwdModal();
+      // Show brief success toast
+      showToast('Password updated successfully');
+    }
+
+    async function deleteClientUser(userId, email) {
+      if (!confirm(`Remove ${email} from your organization?\n\nThis will delete their account and revoke all access.`)) return;
+      const result = await callManageUsers({ action: 'delete', user_id: userId });
+      if (result.error) { alert('Error: ' + result.error); return; }
+      _clientsCache = _clientsCache.filter(u => u.user_id !== userId);
+      renderClientsList();
+      showToast('Client account removed');
+    }
+
+    function showToast(msg) {
+      let t = document.getElementById('blue-toast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'blue-toast';
+        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0573F5;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.opacity = '1';
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+    }
+
+    // Close modals on backdrop click
+    document.getElementById('add-client-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('add-client-modal')) closeAddClientModal();
+    });
+    document.getElementById('reset-pwd-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('reset-pwd-modal')) closeResetPwdModal();
+    });
 
     // ── Agency Settings UI ──────────────────────────────────────────────────
     function renderAgencySettings() {
