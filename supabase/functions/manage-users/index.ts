@@ -6,7 +6,7 @@
  *
  * Actions (POST body):
  *   { action: "list" }
- *   { action: "create",       name, email, password }
+ *   { action: "create",       username, name, email, password }
  *   { action: "set_password", user_id, password }
  *   { action: "delete",       user_id }
  */
@@ -30,7 +30,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Resolve caller's user_id from their JWT */
 async function getCallerId(authHeader: string | null): Promise<string | null> {
   if (!authHeader) return null;
   const token = authHeader.replace("Bearer ", "");
@@ -39,7 +38,6 @@ async function getCallerId(authHeader: string | null): Promise<string | null> {
   return user.id;
 }
 
-/** Check the caller is an owner of at least one organization */
 async function isOwner(userId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin
     .from("organization_members")
@@ -56,37 +54,35 @@ async function isOwner(userId: string): Promise<string | null> {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  // Auth check
   const callerId = await getCallerId(req.headers.get("authorization"));
   if (!callerId) return json({ error: "Unauthorized" }, 401);
 
   const orgId = await isOwner(callerId);
   if (!orgId) return json({ error: "Forbidden: owner role required" }, 403);
 
-  // Parse body
   let body: Record<string, string>;
   try { body = await req.json(); }
   catch { return json({ error: "Invalid JSON" }, 400); }
 
   const { action } = body;
 
-  // ── LIST ─────────────────────────────────────────────────────────────────
+  // ── LIST ──────────────────────────────────────────────────────────────────
   if (action === "list") {
     const { data: members, error } = await supabaseAdmin
       .from("organization_members")
-      .select("user_id, role, accepted_at, invited_email")
+      .select("user_id, role, accepted_at")
       .eq("organization_id", orgId)
       .not("accepted_at", "is", null);
 
     if (error) return json({ error: error.message }, 500);
 
-    // Fetch user details for each member
     const users = await Promise.all(
       (members ?? []).map(async (m) => {
         const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(m.user_id);
         return {
           user_id: m.user_id,
-          email: user?.email ?? m.invited_email ?? "",
+          email: user?.email ?? "",
+          username: user?.user_metadata?.username ?? "",
           name: user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? "",
           role: m.role,
           accepted_at: m.accepted_at,
@@ -100,24 +96,31 @@ Deno.serve(async (req: Request) => {
 
   // ── CREATE ────────────────────────────────────────────────────────────────
   if (action === "create") {
-    const { name, email, password } = body;
+    const { username, name, email, password } = body;
+    if (!username) return json({ error: "username is required" }, 400);
     if (!email || !password) return json({ error: "email and password required" }, 400);
-
-    // Validate password length
     if (password.length < 8) return json({ error: "Password must be at least 8 characters" }, 400);
 
-    // Create the Supabase auth user (email pre-confirmed, no verification email)
+    // Check username uniqueness across all auth users
+    const { data: existing } = await supabaseAdmin.rpc("get_email_by_username", {
+      p_username: username.toLowerCase().trim(),
+    });
+    if (existing) return json({ error: `Username "${username}" is already taken` }, 400);
+
     const { data: { user }, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: name ?? "" },
+      user_metadata: {
+        username: username.toLowerCase().trim(),
+        full_name: name ?? "",
+      },
     });
 
     if (createErr) return json({ error: createErr.message }, 400);
     if (!user) return json({ error: "User creation failed" }, 500);
 
-    // Add to organization_members
+    // Add to organization
     const { error: memberErr } = await supabaseAdmin
       .from("organization_members")
       .insert({
@@ -125,20 +128,19 @@ Deno.serve(async (req: Request) => {
         user_id: user.id,
         role: "member",
         invited_by: callerId,
-        invited_email: email,
         accepted_at: new Date().toISOString(),
       });
 
     if (memberErr) {
-      // Roll back user creation
       await supabaseAdmin.auth.admin.deleteUser(user.id);
       return json({ error: memberErr.message }, 500);
     }
 
-    console.log("[manage-users] Created client:", email, "in org:", orgId);
+    console.log("[manage-users] Created client:", username, email, "in org:", orgId);
     return json({
       user_id: user.id,
       email: user.email,
+      username: user.user_metadata?.username ?? "",
       name: user.user_metadata?.full_name ?? "",
       role: "member",
     });
@@ -149,8 +151,8 @@ Deno.serve(async (req: Request) => {
     const { user_id, password } = body;
     if (!user_id || !password) return json({ error: "user_id and password required" }, 400);
     if (password.length < 8) return json({ error: "Password must be at least 8 characters" }, 400);
+    if (user_id === callerId) return json({ error: "Use account settings to change your own password" }, 400);
 
-    // Verify target user belongs to this org
     const { data: membership } = await supabaseAdmin
       .from("organization_members")
       .select("user_id")
@@ -159,8 +161,6 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (!membership) return json({ error: "User not in your organization" }, 403);
-    // Prevent owner from changing their own password via this endpoint (use Supabase dashboard)
-    if (user_id === callerId) return json({ error: "Use account settings to change your own password" }, 400);
 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, { password });
     if (error) return json({ error: error.message }, 400);
@@ -175,7 +175,6 @@ Deno.serve(async (req: Request) => {
     if (!user_id) return json({ error: "user_id required" }, 400);
     if (user_id === callerId) return json({ error: "Cannot delete your own account" }, 400);
 
-    // Verify target user belongs to this org
     const { data: membership } = await supabaseAdmin
       .from("organization_members")
       .select("user_id, role")
@@ -186,14 +185,12 @@ Deno.serve(async (req: Request) => {
     if (!membership) return json({ error: "User not in your organization" }, 403);
     if (membership.role === "owner") return json({ error: "Cannot delete another owner" }, 403);
 
-    // Remove from org
     await supabaseAdmin
       .from("organization_members")
       .delete()
       .eq("organization_id", orgId)
       .eq("user_id", user_id);
 
-    // Delete auth user
     const { error } = await supabaseAdmin.auth.admin.deleteUser(user_id);
     if (error) return json({ error: error.message }, 500);
 

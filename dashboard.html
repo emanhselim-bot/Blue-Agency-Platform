@@ -749,8 +749,8 @@
       <div class="auth-title">Blue Ad</div>
       <div class="auth-sub">DIGITAL PERFORMANCE MARKETING AGENCY</div>
       <div id="auth-form-login">
-        <!-- Email / password -->
-        <input type="email" class="auth-input" id="auth-email" placeholder="Email address" autocomplete="email">
+        <!-- Username / email + password -->
+        <input type="text" class="auth-input" id="auth-email" placeholder="Username or email" autocomplete="username">
         <input type="password" class="auth-input" id="auth-password" placeholder="Password" autocomplete="current-password">
         <button class="auth-btn" id="auth-btn">SIGN IN</button>
         <div class="auth-error" id="auth-error"></div>
@@ -1065,11 +1065,16 @@
       <div class="modal-body" style="padding:24px">
         <div style="display:flex;flex-direction:column;gap:14px">
           <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Username <span style="color:#F87171">*</span></label>
+            <input type="text" id="ac-username" class="connect-input" placeholder="e.g. dafa_store" style="width:100%;box-sizing:border-box" autocomplete="off">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Client logs in with this username (no @ needed)</div>
+          </div>
+          <div>
             <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Full Name</label>
             <input type="text" id="ac-name" class="connect-input" placeholder="e.g. Dafa Store" style="width:100%;box-sizing:border-box">
           </div>
           <div>
-            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Email Address</label>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Email Address <span style="color:#F87171">*</span></label>
             <input type="email" id="ac-email" class="connect-input" placeholder="client@example.com" style="width:100%;box-sizing:border-box">
           </div>
           <div>
@@ -1630,12 +1635,29 @@
     document.getElementById('back-login-link-2').addEventListener('click', () => showAuthView('login'));
 
     document.getElementById('auth-btn').addEventListener('click', async () => {
-      const email = document.getElementById('auth-email').value.trim();
+      const input    = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
-      const errEl = document.getElementById('auth-error');
+      const errEl    = document.getElementById('auth-error');
+      const btn      = document.getElementById('auth-btn');
       errEl.textContent = '';
-      if (!email || !password) { errEl.textContent = 'Email and password are required.'; return; }
+      if (!input || !password) { errEl.textContent = 'Username/email and password are required.'; return; }
+      btn.disabled = true;
+      btn.textContent = 'SIGNING IN…';
+
+      let email = input;
+      // If input doesn't look like an email, resolve username → email via RPC
+      if (!input.includes('@')) {
+        const { data: resolved, error: rpcErr } = await sb.rpc('get_email_by_username', { p_username: input });
+        if (rpcErr || !resolved) {
+          errEl.textContent = 'Username not found.';
+          btn.disabled = false; btn.textContent = 'SIGN IN';
+          return;
+        }
+        email = resolved;
+      }
+
       const { error } = await Auth.signIn(email, password);
+      btn.disabled = false; btn.textContent = 'SIGN IN';
       if (error) { errEl.textContent = error.message; }
       // onAuthStateChange handles the rest
     });
@@ -3113,6 +3135,7 @@
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead>
             <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Username</th>
               <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Name / Email</th>
               <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Role</th>
               <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Last Login</th>
@@ -3122,6 +3145,9 @@
           <tbody>
             ${clients.map(u => `
               <tr style="border-bottom:1px solid var(--border)" data-uid="${escHtml(u.user_id)}">
+                <td style="padding:10px 6px">
+                  <span style="font-family:monospace;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 7px;color:var(--text-primary)">${escHtml(u.username || '—')}</span>
+                </td>
                 <td style="padding:10px 6px">
                   <div style="font-weight:600;color:var(--text-primary)">${escHtml(u.name || '—')}</div>
                   <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${escHtml(u.email)}</div>
@@ -3152,6 +3178,7 @@
     }
 
     function openAddClientModal() {
+      document.getElementById('ac-username').value = '';
       document.getElementById('ac-name').value = '';
       document.getElementById('ac-email').value = '';
       document.getElementById('ac-password').value = '';
@@ -3159,6 +3186,7 @@
       document.getElementById('ac-submit-btn').disabled = false;
       document.getElementById('ac-submit-btn').textContent = 'Create Account →';
       document.getElementById('add-client-modal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('ac-username').focus(), 100);
     }
 
     function closeAddClientModal() {
@@ -3171,17 +3199,20 @@
     }
 
     async function submitAddClient() {
+      const username = document.getElementById('ac-username').value.trim().toLowerCase();
       const name     = document.getElementById('ac-name').value.trim();
       const email    = document.getElementById('ac-email').value.trim();
       const password = document.getElementById('ac-password').value;
       const errEl    = document.getElementById('ac-error');
       const btn      = document.getElementById('ac-submit-btn');
       errEl.style.display = 'none';
-      if (!email)         { errEl.textContent = 'Email is required.'; errEl.style.display='block'; return; }
+      if (!username)       { errEl.textContent = 'Username is required.'; errEl.style.display='block'; return; }
+      if (!/^[a-z0-9_]+$/.test(username)) { errEl.textContent = 'Username can only contain letters, numbers, and underscores.'; errEl.style.display='block'; return; }
+      if (!email)          { errEl.textContent = 'Email is required.'; errEl.style.display='block'; return; }
       if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display='block'; return; }
       btn.disabled = true;
       btn.textContent = 'Creating…';
-      const result = await callManageUsers({ action: 'create', name, email, password });
+      const result = await callManageUsers({ action: 'create', username, name, email, password });
       if (result.error) {
         errEl.textContent = result.error;
         errEl.style.display = 'block';
@@ -3191,7 +3222,7 @@
       }
       closeAddClientModal();
       // Add to local cache and re-render
-      _clientsCache.push({ user_id: result.user_id, email: result.email, name: result.name, role: 'member', last_sign_in: null });
+      _clientsCache.push({ user_id: result.user_id, email: result.email, username: result.username, name: result.name, role: 'member', last_sign_in: null });
       renderClientsList();
     }
 
