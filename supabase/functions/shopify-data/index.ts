@@ -70,7 +70,10 @@ async function fetchShopTimezone(
   try {
     const res = await fetch(
       `https://${shopDomain}/admin/api/${SHOPIFY_API}/shop.json?fields=iana_timezone`,
-      { headers: { "X-Shopify-Access-Token": accessToken } }
+      {
+        headers: { "X-Shopify-Access-Token": accessToken },
+        signal: AbortSignal.timeout(8000),
+      }
     );
     if (!res.ok) return "UTC";
     const json = await res.json();
@@ -155,6 +158,10 @@ interface ShopifyOrder {
   line_items: Array<{ quantity: number; price: string; title?: string; product_id?: number }>;
 }
 
+// Per-page timeout for Shopify REST API calls (ms).
+// Keeps any single fetch from hanging indefinitely.
+const SHOPIFY_FETCH_TIMEOUT_MS = 20_000;
+
 async function fetchOrders(
   shopDomain:      string,
   accessToken:     string,
@@ -196,7 +203,21 @@ async function fetchOrders(
     // Retry up to 3 times on 429 rate-limit responses
     let res: Response | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      res = await fetch(url, { headers });
+      try {
+        res = await fetch(url, { headers, signal: AbortSignal.timeout(SHOPIFY_FETCH_TIMEOUT_MS) });
+      } catch (e) {
+        const msg = (e as Error).name === "TimeoutError"
+          ? `Shopify API timeout after ${SHOPIFY_FETCH_TIMEOUT_MS / 1000}s`
+          : (e as Error).message;
+        console.error(`[shopify-data] fetch error (attempt ${attempt + 1}):`, msg);
+        // Don't retry on timeout; break out with what we have
+        if ((e as Error).name === "TimeoutError") {
+          console.warn(`[shopify-data] Returning ${orders.length} orders collected before timeout`);
+          return orders;
+        }
+        if (attempt === 2) return orders; // give up after 3 attempts
+        continue;
+      }
       if (res.status !== 429) break;
       const retryAfter = parseInt(res.headers.get("Retry-After") ?? "2", 10);
       console.warn(`[shopify-data] 429 rate limit — retrying after ${retryAfter}s (attempt ${attempt + 1})`);
@@ -208,8 +229,9 @@ async function fetchOrders(
       const text = await res.text();
       const errMsg = `Shopify API ${res.status}: ${text.slice(0, 200)}`;
       console.error(`[shopify-data] ${errMsg}`);
-      // Throw so the caller can return a proper error response
-      throw new Error(errMsg);
+      // Return what we have so far instead of throwing — avoids 502 on transient errors
+      console.warn(`[shopify-data] Returning ${orders.length} orders collected before error`);
+      return orders;
     }
     const json = await res.json();
     const page = json.orders ?? [];
@@ -290,9 +312,16 @@ async function fetchAbandonedCheckouts(
     `https://${shopDomain}/admin/api/${SHOPIFY_API}/checkouts.json?${params}`;
 
   while (url) {
-    const res = await fetch(url, {
-      headers: { "X-Shopify-Access-Token": accessToken },
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: { "X-Shopify-Access-Token": accessToken },
+        signal: AbortSignal.timeout(SHOPIFY_FETCH_TIMEOUT_MS),
+      });
+    } catch (e) {
+      console.warn(`[shopify-data] Checkouts fetch error:`, (e as Error).message);
+      break;
+    }
     if (!res.ok) {
       console.warn(`Shopify checkouts API ${res.status}`);
       break;
@@ -351,6 +380,7 @@ async function fetchShopifyAnalytics(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ query: gql }),
+        signal: AbortSignal.timeout(SHOPIFY_FETCH_TIMEOUT_MS),
       }
     );
     if (!resp.ok) {
@@ -618,6 +648,7 @@ Deno.serve(async (req: Request) => {
   } catch (e) {
     const msg = (e as Error).message ?? "Internal error";
     console.error("[shopify-data] Unhandled error:", msg);
-    return jsonResponse({ error: msg }, 502);
+    // Return 200 with empty rows + error so the dashboard shows "—" instead of crashing
+    return jsonResponse({ rows: [], shopifyError: msg });
   }
 });
