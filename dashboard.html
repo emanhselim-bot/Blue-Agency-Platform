@@ -2752,10 +2752,10 @@
       renderTeamMembers(res.members || []);
     }
 
-    function renderTeamMembers(members) {
+    function renderTeamMembers(members, containerId = 'team-members-list') {
       const allAccounts = Object.values(accountMap);
       const allAgencies = getAgencies(currentOrgId);
-      const container   = document.getElementById('team-members-list');
+      const container   = document.getElementById(containerId);
       if (!members.length) {
         container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No team members yet.</div>';
         return;
@@ -2979,35 +2979,7 @@
         return;
       }
       const members = res.members || [];
-      if (!members.length) {
-        container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No team members yet.</div>';
-        return;
-      }
-      container.innerHTML = members.map(m => {
-        const initials  = (m.email || '?').substring(0, 2).toUpperCase();
-        const isOwner   = m.role === 'owner';
-        const isPending = !!m.is_pending;
-        const badge = isOwner
-          ? '<span class="team-owner-badge">👑 Owner</span>'
-          : isPending
-            ? '<span class="status-badge status-pending">Pending</span>'
-            : `<span class="member-role-badge role-${m.role}">${m.role}</span> <span class="status-badge status-active">Active</span>`;
-        const actions = isPending && m.invite_url
-          ? `<button class="btn-copy-link" onclick="copyText('${escHtml(m.invite_url)}',this)" style="font-size:11px;padding:4px 10px">📋 Copy link</button>
-             <button class="btn-revoke-invite" onclick="revokeInvite('${m.id}')" style="font-size:11px;padding:4px 10px">Revoke</button>`
-          : '';
-        return `<div class="member-card" id="mc_${m.id}" style="margin-bottom:8px">
-          <div class="member-card-top">
-            <div class="member-avatar">${initials}</div>
-            <div class="member-info">
-              <div class="member-email">${escHtml(m.email)}</div>
-              ${m.full_name ? `<div class="member-name">${escHtml(m.full_name)}</div>` : ''}
-            </div>
-            ${badge}
-          </div>
-          ${actions ? `<div style="padding:8px 16px 12px;display:flex;gap:8px">${actions}</div>` : ''}
-        </div>`;
-      }).join('');
+      renderTeamMembers(members, 'tm-members-list');
     }
 
     async function submitSettingsInvite() {
