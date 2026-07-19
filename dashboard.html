@@ -2489,6 +2489,7 @@
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching data for all ${allAccounts.length} account(s)…</div>`;
 
+      try {
       const dr = shopifyDR(currentPeriod);
       const metaBase = acc => ({
         account_db_id: acc.id,
@@ -2663,6 +2664,12 @@
         </div>`;
 
       btn.disabled = false; btn.textContent = '↻ Refresh';
+      } catch (allErr) {
+        console.error('[loadAllAccounts error]', allErr);
+        document.getElementById('content').innerHTML =
+          `<div class="error-state">⚠️ Dashboard render error:\n${escHtml(allErr?.message || String(allErr))}</div>`;
+        btn.disabled = false; btn.textContent = '↻ Refresh';
+      }
     }
 
     // ─────────────────────────────────────────────────────────────
