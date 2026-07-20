@@ -1083,6 +1083,15 @@
               <button onclick="toggleAcPassword()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px" title="Show/hide password">👁</button>
             </div>
           </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Role</label>
+            <select id="ac-role" class="connect-input" style="width:100%;box-sizing:border-box;cursor:pointer">
+              <option value="viewer">Viewer — read-only dashboard access</option>
+              <option value="analyst">Analyst — view + export data</option>
+              <option value="admin">Admin — manage accounts &amp; settings</option>
+              <option value="owner">Owner — full access</option>
+            </select>
+          </div>
           <div id="ac-error" style="font-size:12px;color:#F87171;display:none"></div>
           <button class="connect-btn" style="width:100%;padding:10px;font-size:14px" id="ac-submit-btn" onclick="submitAddClient()">Create Account →</button>
         </div>
@@ -3156,7 +3165,17 @@
                   <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${escHtml(u.email)}</div>
                 </td>
                 <td style="padding:10px 6px">
-                  <span style="background:${u.role==='owner'?'rgba(5,115,245,0.15)':'var(--surface)'};color:${u.role==='owner'?'#0573F5':'var(--text-muted)'};border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;text-transform:capitalize">${escHtml(u.role)}</span>
+                  <span style="background:${
+                    u.role==='owner'   ?'rgba(5,115,245,0.15)':
+                    u.role==='admin'   ?'rgba(250,133,0,0.15)':
+                    u.role==='analyst' ?'rgba(23,155,180,0.15)':
+                                        'rgba(107,114,128,0.1)'
+                  };color:${
+                    u.role==='owner'   ?'#0573F5':
+                    u.role==='admin'   ?'#FA8500':
+                    u.role==='analyst' ?'#179BB4':
+                                        'var(--text-muted)'
+                  };border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;text-transform:capitalize">${escHtml(u.role)}</span>
                 </td>
                 <td style="padding:10px 6px;color:var(--text-muted);font-size:12px">${u.last_sign_in ? new Date(u.last_sign_in).toLocaleDateString() : 'Never'}</td>
                 <td style="padding:10px 6px;text-align:right">
@@ -3185,6 +3204,7 @@
       document.getElementById('ac-name').value = '';
       document.getElementById('ac-email').value = '';
       document.getElementById('ac-password').value = '';
+      document.getElementById('ac-role').value = 'viewer';
       document.getElementById('ac-error').style.display = 'none';
       document.getElementById('ac-submit-btn').disabled = false;
       document.getElementById('ac-submit-btn').textContent = 'Create Account →';
@@ -3206,6 +3226,7 @@
       const name     = document.getElementById('ac-name').value.trim();
       const email    = document.getElementById('ac-email').value.trim();
       const password = document.getElementById('ac-password').value;
+      const role     = document.getElementById('ac-role').value || 'viewer';
       const errEl    = document.getElementById('ac-error');
       const btn      = document.getElementById('ac-submit-btn');
       errEl.style.display = 'none';
@@ -3215,7 +3236,7 @@
       if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display='block'; return; }
       btn.disabled = true;
       btn.textContent = 'Creating…';
-      const result = await callManageUsers({ action: 'create', username, name, email, password });
+      const result = await callManageUsers({ action: 'create', username, name, email, password, role });
       if (result.error) {
         errEl.textContent = result.error;
         errEl.style.display = 'block';
@@ -3225,7 +3246,7 @@
       }
       closeAddClientModal();
       // Add to local cache and re-render
-      _clientsCache.push({ user_id: result.user_id, email: result.email, username: result.username, name: result.name, role: 'member', last_sign_in: null });
+      _clientsCache.push({ user_id: result.user_id, email: result.email, username: result.username, name: result.name, role: result.role || role, last_sign_in: null });
       renderClientsList();
     }
 

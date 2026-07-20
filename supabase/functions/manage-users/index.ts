@@ -96,10 +96,12 @@ Deno.serve(async (req: Request) => {
 
   // ── CREATE ────────────────────────────────────────────────────────────────
   if (action === "create") {
-    const { username, name, email, password } = body;
+    const { username, name, email, password, role: rawRole } = body;
     if (!username) return json({ error: "username is required" }, 400);
     if (!email || !password) return json({ error: "email and password required" }, 400);
     if (password.length < 8) return json({ error: "Password must be at least 8 characters" }, 400);
+    const VALID_ROLES = ["owner", "admin", "analyst", "viewer"];
+    const role = VALID_ROLES.includes(rawRole) ? rawRole : "viewer";
 
     // Check username uniqueness across all auth users
     const { data: existing } = await supabaseAdmin.rpc("get_email_by_username", {
@@ -126,7 +128,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         organization_id: orgId,
         user_id: user.id,
-        role: "viewer",
+        role,
         invited_by: callerId,
         accepted_at: new Date().toISOString(),
       });
@@ -142,7 +144,7 @@ Deno.serve(async (req: Request) => {
       email: user.email,
       username: user.user_metadata?.username ?? "",
       name: user.user_metadata?.full_name ?? "",
-      role: "viewer",
+      role,
     });
   }
 
