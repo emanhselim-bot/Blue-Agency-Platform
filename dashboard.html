@@ -1806,7 +1806,7 @@
       Auth.touchLastSeen(currentUser.id);
     }
 
-    async function loadAccounts() {
+    async function loadAccounts(triggerDataLoad = true) {
       // Prefer DB-persisted account over localStorage
       const dbSettings   = await Auth.getDashboardSettings(currentUser?.id, currentOrgId);
       const savedAccount = dbSettings?.default_account_id
@@ -1817,6 +1817,8 @@
 
       // Auto-sync campaign flags if any account hasn't been synced in >24 h
       // (runs in background — doesn't block account list from loading)
+      // Pass triggerDataLoad=false so the post-sync refresh only updates the
+      // account dropdown without re-fetching all dashboard data (avoids double-load).
       sb.from('meta_ad_accounts_safe')
         .select('campaigns_last_synced_at')
         .eq('organization_id', currentOrgId)
@@ -1827,7 +1829,7 @@
             const age = Date.now() - new Date(r.campaigns_last_synced_at).getTime();
             return age > 24 * 60 * 60 * 1000; // 24 hours
           });
-          if (stale) syncCampaigns().then(() => loadAccounts());
+          if (stale) syncCampaigns().then(() => loadAccounts(false));
         });
 
       // Only show accounts with active campaigns (or not-yet-synced = null)
@@ -1852,7 +1854,7 @@
         sel.value = savedAccount;
       }
 
-      if (sel.value && (sel.value === savedAccount || sel.value === '__all__')) loadDataWithRefresh();
+      if (triggerDataLoad && sel.value && (sel.value === savedAccount || sel.value === '__all__')) loadDataWithRefresh();
     }
 
     orgSel.addEventListener('change', async () => {
