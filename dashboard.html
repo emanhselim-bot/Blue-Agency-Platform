@@ -2395,11 +2395,14 @@
           // Merge Add to Cart sources: prefer ShopifyQL, fall back to Clarity
           const atcVal = funnelCartSessions !== null ? funnelCartSessions : clarityAddToCart;
           const atcSrc = funnelCartSessions !== null ? 'Shopify Analytics' : (clarityAddToCart !== null ? 'Microsoft Clarity' : 'Shopify Analytics');
+          const viewContentSrc = sessionsFromClarity
+            ? `Microsoft Clarity${clarityWarningIcon}${clarityWindowNote}`
+            : 'Shopify Analytics';
           const fStepsAll = [
-            { icon:'🛒', label:'Add to Cart',        val: atcVal,                src: atcSrc,             color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: shopifyEnabled },
-            { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false, isAnalytics: false, alwaysShow: false },
-            { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
-            { icon:'✅', label:'Purchase',           val: shopifyOrders,         src:'Shopify',           color:'#16A34A', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
+            { icon:'👁️', label:'View Content',      val: displaySessions,  src: viewContentSrc, color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity, alwaysShow: true },
+            { icon:'🛒', label:'Add to Cart',        val: atcVal,           src: atcSrc,         color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: shopifyEnabled },
+            { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,  src:'Shopify',       color:'#FCBA00', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
+            { icon:'✅', label:'Purchase',           val: shopifyOrders,    src:'Shopify',       color:'#16A34A', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
           ];
           // Only show steps that have real data (or are always-shown anchors like View Content / Purchase)
           const fSteps = fStepsAll.filter(s => s.alwaysShow || (s.val !== null && s.val !== undefined && !isNaN(s.val)));
