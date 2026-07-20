@@ -1806,6 +1806,7 @@
       Auth.touchLastSeen(currentUser.id);
     }
 
+    let _campaignSyncDone = false; // run once per session — prevents looping
     async function loadAccounts(triggerDataLoad = true) {
       // Prefer DB-persisted account over localStorage
       const dbSettings   = await Auth.getDashboardSettings(currentUser?.id, currentOrgId);
@@ -1815,22 +1816,24 @@
 
       accountMap = {};
 
-      // Auto-sync campaign flags if any account hasn't been synced in >24 h
-      // (runs in background — doesn't block account list from loading)
-      // Pass triggerDataLoad=false so the post-sync refresh only updates the
-      // account dropdown without re-fetching all dashboard data (avoids double-load).
-      sb.from('meta_ad_accounts_safe')
-        .select('campaigns_last_synced_at')
-        .eq('organization_id', currentOrgId)
-        .eq('is_active', true)
-        .then(({ data: rows }) => {
-          const stale = (rows || []).some(r => {
-            if (!r.campaigns_last_synced_at) return true;
-            const age = Date.now() - new Date(r.campaigns_last_synced_at).getTime();
-            return age > 24 * 60 * 60 * 1000; // 24 hours
+      // Auto-sync campaign flags if any account hasn't been synced in >24 h.
+      // Only runs once per session (flag prevents the post-sync loadAccounts(false)
+      // call from triggering another sync → infinite loop).
+      if (!_campaignSyncDone) {
+        _campaignSyncDone = true;
+        sb.from('meta_ad_accounts_safe')
+          .select('campaigns_last_synced_at')
+          .eq('organization_id', currentOrgId)
+          .eq('is_active', true)
+          .then(({ data: rows }) => {
+            const stale = (rows || []).some(r => {
+              if (!r.campaigns_last_synced_at) return true;
+              const age = Date.now() - new Date(r.campaigns_last_synced_at).getTime();
+              return age > 24 * 60 * 60 * 1000;
+            });
+            if (stale) syncCampaigns().then(() => loadAccounts(false));
           });
-          if (stale) syncCampaigns().then(() => loadAccounts(false));
-        });
+      }
 
       // Only show accounts with active campaigns (or not-yet-synced = null)
       const { data: accounts } = await sb
