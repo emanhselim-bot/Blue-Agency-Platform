@@ -2325,7 +2325,10 @@
       // Fall back to Clarity sessions when ShopifyQL is unavailable (dev/Basic plan stores)
       const displaySessions       = sessions ?? claritySessions;
       const sessionsFromClarity   = sessions === null && claritySessions !== null;
-      const shopifyConversionRate = conversionRate; // Shopify's own CR (already * 100)
+      // Shopify's own CR from ShopifyQL (already × 100); fall back to orders ÷ sessions
+      const shopifyConversionRate = conversionRate !== null
+        ? conversionRate
+        : (shopifyOrders != null && displaySessions ? (shopifyOrders / displaySessions) * 100 : null);
       const shopifySubLabel = !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : '<span class="shopify-badge">● Shopify</span>';
@@ -2349,7 +2352,7 @@
           ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'))}
           ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
-          ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sfmtSub('Shopify Orders ÷ Sessions'))}
+          ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(conversionRate !== null ? 'Shopify Analytics' : 'Shopify Orders ÷ Sessions'))}
           ${kpi('c-coral',  '↩️', 'Returns',                 sfmt(returns, v => v.toLocaleString('en')), shopifySubLabel)}
           ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
         </div>
