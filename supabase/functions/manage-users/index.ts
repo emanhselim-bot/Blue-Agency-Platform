@@ -126,7 +126,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         organization_id: orgId,
         user_id: user.id,
-        role: "member",
+        role: "viewer",
         invited_by: callerId,
         accepted_at: new Date().toISOString(),
       });
@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
       email: user.email,
       username: user.user_metadata?.username ?? "",
       name: user.user_metadata?.full_name ?? "",
-      role: "member",
+      role: "viewer",
     });
   }
 
