@@ -2270,6 +2270,14 @@
         if (abandonedCount   > 0) funnelAbandoned = abandonedCount;
       }
 
+      // ── Parse Shopify Add to Cart (sessions_with_cart_added via ShopifyQL) ──
+      let funnelCartSessions = null;
+      const cartRows = getShopifyRows('cart');
+      if (cartRows?.[0]?.[0] !== undefined && cartRows[0][0] !== null) {
+        const v = parseInt(cartRows[0][0]);
+        if (!isNaN(v)) funnelCartSessions = v;
+      }
+
       // ── Parse Clarity ──
       let clarityConfigured = false, claritySessions = null, clarityPageViews = null;
       let clarityAddToCart = null, clarityCheckout = null, clarityRemoveFromCart = null;
@@ -2379,11 +2387,12 @@
             ? `Microsoft Clarity${clarityWarningIcon}${clarityWindowNote}`
             : 'Shopify Analytics';
           const fStepsAll = [
-            { icon:'👁️', label:'View Content',      val: displaySessions,       src: viewContentSrc, color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity, alwaysShow: true },
+            { icon:'👁️', label:'View Content',      val: displaySessions,       src: viewContentSrc,     color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity, alwaysShow: true },
             { icon:'🛒', label:'Add to Cart',        val: clarityAddToCart,      src:'Microsoft Clarity', color:'#179BB4', shopify: false, isAnalytics: false, alwaysShow: false },
             { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false, isAnalytics: false, alwaysShow: false },
-            { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true, isAnalytics: false, alwaysShow: shopifyEnabled },
-            { icon:'✅', label:'Purchase',           val: shopifyOrders,         src:'Shopify',           color:'#16A34A', shopify: true, isAnalytics: false, alwaysShow: shopifyEnabled },
+            { icon:'🛒', label:'Add to Cart',        val: funnelCartSessions,    src:'Shopify Analytics', color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: false },
+            { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
+            { icon:'✅', label:'Purchase',           val: shopifyOrders,         src:'Shopify',           color:'#16A34A', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
           ];
           // Only show steps that have real data (or are always-shown anchors like View Content / Purchase)
           const fSteps = fStepsAll.filter(s => s.alwaysShow || (s.val !== null && s.val !== undefined && !isNaN(s.val)));

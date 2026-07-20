@@ -442,6 +442,70 @@ async function fetchShopifyAnalytics(
   }
 }
 
+// ── ShopifyQL Cart Sessions ──────────────────────────────────────────────────
+// Queries sessions_with_cart_added via ShopifyQL. Returns null gracefully when
+// the store plan doesn't include Analytics or the field isn't supported.
+async function fetchCartSessions(
+  shopDomain:  string,
+  accessToken: string,
+  since:       string, // YYYY-MM-DD fallback
+  until:       string, // YYYY-MM-DD fallback
+  sinceToken?: string, // raw DSL token (e.g. "yesterday")
+  untilToken?: string,
+): Promise<number | null> {
+  const sinceStr = sinceToken && SHOPIFYQL_DATE_KEYWORDS.has(sinceToken) ? sinceToken : since;
+  const untilStr = untilToken && SHOPIFYQL_DATE_KEYWORDS.has(untilToken) ? untilToken : until;
+
+  const gql = `{
+    shopifyqlQuery(query: "FROM sessions SHOW sessions_with_cart_added SINCE ${sinceStr} UNTIL ${untilStr}") {
+      ... on TableData {
+        columns { name dataType }
+        rowData
+      }
+      ... on ParseError {
+        parseErrors { code message }
+      }
+    }
+  }`;
+
+  try {
+    const resp = await fetch(
+      `https://${shopDomain}/admin/api/${SHOPIFY_API}/graphql.json`,
+      {
+        method: "POST",
+        headers: { "X-Shopify-Access-Token": accessToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ query: gql }),
+        signal: AbortSignal.timeout(SHOPIFY_FETCH_TIMEOUT_MS),
+      }
+    );
+    if (!resp.ok) {
+      console.warn("[shopify-data] fetchCartSessions HTTP error:", resp.status);
+      return null;
+    }
+    const json = await resp.json();
+    if (json?.errors?.length) {
+      console.warn("[shopify-data] fetchCartSessions GraphQL errors:", JSON.stringify(json.errors).slice(0, 400));
+      return null;
+    }
+    const ql = json?.data?.shopifyqlQuery;
+    if (!ql || ql.parseErrors?.length) {
+      console.warn("[shopify-data] fetchCartSessions: null or parseError");
+      return null;
+    }
+    if (!ql.rowData?.length) return 0;
+    const row  = Array.isArray(ql.rowData[0]) ? ql.rowData[0] : ql.rowData;
+    const cols: string[] = (ql.columns ?? []).map((c: { name: string }) => c.name);
+    const idx  = cols.indexOf("sessions_with_cart_added");
+    const val  = idx >= 0 ? parseInt(row[idx]) : NaN;
+    const result = isNaN(val) ? null : val;
+    console.log("[shopify-data] sessions_with_cart_added:", result);
+    return result;
+  } catch (e) {
+    console.warn("[shopify-data] fetchCartSessions exception:", (e as Error).message);
+    return null;
+  }
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -598,10 +662,11 @@ Deno.serve(async (req: Request) => {
     // Returns a single JSON with all metric buckets keyed by source name so
     // the dashboard can make ONE call per page load instead of 7.
     if (source === "all") {
-      const [allOrders, abandonedCount, analytics] = await Promise.all([
+      const [allOrders, abandonedCount, analytics, cartSessions] = await Promise.all([
         fetchOrders(store.shop_domain, store.access_token, since, until, shopTimezone),
         fetchAbandonedCheckouts(store.shop_domain, store.access_token, since, until, shopTimezone),
         fetchShopifyAnalytics(store.shop_domain, store.access_token, since, until, dsl.sinceToken, dsl.untilToken),
+        fetchCartSessions(store.shop_domain, store.access_token, since, until, dsl.sinceToken, dsl.untilToken),
       ]);
 
       // Derive refunded orders from the full set (avoids 2 extra API calls)
@@ -638,6 +703,7 @@ Deno.serve(async (req: Request) => {
         daily_sales: { rows: calcDailySales(allOrders, shopTimezone) },
         refunds:     { rows: [[String(refundedOrders.length)]] },
         checkouts:   { rows: [[String(totalCheckouts), String(abandonedCount), String(allOrders.length)]] },
+        cart:        { rows: cartSessions !== null ? [[String(cartSessions)]] : null },
         products:    { rows: topProducts },
       });
     }
