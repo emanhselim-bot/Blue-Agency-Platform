@@ -2152,7 +2152,13 @@
       </table>`;
     }
 
+    let _loadDataActive = false;
     async function loadData() {
+      if (_loadDataActive) return; // prevent overlapping calls
+      _loadDataActive = true;
+      try { await _loadDataInner(); } finally { _loadDataActive = false; }
+    }
+    async function _loadDataInner() {
       const accountDbId = sel.value;
       if (!accountDbId) return;
       if (accountDbId === '__all__') return loadAllAccounts();
@@ -2476,7 +2482,7 @@
       const btn2 = document.getElementById('refresh-btn');
       if (btn2) { btn2.disabled = false; btn2.textContent = '↻ Refresh'; }
     }
-    }  // end loadData
+    }  // end _loadDataInner
 
     // ─────────────────────────────────────────────────────────────
     // ALL-ACCOUNTS AGGREGATION
