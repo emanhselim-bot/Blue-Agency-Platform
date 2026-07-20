@@ -1100,7 +1100,7 @@
   </div>
 
   <!-- RESET PASSWORD MODAL -->
-  <div class="modal-overlay hidden" id="reset-pwd-modal">
+  <div class="modal-overlay hidden" id="reset-pwd-modal" style="z-index:9999">
     <div class="modal" style="max-width:400px">
       <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
         <h2 style="color:#e6edf3;font-size:15px">🔒 Reset Password</h2>
@@ -2392,14 +2392,12 @@
           const clarityWindowNote = sessionsFromClarity && clarityDays > 1
             ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px;line-height:1.3">rolling ${clarityDays}-day window</div>`
             : '';
-          const viewContentSrc = sessionsFromClarity
-            ? `Microsoft Clarity${clarityWarningIcon}${clarityWindowNote}`
-            : 'Shopify Analytics';
+          // Merge Add to Cart sources: prefer ShopifyQL, fall back to Clarity
+          const atcVal = funnelCartSessions !== null ? funnelCartSessions : clarityAddToCart;
+          const atcSrc = funnelCartSessions !== null ? 'Shopify Analytics' : (clarityAddToCart !== null ? 'Microsoft Clarity' : 'Shopify Analytics');
           const fStepsAll = [
-            { icon:'👁️', label:'View Content',      val: displaySessions,       src: viewContentSrc,     color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity, alwaysShow: true },
-            { icon:'🛒', label:'Add to Cart',        val: clarityAddToCart,      src:'Microsoft Clarity', color:'#179BB4', shopify: false, isAnalytics: false, alwaysShow: false },
+            { icon:'🛒', label:'Add to Cart',        val: atcVal,                src: atcSrc,             color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: shopifyEnabled },
             { icon:'↩️', label:'Remove from Cart',   val: clarityRemoveFromCart, src:'Microsoft Clarity', color:'#FF5759', shopify: false, isAnalytics: false, alwaysShow: false },
-            { icon:'🛒', label:'Add to Cart',        val: funnelCartSessions,    src:'Shopify Analytics', color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: false },
             { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,       src:'Shopify',           color:'#FCBA00', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
             { icon:'✅', label:'Purchase',           val: shopifyOrders,         src:'Shopify',           color:'#16A34A', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
           ];
