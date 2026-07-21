@@ -19,7 +19,7 @@ const CLIENT_SECRET       = Deno.env.get("GOOGLE_ADS_CLIENT_SECRET")!;
 const DEVELOPER_TOKEN     = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN")!;
 
 const REDIRECT_URI        = `${SUPABASE_URL}/functions/v1/google-ads-oauth`;
-const GOOGLE_ADS_API      = "https://googleads.googleapis.com/v17";
+const GOOGLE_ADS_API      = "https://googleads.googleapis.com/v24";
 const SCOPES              = "https://www.googleapis.com/auth/adwords";
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -222,7 +222,7 @@ Deno.serve(async (req: Request) => {
     console.log(`[google-ads-oauth] connected ${rows.length} account(s) for org ${org_id}`);
 
     // Redirect back to dashboard
-    const dashboardUrl = Deno.env.get("DASHBOARD_URL") || "https://blue-ad-dashboard-production.up.railway.app";
+    const dashboardUrl = Deno.env.get("DASHBOARD_URL") || "https://web-production-b4926.up.railway.app";
     return redirect(`${dashboardUrl}?connected=google_ads&accounts=${rows.length}`);
   }
 

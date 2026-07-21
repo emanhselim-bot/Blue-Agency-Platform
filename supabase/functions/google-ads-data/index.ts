@@ -145,7 +145,7 @@ async function fetchGoogleAdsMetrics(
   `;
 
   const res = await fetch(
-    `https://googleads.googleapis.com/v17/customers/${cid}/googleAds:searchStream`,
+    `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
     {
       method: "POST",
       headers: {
@@ -250,7 +250,7 @@ async function fetchGoogleAdsCampaigns(
   `;
 
   const res = await fetch(
-    `https://googleads.googleapis.com/v17/customers/${cid}/googleAds:searchStream`,
+    `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
     {
       method: "POST",
       headers: {
