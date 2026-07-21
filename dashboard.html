@@ -3533,6 +3533,7 @@
       if (name === 'linked')     loadLinkedAccountsTab();
       if (name === 'google-ads') loadGoogleAdsList();
       if (name === 'tiktok-ads') loadTikTokAdsList();
+      if (name === 'agencies')   renderAgencySettings();
     }
 
     // ── Client Accounts ─────────────────────────────────────────────────────
@@ -3755,10 +3756,15 @@
       const agencies = getAgencies(currentOrgId);
       const accounts = Object.values(accountMap);
 
-      // Agency list
+      // Agency list — count uses same logic as the nav: unassigned accounts appear in every agency
       const listEl = document.getElementById('agency-settings-list');
       if (listEl) {
-        listEl.innerHTML = agencies.map(a => `
+        listEl.innerHTML = agencies.map(a => {
+          const count = accounts.filter(acc => {
+            const assigned = localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`);
+            return !assigned || assigned === a.id;
+          }).length;
+          return `
           <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;margin-bottom:6px">
             <span style="font-size:16px;width:24px;text-align:center">${a.icon || '📊'}</span>
             <input type="text" value="${escHtml(a.name)}" data-id="${a.id}"
@@ -3766,25 +3772,28 @@
               onfocus="this.style.borderBottomColor='var(--blue)'"
               onblur="this.style.borderBottomColor='transparent';renameAgencyFromSettings('${a.id}',this.value)"
               onkeydown="if(event.key==='Enter')this.blur()">
-            <span style="font-size:11px;color:var(--text-muted)">${accounts.filter(acc=>(localStorage.getItem('acct_agency_'+currentOrgId+'_'+acc.id)||agencies[0]?.id)===a.id).length} accounts</span>
+            <span style="font-size:11px;color:var(--text-muted)">${count} account${count !== 1 ? 's' : ''}</span>
             ${agencies.length > 1 ? `<button onclick="deleteAgencyFromSettings('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:2px 4px" title="Remove agency">🗑</button>` : ''}
-          </div>`).join('');
+          </div>`;
+        }).join('');
       }
 
       // Account → Agency assignment rows
+      // "All Agencies" (value="") means unassigned — account appears in every agency tab
       const rowsEl = document.getElementById('account-agency-rows');
       if (rowsEl) {
         if (!accounts.length) {
           rowsEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">No ad accounts connected yet.</div>';
         } else {
           rowsEl.innerHTML = accounts.map(acc => {
-            const assigned = localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`) || agencies[0]?.id || '';
+            const assigned = localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`) || '';
+            const allOpt = `<option value="" ${!assigned ? 'selected' : ''}>All Agencies (unassigned)</option>`;
             const opts = agencies.map(a => `<option value="${a.id}" ${assigned===a.id?'selected':''}>${a.icon||'📊'} ${escHtml(a.name)}</option>`).join('');
             return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
               <span style="flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((acc.account_name||acc.meta_account_id||'').substring(0,40))}</span>
-              <select data-acct="${acc.id}" onchange="setAccountAgencyId(currentOrgId,this.dataset.acct,this.value);renderAgencyNav();filterAccountsByAgency();if(sel.value)loadData();"
+              <select data-acct="${acc.id}" onchange="setAccountAgencyId(currentOrgId,this.dataset.acct,this.value||null);renderAgencyNav();filterAccountsByAgency();renderAgencySettings();if(sel.value)loadData();"
                 style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
-                ${opts}
+                ${allOpt}${opts}
               </select>
             </div>`;
           }).join('');
