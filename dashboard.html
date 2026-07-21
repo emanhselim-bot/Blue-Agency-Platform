@@ -1558,13 +1558,13 @@
       const prevVal = sel.value;
       sel.innerHTML = '<option value="">— Select Account —</option>';
       if (toShow.length > 1) {
-        const label = activeAgency?.name || 'Accounts';
-        sel.innerHTML += `<option value="__all__">All ${label} Accounts</option>`;
+        const label = activeAgency?.name ? ` · ${activeAgency.name}` : '';
+        sel.innerHTML += `<option value="__all__">All Accounts${label}</option>`;
       }
       toShow.forEach(acc => {
         const opt = document.createElement('option');
         opt.value = acc.id;
-        opt.textContent = acc.account_name || acc.meta_account_id;
+        opt.textContent = (acc.type === 'google_ads' ? '🔍 ' : acc.type === 'tiktok_ads' ? '🎵 ' : '') + (acc.account_name || acc.meta_account_id || '');
         if (acc.id === prevVal) opt.selected = true;
         sel.appendChild(opt);
       });
@@ -1887,6 +1887,20 @@
       // Populate accountMap — apply per-user access restrictions for non-owners
       const filteredAccounts = applyAccountAccessRestrictions(accounts || []);
       filteredAccounts.forEach(acc => { accountMap[acc.id] = acc; });
+
+      // Also load Google Ads and TikTok Ads accounts into the map
+      if (currentOrgId) {
+        const [{ data: gadsAccts }, { data: ttAccts }] = await Promise.all([
+          sb.from('google_ads_accounts').select('id, customer_id, account_name').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
+          sb.from('tiktok_ads_accounts').select('id, advertiser_id, account_name').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
+        ]);
+        (gadsAccts || []).forEach(acc => {
+          accountMap[acc.id] = { ...acc, type: 'google_ads', account_name: acc.account_name || acc.customer_id };
+        });
+        (ttAccts || []).forEach(acc => {
+          accountMap[acc.id] = { ...acc, type: 'tiktok_ads', account_name: acc.account_name || acc.advertiser_id };
+        });
+      }
 
       // Render agency nav, then filter accounts by active agency
       renderAgencyNav();
@@ -2290,6 +2304,130 @@
         </div>` : ''}`;
     }
 
+    // ── Dedicated Google Ads dashboard ───────────────────────────
+    async function loadGoogleAdsDashboard(account) {
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true; btn.textContent = '⏳ Loading…';
+      document.getElementById('recs-section').style.display = 'none';
+      document.getElementById('content').innerHTML =
+        `<div class="loading-state"><div class="spinner"></div>Fetching Google Ads data…</div>`;
+      try {
+        const data = await callEdgeFunction('google-ads-data', {
+          account_id: account.id,
+          organization_id: currentOrgId,
+          since: currentPeriod,
+          until: currentPeriod,
+          include_campaigns: true,
+        });
+        if (data?.error) throw new Error(data.error);
+        const t = data?.totals;
+        if (!t) { document.getElementById('content').innerHTML = `<div class="no-data"><strong>No Google Ads data for this period.</strong></div>`; return; }
+        const campaigns = data.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
+        const curr = '$';
+        const dr = data.date_range;
+        document.getElementById('content').innerHTML = `
+          <div class="section-label">Google Ads — ${account.account_name} <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${dr?.start ?? ''} – ${dr?.end ?? ''}</span></div>
+          <div class="kpi-grid">
+            ${kpi('c-blue',   '💰', 'Spend',       fmtAds(t.spend, curr),          'Google Ads')}
+            ${kpi('c-sky',    '👁️', 'Impressions',  fmtAds(t.impressions, '', 0),   'Google Ads')}
+            ${kpi('c-teal',   '🖱️', 'Clicks',       fmtAds(t.clicks, '', 0),        'Google Ads')}
+            ${kpi('c-gold',   '📊', 'CTR',          fmtAds(t.ctr) + '%',            'Google Ads')}
+            ${kpi('c-green',  '✅', 'Conversions',  fmtAds(t.conversions, '', 1),   'Google Ads')}
+            ${kpi('c-orange', '📈', 'ROAS',         fmtAds(t.roas) + 'x',           'Google Ads')}
+          </div>
+          ${campaigns.length ? `
+          <div class="section-label">Campaigns</div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr>
+                <th class="tl">Campaign</th>
+                <th class="tr">Spend</th>
+                <th class="tr">Impressions</th>
+                <th class="tr">Clicks</th>
+                <th class="tr">CTR</th>
+                <th class="tr">Conv.</th>
+                <th class="tr">ROAS</th>
+              </tr></thead>
+              <tbody>${campaigns.map(c => `<tr>
+                <td class="tl">${c.name}</td>
+                <td class="tr">${fmtAds(c.spend, curr)}</td>
+                <td class="tr">${fmtAds(c.impressions,'',0)}</td>
+                <td class="tr">${fmtAds(c.clicks,'',0)}</td>
+                <td class="tr">${fmtAds(c.ctr)}%</td>
+                <td class="tr">${fmtAds(c.conversions,'',1)}</td>
+                <td class="tr">${fmtAds(c.roas)}x</td>
+              </tr>`).join('')}</tbody>
+            </table>
+          </div>` : ''}`;
+      } catch(e) {
+        document.getElementById('content').innerHTML = `<div class="error-state">⚠️ Google Ads error:\n${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '↻ Refresh';
+      }
+    }
+
+    // ── Dedicated TikTok Ads dashboard ────────────────────────────
+    async function loadTikTokAdsDashboard(account) {
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true; btn.textContent = '⏳ Loading…';
+      document.getElementById('recs-section').style.display = 'none';
+      document.getElementById('content').innerHTML =
+        `<div class="loading-state"><div class="spinner"></div>Fetching TikTok Ads data…</div>`;
+      try {
+        const data = await callEdgeFunction('tiktok-ads-data', {
+          account_id: account.id,
+          organization_id: currentOrgId,
+          since: currentPeriod,
+          until: currentPeriod,
+          include_campaigns: true,
+        });
+        if (data?.error) throw new Error(data.error);
+        const t = data?.totals;
+        if (!t) { document.getElementById('content').innerHTML = `<div class="no-data"><strong>No TikTok Ads data for this period.</strong></div>`; return; }
+        const campaigns = data.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
+        const curr = '$';
+        const dr = data.date_range;
+        document.getElementById('content').innerHTML = `
+          <div class="section-label">TikTok Ads — ${account.account_name} <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${dr?.start ?? ''} – ${dr?.end ?? ''}</span></div>
+          <div class="kpi-grid">
+            ${kpi('c-blue',   '💰', 'Spend',        fmtAds(t.spend, curr),          'TikTok Ads')}
+            ${kpi('c-sky',    '👁️', 'Impressions',   fmtAds(t.impressions, '', 0),   'TikTok Ads')}
+            ${kpi('c-teal',   '👥', 'Reach',         fmtAds(t.reach, '', 0),         'TikTok Ads')}
+            ${kpi('c-gold',   '🖱️', 'Clicks',        fmtAds(t.clicks, '', 0),        'TikTok Ads')}
+            ${kpi('c-green',  '✅', 'Conversions',   fmtAds(t.conversions, '', 1),   'TikTok Ads')}
+            ${kpi('c-orange', '📈', 'ROAS',          fmtAds(t.roas) + 'x',           'TikTok Ads')}
+          </div>
+          ${campaigns.length ? `
+          <div class="section-label">Campaigns</div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr>
+                <th class="tl">Campaign</th>
+                <th class="tr">Spend</th>
+                <th class="tr">Impressions</th>
+                <th class="tr">Clicks</th>
+                <th class="tr">CTR</th>
+                <th class="tr">Conv.</th>
+                <th class="tr">ROAS</th>
+              </tr></thead>
+              <tbody>${campaigns.map(c => `<tr>
+                <td class="tl">${c.name}</td>
+                <td class="tr">${fmtAds(c.spend, curr)}</td>
+                <td class="tr">${fmtAds(c.impressions,'',0)}</td>
+                <td class="tr">${fmtAds(c.clicks,'',0)}</td>
+                <td class="tr">${fmtAds(c.ctr)}%</td>
+                <td class="tr">${fmtAds(c.conversions,'',1)}</td>
+                <td class="tr">${fmtAds(c.roas)}x</td>
+              </tr>`).join('')}</tbody>
+            </table>
+          </div>` : ''}`;
+      } catch(e) {
+        document.getElementById('content').innerHTML = `<div class="error-state">⚠️ TikTok Ads error:\n${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '↻ Refresh';
+      }
+    }
+
     // ── Google Ads settings CRUD ──────────────────────────────────
     async function loadGoogleAdsList() {
       if (!currentOrgId) return;
@@ -2390,6 +2528,10 @@
 
       const account = accountMap[accountDbId];
       if (!account) return;
+
+      // Route to platform-specific dashboards
+      if (account.type === 'google_ads') return loadGoogleAdsDashboard(account);
+      if (account.type === 'tiktok_ads') return loadTikTokAdsDashboard(account);
 
       const curr = (account.currency || 'USD') + ' ';
       const shopifyStoreId = account.shopify_store_id || null;
