@@ -836,7 +836,9 @@
           <div class="settings-nav-section">Integrations</div>
           <button class="settings-nav-item"        id="snav-shopify"  onclick="setSettingsTab('shopify')"> <span class="settings-nav-icon">🛍️</span> Shopify Stores</button>
           <button class="settings-nav-item"        id="snav-clarity"  onclick="setSettingsTab('clarity')"> <span class="settings-nav-icon">🔍</span> Microsoft Clarity</button>
-          <button class="settings-nav-item"        id="snav-meta"     onclick="setSettingsTab('meta')">    <span class="settings-nav-icon">📊</span> Meta Accounts</button>
+          <button class="settings-nav-item"        id="snav-meta"       onclick="setSettingsTab('meta')">       <span class="settings-nav-icon">📊</span> Meta Accounts</button>
+          <button class="settings-nav-item"        id="snav-google-ads" onclick="setSettingsTab('google-ads')"> <span class="settings-nav-icon">🔍</span> Google Ads</button>
+          <button class="settings-nav-item"        id="snav-tiktok-ads" onclick="setSettingsTab('tiktok-ads')"> <span class="settings-nav-icon">🎵</span> TikTok Ads</button>
           <div class="settings-nav-section">Configuration</div>
           <button class="settings-nav-item"        id="snav-linked"   onclick="setSettingsTab('linked')">  <span class="settings-nav-icon">🔗</span> Linked Accounts</button>
           <button class="settings-nav-item"        id="snav-link"     onclick="setSettingsTab('link')">    <span class="settings-nav-icon">⛓</span> Quick Link</button>
@@ -990,6 +992,53 @@
           </div>
         </div>
         </div><!-- /spanel-clarity -->
+
+        <!-- ── TAB: Google Ads ── -->
+        <div class="settings-panel" id="spanel-google-ads">
+        <div class="modal-section">
+          <div class="modal-section-title">Google Ads Accounts</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+            Connect a Google Ads account to display spend, impressions, clicks, CTR, conversions, and ROAS.
+            Get your credentials in <a href="https://ads.google.com/nav/selectaccount" target="_blank" style="color:#3b82f6">Google Ads → Tools → API Center</a>.
+          </p>
+          <div class="store-list" id="google-ads-list"></div>
+          <div style="margin-top:14px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Add Google Ads Account</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input type="text"     class="connect-input" id="gads-name"          placeholder="Account name (e.g., Blue Agency - Search)" style="width:100%">
+              <input type="text"     class="connect-input" id="gads-customer-id"   placeholder="Customer ID (e.g., 123-456-7890)" style="width:100%;font-family:monospace;font-size:12px">
+              <input type="password" class="connect-input" id="gads-dev-token"     placeholder="Developer Token" style="width:100%;font-family:monospace;font-size:12px">
+              <input type="text"     class="connect-input" id="gads-client-id"     placeholder="OAuth2 Client ID" style="width:100%;font-family:monospace;font-size:12px">
+              <input type="password" class="connect-input" id="gads-client-secret" placeholder="OAuth2 Client Secret" style="width:100%;font-family:monospace;font-size:12px">
+              <input type="password" class="connect-input" id="gads-refresh-token" placeholder="Refresh Token" style="width:100%;font-family:monospace;font-size:12px">
+              <button class="connect-btn" onclick="saveGoogleAdsAccount()">+ Add Account</button>
+            </div>
+            <div class="modal-status" id="google-ads-status"></div>
+          </div>
+        </div>
+        </div><!-- /spanel-google-ads -->
+
+        <!-- ── TAB: TikTok Ads ── -->
+        <div class="settings-panel" id="spanel-tiktok-ads">
+        <div class="modal-section">
+          <div class="modal-section-title">TikTok Ads Accounts</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+            Connect a TikTok Ads account to display spend, reach, clicks, CTR, conversions, and ROAS.
+            Get your credentials in <a href="https://ads.tiktok.com/marketing_api/apps" target="_blank" style="color:#3b82f6">TikTok For Business → Apps & Permissions</a>.
+          </p>
+          <div class="store-list" id="tiktok-ads-list"></div>
+          <div style="margin-top:14px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Add TikTok Ads Account</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input type="text"     class="connect-input" id="ttads-name"         placeholder="Account name (e.g., Blue Agency - TikTok)" style="width:100%">
+              <input type="text"     class="connect-input" id="ttads-advertiser-id" placeholder="Advertiser ID" style="width:100%;font-family:monospace;font-size:12px">
+              <input type="password" class="connect-input" id="ttads-access-token"  placeholder="Access Token" style="width:100%;font-family:monospace;font-size:12px">
+              <button class="connect-btn" onclick="saveTikTokAdsAccount()">+ Add Account</button>
+            </div>
+            <div class="modal-status" id="tiktok-ads-status"></div>
+          </div>
+        </div>
+        </div><!-- /spanel-tiktok-ads -->
 
         <!-- ── TAB: Linked Accounts ── -->
         <div class="settings-panel" id="spanel-linked">
@@ -2146,6 +2195,188 @@
       </table>`;
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // GOOGLE ADS + TIKTOK ADS — Render + Settings CRUD
+    // ─────────────────────────────────────────────────────────────
+
+    function fmtAds(val, prefix='', decimals=2) {
+      if (val === null || val === undefined || isNaN(val)) return '—';
+      return prefix + Number(val).toLocaleString('en', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    }
+
+    function renderGoogleAdsSection(res) {
+      if (!res || res.status === 'rejected') return '';
+      const d = res.value;
+      if (d?.error || !d?.totals) return '';
+      const t = d.totals;
+      const campaigns = d.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
+      const curr = '$';
+      return `
+        <div class="section-label">Google Ads <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${d.date_range?.start ?? ''} – ${d.date_range?.end ?? ''}</span></div>
+        <div class="kpi-grid">
+          ${kpi('c-blue',   '💰', 'Google Spend',       fmtAds(t.spend, curr),                   'Google Ads')}
+          ${kpi('c-sky',    '👁️', 'Impressions',         fmtAds(t.impressions, '', 0),            'Google Ads')}
+          ${kpi('c-teal',   '🖱️', 'Clicks',              fmtAds(t.clicks, '', 0),                 'Google Ads')}
+          ${kpi('c-gold',   '📊', 'CTR',                 fmtAds(t.ctr) + '%',                     'Google Ads')}
+          ${kpi('c-green',  '✅', 'Conversions',         fmtAds(t.conversions, '', 1),             'Google Ads')}
+          ${kpi('c-orange', '📈', 'ROAS',                fmtAds(t.roas) + 'x',                    'Google Ads')}
+        </div>
+        ${campaigns.length ? `
+        <div class="section-label">Google Ads Campaigns</div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr>
+              <th class="tl">Campaign</th>
+              <th class="tr">Spend</th>
+              <th class="tr">Impressions</th>
+              <th class="tr">Clicks</th>
+              <th class="tr">CTR</th>
+              <th class="tr">Conv.</th>
+              <th class="tr">ROAS</th>
+            </tr></thead>
+            <tbody>${campaigns.slice(0,10).map(c => `<tr>
+              <td class="tl">${c.name}</td>
+              <td class="tr">${fmtAds(c.spend, curr)}</td>
+              <td class="tr">${fmtAds(c.impressions,'',0)}</td>
+              <td class="tr">${fmtAds(c.clicks,'',0)}</td>
+              <td class="tr">${fmtAds(c.ctr)}%</td>
+              <td class="tr">${fmtAds(c.conversions,'',1)}</td>
+              <td class="tr">${fmtAds(c.roas)}x</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>` : ''}`;
+    }
+
+    function renderTikTokAdsSection(res) {
+      if (!res || res.status === 'rejected') return '';
+      const d = res.value;
+      if (d?.error || !d?.totals) return '';
+      const t = d.totals;
+      const campaigns = d.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
+      const curr = '$';
+      return `
+        <div class="section-label">TikTok Ads <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${d.date_range?.start ?? ''} – ${d.date_range?.end ?? ''}</span></div>
+        <div class="kpi-grid">
+          ${kpi('c-blue',   '💰', 'TikTok Spend',        fmtAds(t.spend, curr),                  'TikTok Ads')}
+          ${kpi('c-sky',    '👁️', 'Impressions',          fmtAds(t.impressions, '', 0),           'TikTok Ads')}
+          ${kpi('c-teal',   '👥', 'Reach',                fmtAds(t.reach, '', 0),                 'TikTok Ads')}
+          ${kpi('c-gold',   '🖱️', 'Clicks',               fmtAds(t.clicks, '', 0),                'TikTok Ads')}
+          ${kpi('c-green',  '✅', 'Conversions',          fmtAds(t.conversions, '', 1),            'TikTok Ads')}
+          ${kpi('c-orange', '📈', 'ROAS',                 fmtAds(t.roas) + 'x',                   'TikTok Ads')}
+        </div>
+        ${campaigns.length ? `
+        <div class="section-label">TikTok Campaigns</div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr>
+              <th class="tl">Campaign</th>
+              <th class="tr">Spend</th>
+              <th class="tr">Impressions</th>
+              <th class="tr">Clicks</th>
+              <th class="tr">CTR</th>
+              <th class="tr">Conv.</th>
+              <th class="tr">ROAS</th>
+            </tr></thead>
+            <tbody>${campaigns.slice(0,10).map(c => `<tr>
+              <td class="tl">${c.name}</td>
+              <td class="tr">${fmtAds(c.spend, curr)}</td>
+              <td class="tr">${fmtAds(c.impressions,'',0)}</td>
+              <td class="tr">${fmtAds(c.clicks,'',0)}</td>
+              <td class="tr">${fmtAds(c.ctr)}%</td>
+              <td class="tr">${fmtAds(c.conversions,'',1)}</td>
+              <td class="tr">${fmtAds(c.roas)}x</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>` : ''}`;
+    }
+
+    // ── Google Ads settings CRUD ──────────────────────────────────
+    async function loadGoogleAdsList() {
+      if (!currentOrgId) return;
+      const el = document.getElementById('google-ads-list');
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
+      const { data, error } = await sb.from('google_ads_accounts').select('*').eq('organization_id', currentOrgId).order('created_at');
+      if (error || !data?.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No Google Ads accounts connected yet.</div>'; return; }
+      el.innerHTML = data.map(a => `
+        <div class="store-item" style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:600;font-size:13px">🔍 ${a.account_name || a.customer_id}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Customer ID: ${a.customer_id}</div>
+          </div>
+          <button onclick="deleteGoogleAdsAccount('${a.id}')" style="background:none;border:none;color:var(--coral);cursor:pointer;font-size:13px;padding:4px 8px">✕ Remove</button>
+        </div>`).join('');
+    }
+
+    async function saveGoogleAdsAccount() {
+      const status = document.getElementById('google-ads-status');
+      const name      = document.getElementById('gads-name').value.trim();
+      const customerId= document.getElementById('gads-customer-id').value.trim().replace(/-/g,'');
+      const devToken  = document.getElementById('gads-dev-token').value.trim();
+      const clientId  = document.getElementById('gads-client-id').value.trim();
+      const clientSec = document.getElementById('gads-client-secret').value.trim();
+      const refresh   = document.getElementById('gads-refresh-token').value.trim();
+      if (!customerId || !devToken || !clientId || !clientSec || !refresh) {
+        status.textContent = '⚠ All fields required'; status.style.color = 'var(--coral)'; return;
+      }
+      status.textContent = 'Saving…'; status.style.color = 'var(--text-muted)';
+      const { error } = await sb.from('google_ads_accounts').upsert({
+        organization_id: currentOrgId, customer_id: customerId, developer_token: devToken,
+        client_id: clientId, client_secret: clientSec, refresh_token: refresh, account_name: name || null, is_active: true,
+      }, { onConflict: 'organization_id,customer_id' });
+      if (error) { status.textContent = '⚠ ' + error.message; status.style.color = 'var(--coral)'; return; }
+      status.textContent = '✓ Saved'; status.style.color = '#16a34a';
+      ['gads-name','gads-customer-id','gads-dev-token','gads-client-id','gads-client-secret','gads-refresh-token'].forEach(id => document.getElementById(id).value = '');
+      loadGoogleAdsList();
+    }
+
+    async function deleteGoogleAdsAccount(id) {
+      if (!confirm('Remove this Google Ads account?')) return;
+      await sb.from('google_ads_accounts').delete().eq('id', id);
+      loadGoogleAdsList();
+    }
+
+    // ── TikTok Ads settings CRUD ─────────────────────────────────
+    async function loadTikTokAdsList() {
+      if (!currentOrgId) return;
+      const el = document.getElementById('tiktok-ads-list');
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
+      const { data, error } = await sb.from('tiktok_ads_accounts').select('*').eq('organization_id', currentOrgId).order('created_at');
+      if (error || !data?.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No TikTok Ads accounts connected yet.</div>'; return; }
+      el.innerHTML = data.map(a => `
+        <div class="store-item" style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:600;font-size:13px">🎵 ${a.account_name || a.advertiser_id}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Advertiser ID: ${a.advertiser_id}</div>
+          </div>
+          <button onclick="deleteTikTokAdsAccount('${a.id}')" style="background:none;border:none;color:var(--coral);cursor:pointer;font-size:13px;padding:4px 8px">✕ Remove</button>
+        </div>`).join('');
+    }
+
+    async function saveTikTokAdsAccount() {
+      const status = document.getElementById('tiktok-ads-status');
+      const name        = document.getElementById('ttads-name').value.trim();
+      const advertiserId= document.getElementById('ttads-advertiser-id').value.trim();
+      const accessToken = document.getElementById('ttads-access-token').value.trim();
+      if (!advertiserId || !accessToken) {
+        status.textContent = '⚠ Advertiser ID and Access Token required'; status.style.color = 'var(--coral)'; return;
+      }
+      status.textContent = 'Saving…'; status.style.color = 'var(--text-muted)';
+      const { error } = await sb.from('tiktok_ads_accounts').upsert({
+        organization_id: currentOrgId, advertiser_id: advertiserId, access_token: accessToken,
+        account_name: name || null, is_active: true,
+      }, { onConflict: 'organization_id,advertiser_id' });
+      if (error) { status.textContent = '⚠ ' + error.message; status.style.color = 'var(--coral)'; return; }
+      status.textContent = '✓ Saved'; status.style.color = '#16a34a';
+      ['ttads-name','ttads-advertiser-id','ttads-access-token'].forEach(id => document.getElementById(id).value = '');
+      loadTikTokAdsList();
+    }
+
+    async function deleteTikTokAdsAccount(id) {
+      if (!confirm('Remove this TikTok Ads account?')) return;
+      await sb.from('tiktok_ads_accounts').delete().eq('id', id);
+      loadTikTokAdsList();
+    }
+
     let _loadDataActive = false;
     async function loadData() {
       if (_loadDataActive) return; // prevent overlapping calls
@@ -2183,8 +2414,8 @@
         custom_to:   customTo   || undefined,
       };
 
-      // 8 parallel calls: account + campaign + daily + 1 Shopify batch + Clarity + platform + region + ad
-      const [metaRes, campaignRes, dailyRes, shopifyAllRes, clarityRes, platformRes, regionRes, adRes] =
+      // 10 parallel calls: Meta (4) + Shopify + Clarity + Google Ads + TikTok Ads + platform + region + ad
+      const [metaRes, campaignRes, dailyRes, shopifyAllRes, clarityRes, platformRes, regionRes, adRes, googleAdsRes, tiktokAdsRes] =
         await Promise.allSettled([
           callEdgeFunction('meta-data', baseMeta),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
@@ -2196,6 +2427,12 @@
           callEdgeFunction('meta-data', { ...baseMeta, level: 'platform' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'region' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'ad' }),
+          currentOrgId
+            ? callEdgeFunction('google-ads-data', { organization_id: currentOrgId, since: currentPeriod, until: currentPeriod, include_campaigns: true })
+            : Promise.resolve(null),
+          currentOrgId
+            ? callEdgeFunction('tiktok-ads-data', { organization_id: currentOrgId, since: currentPeriod, until: currentPeriod, include_campaigns: true })
+            : Promise.resolve(null),
         ]);
 
       // ── Parse Meta account-level ──
@@ -2326,17 +2563,14 @@
       const displaySessions       = sessions ?? claritySessions;
       const sessionsFromClarity   = sessions === null && claritySessions !== null;
       // Shopify's own CR from ShopifyQL (already × 100);
-      // fallback 1: orders ÷ sessions; fallback 2: orders ÷ checkout initiations
+      // fallback: orders ÷ sessions (Clarity) — never use checkouts (gives misleading 100%)
       const shopifyConversionRate = conversionRate !== null
         ? conversionRate
         : (shopifyOrders != null && displaySessions
             ? (shopifyOrders / displaySessions) * 100
-            : (shopifyOrders != null && funnelAddToCart
-                ? (shopifyOrders / funnelAddToCart) * 100
-                : null));
+            : null);
       const crSubLabel = conversionRate !== null ? 'Shopify Analytics'
-        : (displaySessions !== null ? 'Orders ÷ Sessions'
-          : (funnelAddToCart !== null ? 'Orders ÷ Checkouts' : 'Shopify Analytics'));
+        : (displaySessions !== null ? 'Orders ÷ Sessions' : 'Shopify Analytics');
       const shopifySubLabel = !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : '<span class="shopify-badge">● Shopify</span>';
@@ -2445,7 +2679,10 @@
           ${metric('Cost per Message',        fmt(costPerMessage, curr))}
         </div>
 
-        ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}`;
+        ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
+
+        ${renderGoogleAdsSection(googleAdsRes)}
+        ${renderTikTokAdsSection(tiktokAdsRes)}`;
 
       // ── Capture context for Ask Claude sidebar ──
       try {
@@ -3089,15 +3326,17 @@
     });
 
     function setSettingsTab(name) {
-      ['teams','clients','shopify','clarity','meta','linked','link','agencies'].forEach(t => {
+      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','linked','link','agencies'].forEach(t => {
         const nav = document.getElementById('snav-'   + t);
         const pan = document.getElementById('spanel-' + t);
         if (nav) nav.classList.toggle('active', t === name);
         if (pan) pan.classList.toggle('active', t === name);
       });
-      if (name === 'teams')   loadSettingsTeam();
-      if (name === 'clients') loadClientAccounts();
-      if (name === 'linked')  loadLinkedAccountsTab();
+      if (name === 'teams')      loadSettingsTeam();
+      if (name === 'clients')    loadClientAccounts();
+      if (name === 'linked')     loadLinkedAccountsTab();
+      if (name === 'google-ads') loadGoogleAdsList();
+      if (name === 'tiktok-ads') loadTikTokAdsList();
     }
 
     // ── Client Accounts ─────────────────────────────────────────────────────
