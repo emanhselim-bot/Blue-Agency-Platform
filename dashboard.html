@@ -1792,11 +1792,17 @@
       if (_qp.get('connected') === 'google_ads') {
         const n = _qp.get('accounts') || '1';
         history.replaceState({}, '', window.location.pathname);
-        // Open settings to Google Ads tab so user can see connected accounts
         openSettings('google-ads');
         setTimeout(() => {
           const st = document.getElementById('google-ads-status');
           if (st) { st.textContent = `✓ ${n} Google Ads account(s) connected!`; st.style.color = '#16a34a'; }
+        }, 300);
+      } else if (_qp.get('google_ads_setup') === 'true') {
+        history.replaceState({}, '', window.location.pathname);
+        openSettings('google-ads');
+        setTimeout(() => {
+          const st = document.getElementById('google-ads-status');
+          if (st) { st.textContent = '✓ Google authorized! Enter your Customer ID below to complete setup.'; st.style.color = '#2563eb'; }
         }, 300);
       }
     }
@@ -2439,7 +2445,11 @@
       el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
       const { data, error } = await sb.from('google_ads_accounts').select('*').eq('organization_id', currentOrgId).order('created_at');
       if (error || !data?.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No Google Ads accounts connected yet.</div>'; return; }
-      el.innerHTML = data.map(a => `
+
+      const pending = data.find(a => a.customer_id === 'SETUP_REQUIRED');
+      const active  = data.filter(a => a.customer_id !== 'SETUP_REQUIRED');
+
+      let html = active.map(a => `
         <div class="store-item" style="display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-weight:600;font-size:13px">🔍 ${a.account_name || a.customer_id}</div>
@@ -2447,6 +2457,48 @@
           </div>
           <button onclick="deleteGoogleAdsAccount('${a.id}')" style="background:none;border:none;color:var(--coral);cursor:pointer;font-size:13px;padding:4px 8px">✕ Remove</button>
         </div>`).join('');
+
+      if (pending) {
+        html += `
+        <div class="store-item" style="background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.2);border-radius:8px;padding:14px;margin-top:8px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#2563eb">🔗 Complete Google Ads Setup</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+            Authorization succeeded! Enter your Google Ads Customer ID to finish connecting.
+            Find it at <a href="https://ads.google.com" target="_blank" style="color:#2563eb">ads.google.com</a> — it looks like <strong>123-456-7890</strong>.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="gads-cid-input" type="text" placeholder="e.g. 123-456-7890"
+              style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg-card);color:var(--text-primary)"
+              onkeydown="if(event.key==='Enter')submitGoogleAdsCID('${pending.id}')">
+            <button onclick="submitGoogleAdsCID('${pending.id}')"
+              style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">
+              Link Account
+            </button>
+          </div>
+          <div id="gads-setup-status" style="font-size:12px;margin-top:6px"></div>
+          <button onclick="deleteGoogleAdsAccount('${pending.id}')" style="margin-top:8px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;text-decoration:underline">
+            Cancel &amp; remove
+          </button>
+        </div>`;
+      }
+
+      el.innerHTML = html || '<div style="color:var(--text-muted);font-size:13px">No Google Ads accounts connected yet.</div>';
+    }
+
+    async function submitGoogleAdsCID(pendingId) {
+      const input  = document.getElementById('gads-cid-input');
+      const status = document.getElementById('gads-setup-status');
+      const cid    = (input?.value || '').trim();
+      if (!cid) { if (status) { status.textContent = '⚠ Please enter a Customer ID'; status.style.color = 'var(--coral)'; } return; }
+      if (status) { status.textContent = 'Verifying…'; status.style.color = 'var(--text-muted)'; }
+      try {
+        const result = await callEdgeFunction('google-ads-setup', { organization_id: currentOrgId, customer_id: cid });
+        if (result.error) throw new Error(result.error);
+        if (status) { status.textContent = `✓ Account "${result.account_name || result.customer_id}" linked!`; status.style.color = '#16a34a'; }
+        setTimeout(() => { loadGoogleAdsList(); loadAccounts(); }, 1000);
+      } catch (e) {
+        if (status) { status.textContent = `⚠ ${e.message}`; status.style.color = 'var(--coral)'; }
+      }
     }
 
     async function connectGoogleAds() {

@@ -61,11 +61,42 @@ async function exchangeCode(code: string): Promise<{ access_token: string; refre
     const t = await res.text();
     throw new Error(`Token exchange failed ${res.status}: ${t.slice(0, 300)}`);
   }
-  return res.json();
+  const tokenData = await res.json();
+  console.log("[google-ads-oauth] token scope:", tokenData.scope);
+  console.log("[google-ads-oauth] token type:", tokenData.token_type);
+  return tokenData;
+}
+
+// ── Verify token scope via tokeninfo ─────────────────────────────────────────
+async function verifyTokenScope(accessToken: string): Promise<{ hasAdwords: boolean; scope: string; email: string }> {
+  try {
+    const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+      { signal: AbortSignal.timeout(8_000) }
+    );
+    if (!res.ok) {
+      const t = await res.text();
+      console.error("[google-ads-oauth] tokeninfo failed:", res.status, t.slice(0, 200));
+      return { hasAdwords: false, scope: `tokeninfo_${res.status}`, email: "" };
+    }
+    const info = await res.json();
+    const scope: string = info.scope ?? "";
+    console.log("[google-ads-oauth] tokeninfo scope:", scope);
+    console.log("[google-ads-oauth] tokeninfo email:", info.email);
+    return {
+      hasAdwords: scope.includes("https://www.googleapis.com/auth/adwords"),
+      scope,
+      email: info.email ?? "",
+    };
+  } catch (e) {
+    console.error("[google-ads-oauth] tokeninfo exception:", (e as Error).message);
+    return { hasAdwords: false, scope: "tokeninfo_error", email: "" };
+  }
 }
 
 // ── List accessible customers ─────────────────────────────────────────────────
 async function listAccessibleCustomers(accessToken: string): Promise<string[]> {
+  console.log("[google-ads-oauth] developer-token present:", !!DEVELOPER_TOKEN, "length:", DEVELOPER_TOKEN?.length ?? 0);
+  console.log("[google-ads-oauth] calling listAccessibleCustomers, token prefix:", accessToken?.substring(0, 15));
   const res = await fetch(`${GOOGLE_ADS_API}/customers:listAccessibleCustomers`, {
     headers: {
       "Authorization":  `Bearer ${accessToken}`,
@@ -74,7 +105,8 @@ async function listAccessibleCustomers(accessToken: string): Promise<string[]> {
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`listAccessibleCustomers ${res.status}: ${t.slice(0, 300)}`);
+    console.error("[google-ads-oauth] listAccessibleCustomers error:", res.status, t.slice(0, 600));
+    throw new Error(`listAccessibleCustomers ${res.status}: ${t.slice(0, 500)}`);
   }
   const json = await res.json();
   // Returns ["customers/1234567890", ...]
@@ -179,26 +211,74 @@ Deno.serve(async (req: Request) => {
       return errorPage(`Token exchange failed: ${(e as Error).message}`);
     }
 
+    console.log("[google-ads-oauth] token exchange success — access_token present:", !!tokens.access_token, "refresh_token present:", !!tokens.refresh_token, "access_token prefix:", tokens.access_token?.substring(0, 10));
+
+    if (!tokens.access_token) {
+      return errorPage("No access token returned from Google. Please try again.");
+    }
+
     if (!tokens.refresh_token) {
       return errorPage("No refresh token returned — please revoke app access in your Google Account and try again.");
     }
 
-    // List accessible Google Ads accounts
-    let customerIds: string[];
+    // Verify the token actually has adwords scope before hitting the API
+    const scopeInfo = await verifyTokenScope(tokens.access_token);
+    const dashboardUrl = Deno.env.get("DASHBOARD_URL") || "https://web-production-b4926.up.railway.app";
+
+    if (!scopeInfo.hasAdwords) {
+      console.warn("[google-ads-oauth] adwords scope missing — falling back to manual setup. Scopes:", scopeInfo.scope);
+      // Scope not granted — store tokens and let the user enter their CID manually
+      await supabaseAdmin.from("google_ads_accounts").upsert([{
+        organization_id: org_id,
+        customer_id:     "SETUP_REQUIRED",
+        account_name:    "Setup Required",
+        developer_token: DEVELOPER_TOKEN,
+        client_id:       CLIENT_ID,
+        client_secret:   CLIENT_SECRET,
+        refresh_token:   tokens.refresh_token,
+        is_active:       false,
+      }], { onConflict: "organization_id,customer_id" });
+      return redirect(`${dashboardUrl}?google_ads_setup=true`);
+    }
+
+    // Try auto-discovery of all accessible accounts
+    let customerIds: string[] = [];
     try {
       customerIds = await listAccessibleCustomers(tokens.access_token);
     } catch (e) {
-      return errorPage(`Could not list Google Ads accounts: ${(e as Error).message}`);
+      console.error("[google-ads-oauth] listAccessibleCustomers failed:", (e as Error).message);
+      // Fall back to manual CID entry
+      await supabaseAdmin.from("google_ads_accounts").upsert([{
+        organization_id: org_id,
+        customer_id:     "SETUP_REQUIRED",
+        account_name:    "Setup Required",
+        developer_token: DEVELOPER_TOKEN,
+        client_id:       CLIENT_ID,
+        client_secret:   CLIENT_SECRET,
+        refresh_token:   tokens.refresh_token,
+        is_active:       false,
+      }], { onConflict: "organization_id,customer_id" });
+      return redirect(`${dashboardUrl}?google_ads_setup=true`);
     }
 
     if (!customerIds.length) {
-      return errorPage("No Google Ads accounts found for this Google login. Make sure you're signing in with an account that has access to Google Ads.");
+      // No accounts auto-discovered — let the user enter their CID manually
+      await supabaseAdmin.from("google_ads_accounts").upsert([{
+        organization_id: org_id,
+        customer_id:     "SETUP_REQUIRED",
+        account_name:    "Setup Required",
+        developer_token: DEVELOPER_TOKEN,
+        client_id:       CLIENT_ID,
+        client_secret:   CLIENT_SECRET,
+        refresh_token:   tokens.refresh_token,
+        is_active:       false,
+      }], { onConflict: "organization_id,customer_id" });
+      return redirect(`${dashboardUrl}?google_ads_setup=true`);
     }
 
-    // Fetch account names in parallel (best-effort)
+    // Auto-discovery succeeded — fetch account names and store all accounts
     const names = await Promise.all(customerIds.map(id => getCustomerName(id, tokens.access_token)));
 
-    // Upsert each account
     const rows = customerIds.map((customerId, i) => ({
       organization_id: org_id,
       customer_id:     customerId,
@@ -220,9 +300,6 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(`[google-ads-oauth] connected ${rows.length} account(s) for org ${org_id}`);
-
-    // Redirect back to dashboard
-    const dashboardUrl = Deno.env.get("DASHBOARD_URL") || "https://web-production-b4926.up.railway.app";
     return redirect(`${dashboardUrl}?connected=google_ads&accounts=${rows.length}`);
   }
 
