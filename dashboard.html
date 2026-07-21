@@ -998,23 +998,14 @@
         <div class="modal-section">
           <div class="modal-section-title">Google Ads Accounts</div>
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
-            Connect a Google Ads account to display spend, impressions, clicks, CTR, conversions, and ROAS.
-            Get your credentials in <a href="https://ads.google.com/nav/selectaccount" target="_blank" style="color:#3b82f6">Google Ads → Tools → API Center</a>.
+            Connect your Google Ads account with one click. All accessible accounts under your Google login will be added automatically.
           </p>
           <div class="store-list" id="google-ads-list"></div>
-          <div style="margin-top:14px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
-            <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Add Google Ads Account</div>
-            <div style="display:flex;flex-direction:column;gap:8px">
-              <input type="text"     class="connect-input" id="gads-name"          placeholder="Account name (e.g., Blue Agency - Search)" style="width:100%">
-              <input type="text"     class="connect-input" id="gads-customer-id"   placeholder="Customer ID (e.g., 123-456-7890)" style="width:100%;font-family:monospace;font-size:12px">
-              <input type="password" class="connect-input" id="gads-dev-token"     placeholder="Developer Token" style="width:100%;font-family:monospace;font-size:12px">
-              <input type="text"     class="connect-input" id="gads-client-id"     placeholder="OAuth2 Client ID" style="width:100%;font-family:monospace;font-size:12px">
-              <input type="password" class="connect-input" id="gads-client-secret" placeholder="OAuth2 Client Secret" style="width:100%;font-family:monospace;font-size:12px">
-              <input type="password" class="connect-input" id="gads-refresh-token" placeholder="Refresh Token" style="width:100%;font-family:monospace;font-size:12px">
-              <button class="connect-btn" onclick="saveGoogleAdsAccount()">+ Add Account</button>
-            </div>
-            <div class="modal-status" id="google-ads-status"></div>
-          </div>
+          <button class="connect-btn" id="gads-connect-btn" onclick="connectGoogleAds()" style="margin-top:14px;display:flex;align-items:center;gap:8px;justify-content:center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Connect with Google
+          </button>
+          <div class="modal-status" id="google-ads-status"></div>
         </div>
         </div><!-- /spanel-google-ads -->
 
@@ -1795,6 +1786,19 @@
 
       await applyOrgContext();
       await loadAccounts();
+
+      // Handle redirect back from Google Ads OAuth
+      const _qp = new URLSearchParams(window.location.search);
+      if (_qp.get('connected') === 'google_ads') {
+        const n = _qp.get('accounts') || '1';
+        history.replaceState({}, '', window.location.pathname);
+        // Open settings to Google Ads tab so user can see connected accounts
+        openSettings('google-ads');
+        setTimeout(() => {
+          const st = document.getElementById('google-ads-status');
+          if (st) { st.textContent = `✓ ${n} Google Ads account(s) connected!`; st.style.color = '#16a34a'; }
+        }, 300);
+      }
     }
 
     // Called whenever the active org changes.
@@ -2445,32 +2449,25 @@
         </div>`).join('');
     }
 
-    async function saveGoogleAdsAccount() {
+    async function connectGoogleAds() {
       const status = document.getElementById('google-ads-status');
-      const name      = document.getElementById('gads-name').value.trim();
-      const customerId= document.getElementById('gads-customer-id').value.trim().replace(/-/g,'');
-      const devToken  = document.getElementById('gads-dev-token').value.trim();
-      const clientId  = document.getElementById('gads-client-id').value.trim();
-      const clientSec = document.getElementById('gads-client-secret').value.trim();
-      const refresh   = document.getElementById('gads-refresh-token').value.trim();
-      if (!customerId || !devToken || !clientId || !clientSec || !refresh) {
-        status.textContent = '⚠ All fields required'; status.style.color = 'var(--coral)'; return;
-      }
-      status.textContent = 'Saving…'; status.style.color = 'var(--text-muted)';
-      const { error } = await sb.from('google_ads_accounts').upsert({
-        organization_id: currentOrgId, customer_id: customerId, developer_token: devToken,
-        client_id: clientId, client_secret: clientSec, refresh_token: refresh, account_name: name || null, is_active: true,
-      }, { onConflict: 'organization_id,customer_id' });
-      if (error) { status.textContent = '⚠ ' + error.message; status.style.color = 'var(--coral)'; return; }
-      status.textContent = '✓ Saved'; status.style.color = '#16a34a';
-      ['gads-name','gads-customer-id','gads-dev-token','gads-client-id','gads-client-secret','gads-refresh-token'].forEach(id => document.getElementById(id).value = '');
-      loadGoogleAdsList();
+      const btn    = document.getElementById('gads-connect-btn');
+      if (!currentOrgId) { status.textContent = '⚠ No organization selected'; status.style.color = 'var(--coral)'; return; }
+
+      // Get the user's JWT to pass to the edge function
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session?.access_token) { status.textContent = '⚠ Not signed in'; status.style.color = 'var(--coral)'; return; }
+
+      btn.disabled = true; btn.textContent = 'Redirecting…';
+      const oauthUrl = `${SUPABASE_URL}/functions/v1/google-ads-oauth?action=connect&org=${encodeURIComponent(currentOrgId)}&t=${encodeURIComponent(session.access_token)}`;
+      window.location.href = oauthUrl;
     }
 
     async function deleteGoogleAdsAccount(id) {
       if (!confirm('Remove this Google Ads account?')) return;
-      await sb.from('google_ads_accounts').delete().eq('id', id);
+      await sb.from('google_ads_accounts').update({ is_active: false }).eq('id', id);
       loadGoogleAdsList();
+      loadAccounts();
     }
 
     // ── TikTok Ads settings CRUD ─────────────────────────────────
@@ -3460,6 +3457,11 @@
       renderAgencyNav();
       filterAccountsByAgency();
       if (sel.value) loadData();
+    }
+    function openSettings(tab) {
+      document.getElementById('settings-modal').classList.remove('hidden');
+      setSettingsTab(tab || 'teams');
+      renderAgencySettings();
     }
     document.getElementById('modal-close').addEventListener('click', closeSettingsModal);
     document.getElementById('settings-modal').addEventListener('click', e => {
