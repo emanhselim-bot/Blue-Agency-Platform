@@ -2,7 +2,7 @@
  * Google Ads Data — Supabase Edge Function
  * Queries the Google Ads API (REST) for campaign metrics.
  *
- * Metrics returned: spend, impressions, clicks, ctr, conversions, conversion_value, roas
+ * Metrics returned: spend, impressions, clicks, ctr, conversions, conversion_value, roas, cpc, cost_per_conversion
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -119,6 +119,8 @@ interface GoogleAdsMetrics {
   conversions: number;
   conversion_value: number;
   roas: number;
+  cpc: number;
+  cost_per_conversion: number;
 }
 
 async function fetchGoogleAdsMetrics(
@@ -201,15 +203,19 @@ async function fetchGoogleAdsMetrics(
     ? (totalClicks / totalImpressions) * 100
     : 0;
   const roas  = spend > 0 ? totalConversionValue / spend : 0;
+  const cpc   = totalClicks > 0 ? spend / totalClicks : 0;
+  const cost_per_conversion = totalConversions > 0 ? spend / totalConversions : 0;
 
   return {
-    spend:            parseFloat(spend.toFixed(2)),
-    impressions:      totalImpressions,
-    clicks:           totalClicks,
-    ctr:              parseFloat(ctr.toFixed(2)),
-    conversions:      parseFloat(totalConversions.toFixed(2)),
-    conversion_value: parseFloat(totalConversionValue.toFixed(2)),
-    roas:             parseFloat(roas.toFixed(2)),
+    spend:                parseFloat(spend.toFixed(2)),
+    impressions:          totalImpressions,
+    clicks:               totalClicks,
+    ctr:                  parseFloat(ctr.toFixed(2)),
+    conversions:          parseFloat(totalConversions.toFixed(2)),
+    conversion_value:     parseFloat(totalConversionValue.toFixed(2)),
+    roas:                 parseFloat(roas.toFixed(2)),
+    cpc:                  parseFloat(cpc.toFixed(2)),
+    cost_per_conversion:  parseFloat(cost_per_conversion.toFixed(2)),
   };
 }
 
@@ -222,6 +228,8 @@ interface CampaignRow {
   ctr: number;
   conversions: number;
   roas: number;
+  cpc: number;
+  cost_per_conversion: number;
 }
 
 async function fetchGoogleAdsCampaigns(
@@ -287,13 +295,15 @@ async function fetchGoogleAdsCampaigns(
       const conversions= Number(m.conversions ?? 0);
       const convValue  = Number(m.conversionsValue ?? m.conversions_value ?? 0);
       campaigns.push({
-        name:        r.campaign?.name ?? "Unknown",
-        spend:       parseFloat(spend.toFixed(2)),
+        name:                r.campaign?.name ?? "Unknown",
+        spend:               parseFloat(spend.toFixed(2)),
         impressions,
         clicks,
-        ctr:         impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0,
-        conversions: parseFloat(conversions.toFixed(2)),
-        roas:        spend > 0 ? parseFloat((convValue / spend).toFixed(2)) : 0,
+        ctr:                 impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0,
+        conversions:         parseFloat(conversions.toFixed(2)),
+        roas:                spend > 0 ? parseFloat((convValue / spend).toFixed(2)) : 0,
+        cpc:                 clicks > 0 ? parseFloat((spend / clicks).toFixed(2)) : 0,
+        cost_per_conversion: conversions > 0 ? parseFloat((spend / conversions).toFixed(2)) : 0,
       });
     }
   }
@@ -368,7 +378,7 @@ Deno.serve(async (req: Request) => {
   }));
 
   // Aggregate totals across accounts
-  const totals: GoogleAdsMetrics = { spend: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, conversion_value: 0, roas: 0 };
+  const totals: GoogleAdsMetrics = { spend: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, conversion_value: 0, roas: 0, cpc: 0, cost_per_conversion: 0 };
   for (const r of results) {
     if (r.metrics) {
       totals.spend            += r.metrics.spend;
@@ -378,8 +388,10 @@ Deno.serve(async (req: Request) => {
       totals.conversion_value += r.metrics.conversion_value;
     }
   }
-  if (totals.impressions > 0) totals.ctr  = parseFloat(((totals.clicks / totals.impressions) * 100).toFixed(2));
-  if (totals.spend > 0)       totals.roas = parseFloat((totals.conversion_value / totals.spend).toFixed(2));
+  if (totals.impressions > 0) totals.ctr                = parseFloat(((totals.clicks / totals.impressions) * 100).toFixed(2));
+  if (totals.spend > 0)       totals.roas               = parseFloat((totals.conversion_value / totals.spend).toFixed(2));
+  if (totals.clicks > 0)      totals.cpc                = parseFloat((totals.spend / totals.clicks).toFixed(2));
+  if (totals.conversions > 0) totals.cost_per_conversion = parseFloat((totals.spend / totals.conversions).toFixed(2));
 
   return jsonResponse({ totals, accounts: results, date_range: { start, end } });
 });
