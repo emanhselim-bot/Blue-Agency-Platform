@@ -2238,12 +2238,13 @@
       return `
         <div class="section-label">Google Ads <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${d.date_range?.start ?? ''} – ${d.date_range?.end ?? ''}</span></div>
         <div class="kpi-grid">
-          ${kpi('c-blue',   '💰', 'Google Spend',       fmtAds(t.spend, curr),                   'Google Ads')}
-          ${kpi('c-sky',    '👁️', 'Impressions',         fmtAds(t.impressions, '', 0),            'Google Ads')}
-          ${kpi('c-teal',   '🖱️', 'Clicks',              fmtAds(t.clicks, '', 0),                 'Google Ads')}
-          ${kpi('c-gold',   '📊', 'CTR',                 fmtAds(t.ctr) + '%',                     'Google Ads')}
-          ${kpi('c-green',  '✅', 'Conversions',         fmtAds(t.conversions, '', 1),             'Google Ads')}
-          ${kpi('c-orange', '📈', 'ROAS',                fmtAds(t.roas) + 'x',                    'Google Ads')}
+          ${kpi('c-sky',    '👁️', 'Impressions',          fmtAds(t.impressions, '', 0),            'Google Ads')}
+          ${kpi('c-teal',   '🖱️', 'CPC',                  fmtAds(t.cpc, curr),                     'Google Ads')}
+          ${kpi('c-blue',   '🖱️', 'No. of Clicks',        fmtAds(t.clicks, '', 0),                 'Google Ads')}
+          ${kpi('c-green',  '✅', 'Conversions',           fmtAds(t.conversions, '', 1),             'Google Ads')}
+          ${kpi('c-orange', '💸', 'Cost per Conversion',  fmtAds(t.cost_per_conversion, curr),      'Google Ads')}
+          ${kpi('c-gold',   '💰', 'Spending',              fmtAds(t.spend, curr),                   'Google Ads')}
+          ${kpi('c-purple', '📊', 'CTR',                   fmtAds(t.ctr) + '%',                     'Google Ads')}
         </div>
         ${campaigns.length ? `
         <div class="section-label">Google Ads Campaigns</div>
@@ -2254,18 +2255,20 @@
               <th class="tr">Spend</th>
               <th class="tr">Impressions</th>
               <th class="tr">Clicks</th>
+              <th class="tr">CPC</th>
               <th class="tr">CTR</th>
               <th class="tr">Conv.</th>
-              <th class="tr">ROAS</th>
+              <th class="tr">Cost/Conv.</th>
             </tr></thead>
             <tbody>${campaigns.slice(0,10).map(c => `<tr>
               <td class="tl">${c.name}</td>
               <td class="tr">${fmtAds(c.spend, curr)}</td>
               <td class="tr">${fmtAds(c.impressions,'',0)}</td>
               <td class="tr">${fmtAds(c.clicks,'',0)}</td>
+              <td class="tr">${fmtAds(c.cpc, curr)}</td>
               <td class="tr">${fmtAds(c.ctr)}%</td>
               <td class="tr">${fmtAds(c.conversions,'',1)}</td>
-              <td class="tr">${fmtAds(c.roas)}x</td>
+              <td class="tr">${fmtAds(c.cost_per_conversion, curr)}</td>
             </tr>`).join('')}</tbody>
           </table>
         </div>` : ''}`;
