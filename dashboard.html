@@ -460,6 +460,35 @@
 
     .agency-nav-spacer { flex: 1; }
 
+    /* ── Platform tabs (sub-nav between agency nav & controls) ── */
+    #platform-tabs-bar {
+      background: white;
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: none; /* shown via JS when org has 2+ platforms */
+      align-items: stretch;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+    }
+    #platform-tabs-bar::-webkit-scrollbar { display: none; }
+    [data-theme="dark"] #platform-tabs-bar { background: var(--surface); border-bottom-color: var(--border); }
+    .platform-tab {
+      display: flex; align-items: center; gap: 7px;
+      padding: 0 20px; height: 40px;
+      border: none; border-bottom: 3px solid transparent;
+      margin-bottom: -1px;
+      background: transparent; font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .platform-tab:hover { color: var(--blue-dark); background: #f4f6ff; }
+    .platform-tab.active { color: var(--blue-dark); border-bottom-color: var(--blue-dark); }
+    [data-theme="dark"] .platform-tab { color: var(--text-muted); }
+    [data-theme="dark"] .platform-tab.active { color: var(--blue-light); border-bottom-color: var(--blue-light); }
+    [data-theme="dark"] .platform-tab:hover { background: rgba(255,255,255,0.05); }
+
     .add-agency-tab {
       display: flex; align-items: center; gap: 6px;
       padding: 0 18px; height: 46px;
@@ -664,6 +693,9 @@
   <div class="agency-nav" id="agency-nav">
     <!-- Populated by renderAgencyNav() after accounts load -->
   </div>
+
+  <!-- PLATFORM TABS (shown when org has accounts on multiple platforms) -->
+  <div id="platform-tabs-bar"></div>
 
   <!-- CONTROLS -->
   <div class="controls-bar">
@@ -1384,6 +1416,8 @@
     let timer            = null;
     let nextAt           = null;
     let accountMap       = {}; // dbId → { meta_account_id, currency, shopify_store_id }
+    let currentPlatformTab = ''; // 'meta' | 'google_ads' | 'tiktok_ads' — set by renderPlatformTabs()
+    let orgPlatforms       = []; // platforms detected for current org
 
     const PERIOD_LABELS = {
       today:        'Today',
@@ -1506,6 +1540,56 @@
       if (nameEl) nameEl.textContent = active.name;
     }
 
+    // ─── PLATFORM TABS ──────────────────────────────────────────────
+    const PLATFORM_DEFS = {
+      meta:       { label: 'Meta Ads',    icon: '📘' },
+      google_ads: { label: 'Google Ads',  icon: '🔍' },
+      tiktok_ads: { label: 'TikTok Ads',  icon: '🎵' },
+    };
+
+    function renderPlatformTabs() {
+      const bar = document.getElementById('platform-tabs-bar');
+      if (!bar) return;
+
+      // Detect which platforms have accounts in the current org
+      const all = Object.values(accountMap);
+      orgPlatforms = [];
+      if (all.some(a => !a.type)) orgPlatforms.push('meta');
+      if (all.some(a => a.type === 'google_ads')) orgPlatforms.push('google_ads');
+      if (all.some(a => a.type === 'tiktok_ads')) orgPlatforms.push('tiktok_ads');
+
+      // Restore saved platform or pick first available
+      const saved = localStorage.getItem(`dash_platform_${currentOrgId}`);
+      if (!currentPlatformTab || !orgPlatforms.includes(currentPlatformTab)) {
+        currentPlatformTab = (saved && orgPlatforms.includes(saved)) ? saved : (orgPlatforms[0] || '');
+      }
+
+      // Only show the bar when there are 2+ platforms — single-platform orgs don't need it
+      if (orgPlatforms.length <= 1) {
+        bar.style.display = 'none';
+        return;
+      }
+
+      bar.style.display = 'flex';
+      bar.innerHTML = orgPlatforms.map(p => {
+        const def = PLATFORM_DEFS[p] || { label: p, icon: '📊' };
+        return `<button class="platform-tab${currentPlatformTab === p ? ' active' : ''}" onclick="setPlatformTab('${p}')">${def.icon} ${def.label}</button>`;
+      }).join('');
+    }
+
+    function setPlatformTab(platform) {
+      currentPlatformTab = platform;
+      localStorage.setItem(`dash_platform_${currentOrgId}`, platform);
+      renderPlatformTabs();
+      filterAccountsByAgency();
+      // Reset account selection and clear content when switching platforms
+      sel.value = '';
+      document.getElementById('content').innerHTML = '<div class="loading-state">Select an account above to load data.</div>';
+      document.getElementById('date-label').textContent = 'Select an account to start';
+      const recsSection = document.getElementById('recs-section');
+      if (recsSection) recsSection.style.display = 'none';
+    }
+
     // Switch the active agency: updates state, re-renders nav, filters accounts.
     function setActiveAgency(agencyId) {
       currentAgencyId = agencyId;
@@ -1544,7 +1628,15 @@
         return !assigned || assigned === agencyId;
       });
       // Graceful fallback: if no accounts match (nothing assigned yet), show all
-      const toShow = visible.length ? visible : all;
+      let toShow = visible.length ? visible : all;
+
+      // Filter by the active platform tab (only when org has multiple platforms)
+      if (currentPlatformTab && orgPlatforms.length > 1) {
+        const pf = toShow.filter(acc =>
+          currentPlatformTab === 'meta' ? !acc.type : acc.type === currentPlatformTab
+        );
+        if (pf.length > 0) toShow = pf;
+      }
 
       const prevVal = sel.value;
       sel.innerHTML = '<option value="">— Select Account —</option>';
@@ -1912,8 +2004,9 @@
         });
       }
 
-      // Render agency nav, then filter accounts by active agency
+      // Render agency nav, platform tabs, then filter accounts by active agency
       renderAgencyNav();
+      renderPlatformTabs();
       filterAccountsByAgency();
 
       // Restore saved account selection
@@ -1931,6 +2024,7 @@
       currentRole = await Auth.getRole(currentOrgId);
       sel.innerHTML = '<option value="">— Select Account —</option>';
       currentAgencyId = localStorage.getItem(`dash_agency_id_${currentOrgId}`) || 'all';
+      currentPlatformTab = ''; // reset so renderPlatformTabs() picks the right default for the new org
       await applyOrgContext();
       loadAccounts();
     });
