@@ -1038,6 +1038,13 @@
             Connect with Google
           </button>
           <div class="modal-status" id="google-ads-status"></div>
+          <!-- Diagnostic tool -->
+          <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">🔬 API Diagnostic</div>
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">Run this if Google Ads data shows all zeros. It reveals which customer IDs are accessible under your connected credentials and probes the API directly.</p>
+            <button class="connect-btn" onclick="runGoogleAdsDiagnostic()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);font-size:12px;padding:8px 16px">▶ Run Diagnostic</button>
+            <pre id="gads-diagnostic-output" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;color:var(--text)"></pre>
+          </div>
         </div>
         </div><!-- /spanel-google-ads -->
 
@@ -2685,6 +2692,18 @@
         setTimeout(() => { loadGoogleAdsList(); loadAccounts(); }, 1000);
       } catch (e) {
         if (status) { status.textContent = `⚠ ${e.message}`; status.style.color = 'var(--coral)'; }
+      }
+    }
+
+    async function runGoogleAdsDiagnostic() {
+      const out = document.getElementById('gads-diagnostic-output');
+      out.style.display = 'block';
+      out.textContent = '⏳ Running diagnostic…';
+      try {
+        const res = await callEdgeFunction('google-ads-data', { organization_id: currentOrgId, diagnostic: true });
+        out.textContent = JSON.stringify(res, null, 2);
+      } catch(e) {
+        out.textContent = '❌ Error: ' + e.message;
       }
     }
 
