@@ -2234,6 +2234,8 @@
       if (d?.error || !d?.totals) return '';
       const t = d.totals;
       const campaigns = d.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
+      const bestAd   = d.bestAd ?? null;
+      const keywords = d.keywords ?? [];
       const curr = '$';
 
       // ── Clarity mini-table helper ──────────────────────────────────────────
@@ -2330,7 +2332,47 @@
             </tr>`).join('')}</tbody>
           </table>
         </div>` : ''}
-        ${claritySection}`;
+        ${claritySection}
+        ${bestAd ? `
+        <div class="section-label" style="margin-top:18px">Best Performing Ad <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Highest Clicks</span></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;gap:16px;align-items:flex-start">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(bestAd.headline||'').replace(/"/g,'&quot;')}">${bestAd.headline || 'Ad'}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${bestAd.type || ''} ${bestAd.campaign ? '· ' + bestAd.campaign : ''}</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--text-muted)">Clicks: <strong style="color:var(--text)">${bestAd.clicks?.toLocaleString()??0}</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">Impr.: <strong style="color:var(--text)">${bestAd.impressions?.toLocaleString()??0}</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">CTR: <strong style="color:var(--text)">${bestAd.ctr??0}%</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">Conv.: <strong style="color:var(--text)">${bestAd.conversions??0}</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">Spend: <strong style="color:var(--text)">$${(bestAd.spend??0).toLocaleString()}</strong></span>
+            </div>
+          </div>
+          <div style="background:var(--accent);border-radius:8px;padding:6px 10px;white-space:nowrap;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">🏆 Best Ad</div>
+        </div>` : ''}
+        ${keywords.length ? `
+        <div class="section-label" style="margin-top:18px">Top 10 Keywords <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● By Clicks</span></div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr>
+              <th class="tl">Keyword</th>
+              <th class="tl">Match</th>
+              <th class="tr">Clicks</th>
+              <th class="tr">Impr.</th>
+              <th class="tr">CTR</th>
+              <th class="tr">Conv.</th>
+              <th class="tr">Spend</th>
+            </tr></thead>
+            <tbody>${keywords.map((kw, i) => `<tr>
+              <td class="tl" style="font-weight:${i===0?'700':'400'}">${kw.text || '—'}</td>
+              <td class="tl" style="font-size:10px;color:var(--text-muted)">${kw.matchType || ''}</td>
+              <td class="tr">${(kw.clicks??0).toLocaleString()}</td>
+              <td class="tr">${(kw.impressions??0).toLocaleString()}</td>
+              <td class="tr">${kw.ctr??0}%</td>
+              <td class="tr">${kw.conversions??0}</td>
+              <td class="tr">$${(kw.spend??0).toLocaleString()}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>` : ''}`;
     }
 
     function renderTikTokAdsSection(res) {
@@ -2681,7 +2723,7 @@
           callEdgeFunction('meta-data', { ...baseMeta, level: 'region' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'ad' }),
           currentOrgId
-            ? callEdgeFunction('google-ads-data', { organization_id: currentOrgId, since: currentPeriod, until: currentPeriod, include_campaigns: true })
+            ? callEdgeFunction('google-ads-data', { organization_id: currentOrgId, since: currentPeriod, until: currentPeriod, include_campaigns: true, include_ads: true, include_keywords: true })
             : Promise.resolve(null),
           currentOrgId
             ? callEdgeFunction('tiktok-ads-data', { organization_id: currentOrgId, since: currentPeriod, until: currentPeriod, include_campaigns: true })

@@ -355,11 +355,15 @@ async function fetchShopifyAnalytics(
   // timezone handling precisely (e.g. "yesterday" = store's previous calendar day).
   const sinceStr = sinceToken && SHOPIFYQL_DATE_KEYWORDS.has(sinceToken) ? sinceToken : since;
   const untilStr = untilToken && SHOPIFYQL_DATE_KEYWORDS.has(untilToken) ? untilToken : until;
+  // Named period keywords (e.g. last_30_days) define the full range by themselves.
+  // Adding UNTIL with the same keyword is invalid ShopifyQL — only add UNTIL for ISO dates.
+  const isNamedPeriod = SHOPIFYQL_DATE_KEYWORDS.has(sinceStr) && sinceStr === untilStr;
+  const dateClause = isNamedPeriod ? `SINCE ${sinceStr}` : `SINCE ${sinceStr} UNTIL ${untilStr}`;
 
-  console.log(`[shopify-data] ShopifyQL date range: SINCE ${sinceStr} UNTIL ${untilStr} (raw tokens: ${sinceToken}/${untilToken})`);
+  console.log(`[shopify-data] ShopifyQL dateClause: ${dateClause} (raw tokens: ${sinceToken}/${untilToken})`);
 
   const gql = `{
-    shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate SINCE ${sinceStr} UNTIL ${untilStr}") {
+    shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate ${dateClause}") {
       ... on TableData {
         columns { name dataType }
         rowData
@@ -455,9 +459,11 @@ async function fetchCartSessions(
 ): Promise<number | null> {
   const sinceStr = sinceToken && SHOPIFYQL_DATE_KEYWORDS.has(sinceToken) ? sinceToken : since;
   const untilStr = untilToken && SHOPIFYQL_DATE_KEYWORDS.has(untilToken) ? untilToken : until;
+  const isNamedPeriodCart = SHOPIFYQL_DATE_KEYWORDS.has(sinceStr) && sinceStr === untilStr;
+  const dateClauseCart = isNamedPeriodCart ? `SINCE ${sinceStr}` : `SINCE ${sinceStr} UNTIL ${untilStr}`;
 
   const gql = `{
-    shopifyqlQuery(query: "FROM sessions SHOW sessions_with_cart_added SINCE ${sinceStr} UNTIL ${untilStr}") {
+    shopifyqlQuery(query: "FROM sessions SHOW sessions_with_cart_added ${dateClauseCart}") {
       ... on TableData {
         columns { name dataType }
         rowData

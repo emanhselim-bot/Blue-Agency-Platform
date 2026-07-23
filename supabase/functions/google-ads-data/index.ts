@@ -311,6 +311,203 @@ async function fetchGoogleAdsCampaigns(
   return campaigns.sort((a, b) => b.spend - a.spend).slice(0, 10);
 }
 
+// ── Best Ad ───────────────────────────────────────────────────────────────────
+interface AdRow {
+  headline: string;
+  type: string;
+  campaign: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  conversions: number;
+}
+
+async function fetchGoogleAdsBestAd(
+  customerId: string,
+  developerToken: string,
+  accessToken: string,
+  startDate: string,
+  endDate: string
+): Promise<AdRow | null> {
+  const cid = customerId.replace(/-/g, "");
+
+  const gaql = `
+    SELECT
+      ad_group_ad.ad.name,
+      ad_group_ad.ad.type,
+      ad_group_ad.ad.responsive_search_ad.headlines,
+      ad_group_ad.ad.expanded_text_ad.headline_part1,
+      campaign.name,
+      metrics.cost_micros,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.ctr,
+      metrics.conversions
+    FROM ad_group_ad
+    WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
+      AND ad_group_ad.status != 'REMOVED'
+      AND campaign.status != 'REMOVED'
+    ORDER BY metrics.clicks DESC
+    LIMIT 1
+  `;
+
+  const res = await fetch(
+    `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "developer-token": developerToken,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: gaql }),
+      signal: AbortSignal.timeout(20_000),
+    }
+  );
+
+  if (!res.ok) return null;
+
+  const text = await res.text();
+  let batches: unknown[] = [];
+  try {
+    const parsed = JSON.parse(text);
+    batches = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    batches = text.trim().split("\n").filter(Boolean).map(l => JSON.parse(l));
+  }
+
+  for (const batch of batches) {
+    const results = (batch as { results?: unknown[] }).results ?? [];
+    if (!results.length) continue;
+    const row = results[0] as {
+      adGroupAd?: { ad?: { name?: string; type?: string; responsiveSearchAd?: { headlines?: { text?: string }[] }; expandedTextAd?: { headlinePart1?: string } } };
+      campaign?: { name?: string };
+      metrics?: Record<string, number | string>;
+    };
+    const ad = row.adGroupAd?.ad ?? {};
+    const m  = (row.metrics ?? {}) as Record<string, number | string>;
+
+    // Best headline: RSA → first headline text; ETA → headline_part1; fallback ad name
+    const rsaHeadline = ad.responsiveSearchAd?.headlines?.[0]?.text ?? null;
+    const etaHeadline = ad.expandedTextAd?.headlinePart1 ?? null;
+    const headline    = rsaHeadline ?? etaHeadline ?? ad.name ?? "Ad";
+
+    const costMicros  = Number(m.costMicros ?? m.cost_micros ?? 0);
+    const spend       = costMicros / 1_000_000;
+    const clicks      = Number(m.clicks ?? 0);
+    const impressions = Number(m.impressions ?? 0);
+    const conversions = Number(m.conversions ?? 0);
+
+    return {
+      headline,
+      type:        String(ad.type ?? "").replace(/_/g, " "),
+      campaign:    row.campaign?.name ?? "",
+      spend:       parseFloat(spend.toFixed(2)),
+      impressions,
+      clicks,
+      ctr:         impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0,
+      conversions: parseFloat(conversions.toFixed(2)),
+    };
+  }
+  return null;
+}
+
+// ── Top Keywords ──────────────────────────────────────────────────────────────
+interface KeywordRow {
+  text: string;
+  matchType: string;
+  campaign: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  conversions: number;
+}
+
+async function fetchGoogleAdsKeywords(
+  customerId: string,
+  developerToken: string,
+  accessToken: string,
+  startDate: string,
+  endDate: string
+): Promise<KeywordRow[]> {
+  const cid = customerId.replace(/-/g, "");
+
+  const gaql = `
+    SELECT
+      ad_group_criterion.keyword.text,
+      ad_group_criterion.keyword.match_type,
+      campaign.name,
+      metrics.cost_micros,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.ctr,
+      metrics.conversions
+    FROM keyword_view
+    WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
+      AND ad_group_criterion.status != 'REMOVED'
+      AND campaign.status != 'REMOVED'
+    ORDER BY metrics.clicks DESC
+    LIMIT 10
+  `;
+
+  const res = await fetch(
+    `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "developer-token": developerToken,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: gaql }),
+      signal: AbortSignal.timeout(20_000),
+    }
+  );
+
+  if (!res.ok) return [];
+
+  const text = await res.text();
+  let batches: unknown[] = [];
+  try {
+    const parsed = JSON.parse(text);
+    batches = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    batches = text.trim().split("\n").filter(Boolean).map(l => JSON.parse(l));
+  }
+
+  const keywords: KeywordRow[] = [];
+  for (const batch of batches) {
+    const results = (batch as { results?: unknown[] }).results ?? [];
+    for (const row of results) {
+      const r = row as {
+        adGroupCriterion?: { keyword?: { text?: string; matchType?: string } };
+        campaign?: { name?: string };
+        metrics?: Record<string, number | string>;
+      };
+      const kw = r.adGroupCriterion?.keyword ?? {};
+      const m  = (r.metrics ?? {}) as Record<string, number | string>;
+      const costMicros  = Number(m.costMicros ?? m.cost_micros ?? 0);
+      const spend       = costMicros / 1_000_000;
+      const clicks      = Number(m.clicks ?? 0);
+      const impressions = Number(m.impressions ?? 0);
+      const conversions = Number(m.conversions ?? 0);
+      keywords.push({
+        text:        kw.text ?? "",
+        matchType:   String(kw.matchType ?? "").replace(/_/g, " "),
+        campaign:    r.campaign?.name ?? "",
+        spend:       parseFloat(spend.toFixed(2)),
+        impressions,
+        clicks,
+        ctr:         impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0,
+        conversions: parseFloat(conversions.toFixed(2)),
+      });
+    }
+  }
+  return keywords.slice(0, 10);
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -323,11 +520,11 @@ Deno.serve(async (req: Request) => {
   );
   if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  let body: { account_id?: string; organization_id?: string; since?: string; until?: string; include_campaigns?: boolean };
+  let body: { account_id?: string; organization_id?: string; since?: string; until?: string; include_campaigns?: boolean; include_ads?: boolean; include_keywords?: boolean };
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "Invalid JSON" }, 400); }
 
-  const { account_id, organization_id, since = "last_30_days", until = "last_30_days", include_campaigns = false } = body;
+  const { account_id, organization_id, since = "last_30_days", until = "last_30_days", include_campaigns = false, include_ads = false, include_keywords = false } = body;
 
   if (!organization_id) return jsonResponse({ error: "organization_id required" }, 400);
 
@@ -364,13 +561,19 @@ Deno.serve(async (req: Request) => {
       const accessToken = await refreshAccessToken(
         acct.client_id, acct.client_secret, acct.refresh_token
       );
-      const [metrics, campaigns] = await Promise.all([
+      const [metrics, campaigns, bestAd, keywords] = await Promise.all([
         fetchGoogleAdsMetrics(acct.customer_id, acct.developer_token, accessToken, start, end),
         include_campaigns
           ? fetchGoogleAdsCampaigns(acct.customer_id, acct.developer_token, accessToken, start, end)
           : Promise.resolve([]),
+        include_ads
+          ? fetchGoogleAdsBestAd(acct.customer_id, acct.developer_token, accessToken, start, end)
+          : Promise.resolve(null),
+        include_keywords
+          ? fetchGoogleAdsKeywords(acct.customer_id, acct.developer_token, accessToken, start, end)
+          : Promise.resolve([]),
       ]);
-      return { account_id: acct.id, account_name: acct.account_name ?? acct.customer_id, metrics, campaigns };
+      return { account_id: acct.id, account_name: acct.account_name ?? acct.customer_id, metrics, campaigns, bestAd, keywords };
     } catch (e) {
       console.error("[google-ads-data] error for account", acct.id, (e as Error).message);
       return { account_id: acct.id, account_name: acct.account_name ?? acct.customer_id, error: (e as Error).message };
@@ -393,5 +596,29 @@ Deno.serve(async (req: Request) => {
   if (totals.clicks > 0)      totals.cpc                = parseFloat((totals.spend / totals.clicks).toFixed(2));
   if (totals.conversions > 0) totals.cost_per_conversion = parseFloat((totals.spend / totals.conversions).toFixed(2));
 
-  return jsonResponse({ totals, accounts: results, date_range: { start, end } });
+  // Aggregate best ad (highest clicks across all accounts)
+  let aggregatedBestAd: AdRow | null = null;
+  if (include_ads) {
+    for (const r of results) {
+      const ad = (r as { bestAd?: AdRow | null }).bestAd ?? null;
+      if (ad && (aggregatedBestAd === null || ad.clicks > aggregatedBestAd.clicks)) {
+        aggregatedBestAd = ad;
+      }
+    }
+  }
+
+  // Aggregate keywords (merge all accounts, sort by clicks, top 10)
+  let aggregatedKeywords: KeywordRow[] = [];
+  if (include_keywords) {
+    const allKw: KeywordRow[] = [];
+    for (const r of results) {
+      const kws = (r as { keywords?: KeywordRow[] }).keywords ?? [];
+      allKw.push(...kws);
+    }
+    aggregatedKeywords = allKw
+      .sort((a, b) => b.clicks - a.clicks)
+      .slice(0, 10);
+  }
+
+  return jsonResponse({ totals, accounts: results, date_range: { start, end }, bestAd: aggregatedBestAd, keywords: aggregatedKeywords });
 });

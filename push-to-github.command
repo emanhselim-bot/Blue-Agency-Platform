@@ -1,8 +1,12 @@
 #!/bin/bash
-cd "/Users/emanselim/Desktop/Claude Code/blue-agency-platform"
+cd "/Users/emanselim/Desktop/Blue Ad Dashboard Claude Code/blue-agency-platform"
 
 # Remove any stale git lock files
 rm -f .git/index.lock .git/HEAD.lock
+
+# Stage and commit pending changes
+git add dashboard.html
+git diff --cached --quiet || git commit -m "Fix agency settings: align account counts with nav, add unassigned option"
 
 # Ask for GitHub Personal Access Token
 TOKEN=$(osascript -e 'display dialog "Paste your GitHub Personal Access Token (ghp_...):" default answer "" with hidden answer buttons {"Cancel","Push"} default button "Push"' -e 'text returned of result' 2>/dev/null)
