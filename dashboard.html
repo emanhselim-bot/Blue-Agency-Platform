@@ -1425,6 +1425,7 @@
     let accountMap       = {}; // dbId → { meta_account_id, currency, shopify_store_id }
     let currentPlatformTab = ''; // 'meta' | 'google_ads' | 'tiktok_ads' — set by renderPlatformTabs()
     let orgPlatforms       = []; // platforms detected for current org
+    let _recsEnabled       = false; // true only when a Meta account view is active
 
     const PERIOD_LABELS = {
       today:        'Today',
@@ -2465,6 +2466,7 @@
     async function loadGoogleAdsDashboard(account) {
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
+      _recsEnabled = false;
       document.getElementById('recs-section').style.display = 'none';
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching Google Ads data…</div>`;
@@ -2574,6 +2576,7 @@
     async function loadTikTokAdsDashboard(account) {
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
+      _recsEnabled = false;
       document.getElementById('recs-section').style.display = 'none';
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching TikTok Ads data…</div>`;
@@ -3126,7 +3129,8 @@
         };
       } catch(ctxErr) { console.warn('[context capture]', ctxErr); }
 
-      // Auto-generate recommendations (non-blocking)
+      // Auto-generate recommendations (non-blocking, Meta only)
+      _recsEnabled = true;
       loadRecommendations();
 
       btn.disabled = false; btn.textContent = '↻ Refresh';
@@ -4972,11 +4976,7 @@
     }
 
     async function loadRecommendations() {
-      if (!_dashContext) return;
-      // Only show recommendations for Meta Ads accounts — never for Google Ads / TikTok
-      const _selEl = document.getElementById('account-select');
-      const _selAcc = _selEl ? accountMap[_selEl.value] : null;
-      if (_selAcc && _selAcc.type) return; // has a type = not Meta — skip
+      if (!_dashContext || !_recsEnabled) return;
       const REC_PROMPT = `Analyse this Meta Ads account data and respond with ONLY a valid JSON object — no markdown, no explanation, just raw JSON — with exactly these four keys:
 {
   "account": "2-3 sentences summarising overall account performance: key metrics, what is working, and what is underperforming.",
@@ -4991,10 +4991,8 @@
           message: REC_PROMPT,
           context: _dashContext,
         });
-        // Race-condition guard: bail if account changed to non-Meta while AI was thinking
-        const _sel2 = document.getElementById('account-select');
-        const _acc2 = _sel2 ? accountMap[_sel2.value] : null;
-        if (_acc2 && _acc2.type) { document.getElementById('recs-section').style.display = 'none'; return; }
+        // Race-condition guard: bail if view changed away from Meta while AI was thinking
+        if (!_recsEnabled) { document.getElementById('recs-section').style.display = 'none'; return; }
         if (result?.error) { recsError('⚠️ ' + result.error); return; }
         const text = result?.reply || '';
         // Parse JSON — strip any accidental markdown fences
