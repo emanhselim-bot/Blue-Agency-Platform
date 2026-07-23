@@ -4947,13 +4947,6 @@
     // ─────────────────────────────────────────────────────────────
     // CLAUDE RECOMMENDATIONS SECTION
     // ─────────────────────────────────────────────────────────────
-    const REC_PROMPT = `Analyse this Meta Ads account data and respond with ONLY a valid JSON object — no markdown, no explanation, just raw JSON — with exactly these four keys:
-{
-  "account": "2-3 sentences summarising overall account performance: key metrics, what is working, and what is underperforming.",
-  "creative": "2-3 specific creative recommendations based on the ad-level data: which ad types or messages to invest in, which to pause, and why.",
-  "targeting": "2-3 specific targeting recommendations: audiences, platforms, or regions to prioritise or avoid based on the performance data.",
-  "improve": "2-3 concrete next steps the account manager should take this week to improve results."
-}`;
 
     function recsSetLoading() {
       ['account','creative','targeting','improve'].forEach(k => {
@@ -4987,10 +4980,17 @@
 
     async function loadRecommendations() {
       if (!_dashContext) return;
-      // Only show recommendations for Meta Ads accounts
+      // Only show recommendations for Meta Ads accounts — never for Google Ads / TikTok
       const _selEl = document.getElementById('account-select');
       const _selAcc = _selEl ? accountMap[_selEl.value] : null;
-      if (_selAcc && _selAcc.type) return; // google_ads, tiktok_ads — skip
+      if (_selAcc && _selAcc.type) return; // has a type = not Meta — skip
+      const REC_PROMPT = `Analyse this Meta Ads account data and respond with ONLY a valid JSON object — no markdown, no explanation, just raw JSON — with exactly these four keys:
+{
+  "account": "2-3 sentences summarising overall account performance: key metrics, what is working, and what is underperforming.",
+  "creative": "2-3 specific creative recommendations based on the ad-level data: which ad types or messages to invest in, which to pause, and why.",
+  "targeting": "2-3 specific targeting recommendations: audiences, platforms, or regions to prioritise or avoid based on the performance data.",
+  "improve": "2-3 concrete next steps the account manager should take this week to improve results."
+}`;
       document.getElementById('recs-section').style.display = 'block';
       recsSetLoading();
       try {
@@ -4998,6 +4998,10 @@
           message: REC_PROMPT,
           context: _dashContext,
         });
+        // Race-condition guard: bail if account changed to non-Meta while AI was thinking
+        const _sel2 = document.getElementById('account-select');
+        const _acc2 = _sel2 ? accountMap[_sel2.value] : null;
+        if (_acc2 && _acc2.type) { document.getElementById('recs-section').style.display = 'none'; return; }
         if (result?.error) { recsError('⚠️ ' + result.error); return; }
         const text = result?.reply || '';
         // Parse JSON — strip any accidental markdown fences
