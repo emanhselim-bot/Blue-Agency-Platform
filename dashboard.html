@@ -2432,22 +2432,27 @@
           since: currentPeriod,
           until: currentPeriod,
           include_campaigns: true,
+          include_ads: true,
+          include_keywords: true,
         });
         if (data?.error) throw new Error(data.error);
         const t = data?.totals;
         if (!t) { document.getElementById('content').innerHTML = `<div class="no-data"><strong>No Google Ads data for this period.</strong></div>`; return; }
         const campaigns = data.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
+        const bestAd   = data.bestAd ?? null;
+        const keywords = data.keywords ?? [];
         const curr = '$';
         const dr = data.date_range;
         document.getElementById('content').innerHTML = `
           <div class="section-label">Google Ads — ${account.account_name} <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${dr?.start ?? ''} – ${dr?.end ?? ''}</span></div>
           <div class="kpi-grid">
-            ${kpi('c-blue',   '💰', 'Spend',       fmtAds(t.spend, curr),          'Google Ads')}
-            ${kpi('c-sky',    '👁️', 'Impressions',  fmtAds(t.impressions, '', 0),   'Google Ads')}
-            ${kpi('c-teal',   '🖱️', 'Clicks',       fmtAds(t.clicks, '', 0),        'Google Ads')}
-            ${kpi('c-gold',   '📊', 'CTR',          fmtAds(t.ctr) + '%',            'Google Ads')}
-            ${kpi('c-green',  '✅', 'Conversions',  fmtAds(t.conversions, '', 1),   'Google Ads')}
-            ${kpi('c-orange', '📈', 'ROAS',         fmtAds(t.roas) + 'x',           'Google Ads')}
+            ${kpi('c-sky',    '👁️', 'Impressions',         fmtAds(t.impressions, '', 0),         'Google Ads')}
+            ${kpi('c-teal',   '🖱️', 'CPC',                 fmtAds(t.cpc, curr),                  'Google Ads')}
+            ${kpi('c-blue',   '🖱️', 'No. of Clicks',       fmtAds(t.clicks, '', 0),              'Google Ads')}
+            ${kpi('c-green',  '✅', 'Conversions',          fmtAds(t.conversions, '', 1),          'Google Ads')}
+            ${kpi('c-orange', '💸', 'Cost per Conversion', fmtAds(t.cost_per_conversion, curr),   'Google Ads')}
+            ${kpi('c-gold',   '💰', 'Spending',             fmtAds(t.spend, curr),                'Google Ads')}
+            ${kpi('c-purple', '📊', 'CTR',                  fmtAds(t.ctr) + '%',                  'Google Ads')}
           </div>
           ${campaigns.length ? `
           <div class="section-label">Campaigns</div>
@@ -2458,18 +2463,60 @@
                 <th class="tr">Spend</th>
                 <th class="tr">Impressions</th>
                 <th class="tr">Clicks</th>
+                <th class="tr">CPC</th>
                 <th class="tr">CTR</th>
                 <th class="tr">Conv.</th>
-                <th class="tr">ROAS</th>
+                <th class="tr">Cost/Conv.</th>
               </tr></thead>
               <tbody>${campaigns.map(c => `<tr>
                 <td class="tl">${c.name}</td>
                 <td class="tr">${fmtAds(c.spend, curr)}</td>
                 <td class="tr">${fmtAds(c.impressions,'',0)}</td>
                 <td class="tr">${fmtAds(c.clicks,'',0)}</td>
+                <td class="tr">${fmtAds(c.cpc, curr)}</td>
                 <td class="tr">${fmtAds(c.ctr)}%</td>
                 <td class="tr">${fmtAds(c.conversions,'',1)}</td>
-                <td class="tr">${fmtAds(c.roas)}x</td>
+                <td class="tr">${fmtAds(c.cost_per_conversion, curr)}</td>
+              </tr>`).join('')}</tbody>
+            </table>
+          </div>` : ''}
+          ${bestAd ? `
+          <div class="section-label" style="margin-top:18px">Best Performing Ad <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Highest Clicks</span></div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;gap:16px;align-items:flex-start">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(bestAd.headline||'').replace(/"/g,'&quot;')}">${bestAd.headline || 'Ad'}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${bestAd.type || ''} ${bestAd.campaign ? '· ' + bestAd.campaign : ''}</div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap">
+                <span style="font-size:12px;color:var(--text-muted)">Clicks: <strong style="color:var(--text)">${bestAd.clicks?.toLocaleString()??0}</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">Impr.: <strong style="color:var(--text)">${bestAd.impressions?.toLocaleString()??0}</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">CTR: <strong style="color:var(--text)">${bestAd.ctr??0}%</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">Conv.: <strong style="color:var(--text)">${bestAd.conversions??0}</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">Spend: <strong style="color:var(--text)">$${(bestAd.spend??0).toLocaleString()}</strong></span>
+              </div>
+            </div>
+            <div style="background:var(--accent);border-radius:8px;padding:6px 10px;white-space:nowrap;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">🏆 Best Ad</div>
+          </div>` : ''}
+          ${keywords.length ? `
+          <div class="section-label" style="margin-top:18px">Top 10 Keywords <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● By Clicks</span></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr>
+                <th class="tl">Keyword</th>
+                <th class="tl">Match</th>
+                <th class="tr">Clicks</th>
+                <th class="tr">Impr.</th>
+                <th class="tr">CTR</th>
+                <th class="tr">Conv.</th>
+                <th class="tr">Spend</th>
+              </tr></thead>
+              <tbody>${keywords.map((kw, i) => `<tr>
+                <td class="tl" style="font-weight:${i===0?'700':'400'}">${kw.text || '—'}</td>
+                <td class="tl" style="font-size:10px;color:var(--text-muted)">${kw.matchType || ''}</td>
+                <td class="tr">${(kw.clicks??0).toLocaleString()}</td>
+                <td class="tr">${(kw.impressions??0).toLocaleString()}</td>
+                <td class="tr">${kw.ctr??0}%</td>
+                <td class="tr">${kw.conversions??0}</td>
+                <td class="tr">$${(kw.spend??0).toLocaleString()}</td>
               </tr>`).join('')}</tbody>
             </table>
           </div>` : ''}`;
