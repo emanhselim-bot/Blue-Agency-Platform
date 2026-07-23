@@ -2812,7 +2812,7 @@
       };
 
       // 10 parallel calls: Meta (4) + Shopify + Clarity + Google Ads + TikTok Ads + platform + region + ad
-      const [metaRes, campaignRes, dailyRes, shopifyAllRes, clarityRes, platformRes, regionRes, adRes, googleAdsRes, tiktokAdsRes] =
+      const [metaRes, campaignRes, dailyRes, shopifyAllRes, clarityRes, platformRes, regionRes, adRes] =
         await Promise.allSettled([
           callEdgeFunction('meta-data', baseMeta),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
@@ -2824,12 +2824,6 @@
           callEdgeFunction('meta-data', { ...baseMeta, level: 'platform' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'region' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'ad' }),
-          currentOrgId
-            ? callEdgeFunction('google-ads-data', { organization_id: currentOrgId, since: currentPeriod, until: currentPeriod, include_campaigns: true, include_ads: true, include_keywords: true })
-            : Promise.resolve(null),
-          currentOrgId
-            ? callEdgeFunction('tiktok-ads-data', { organization_id: currentOrgId, since: currentPeriod, until: currentPeriod, include_campaigns: true })
-            : Promise.resolve(null),
         ]);
 
       // ── Parse Meta account-level ──
@@ -3089,8 +3083,7 @@
 
         ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
 
-        ${renderGoogleAdsSection(googleAdsRes)}
-        ${renderTikTokAdsSection(tiktokAdsRes)}`;
+        `;
 
       // ── Capture context for Ask Claude sidebar ──
       try {
