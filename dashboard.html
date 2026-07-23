@@ -4987,6 +4987,10 @@
 
     async function loadRecommendations() {
       if (!_dashContext) return;
+      // Only show recommendations for Meta Ads accounts
+      const _selEl = document.getElementById('account-select');
+      const _selAcc = _selEl ? accountMap[_selEl.value] : null;
+      if (_selAcc && _selAcc.type) return; // google_ads, tiktok_ads — skip
       document.getElementById('recs-section').style.display = 'block';
       recsSetLoading();
       try {
