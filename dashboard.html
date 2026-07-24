@@ -288,6 +288,36 @@
 
     /* ── CLAUDE RECOMMENDATIONS SECTION ── */
     #recs-section { display: none; padding: 0 24px 40px; }
+
+    /* ── Agency Targets panel ── */
+    #targets-panel {
+      position: fixed; top: 0; right: -360px; width: 340px; height: 100vh;
+      background: var(--sidebar-bg, #13152a); border-left: 1px solid var(--border);
+      z-index: 300; transition: right 0.25s ease;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #targets-panel.open { right: 0; }
+    .tgt-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .tgt-title { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; }
+    .tgt-agency-name { font-size: 11px; color: var(--blue-dark); font-weight: 700; }
+    .tgt-close { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; line-height: 1; }
+    .tgt-body { flex: 1; overflow-y: auto; padding: 18px 20px; }
+    .tgt-section-label { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 10px; }
+    .tgt-section-label:first-child { margin-top: 0; }
+    .tgt-field { margin-bottom: 12px; }
+    .tgt-field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+    .tgt-field input { width: 100%; padding: 7px 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; box-sizing: border-box; }
+    .tgt-field input:focus { outline: none; border-color: var(--blue-dark); }
+    .tgt-note { font-size: 10px; color: var(--text-muted); margin: 4px 0 0; }
+    .tgt-save { margin: 0 20px 20px; padding: 10px; background: var(--blue-dark); border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; width: calc(100% - 40px); }
+    .tgt-save:hover { opacity: 0.9; }
+    /* Targets button in controls bar */
+    .targets-btn { padding: 5px 11px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+    .targets-btn:hover, .targets-btn.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
+    /* KPI target badge */
+    .kpi-target { font-size: 10px; font-weight: 700; margin-top: 6px; padding: 2px 8px; border-radius: 20px; display: inline-block; }
+    .kpi-target.on-target  { background: rgba(34,197,94,.15);  color: #22c55e; }
+    .kpi-target.off-target { background: rgba(248,113,113,.15); color: #f87171; }
     .recs-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 16px;
@@ -719,6 +749,48 @@
       <button class="date-apply-btn" id="date-apply">Apply</button>
     </div>
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
+    <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
+  </div>
+
+  <!-- AGENCY TARGETS PANEL -->
+  <div id="targets-panel">
+    <div class="tgt-header">
+      <div class="tgt-title">🎯 Agency Targets</div>
+      <div class="tgt-agency-name" id="tgt-agency-name"></div>
+      <button class="tgt-close" onclick="toggleTargetsPanel(false)">✕</button>
+    </div>
+    <div class="tgt-body">
+      <div class="tgt-section-label">Spend & Revenue</div>
+      <div class="tgt-field"><label>Monthly Spend Budget ($)</label><input id="tgt-spend" type="number" placeholder="e.g. 10000" min="0"></div>
+      <div class="tgt-field"><label>Target Revenue ($)</label><input id="tgt-revenue" type="number" placeholder="e.g. 40000" min="0"></div>
+      <div class="tgt-field"><label>Target ROAS</label><input id="tgt-roas" type="number" placeholder="e.g. 3.5" min="0" step="0.1"></div>
+
+      <div class="tgt-section-label">Efficiency</div>
+      <div class="tgt-field"><label>Target CPM ($)</label><input id="tgt-cpm" type="number" placeholder="e.g. 8.00" min="0" step="0.01"></div>
+      <div class="tgt-field"><label>Target CPC ($)</label><input id="tgt-cpc" type="number" placeholder="e.g. 1.50" min="0" step="0.01"></div>
+      <div class="tgt-field"><label>Target CTR (%)</label><input id="tgt-ctr" type="number" placeholder="e.g. 2.0" min="0" step="0.1"></div>
+      <div class="tgt-field"><label>Target Cost/Result ($)</label><input id="tgt-cpr" type="number" placeholder="e.g. 15.00" min="0" step="0.01"></div>
+
+      <div class="tgt-section-label">Conversions</div>
+      <div class="tgt-field"><label>Target Orders (period)</label><input id="tgt-orders" type="number" placeholder="e.g. 500" min="0"></div>
+      <div class="tgt-field"><label>Target Conv. Rate (%)</label><input id="tgt-cvr" type="number" placeholder="e.g. 3.0" min="0" step="0.1"></div>
+
+      <div class="tgt-section-label">Default Settings</div>
+      <div class="tgt-field">
+        <label>Default Date Period</label>
+        <select id="tgt-period" style="width:100%;padding:7px 11px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px">
+          <option value="">— Same as current —</option>
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="this_month">This Month</option>
+          <option value="last_month">Last Month</option>
+          <option value="this_quarter">This Quarter</option>
+          <option value="last_quarter">Last Quarter</option>
+          <option value="this_year">This Year</option>
+        </select>
+      </div>
+    </div>
+    <button class="tgt-save" onclick="saveTargets()">💾 Save Agency Targets</button>
   </div>
 
   <!-- DATE LABEL (unchanged) -->
@@ -1427,6 +1499,63 @@
     let orgPlatforms       = []; // platforms detected for current org
     let _recsEnabled       = false; // true only when a Meta account view is active
 
+    // ── Per-agency settings helpers ──
+    function getAgencySettings(orgId, agencyId) {
+      try { return JSON.parse(localStorage.getItem(`agency_cfg_${orgId}_${agencyId}`) || '{}'); }
+      catch { return {}; }
+    }
+    function saveAgencySettings(orgId, agencyId, patch) {
+      const s = getAgencySettings(orgId, agencyId);
+      localStorage.setItem(`agency_cfg_${orgId}_${agencyId}`, JSON.stringify({ ...s, ...patch }));
+    }
+    function getAgencyTargets() {
+      return getAgencySettings(currentOrgId, currentAgencyId).targets || {};
+    }
+
+    // ── Agency Targets panel ──
+    function toggleTargetsPanel(open) {
+      const panel = document.getElementById('targets-panel');
+      const btn   = document.getElementById('targets-toggle-btn');
+      const isOpen = panel.classList.contains('open');
+      const shouldOpen = open !== undefined ? open : !isOpen;
+      if (shouldOpen) loadTargetsPanel();
+      panel.classList.toggle('open', shouldOpen);
+      if (btn) btn.classList.toggle('active', shouldOpen);
+    }
+    function loadTargetsPanel() {
+      const cfg = getAgencySettings(currentOrgId, currentAgencyId);
+      const t = cfg.targets || {};
+      document.getElementById('tgt-spend').value   = t.spend   ?? '';
+      document.getElementById('tgt-revenue').value = t.revenue ?? '';
+      document.getElementById('tgt-roas').value    = t.roas    ?? '';
+      document.getElementById('tgt-cpm').value     = t.cpm     ?? '';
+      document.getElementById('tgt-cpc').value     = t.cpc     ?? '';
+      document.getElementById('tgt-ctr').value     = t.ctr     ?? '';
+      document.getElementById('tgt-cpr').value     = t.cpr     ?? '';
+      document.getElementById('tgt-orders').value  = t.orders  ?? '';
+      document.getElementById('tgt-cvr').value     = t.cvr     ?? '';
+      document.getElementById('tgt-period').value  = cfg.period ?? '';
+      const agencies = getAgencies(currentOrgId);
+      const agency = agencies.find(a => a.id === currentAgencyId);
+      const nameEl = document.getElementById('tgt-agency-name');
+      if (nameEl) nameEl.textContent = agency?.name || '';
+    }
+    function saveTargets() {
+      const num = id => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; };
+      const targets = { spend: num('tgt-spend'), revenue: num('tgt-revenue'), roas: num('tgt-roas'), cpm: num('tgt-cpm'), cpc: num('tgt-cpc'), ctr: num('tgt-ctr'), cpr: num('tgt-cpr'), orders: num('tgt-orders'), cvr: num('tgt-cvr') };
+      const period = document.getElementById('tgt-period').value || null;
+      saveAgencySettings(currentOrgId, currentAgencyId, { targets, ...(period ? { period } : {}) });
+      // Apply period immediately if set
+      if (period) {
+        currentPeriod = period;
+        localStorage.setItem('dash_period', period);
+        document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === period));
+        document.getElementById('custom-dates')?.classList.remove('visible');
+      }
+      toggleTargetsPanel(false);
+      if (sel.value) loadData();
+    }
+
     const PERIOD_LABELS = {
       today:        'Today',
       yesterday:    'Yesterday',
@@ -1566,8 +1695,8 @@
       if (all.some(a => a.type === 'google_ads')) orgPlatforms.push('google_ads');
       if (all.some(a => a.type === 'tiktok_ads')) orgPlatforms.push('tiktok_ads');
 
-      // Restore saved platform or pick first available
-      const saved = localStorage.getItem(`dash_platform_${currentOrgId}`);
+      // Restore saved platform or pick first available (per-agency)
+      const saved = getAgencySettings(currentOrgId, currentAgencyId).platform || localStorage.getItem(`dash_platform_${currentOrgId}`);
       if (!currentPlatformTab || !orgPlatforms.includes(currentPlatformTab)) {
         currentPlatformTab = (saved && orgPlatforms.includes(saved)) ? saved : (orgPlatforms[0] || '');
       }
@@ -1588,6 +1717,7 @@
     function setPlatformTab(platform) {
       currentPlatformTab = platform;
       localStorage.setItem(`dash_platform_${currentOrgId}`, platform);
+      saveAgencySettings(currentOrgId, currentAgencyId, { platform });
       renderPlatformTabs();
       filterAccountsByAgency();
       // Reset account selection and clear content when switching platforms
@@ -1598,11 +1728,25 @@
       if (recsSection) recsSection.style.display = 'none';
     }
 
-    // Switch the active agency: updates state, re-renders nav, filters accounts.
+    // Switch the active agency: updates state, restores per-agency settings, re-renders.
     function setActiveAgency(agencyId) {
       currentAgencyId = agencyId;
       localStorage.setItem('dash_agency_id', agencyId);
+
+      // Restore per-agency period
+      const agCfg = getAgencySettings(currentOrgId, agencyId);
+      if (agCfg.period) {
+        currentPeriod = agCfg.period;
+        localStorage.setItem('dash_period', currentPeriod);
+        document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === currentPeriod));
+        document.getElementById('custom-dates')?.classList.toggle('visible', currentPeriod === 'custom');
+      }
+
+      // Reset platform tab so renderPlatformTabs picks the agency-specific one
+      currentPlatformTab = '';
+
       renderAgencyNav();
+      renderPlatformTabs();
       filterAccountsByAgency();
       if (sel.value) loadData();
     }
@@ -1724,12 +1868,21 @@
       return 'SINCE today UNTIL today';
     }
 
-    function kpi(colorClass, icon, label, value, sub) {
+    function kpi(colorClass, icon, label, value, sub, rawVal, targetVal, higherIsBetter) {
+      let targetBadge = '';
+      if (targetVal != null && rawVal != null && !isNaN(rawVal)) {
+        const meeting = higherIsBetter === false ? rawVal <= targetVal : rawVal >= targetVal;
+        const tgtFmt  = typeof targetVal === 'number' && targetVal >= 1000
+          ? targetVal.toLocaleString('en', { maximumFractionDigits: 1 })
+          : (typeof targetVal === 'number' ? targetVal.toLocaleString('en', { maximumFractionDigits: 2 }) : targetVal);
+        targetBadge = `<div class="kpi-target ${meeting ? 'on-target' : 'off-target'}">🎯 ${tgtFmt} ${meeting ? '✓' : '↓'}</div>`;
+      }
       return `<div class="kpi-card ${colorClass}">
         <div class="kpi-icon">${icon}</div>
         <div class="kpi-label">${label}</div>
         <div class="kpi-value">${value}</div>
         ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
+        ${targetBadge}
       </div>`;
     }
 
@@ -2065,6 +2218,7 @@
       e.target.classList.add('active');
       currentPeriod = e.target.dataset.period;
       localStorage.setItem('dash_period', currentPeriod);
+      if (currentOrgId && currentAgencyId) saveAgencySettings(currentOrgId, currentAgencyId, { period: currentPeriod });
       // Persist to DB
       if (currentUser && currentOrgId) {
         Auth.saveDashboardSettings(currentUser.id, currentOrgId, { default_period: currentPeriod });
@@ -2988,17 +3142,18 @@
         ? `<span title="${analyticsError.replace(/"/g,'&quot;')}" style="font-size:10px;color:var(--text-muted);font-weight:600;cursor:help">Analytics N/A ⓘ</span>`
         : '—';
 
+      const _t = getAgencyTargets();
       document.getElementById('content').innerHTML = `
         <div class="section-label">Primary KPIs</div>
         <div class="kpi-grid">
-          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(spend, curr),                   'Meta Ads')}
-          ${kpi('c-sky',    '🛒', 'Number of Orders',    sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(spend, curr),                   'Meta Ads',          spend,               _t.spend,   false)}
+          ${kpi('c-sky',    '🛒', 'Number of Orders',    sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel,   shopifyOrders,       _t.orders,  true)}
           ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Shopify orders'))}
           ${kpi('c-teal',   '🧮', 'Number of Pieces',    sfmt(pieces, v => v.toLocaleString('en')), shopifySubLabel)}
           ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ units sold'))}
-          ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
-          ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'))}
-          ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'))}
+          ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel, revenue, _t.revenue, true)}
+          ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'), roas, _t.roas, true)}
+          ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'), adConversionRate, _t.cvr, true)}
           ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
           ${kpi('c-coral',  '✅', 'Confirmed Orders',          sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
           ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
