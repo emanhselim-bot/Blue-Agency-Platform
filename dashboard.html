@@ -3121,15 +3121,11 @@
       // Fall back to Clarity sessions when ShopifyQL is unavailable (dev/Basic plan stores)
       const displaySessions       = sessions ?? claritySessions;
       const sessionsFromClarity   = sessions === null && claritySessions !== null;
-      // Shopify's own CR from ShopifyQL (already × 100);
-      // fallback: orders ÷ sessions (Clarity) — never use checkouts (gives misleading 100%)
-      const shopifyConversionRate = conversionRate !== null
-        ? conversionRate
-        : (shopifyOrders != null && displaySessions
-            ? (shopifyOrders / displaySessions) * 100
-            : null);
-      const crSubLabel = conversionRate !== null ? 'Shopify Analytics'
-        : (displaySessions !== null ? 'Orders ÷ Sessions' : 'Shopify Analytics');
+      // Shopify's own CR from ShopifyQL (already × 100).
+      // Do NOT fall back to Clarity sessions — different counting methodology
+      // produces a misleading number (e.g. 0.88% vs Shopify's actual 4.76%).
+      const shopifyConversionRate = conversionRate !== null ? conversionRate : null;
+      const crSubLabel = 'Shopify Analytics';
       const shopifySubLabel = !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : '<span class="shopify-badge">● Shopify</span>';
@@ -3185,7 +3181,7 @@
             : 'Shopify Analytics';
           const fStepsAll = [
             { icon:'👁️', label:'View Content',      val: displaySessions,  src: viewContentSrc, color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity, alwaysShow: true },
-            { icon:'🛒', label:'Add to Cart',        val: atcVal,           src: atcSrc,         color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: shopifyEnabled },
+            { icon:'🛒', label:'Add to Cart',        val: atcVal,           src: atcSrc,         color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: false },
             { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,  src:'Shopify',       color:'#FCBA00', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
             { icon:'✅', label:'Purchase',           val: shopifyOrders,    src:'Shopify',       color:'#16A34A', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
           ];
