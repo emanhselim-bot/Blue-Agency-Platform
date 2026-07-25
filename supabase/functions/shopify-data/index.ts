@@ -350,7 +350,7 @@ async function fetchShopifyAnalytics(
   until:        string, // YYYY-MM-DD (resolved, used as fallback)
   sinceToken?:  string, // raw token from DSL — used directly if it's a ShopifyQL keyword
   untilToken?:  string, // raw token from DSL — used directly if it's a ShopifyQL keyword
-): Promise<{ sessions: number | null; conversionRate: number | null; analyticsError?: string }> {
+): Promise<{ sessions: number | null; conversionRate: number | null; cartSessions: number | null; analyticsError?: string }> {
   // Use native ShopifyQL keywords when available — they match the Admin UI's
   // timezone handling precisely (e.g. "yesterday" = store's previous calendar day).
   const sinceStr = sinceToken && SHOPIFYQL_DATE_KEYWORDS.has(sinceToken) ? sinceToken : since;
@@ -363,7 +363,7 @@ async function fetchShopifyAnalytics(
   console.log(`[shopify-data] ShopifyQL dateClause: ${dateClause} (raw tokens: ${sinceToken}/${untilToken})`);
 
   const gql = `{
-    shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate ${dateClause}") {
+    shopifyqlQuery(query: "FROM sessions SHOW sessions, conversion_rate, sessions_with_cart_added ${dateClause}") {
       ... on TableData {
         columns { name dataType }
         rowData
@@ -390,7 +390,7 @@ async function fetchShopifyAnalytics(
     if (!resp.ok) {
       const errText = await resp.text();
       console.warn("[shopify-data] ShopifyQL HTTP error:", resp.status, errText.slice(0, 500));
-      return { sessions: null, conversionRate: null, analyticsError: `HTTP ${resp.status}` };
+      return { sessions: null, conversionRate: null, cartSessions: null, analyticsError: `HTTP ${resp.status}` };
     }
     const json = await resp.json();
 
@@ -401,7 +401,7 @@ async function fetchShopifyAnalytics(
     if (json?.errors?.length) {
       const errMsg = json.errors[0]?.message ?? "GraphQL error";
       console.warn("[shopify-data] ShopifyQL GraphQL errors:", JSON.stringify(json.errors));
-      return { sessions: null, conversionRate: null, analyticsError: errMsg };
+      return { sessions: null, conversionRate: null, cartSessions: null, analyticsError: errMsg };
     }
 
     const ql = json?.data?.shopifyqlQuery;
@@ -412,37 +412,40 @@ async function fetchShopifyAnalytics(
       const rawSnippet = JSON.stringify(json).slice(0, 400);
       const msg = `Shopify Analytics not available (requires Shopify plan or higher). Raw: ${rawSnippet}`;
       console.warn("[shopify-data] ShopifyQL null result:", rawSnippet);
-      return { sessions: null, conversionRate: null, analyticsError: msg };
+      return { sessions: null, conversionRate: null, cartSessions: null, analyticsError: msg };
     }
 
     // ParseError object returned by ShopifyQL for invalid query syntax
     if (ql.parseErrors?.length) {
       const errMsg = ql.parseErrors[0]?.message ?? "ShopifyQL parse error";
       console.warn("[shopify-data] ShopifyQL parseErrors:", JSON.stringify(ql.parseErrors));
-      return { sessions: null, conversionRate: null, analyticsError: errMsg };
+      return { sessions: null, conversionRate: null, cartSessions: null, analyticsError: errMsg };
     }
 
     // Empty rowData means no sessions in the period (genuine 0), not a failure
     if (!ql.rowData?.length) {
       console.log("[shopify-data] ShopifyQL empty rowData — 0 sessions in period");
-      return { sessions: 0, conversionRate: 0 };
+      return { sessions: 0, conversionRate: 0, cartSessions: 0 };
     }
     // rowData may be [[...]] or [...] depending on Shopify version
     const row  = Array.isArray(ql.rowData[0]) ? ql.rowData[0] : ql.rowData;
     const cols: string[] = (ql.columns ?? []).map((c: { name: string }) => c.name);
     const sessIdx = cols.indexOf("sessions");
     const crIdx   = cols.indexOf("conversion_rate");
-    const sessVal = sessIdx >= 0 ? parseInt(row[sessIdx])   : NaN;
+    const cartIdx = cols.indexOf("sessions_with_cart_added");
+    const sessVal = sessIdx >= 0 ? parseInt(row[sessIdx])    : NaN;
     const crVal   = crIdx   >= 0 ? parseFloat(row[crIdx])   : NaN;
+    const cartVal = cartIdx >= 0 ? parseInt(row[cartIdx])    : NaN;
     // Preserve 0 as a valid value (|| null would incorrectly drop 0)
-    const sessions       = isNaN(sessVal) ? null : sessVal;
-    const conversionRate = isNaN(crVal)   ? null : crVal;
-    console.log("[shopify-data] ShopifyQL sessions:", sessions, "CR:", conversionRate);
-    return { sessions, conversionRate };
+    const sessions         = isNaN(sessVal) ? null : sessVal;
+    const conversionRate   = isNaN(crVal)   ? null : crVal;
+    const cartSessions     = isNaN(cartVal) ? null : cartVal;
+    console.log("[shopify-data] ShopifyQL sessions:", sessions, "CR:", conversionRate, "cart:", cartSessions);
+    return { sessions, conversionRate, cartSessions };
   } catch (e) {
     const msg = (e as Error).message;
     console.warn("[shopify-data] ShopifyQL exception:", msg);
-    return { sessions: null, conversionRate: null, analyticsError: msg };
+    return { sessions: null, conversionRate: null, cartSessions: null, analyticsError: msg };
   }
 }
 
@@ -668,12 +671,12 @@ Deno.serve(async (req: Request) => {
     // Returns a single JSON with all metric buckets keyed by source name so
     // the dashboard can make ONE call per page load instead of 7.
     if (source === "all") {
-      const [allOrders, abandonedCount, analytics, cartSessions] = await Promise.all([
+      const [allOrders, abandonedCount, analytics] = await Promise.all([
         fetchOrders(store.shop_domain, store.access_token, since, until, shopTimezone),
         fetchAbandonedCheckouts(store.shop_domain, store.access_token, since, until, shopTimezone),
         fetchShopifyAnalytics(store.shop_domain, store.access_token, since, until, dsl.sinceToken, dsl.untilToken),
-        fetchCartSessions(store.shop_domain, store.access_token, since, until, dsl.sinceToken, dsl.untilToken),
       ]);
+      const cartSessions = analytics.cartSessions ?? null;
 
       // Derive refunded orders from the full set (avoids 2 extra API calls)
       const refundedOrders = allOrders.filter(o =>
