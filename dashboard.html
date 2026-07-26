@@ -1868,7 +1868,7 @@
       return 'SINCE today UNTIL today';
     }
 
-    function kpi(colorClass, icon, label, value, sub, rawVal, targetVal, higherIsBetter) {
+    function kpi(colorClass, icon, label, value, sub, rawVal, targetVal, higherIsBetter, valueId) {
       let targetBadge = '';
       if (targetVal != null && rawVal != null && !isNaN(rawVal)) {
         const meeting = higherIsBetter === false ? rawVal <= targetVal : rawVal >= targetVal;
@@ -1880,7 +1880,7 @@
       return `<div class="kpi-card ${colorClass}">
         <div class="kpi-icon">${icon}</div>
         <div class="kpi-label">${label}</div>
-        <div class="kpi-value">${value}</div>
+        <div class="kpi-value"${valueId ? ` id="${valueId}"` : ''}>${value}</div>
         ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
         ${targetBadge}
       </div>`;
@@ -3112,10 +3112,22 @@
       const numMessages    = parseNum(d.results);
       const costPerMessage = parseNum(d.cost_per_result);
 
-      const avgCostPerOrder = (spend && shopifyOrders) ? spend / shopifyOrders : null;
-      const avgCostPerPiece = (spend && pieces)        ? spend / pieces        : null;
-      const roas            = (revenue && spend)       ? revenue / spend       : null;
-      const adConversionRate      = (shopifyOrders && numLinkClicks) ? (shopifyOrders / numLinkClicks) * 100 : null;
+      // ── Manual entries (persisted per period in localStorage) ──
+      const _periodKey  = `${currentOrgId}-${currentAgencyId}-${currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod}`;
+      const _msgKey     = `msg-orders-${_periodKey}`;
+      const _revKey     = `msg-revenue-${_periodKey}`;
+      const _piecesKey  = `msg-pieces-${_periodKey}`;
+      const msgOrders   = parseInt(localStorage.getItem(_msgKey)   || '0') || 0;
+      const msgRevenue  = parseFloat(localStorage.getItem(_revKey) || '0') || 0;
+      const msgPieces   = parseInt(localStorage.getItem(_piecesKey) || '0') || 0;
+      const totalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + msgOrders;
+      const totalRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
+      const totalPieces  = (pieces         !== null ? pieces         : 0) + msgPieces;
+
+      const avgCostPerOrder = (spend && totalOrders)  ? spend / totalOrders  : null;
+      const avgCostPerPiece = (spend && totalPieces)  ? spend / totalPieces  : null;
+      const roas            = (totalRevenue && spend) ? totalRevenue / spend : null;
+      const adConversionRate = (totalOrders && numLinkClicks) ? (totalOrders / numLinkClicks) * 100 : null;
       // sessions & conversionRate come from Shopify Analytics (ShopifyQL)
       // conversionRate is already a decimal from Shopify (e.g. 0.045 = 4.5%) × 100 = 4.5
       // Fall back to Clarity sessions when ShopifyQL is unavailable (dev/Basic plan stores)
@@ -3142,17 +3154,42 @@
       document.getElementById('content').innerHTML = `
         <div class="section-label">Primary KPIs</div>
         <div class="kpi-grid">
-          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(spend, curr),                   'Meta Ads',          spend,               _t.spend,   false)}
-          ${kpi('c-sky',    '🛒', 'Number of Orders',    sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel,   shopifyOrders,       _t.orders,  true)}
-          ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Shopify orders'))}
-          ${kpi('c-teal',   '🧮', 'Number of Pieces',    sfmt(pieces, v => v.toLocaleString('en')), shopifySubLabel)}
-          ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ units sold'))}
-          ${kpi('c-gold',   '💵', 'Revenue',             sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel, revenue, _t.revenue, true)}
-          ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Shopify Revenue ÷ Meta Spend'), roas, _t.roas, true)}
-          ${kpi('c-green',  '🎯', 'Total Conversion Rate',   sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Shopify Orders ÷ Meta Link Clicks'), adConversionRate, _t.cvr, true)}
+          ${kpi('c-blue',   '💰', 'Total Spend',          fmt(spend, curr),                   'Meta Ads',          spend,    _t.spend,   false)}
+          ${kpi('c-sky',    '🛒', 'Orders from Website',  sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
+          <div class="kpi-card c-teal">
+            <div class="kpi-icon">💬</div>
+            <div class="kpi-label">Orders from Messages</div>
+            <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
+              style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+            <div class="kpi-sub">Manual entry</div>
+          </div>
+          ${kpi('c-green',  '📊', 'Total Orders',          (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—', 'Website + Messages', totalOrders, _t.orders, true, 'kpi-total-orders-val')}
+          ${kpi('c-sky',    '📦', 'Avg Cost per Order',    sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
+          ${kpi('c-teal',   '🧮', 'Pieces from Website',    sfmt(pieces, v => v.toLocaleString('en')), shopifySubLabel)}
+          <div class="kpi-card c-teal">
+            <div class="kpi-icon">💬</div>
+            <div class="kpi-label">Pieces from Messages</div>
+            <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
+              style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+            <div class="kpi-sub">Manual entry</div>
+          </div>
+          ${kpi('c-green',  '📦', 'Total Pieces',          (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—', 'Website + Messages', null, null, null, 'kpi-total-pieces-val')}
+          ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece',   sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
+          ${kpi('c-gold',   '💵', 'Revenue from Website',  sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
+          <div class="kpi-card c-gold">
+            <div class="kpi-icon">💬</div>
+            <div class="kpi-label">Revenue from Messages</div>
+            <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
+              style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+            <div class="kpi-sub">Manual entry</div>
+          </div>
+          ${kpi('c-green',  '💵', 'Total Revenue',         (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+          ${kpi('c-orange', '📈', 'ROAS',                  (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+          ${kpi('c-green',  '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Meta Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
           ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
-          ${kpi('c-coral',  '✅', 'Confirmed Orders',          sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
-          ${kpi('c-navy',   '👁️', 'Sessions',                displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
+          ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
+          ${kpi('c-orange', '💬', 'Number of Messages',    numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '—', 'Meta Ads')}
+          ${kpi('c-coral',  '💸', 'Cost per Message',      costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
         </div>
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
@@ -3183,7 +3220,7 @@
             { icon:'👁️', label:'View Content',      val: displaySessions,  src: viewContentSrc, color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity, alwaysShow: true },
             { icon:'🛒', label:'Add to Cart',        val: atcVal,           src: atcSrc,         color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: false },
             { icon:'💳', label:'Initiate Checkout',  val: funnelAddToCart,  src:'Shopify',       color:'#FCBA00', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
-            { icon:'✅', label:'Purchase',           val: shopifyOrders,    src:'Shopify',       color:'#16A34A', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
+            { icon:'✅', label:'Purchase',           val: totalOrders,      src: msgOrders > 0 ? 'Shopify + Messages' : 'Shopify', color:'#16A34A', shopify: true,  isAnalytics: false, alwaysShow: shopifyEnabled },
           ];
           // Only show steps that have real data (or are always-shown anchors like View Content / Purchase)
           const fSteps = fStepsAll.filter(s => s.alwaysShow || (s.val !== null && s.val !== undefined && !isNaN(s.val)));
@@ -3206,8 +3243,8 @@
             `<div class="funnel-step" style="border-top:3px solid ${step.color}">
               <div class="funnel-step-icon">${step.icon}</div>
               <div class="funnel-step-label">${step.label}</div>
-              <div class="funnel-step-value">${displayVal}</div>
-              <div class="funnel-step-source">${step.src}</div>
+              <div class="funnel-step-value"${step.label === 'Purchase' ? ' id="funnel-purchase-val"' : ''}>${displayVal}</div>
+              <div class="funnel-step-source"${step.label === 'Purchase' ? ' id="funnel-purchase-src"' : ''}>${step.src}</div>
             </div>`;
           }).join('') + '</div>';
         })()}
@@ -3238,6 +3275,58 @@
         ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
 
         `;
+
+      // ── Manual inputs — live update handlers ──
+      {
+        // Helper: recalc and push derived values to DOM
+        const recalcDerived = (newMsgOrders, newMsgRevenue, newMsgPieces) => {
+          const newTotalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + newMsgOrders;
+          const newTotalRevenue = (revenue       !== null ? revenue       : 0) + newMsgRevenue;
+          const newTotalPieces  = (pieces        !== null ? pieces        : 0) + newMsgPieces;
+          const na = shopifyEnabled ? '—' : 'N/A';
+
+          const el = id => document.getElementById(id);
+
+          // Orders
+          if (el('kpi-total-orders-val'))       el('kpi-total-orders-val').textContent       = newTotalOrders.toLocaleString('en');
+          if (el('kpi-avg-cost-per-order-val'))  el('kpi-avg-cost-per-order-val').textContent  = (spend && newTotalOrders)  ? fmt(spend / newTotalOrders, curr)  : na;
+          if (el('kpi-total-cr-val'))            el('kpi-total-cr-val').textContent            = (newTotalOrders && numLinkClicks) ? fmt(newTotalOrders / numLinkClicks * 100, '', 2) + '%' : na;
+          if (el('funnel-purchase-val'))         el('funnel-purchase-val').textContent         = newTotalOrders.toLocaleString('en');
+          if (el('funnel-purchase-src'))         el('funnel-purchase-src').textContent         = newMsgOrders > 0 ? 'Shopify + Messages' : 'Shopify';
+
+          // Pieces
+          if (el('kpi-total-pieces-val'))        el('kpi-total-pieces-val').textContent        = newTotalPieces.toLocaleString('en');
+          if (el('kpi-avg-cost-per-piece-val'))  el('kpi-avg-cost-per-piece-val').textContent  = (spend && newTotalPieces) ? fmt(spend / newTotalPieces, curr) : na;
+
+          // Revenue & ROAS
+          if (el('kpi-total-revenue-val'))       el('kpi-total-revenue-val').textContent       = (shopifyEnabled || newMsgRevenue > 0) ? curr + newTotalRevenue.toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+          if (el('kpi-roas-val'))                el('kpi-roas-val').textContent                = (newTotalRevenue && spend) ? fmt(newTotalRevenue / spend, '', 2) + 'x' : na;
+        };
+
+        let _curMsgOrders  = msgOrders;
+        let _curMsgRevenue = msgRevenue;
+        let _curMsgPieces  = msgPieces;
+
+        const ordersInput  = document.getElementById('kpi-msg-orders-input');
+        const revenueInput = document.getElementById('kpi-msg-revenue-input');
+        const piecesInput  = document.getElementById('kpi-msg-pieces-input');
+
+        if (ordersInput) ordersInput.addEventListener('input', () => {
+          _curMsgOrders = parseInt(ordersInput.value) || 0;
+          localStorage.setItem(_msgKey, String(_curMsgOrders));
+          recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
+        });
+        if (revenueInput) revenueInput.addEventListener('input', () => {
+          _curMsgRevenue = parseFloat(revenueInput.value) || 0;
+          localStorage.setItem(_revKey, String(_curMsgRevenue));
+          recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
+        });
+        if (piecesInput) piecesInput.addEventListener('input', () => {
+          _curMsgPieces = parseInt(piecesInput.value) || 0;
+          localStorage.setItem(_piecesKey, String(_curMsgPieces));
+          recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
+        });
+      }
 
       // ── Capture context for Ask Claude sidebar ──
       try {
