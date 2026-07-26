@@ -3135,10 +3135,9 @@
       const cpc            = parseNum(d.cpc);
       const ctr            = parseNum(d.ctr);
       const frequency      = parseNum(d.frequency);
-      // Use d.results / d.cost_per_result — these match Meta Ads Manager's "Results" column
-      // (for messaging campaigns this IS the conversation count; falls back to action-type field)
-      const numMessages    = parseNum(d.results)         ?? parseNum(d.messages);
-      const costPerMessage = parseNum(d.cost_per_result) ?? parseNum(d.cost_per_message);
+      // Business Suite total (page_messages_new_conversation_unique) → ad results → action-type fallback
+      const numMessages    = parseNum(d.page_messages) ?? parseNum(d.results) ?? parseNum(d.messages);
+      const costPerMessage = parseNum(d.cost_per_message); // edge fn now pre-calculates as spend/page_messages
 
       // ── Manual entries (persisted per period in localStorage) ──
       const _periodKey  = `${currentOrgId}-${currentAgencyId}-${currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod}`;

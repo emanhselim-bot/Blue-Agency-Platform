@@ -411,7 +411,67 @@ Deno.serve(async (req: Request) => {
   const costPerAction: Record<string, string> = {};
   for (const a of insight.cost_per_action_type ?? []) costPerAction[a.action_type] = a.value;
 
-  // ── 7. Return shape that the dashboard's parse logic expects ──
+  // ── 7. Fetch Business Suite page messages (total conversations, not just ad-attributed) ──
+  // Converts period → actual YYYY-MM-DD dates for the Page Insights API
+  function periodToDates(p: string, cf?: string, ct?: string): { since: string; until: string } {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const now  = new Date();
+    const today     = fmt(now);
+    const yesterday = fmt(new Date(now.getTime() - 86_400_000));
+    switch (p) {
+      case "yesterday":    return { since: yesterday, until: yesterday };
+      case "last_7_days":  return { since: fmt(new Date(now.getTime() - 7  * 86_400_000)), until: today };
+      case "last_30_days": return { since: fmt(new Date(now.getTime() - 30 * 86_400_000)), until: today };
+      case "this_month":   return { since: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), until: today };
+      case "last_month":   return { since: fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1)), until: fmt(new Date(now.getFullYear(), now.getMonth(), 0)) };
+      case "this_quarter": { const q = Math.floor(now.getMonth() / 3); return { since: fmt(new Date(now.getFullYear(), q * 3, 1)), until: today }; }
+      case "this_year":    return { since: fmt(new Date(now.getFullYear(), 0, 1)), until: today };
+      case "custom":       return { since: cf ?? today, until: ct ?? today };
+      default:             return { since: today, until: today }; // "today"
+    }
+  }
+
+  let pageMessages: number | null = null;
+  try {
+    // 7a. Get the Business ID from the ad account
+    const bizRes  = await fetch(`${META_API}/act_${account.meta_account_id}?fields=business&access_token=${accessToken}`);
+    const bizData = await bizRes.json();
+    const businessId = bizData.business?.id as string | undefined;
+
+    if (businessId) {
+      // 7b. Get the first owned Page under that Business Manager
+      const pagesRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=1&access_token=${accessToken}`);
+      const pagesData = await pagesRes.json();
+      const pageId    = pagesData.data?.[0]?.id as string | undefined;
+
+      if (pageId) {
+        // 7c. Fetch page_messages_new_conversation_unique for the selected period
+        const { since, until } = periodToDates(period, custom_from, custom_to);
+        const iParams = new URLSearchParams({
+          metric: "page_messages_new_conversation_unique",
+          period: "day",
+          since,
+          until,
+          access_token: accessToken,
+        });
+        const iRes  = await fetch(`${META_API}/${pageId}/insights?${iParams}`);
+        const iData = await iRes.json();
+        if (!iData.error) {
+          const vals = (iData.data?.[0]?.values ?? []) as { value: number }[];
+          const total = vals.reduce((s, v) => s + (v.value || 0), 0);
+          if (total > 0) pageMessages = total;
+        } else {
+          console.log("Page insights error:", iData.error.message);
+        }
+      }
+    }
+  } catch (e) {
+    console.log("Page messages fetch failed:", e);
+  }
+
+  // ── 8. Return shape that the dashboard's parse logic expects ──
+  const adSpend = parseFloat(insight.spend ?? "0") || 0;
   return jsonResponse({
     ad_entity: {
       id: `act_${account.meta_account_id}`,
@@ -432,15 +492,16 @@ Deno.serve(async (req: Request) => {
       frequency: insight.frequency,
 
       // Results (messages / leads / purchases — context-dependent)
-      // cost_per_result is an array [{action_type, value}]; extract first value
       results:          insight.results?.[0]?.value         ?? null,
       cost_per_result:  insight.cost_per_result?.[0]?.value ?? null,
 
-      // Messaging conversations (7-day click window) — used by Number of Messages & Cost per Message KPIs
+      // Business Suite total messages (page_messages_new_conversation_unique) — primary source
+      // Falls back to ad-attributed 7d-click action if page insights unavailable
+      page_messages:    pageMessages,
       messages:         actions["onsite_conversion.messaging_conversation_started_7d"] ?? null,
-      cost_per_message: costPerAction["onsite_conversion.messaging_conversation_started_7d"] ?? null,
+      cost_per_message: pageMessages && adSpend ? String(adSpend / pageMessages) : (costPerAction["onsite_conversion.messaging_conversation_started_7d"] ?? null),
 
-      // Action breakdowns (inline_link_clicks is a reliable direct field fallback)
+      // Action breakdowns
       "actions:like":             actions["like"]            ?? null,
       "actions:page_engagement":  actions["page_engagement"] ?? null,
       "actions:comment":          actions["comment"]         ?? null,
