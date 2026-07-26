@@ -436,6 +436,10 @@ Deno.serve(async (req: Request) => {
       results:          insight.results?.[0]?.value         ?? null,
       cost_per_result:  insight.cost_per_result?.[0]?.value ?? null,
 
+      // Messaging conversations (7-day click window) — used by Number of Messages & Cost per Message KPIs
+      messages:         actions["onsite_conversion.messaging_conversation_started_7d"] ?? null,
+      cost_per_message: costPerAction["onsite_conversion.messaging_conversation_started_7d"] ?? null,
+
       // Action breakdowns (inline_link_clicks is a reliable direct field fallback)
       "actions:like":             actions["like"]            ?? null,
       "actions:page_engagement":  actions["page_engagement"] ?? null,

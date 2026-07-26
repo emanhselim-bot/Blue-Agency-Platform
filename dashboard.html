@@ -3109,8 +3109,8 @@
       const cpc            = parseNum(d.cpc);
       const ctr            = parseNum(d.ctr);
       const frequency      = parseNum(d.frequency);
-      const numMessages    = parseNum(d.results);
-      const costPerMessage = parseNum(d.cost_per_result);
+      const numMessages    = parseNum(d.messages);
+      const costPerMessage = parseNum(d.cost_per_message);
 
       // ── Manual entries (persisted per period in localStorage) ──
       const _periodKey  = `${currentOrgId}-${currentAgencyId}-${currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod}`;
