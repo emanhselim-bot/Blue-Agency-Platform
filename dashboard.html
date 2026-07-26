@@ -144,6 +144,32 @@
     .kpi-card.c-coral  { border-left-color: var(--coral); }     .kpi-card.c-coral::before  { background: var(--coral); }
     .kpi-card.c-navy   { border-left-color: var(--blue-navy); } .kpi-card.c-navy::before   { background: var(--blue-navy); }
     .kpi-card.c-green  { border-left-color: #16A34A; }          .kpi-card.c-green::before  { background: #16A34A; }
+    /* ── SOLID (filled) KPI cards ── */
+    .kpi-card.solid { border-left-width: 0; box-shadow: 0 3px 10px rgba(0,0,0,0.18); }
+    .kpi-card.solid .kpi-label { color: rgba(255,255,255,0.82); }
+    .kpi-card.solid .kpi-value { color: #fff; }
+    .kpi-card.solid .kpi-sub   { color: rgba(255,255,255,0.68); }
+    .kpi-card.solid .kpi-target { background: rgba(255,255,255,0.18); color: #fff; }
+    .kpi-card.solid::before     { background: rgba(255,255,255,1) !important; opacity: 0.12; }
+    .kpi-card.c-blue.solid   { background: #0557D9 !important; }
+    .kpi-card.c-green.solid  { background: #16A34A !important; }
+    .kpi-card.c-orange.solid { background: #FA8500 !important; }
+    .kpi-card.c-teal.solid   { background: #179BB4 !important; }
+    .kpi-card.c-coral.solid  { background: #FF5759 !important; }
+    .kpi-card.c-navy.solid   { background: #0A1CA3 !important; }
+    .kpi-card.c-gold.solid   { background: #D97706 !important; }
+    .kpi-card.c-sky.solid    { background: #0573F5 !important; }
+    .kpi-card.c-purple { border-left-color: #7C3AED; } .kpi-card.c-purple::before { background: #7C3AED; }
+    .kpi-card.c-purple.solid { background: #7C3AED !important; }
+    [data-theme="dark"] .kpi-card.c-blue.solid   { background: #0557D9 !important; }
+    [data-theme="dark"] .kpi-card.c-green.solid  { background: #16A34A !important; }
+    [data-theme="dark"] .kpi-card.c-orange.solid { background: #FA8500 !important; }
+    [data-theme="dark"] .kpi-card.c-teal.solid   { background: #179BB4 !important; }
+    [data-theme="dark"] .kpi-card.c-coral.solid  { background: #FF5759 !important; }
+    [data-theme="dark"] .kpi-card.c-navy.solid   { background: #0A1CA3 !important; }
+    [data-theme="dark"] .kpi-card.c-gold.solid   { background: #D97706 !important; }
+    [data-theme="dark"] .kpi-card.c-sky.solid    { background: #0573F5 !important; }
+    [data-theme="dark"] .kpi-card.c-purple.solid { background: #7C3AED !important; }
     .kpi-icon { font-size: 20px; margin-bottom: 10px; }
     .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 6px; }
     .kpi-value { font-size: 22px; font-weight: 700; color: var(--text-main); line-height: 1.1; letter-spacing: -0.5px; }
@@ -3154,7 +3180,6 @@
       document.getElementById('content').innerHTML = `
         <div class="section-label">Primary KPIs</div>
         <div class="kpi-grid">
-          ${kpi('c-blue',   '💰', 'Total Spend',          fmt(spend, curr),                   'Meta Ads',          spend,    _t.spend,   false)}
           ${kpi('c-sky',    '🛒', 'Orders from Website',  sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
           <div class="kpi-card c-teal">
             <div class="kpi-icon">💬</div>
@@ -3163,8 +3188,6 @@
               style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
             <div class="kpi-sub">Manual entry</div>
           </div>
-          ${kpi('c-green',  '📊', 'Total Orders',          (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—', 'Website + Messages', totalOrders, _t.orders, true, 'kpi-total-orders-val')}
-          ${kpi('c-sky',    '📦', 'Avg Cost per Order',    sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
           ${kpi('c-teal',   '🧮', 'Pieces from Website',    sfmt(pieces, v => v.toLocaleString('en')), shopifySubLabel)}
           <div class="kpi-card c-teal">
             <div class="kpi-icon">💬</div>
@@ -3173,8 +3196,6 @@
               style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
             <div class="kpi-sub">Manual entry</div>
           </div>
-          ${kpi('c-green',  '📦', 'Total Pieces',          (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—', 'Website + Messages', null, null, null, 'kpi-total-pieces-val')}
-          ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece',   sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
           ${kpi('c-gold',   '💵', 'Revenue from Website',  sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
           <div class="kpi-card c-gold">
             <div class="kpi-icon">💬</div>
@@ -3183,13 +3204,23 @@
               style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
             <div class="kpi-sub">Manual entry</div>
           </div>
-          ${kpi('c-green',  '💵', 'Total Revenue',         (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
-          ${kpi('c-orange', '📈', 'ROAS',                  (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
-          ${kpi('c-green',  '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Meta Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
           ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
           ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
           ${kpi('c-orange', '💬', 'Number of Messages',    numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '—', 'Meta Ads')}
           ${kpi('c-coral',  '💸', 'Cost per Message',      costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
+        </div>
+
+        <div class="section-label">Totals</div>
+        <div class="kpi-grid">
+          ${kpi('c-blue solid',   '💰', 'Total Spend',        fmt(spend, curr),                   'Meta Ads',          spend,    _t.spend,   false)}
+          ${kpi('c-green solid',  '📊', 'Total Orders',       (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—', 'Website + Messages', totalOrders, _t.orders, true, 'kpi-total-orders-val')}
+          ${kpi('c-orange solid', '📦', 'Cost per Order',     sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
+          ${kpi('c-teal solid',   '📦', 'Total Pieces',       (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—', 'Website + Messages', null, null, null, 'kpi-total-pieces-val')}
+          ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
+          ${kpi('c-navy solid',   '💵', 'Total Revenue',      (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+          ${kpi('c-gold solid',   '📈', 'ROAS',               (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+          ${kpi('c-sky solid',    '💸', 'Cost per Message',   costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
+          ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
         </div>
 
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
