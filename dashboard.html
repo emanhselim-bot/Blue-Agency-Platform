@@ -367,6 +367,112 @@
     }
     @media (max-width: 1100px) { .recs-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 640px)  { .recs-grid { grid-template-columns: 1fr; } }
+
+    /* ═══════════════════════════════════════════════════
+       MOBILE RESPONSIVE  (≤ 768px)
+       ═══════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      /* Header */
+      .header { padding: 10px 14px; gap: 8px; }
+      .brand-text .agency-name { font-size: 15px; letter-spacing: 4px; }
+      .header-right { gap: 5px; flex-wrap: wrap; }
+      .header-btn { padding: 4px 9px; font-size: 10px; }
+      #auto-refresh-label { display: none; }
+
+      /* Agency nav */
+      .agency-nav { padding: 0 10px; }
+      .agency-tab { font-size: 11px; padding: 10px 12px; }
+
+      /* Controls bar */
+      .controls-bar { padding: 8px 12px; gap: 8px; }
+      .period-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .period-tabs::-webkit-scrollbar { display: none; }
+      .period-btn { font-size: 10px; padding: 5px 10px; white-space: nowrap; flex-shrink: 0; }
+      #account-select { font-size: 12px; max-width: 160px; }
+
+      /* Content area */
+      .content { padding: 12px 12px 24px; }
+      .section-label { font-size: 10px; margin-bottom: 10px; }
+
+      /* KPI grid — 2 columns */
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+
+      /* KPI card — compact */
+      .kpi-card { padding: 11px 12px 10px; border-radius: 10px; border-left-width: 3px; }
+      .kpi-card::before { width: 44px; height: 44px; }
+      .kpi-icon { font-size: 15px; margin-bottom: 6px; }
+      .kpi-label { font-size: 9px; letter-spacing: 0.4px; margin-bottom: 4px; }
+      .kpi-value { font-size: 17px; letter-spacing: -0.3px; }
+      .kpi-sub { font-size: 9px; margin-top: 3px; }
+      .kpi-target { font-size: 9px; padding: 2px 5px; margin-top: 4px; }
+
+      /* Manual input cards */
+      .kpi-card input[type="number"] { font-size: 17px !important; }
+
+      /* Metric cards */
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .metric-card { padding: 10px 12px; }
+      .metric-value { font-size: 14px; }
+
+      /* Funnel — horizontal scroll */
+      .funnel-steps { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
+      .funnel-step { min-width: 90px; }
+      .funnel-step-value { font-size: 15px; }
+      .funnel-step-label { font-size: 9px; }
+      .funnel-step-source { font-size: 8px; }
+
+      /* Charts */
+      .chart-wrap { height: 180px !important; }
+      canvas { max-height: 180px !important; }
+
+      /* Data tables */
+      .data-table { font-size: 11px; }
+      .data-table th, .data-table td { padding: 7px 8px; }
+
+      /* Settings modal — full screen */
+      .modal-overlay { padding: 0; align-items: flex-end; }
+      .modal { max-width: 100%; max-height: 95vh; border-radius: 16px 16px 0 0; }
+      .settings-layout { flex-direction: column; }
+      .settings-sidebar { width: 100%; flex-shrink: 0; overflow-x: auto; overflow-y: hidden; display: flex; flex-direction: row; padding: 6px 8px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); max-height: 52px; }
+      .settings-nav-section { display: none; }
+      .settings-nav-item { flex-direction: column; gap: 2px; padding: 6px 10px; font-size: 9px; white-space: nowrap; border-right: none; border-bottom: 2px solid transparent; border-radius: 6px; min-width: 64px; align-items: center; text-align: center; }
+      .settings-nav-item.active { border-bottom-color: #5b9cf6; border-right-color: transparent; }
+      .settings-nav-icon { font-size: 16px; }
+      .modal-body { padding: 14px 16px 20px; }
+
+      /* AI panel */
+      .ai-panel { width: 100% !important; position: fixed; bottom: 0; left: 0; right: 0; height: 60vh; border-left: none; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; z-index: 500; }
+
+      /* Analysis section */
+      .analysis-grid { grid-template-columns: 1fr !important; }
+      .platform-grid { grid-template-columns: repeat(2,1fr) !important; }
+    }
+
+    /* ═══════════════════════════════════════════════════
+       SMALL MOBILE  (≤ 480px)
+       ═══════════════════════════════════════════════════ */
+    @media (max-width: 480px) {
+      .header { padding: 8px 10px; }
+      .brand-text .agency-name { font-size: 13px; letter-spacing: 3px; }
+      .brand-logo span { width: 5px; }
+
+      .content { padding: 10px 10px 20px; }
+
+      /* KPI cards — even more compact on tiny screens */
+      .kpi-grid { gap: 6px; }
+      .kpi-card { padding: 9px 10px 8px; border-radius: 8px; }
+      .kpi-icon { font-size: 13px; margin-bottom: 5px; }
+      .kpi-label { font-size: 8px; margin-bottom: 3px; }
+      .kpi-value { font-size: 15px; }
+      .kpi-sub { font-size: 8px; }
+      .kpi-card input[type="number"] { font-size: 15px !important; }
+
+      .period-btn { font-size: 9px; padding: 4px 8px; }
+      #account-select { max-width: 130px; font-size: 11px; }
+
+      .funnel-step { min-width: 80px; }
+      .funnel-step-value { font-size: 13px; }
+    }
     .rec-card {
       background: white; border-radius: 14px; padding: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04);
