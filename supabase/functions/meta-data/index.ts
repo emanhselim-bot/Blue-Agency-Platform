@@ -434,21 +434,39 @@ Deno.serve(async (req: Request) => {
 
   let pageMessages: number | null = null;
   try {
-    // Helper: fetch page_messages_new_conversation_unique for a given page
+    // App Access Token — same app used for meta-oauth.
+    // App tokens can query BM pages regardless of what scopes the stored user/system-user token has.
+    const META_APP_ID     = Deno.env.get("META_APP_ID");
+    const META_APP_SECRET = Deno.env.get("META_APP_SECRET");
+    const appToken = (META_APP_ID && META_APP_SECRET) ? `${META_APP_ID}|${META_APP_SECRET}` : null;
+    console.log("App token available:", !!appToken);
+
+    // Helper: fetch page insights. Tries to get a page-specific access token first,
+    // since page insights require a user token or page token (not an app token).
     const fetchPageInsights = async (pageId: string): Promise<number | null> => {
       const { since, until } = periodToDates(period, custom_from, custom_to);
+
+      // Exchange user token for a page access token (works if user token has manage_pages)
+      let pageToken = accessToken;
+      try {
+        const ptRes  = await fetch(`${META_API}/${pageId}?fields=access_token&access_token=${accessToken}`);
+        const ptData = await ptRes.json();
+        if (ptData.access_token) { pageToken = ptData.access_token; }
+      } catch (_) { /* fall through */ }
+
       const iParams = new URLSearchParams({
         metric: "page_messages_new_conversation_unique",
         period: "day",
         since,
         until,
-        access_token: accessToken,
+        access_token: pageToken,
       });
       const iRes  = await fetch(`${META_API}/${pageId}/insights?${iParams}`);
       const iData = await iRes.json();
       if (iData.error) { console.log("Page insights error for", pageId, ":", iData.error.message); return null; }
       const vals  = (iData.data?.[0]?.values ?? []) as { value: number }[];
       const total = vals.reduce((s, v) => s + (v.value || 0), 0);
+      console.log("Page insights total for", pageId, ":", total);
       return total > 0 ? total : null;
     };
 
@@ -459,23 +477,26 @@ Deno.serve(async (req: Request) => {
     console.log("BM ID:", businessId ?? "none");
 
     if (businessId) {
-      // 7b-1. Try owned_pages
-      const ownedRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=5&access_token=${accessToken}`);
+      // Use App Token for BM page lookups — broadest access, no user-scope dependency
+      const lookupToken = appToken ?? accessToken;
+
+      // 7b-1. owned_pages via App Token
+      const ownedRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
       const ownedData = await ownedRes.json();
       let pageId = ownedData.data?.[0]?.id as string | undefined;
       console.log("owned_pages:", ownedData.data?.length ?? 0, "| error:", ownedData.error?.message ?? "none");
 
-      // 7b-2. Try client_pages (pages managed on behalf of clients)
+      // 7b-2. client_pages
       if (!pageId) {
-        const clientRes  = await fetch(`${META_API}/${businessId}/client_pages?fields=id,name&limit=5&access_token=${accessToken}`);
+        const clientRes  = await fetch(`${META_API}/${businessId}/client_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
         const clientData = await clientRes.json();
         pageId = clientData.data?.[0]?.id as string | undefined;
         console.log("client_pages:", clientData.data?.length ?? 0, "| error:", clientData.error?.message ?? "none");
       }
 
-      // 7b-3. Try /pages on the business
+      // 7b-3. /pages on the business
       if (!pageId) {
-        const bpRes  = await fetch(`${META_API}/${businessId}/pages?fields=id,name&limit=5&access_token=${accessToken}`);
+        const bpRes  = await fetch(`${META_API}/${businessId}/pages?fields=id,name&limit=10&access_token=${lookupToken}`);
         const bpData = await bpRes.json();
         pageId = bpData.data?.[0]?.id as string | undefined;
         console.log("business /pages:", bpData.data?.length ?? 0, "| error:", bpData.error?.message ?? "none");
