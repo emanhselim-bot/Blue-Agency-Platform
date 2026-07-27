@@ -473,6 +473,25 @@
       .funnel-step { min-width: 80px; }
       .funnel-step-value { font-size: 13px; }
     }
+    /* ── DRAG & DROP LAYOUT ── */
+    .layout-edit-btn { padding: 5px 11px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; white-space: nowrap; }
+    .layout-edit-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .drag-handle { position: absolute; top: 7px; right: 8px; font-size: 15px; color: var(--text-muted); opacity: 0; cursor: grab; transition: opacity 0.15s; user-select: none; z-index: 2; pointer-events: none; }
+    .kpi-card { position: relative; }
+    body.layout-edit-mode .kpi-card { cursor: grab; }
+    body.layout-edit-mode .kpi-card:active { cursor: grabbing; }
+    body.layout-edit-mode .kpi-card .drag-handle { opacity: 0.45; pointer-events: auto; }
+    body.layout-edit-mode .kpi-card:hover .drag-handle { opacity: 1; }
+    .kpi-card.kpi-dragging { opacity: 0.3; outline: 2px dashed var(--accent); outline-offset: 2px; transform: scale(0.97); transition: transform 0.1s; }
+    .kpi-card.kpi-drag-over { outline: 2px solid var(--accent); outline-offset: 2px; background: rgba(91,156,246,0.07); }
+    .kpi-grid.grid-drag-over { outline: 2px dashed rgba(91,156,246,0.3); border-radius: 12px; }
+    .section-drag-handle { cursor: grab; opacity: 0; font-size: 14px; margin-left: 8px; color: var(--text-muted); transition: opacity 0.15s; user-select: none; vertical-align: middle; }
+    body.layout-edit-mode .section-drag-handle { opacity: 0.5; }
+    body.layout-edit-mode .section-label { cursor: grab; }
+    .kpi-section.section-dragging { opacity: 0.35; }
+    .kpi-section.section-drag-over { outline: 2px solid var(--accent); border-radius: 12px; padding: 8px; margin: -8px; }
+    .kpi-sections-container { display: flex; flex-direction: column; }
+
     .rec-card {
       background: white; border-radius: 14px; padding: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04);
@@ -882,6 +901,7 @@
     </div>
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
+    <button class="layout-edit-btn" id="layout-edit-btn" onclick="toggleLayoutEdit()">⠿ Edit Layout</button>
   </div>
 
   <!-- AGENCY TARGETS PANEL -->
@@ -1644,6 +1664,174 @@
       return getAgencySettings(currentOrgId, currentAgencyId).targets || {};
     }
 
+    // ── Drag & Drop Layout ──
+    let _layoutEditMode = false;
+
+    function toggleLayoutEdit() {
+      _layoutEditMode = !_layoutEditMode;
+      document.body.classList.toggle('layout-edit-mode', _layoutEditMode);
+      const btn = document.getElementById('layout-edit-btn');
+      if (btn) {
+        btn.classList.toggle('active', _layoutEditMode);
+        btn.textContent = _layoutEditMode ? '✓ Done' : '⠿ Edit Layout';
+      }
+    }
+
+    function _layoutKey() {
+      return 'kpi-layout-v1-' + (currentOrgId || 'x') + '-' + (currentAgencyId || 'x');
+    }
+
+    function saveLayout() {
+      const container = document.getElementById('kpi-sections-container');
+      if (!container) return;
+      const sections = [];
+      container.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
+        const cards = [];
+        sec.querySelectorAll('.kpi-card[data-card-id]').forEach(c => cards.push(c.dataset.cardId));
+        sections.push({ id: sec.dataset.sectionId, cards });
+      });
+      try { localStorage.setItem(_layoutKey(), JSON.stringify(sections)); } catch(_) {}
+    }
+
+    function restoreLayout() {
+      let saved;
+      try { saved = JSON.parse(localStorage.getItem(_layoutKey()) || 'null'); } catch(_) {}
+      if (!saved || !Array.isArray(saved)) return;
+      const container = document.getElementById('kpi-sections-container');
+      if (!container) return;
+      // Restore section order
+      saved.forEach(({ id, cards }) => {
+        const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
+        if (sec) container.appendChild(sec);
+        if (!cards || !sec) return;
+        const grid = sec.querySelector('.kpi-grid[data-grid-id]');
+        if (!grid) return;
+        // Restore card order within grid
+        cards.forEach(cid => {
+          const card = grid.querySelector(`.kpi-card[data-card-id="${cid}"]`);
+          if (card) grid.appendChild(card);
+        });
+      });
+    }
+
+    function initDragDrop() {
+      let _dragCard = null, _dragSection = null;
+
+      // ── Card drag & drop ──
+      document.querySelectorAll('.kpi-card[data-card-id]').forEach(card => {
+        card.draggable = true;
+
+        card.addEventListener('dragstart', e => {
+          if (!_layoutEditMode) { e.preventDefault(); return; }
+          _dragCard = card;
+          _dragSection = null;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', card.dataset.cardId);
+          setTimeout(() => card.classList.add('kpi-dragging'), 0);
+        }, { capture: true });
+
+        card.addEventListener('dragend', () => {
+          card.classList.remove('kpi-dragging');
+          document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('kpi-drag-over'));
+          document.querySelectorAll('.kpi-grid').forEach(g => g.classList.remove('grid-drag-over'));
+          _dragCard = null;
+          saveLayout();
+        });
+
+        card.addEventListener('dragover', e => {
+          if (!_layoutEditMode || !_dragCard || _dragCard === card) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('kpi-drag-over'));
+          card.classList.add('kpi-drag-over');
+        });
+
+        card.addEventListener('dragleave', () => card.classList.remove('kpi-drag-over'));
+
+        card.addEventListener('drop', e => {
+          e.preventDefault(); e.stopPropagation();
+          card.classList.remove('kpi-drag-over');
+          if (!_dragCard || _dragCard === card) return;
+          const grid = card.closest('.kpi-grid');
+          if (!grid) return;
+          const rect = card.getBoundingClientRect();
+          // Insert before or after based on horizontal position (grid wraps)
+          const insertBefore = e.clientX < rect.left + rect.width / 2;
+          grid.insertBefore(_dragCard, insertBefore ? card : card.nextSibling);
+          saveLayout();
+        });
+      });
+
+      // ── Grid drop zone (drop onto empty grid space) ──
+      document.querySelectorAll('.kpi-grid[data-grid-id]').forEach(grid => {
+        grid.addEventListener('dragover', e => {
+          if (!_layoutEditMode || !_dragCard) return;
+          e.preventDefault();
+          grid.classList.add('grid-drag-over');
+        });
+        grid.addEventListener('dragleave', e => {
+          if (!grid.contains(e.relatedTarget)) grid.classList.remove('grid-drag-over');
+        });
+        grid.addEventListener('drop', e => {
+          grid.classList.remove('grid-drag-over');
+          if (!_dragCard) return;
+          e.preventDefault();
+          // Only append if drop was directly on grid (not on a card)
+          if (e.target === grid) { grid.appendChild(_dragCard); saveLayout(); }
+        });
+      });
+
+      // ── Section drag & drop ──
+      document.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
+        const handle = sec.querySelector('.section-drag-handle');
+        if (!handle) return;
+        sec.draggable = true;
+
+        sec.addEventListener('dragstart', e => {
+          if (!_layoutEditMode) { e.preventDefault(); return; }
+          // Only allow drag from the handle
+          if (!e.target.classList.contains('section-drag-handle') && e.target !== handle) {
+            // If it's a card drag, let card handler take it
+            if (e.target.closest('.kpi-card')) return;
+            e.preventDefault(); return;
+          }
+          _dragSection = sec;
+          _dragCard = null;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', sec.dataset.sectionId);
+          setTimeout(() => sec.classList.add('section-dragging'), 0);
+        });
+
+        sec.addEventListener('dragend', () => {
+          sec.classList.remove('section-dragging');
+          document.querySelectorAll('.kpi-section').forEach(s => s.classList.remove('section-drag-over'));
+          _dragSection = null;
+          saveLayout();
+        });
+
+        sec.addEventListener('dragover', e => {
+          if (!_layoutEditMode || !_dragSection || _dragSection === sec) return;
+          e.preventDefault();
+          document.querySelectorAll('.kpi-section').forEach(s => s.classList.remove('section-drag-over'));
+          sec.classList.add('section-drag-over');
+        });
+
+        sec.addEventListener('dragleave', e => {
+          if (!sec.contains(e.relatedTarget)) sec.classList.remove('section-drag-over');
+        });
+
+        sec.addEventListener('drop', e => {
+          sec.classList.remove('section-drag-over');
+          if (!_dragSection || _dragSection === sec) return;
+          e.preventDefault(); e.stopPropagation();
+          const parent = sec.parentNode;
+          const rect = sec.getBoundingClientRect();
+          parent.insertBefore(_dragSection, e.clientY < rect.top + rect.height / 2 ? sec : sec.nextSibling);
+          saveLayout();
+        });
+      });
+    }
+
     // ── Agency Targets panel ──
     function toggleTargetsPanel(open) {
       const panel = document.getElementById('targets-panel');
@@ -2001,6 +2189,7 @@
     }
 
     function kpi(colorClass, icon, label, value, sub, rawVal, targetVal, higherIsBetter, valueId) {
+      const cardId = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       let targetBadge = '';
       if (targetVal != null && rawVal != null && !isNaN(rawVal)) {
         const meeting = higherIsBetter === false ? rawVal <= targetVal : rawVal >= targetVal;
@@ -2009,7 +2198,8 @@
           : (typeof targetVal === 'number' ? targetVal.toLocaleString('en', { maximumFractionDigits: 2 }) : targetVal);
         targetBadge = `<div class="kpi-target ${meeting ? 'on-target' : 'off-target'}">🎯 ${tgtFmt} ${meeting ? '✓' : '↓'}</div>`;
       }
-      return `<div class="kpi-card ${colorClass}">
+      return `<div class="kpi-card ${colorClass}" data-card-id="${cardId}">
+        <span class="drag-handle" title="Drag to reorder">⠿</span>
         <div class="kpi-icon">${icon}</div>
         <div class="kpi-label">${label}</div>
         <div class="kpi-value"${valueId ? ` id="${valueId}"` : ''}>${value}</div>
@@ -3285,51 +3475,63 @@
 
       const _t = getAgencyTargets();
       document.getElementById('content').innerHTML = `
-        <div class="section-label">Primary KPIs</div>
-        <div class="kpi-grid">
-          ${kpi('c-sky',    '🛒', 'Orders from Website',  sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
-          <div class="kpi-card c-teal">
-            <div class="kpi-icon">💬</div>
-            <div class="kpi-label">Orders from Messages</div>
-            <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
-              style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-            <div class="kpi-sub">Manual entry</div>
-          </div>
-          ${kpi('c-teal',   '🧮', 'Pieces from Website',    sfmt(pieces, v => v.toLocaleString('en')), shopifySubLabel)}
-          <div class="kpi-card c-teal">
-            <div class="kpi-icon">💬</div>
-            <div class="kpi-label">Pieces from Messages</div>
-            <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
-              style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-            <div class="kpi-sub">Manual entry</div>
-          </div>
-          ${kpi('c-gold',   '💵', 'Revenue from Website',  sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
-          <div class="kpi-card c-gold">
-            <div class="kpi-icon">💬</div>
-            <div class="kpi-label">Revenue from Messages</div>
-            <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
-              style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-            <div class="kpi-sub">Manual entry</div>
-          </div>
-          ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
-          ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
-          ${kpi('c-orange', '💬', 'Number of Messages',    numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '—', 'Meta Ads')}
-          ${kpi('c-coral',  '💸', 'Cost per Message',      costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
-        </div>
+        <div class="kpi-sections-container" id="kpi-sections-container">
 
-        <div class="section-label">Totals</div>
-        <div class="kpi-grid">
-          ${kpi('c-blue solid',   '💰', 'Total Spend',        fmt(spend, curr),                   'Meta Ads',          spend,    _t.spend,   false)}
-          ${kpi('c-green solid',  '📊', 'Total Orders',       (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—', 'Website + Messages', totalOrders, _t.orders, true, 'kpi-total-orders-val')}
-          ${kpi('c-orange solid', '📦', 'Cost per Order',     sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
-          ${kpi('c-teal solid',   '📦', 'Total Pieces',       (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—', 'Website + Messages', null, null, null, 'kpi-total-pieces-val')}
-          ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
-          ${kpi('c-navy solid',   '💵', 'Total Revenue',      (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
-          ${kpi('c-gold solid',   '📈', 'ROAS',               (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
-          ${kpi('c-sky solid',    '💸', 'Cost per Message',   costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
-          ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
-        </div>
+          <div class="kpi-section" data-section-id="primary-kpis">
+            <div class="section-label">Primary KPIs <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="primary-kpis">
+              ${kpi('c-sky',    '🛒', 'Orders from Website',  sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
+              <div class="kpi-card c-teal" data-card-id="orders-from-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Orders from Messages</div>
+                <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              ${kpi('c-teal',   '🧮', 'Pieces from Website',    sfmt(pieces, v => v.toLocaleString('en')), shopifySubLabel)}
+              <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Pieces from Messages</div>
+                <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              ${kpi('c-gold',   '💵', 'Revenue from Website',  sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
+              <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Revenue from Messages</div>
+                <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
+              ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
+              ${kpi('c-orange', '💬', 'Number of Messages',    numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '—', 'Meta Ads')}
+              ${kpi('c-coral',  '💸', 'Cost per Message',      costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
+            </div>
+          </div>
 
+          <div class="kpi-section" data-section-id="totals">
+            <div class="section-label">Totals <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="totals">
+              ${kpi('c-blue solid',   '💰', 'Total Spend',        fmt(spend, curr),                   'Meta Ads',          spend,    _t.spend,   false)}
+              ${kpi('c-green solid',  '📊', 'Total Orders',       (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—', 'Website + Messages', totalOrders, _t.orders, true, 'kpi-total-orders-val')}
+              ${kpi('c-orange solid', '📦', 'Cost per Order',     sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
+              ${kpi('c-teal solid',   '📦', 'Total Pieces',       (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—', 'Website + Messages', null, null, null, 'kpi-total-pieces-val')}
+              ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
+              ${kpi('c-navy solid',   '💵', 'Total Revenue',      (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+              ${kpi('c-gold solid',   '📈', 'ROAS',               (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+              ${kpi('c-sky solid',    '💸', 'Cost per Message',   costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
+              ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
+            </div>
+          </div>
+
+        </div>`;
+
+      document.getElementById('content').innerHTML += `
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
         ${(()=>{
           // Funnel data sources:
@@ -3465,6 +3667,10 @@
           recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
         });
       }
+
+      // ── Init drag-and-drop layout ──
+      restoreLayout();
+      initDragDrop();
 
       // ── Capture context for Ask Claude sidebar ──
       try {
