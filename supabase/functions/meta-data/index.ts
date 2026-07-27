@@ -434,36 +434,68 @@ Deno.serve(async (req: Request) => {
 
   let pageMessages: number | null = null;
   try {
-    // 7a. Get the Business ID from the ad account
+    // Helper: fetch page_messages_new_conversation_unique for a given page
+    const fetchPageInsights = async (pageId: string): Promise<number | null> => {
+      const { since, until } = periodToDates(period, custom_from, custom_to);
+      const iParams = new URLSearchParams({
+        metric: "page_messages_new_conversation_unique",
+        period: "day",
+        since,
+        until,
+        access_token: accessToken,
+      });
+      const iRes  = await fetch(`${META_API}/${pageId}/insights?${iParams}`);
+      const iData = await iRes.json();
+      if (iData.error) { console.log("Page insights error for", pageId, ":", iData.error.message); return null; }
+      const vals  = (iData.data?.[0]?.values ?? []) as { value: number }[];
+      const total = vals.reduce((s, v) => s + (v.value || 0), 0);
+      return total > 0 ? total : null;
+    };
+
+    // 7a. Get Business ID from the ad account
     const bizRes  = await fetch(`${META_API}/act_${account.meta_account_id}?fields=business&access_token=${accessToken}`);
     const bizData = await bizRes.json();
     const businessId = bizData.business?.id as string | undefined;
+    console.log("BM ID:", businessId ?? "none");
 
     if (businessId) {
-      // 7b. Get the first owned Page under that Business Manager
-      const pagesRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=1&access_token=${accessToken}`);
-      const pagesData = await pagesRes.json();
-      const pageId    = pagesData.data?.[0]?.id as string | undefined;
+      // 7b-1. Try owned_pages
+      const ownedRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=5&access_token=${accessToken}`);
+      const ownedData = await ownedRes.json();
+      let pageId = ownedData.data?.[0]?.id as string | undefined;
+      console.log("owned_pages:", ownedData.data?.length ?? 0, "| error:", ownedData.error?.message ?? "none");
+
+      // 7b-2. Try client_pages (pages managed on behalf of clients)
+      if (!pageId) {
+        const clientRes  = await fetch(`${META_API}/${businessId}/client_pages?fields=id,name&limit=5&access_token=${accessToken}`);
+        const clientData = await clientRes.json();
+        pageId = clientData.data?.[0]?.id as string | undefined;
+        console.log("client_pages:", clientData.data?.length ?? 0, "| error:", clientData.error?.message ?? "none");
+      }
+
+      // 7b-3. Try /pages on the business
+      if (!pageId) {
+        const bpRes  = await fetch(`${META_API}/${businessId}/pages?fields=id,name&limit=5&access_token=${accessToken}`);
+        const bpData = await bpRes.json();
+        pageId = bpData.data?.[0]?.id as string | undefined;
+        console.log("business /pages:", bpData.data?.length ?? 0, "| error:", bpData.error?.message ?? "none");
+      }
 
       if (pageId) {
-        // 7c. Fetch page_messages_new_conversation_unique for the selected period
-        const { since, until } = periodToDates(period, custom_from, custom_to);
-        const iParams = new URLSearchParams({
-          metric: "page_messages_new_conversation_unique",
-          period: "day",
-          since,
-          until,
-          access_token: accessToken,
-        });
-        const iRes  = await fetch(`${META_API}/${pageId}/insights?${iParams}`);
-        const iData = await iRes.json();
-        if (!iData.error) {
-          const vals = (iData.data?.[0]?.values ?? []) as { value: number }[];
-          const total = vals.reduce((s, v) => s + (v.value || 0), 0);
-          if (total > 0) pageMessages = total;
-        } else {
-          console.log("Page insights error:", iData.error.message);
-        }
+        pageMessages = await fetchPageInsights(pageId);
+        console.log("pageMessages via BM:", pageMessages, "from page", pageId);
+      }
+    }
+
+    // 7c. Final fallback: /me/accounts — pages the token user directly administers
+    if (pageMessages === null) {
+      const meRes  = await fetch(`${META_API}/me/accounts?fields=id,name&limit=10&access_token=${accessToken}`);
+      const meData = await meRes.json();
+      const pages  = (meData.data ?? []) as { id: string; name: string }[];
+      console.log("me/accounts pages:", pages.length, "| error:", meData.error?.message ?? "none");
+      for (const page of pages) {
+        const result = await fetchPageInsights(page.id);
+        if (result !== null) { pageMessages = result; console.log("pageMessages via me/accounts:", pageMessages, "from page", page.id); break; }
       }
     }
   } catch (e) {
