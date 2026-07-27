@@ -433,6 +433,16 @@ Deno.serve(async (req: Request) => {
   }
 
   let pageMessages: number | null = null;
+  let messageSource: "business_suite" | "meta_ads" | null = null;
+
+  // page_messages_new_conversation_unique has a 24-48h reporting delay on Facebook's side.
+  // For "today", this metric is always 0 regardless of actual conversations.
+  // Skip the BM lookup entirely for "today" — saves ~1-2s of API calls and avoids showing 0.
+  const skipPageInsights = (period === "today");
+  if (skipPageInsights) {
+    console.log("Skipping page insights for 'today' period (24-48h delay on this metric)");
+  }
+
   try {
     // App Access Token — same app used for meta-oauth.
     // App tokens can query BM pages regardless of what scopes the stored user/system-user token has.
@@ -470,57 +480,70 @@ Deno.serve(async (req: Request) => {
       return total > 0 ? total : null;
     };
 
-    // 7a. Get Business ID from the ad account
-    const bizRes  = await fetch(`${META_API}/act_${account.meta_account_id}?fields=business&access_token=${accessToken}`);
-    const bizData = await bizRes.json();
-    const businessId = bizData.business?.id as string | undefined;
-    console.log("BM ID:", businessId ?? "none");
+    if (!skipPageInsights) {
+      // 7a. Get Business ID from the ad account
+      const bizRes  = await fetch(`${META_API}/act_${account.meta_account_id}?fields=business&access_token=${accessToken}`);
+      const bizData = await bizRes.json();
+      const businessId = bizData.business?.id as string | undefined;
+      console.log("BM ID:", businessId ?? "none");
 
-    if (businessId) {
-      // Use App Token for BM page lookups — broadest access, no user-scope dependency
-      const lookupToken = appToken ?? accessToken;
+      if (businessId) {
+        // Use App Token for BM page lookups — broadest access, no user-scope dependency
+        const lookupToken = appToken ?? accessToken;
 
-      // 7b-1. owned_pages via App Token
-      const ownedRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
-      const ownedData = await ownedRes.json();
-      let pageId = ownedData.data?.[0]?.id as string | undefined;
-      console.log("owned_pages:", ownedData.data?.length ?? 0, "| error:", ownedData.error?.message ?? "none");
+        // 7b-1. owned_pages via App Token
+        const ownedRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
+        const ownedData = await ownedRes.json();
+        let pageId = ownedData.data?.[0]?.id as string | undefined;
+        console.log("owned_pages:", ownedData.data?.length ?? 0, "| error:", ownedData.error?.message ?? "none");
 
-      // 7b-2. client_pages
-      if (!pageId) {
-        const clientRes  = await fetch(`${META_API}/${businessId}/client_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
-        const clientData = await clientRes.json();
-        pageId = clientData.data?.[0]?.id as string | undefined;
-        console.log("client_pages:", clientData.data?.length ?? 0, "| error:", clientData.error?.message ?? "none");
+        // 7b-2. client_pages
+        if (!pageId) {
+          const clientRes  = await fetch(`${META_API}/${businessId}/client_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
+          const clientData = await clientRes.json();
+          pageId = clientData.data?.[0]?.id as string | undefined;
+          console.log("client_pages:", clientData.data?.length ?? 0, "| error:", clientData.error?.message ?? "none");
+        }
+
+        // 7b-3. /pages on the business
+        if (!pageId) {
+          const bpRes  = await fetch(`${META_API}/${businessId}/pages?fields=id,name&limit=10&access_token=${lookupToken}`);
+          const bpData = await bpRes.json();
+          pageId = bpData.data?.[0]?.id as string | undefined;
+          console.log("business /pages:", bpData.data?.length ?? 0, "| error:", bpData.error?.message ?? "none");
+        }
+
+        if (pageId) {
+          pageMessages = await fetchPageInsights(pageId);
+          if (pageMessages !== null) messageSource = "business_suite";
+          console.log("pageMessages via BM:", pageMessages, "from page", pageId);
+        }
       }
 
-      // 7b-3. /pages on the business
-      if (!pageId) {
-        const bpRes  = await fetch(`${META_API}/${businessId}/pages?fields=id,name&limit=10&access_token=${lookupToken}`);
-        const bpData = await bpRes.json();
-        pageId = bpData.data?.[0]?.id as string | undefined;
-        console.log("business /pages:", bpData.data?.length ?? 0, "| error:", bpData.error?.message ?? "none");
-      }
-
-      if (pageId) {
-        pageMessages = await fetchPageInsights(pageId);
-        console.log("pageMessages via BM:", pageMessages, "from page", pageId);
-      }
-    }
-
-    // 7c. Final fallback: /me/accounts — pages the token user directly administers
-    if (pageMessages === null) {
-      const meRes  = await fetch(`${META_API}/me/accounts?fields=id,name&limit=10&access_token=${accessToken}`);
-      const meData = await meRes.json();
-      const pages  = (meData.data ?? []) as { id: string; name: string }[];
-      console.log("me/accounts pages:", pages.length, "| error:", meData.error?.message ?? "none");
-      for (const page of pages) {
-        const result = await fetchPageInsights(page.id);
-        if (result !== null) { pageMessages = result; console.log("pageMessages via me/accounts:", pageMessages, "from page", page.id); break; }
+      // 7c. Final fallback: /me/accounts — pages the token user directly administers
+      if (pageMessages === null) {
+        const meRes  = await fetch(`${META_API}/me/accounts?fields=id,name&limit=10&access_token=${accessToken}`);
+        const meData = await meRes.json();
+        const pages  = (meData.data ?? []) as { id: string; name: string }[];
+        console.log("me/accounts pages:", pages.length, "| error:", meData.error?.message ?? "none");
+        for (const page of pages) {
+          const result = await fetchPageInsights(page.id);
+          if (result !== null) {
+            pageMessages = result;
+            messageSource = "business_suite";
+            console.log("pageMessages via me/accounts:", pageMessages, "from page", page.id);
+            break;
+          }
+        }
       }
     }
   } catch (e) {
     console.log("Page messages fetch failed:", e);
+  }
+
+  // Determine final message source for dashboard labeling
+  if (messageSource === null) {
+    messageSource = actions["onsite_conversion.messaging_conversation_started_7d"] != null ? "meta_ads" : null;
   }
 
   // ── 8. Return shape that the dashboard's parse logic expects ──
@@ -552,6 +575,7 @@ Deno.serve(async (req: Request) => {
       // Falls back to ad-attributed 7d-click action if page insights unavailable
       page_messages:    pageMessages,
       messages:         actions["onsite_conversion.messaging_conversation_started_7d"] ?? null,
+      message_source:   messageSource,   // "business_suite" | "meta_ads" | null
       cost_per_message: pageMessages && adSpend ? String(adSpend / pageMessages) : (costPerAction["onsite_conversion.messaging_conversation_started_7d"] ?? null),
 
       // Action breakdowns

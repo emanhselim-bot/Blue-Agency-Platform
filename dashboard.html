@@ -483,8 +483,7 @@
     body.layout-edit-mode .kpi-card .drag-handle { opacity: 0.45; pointer-events: auto; }
     body.layout-edit-mode .kpi-card:hover .drag-handle { opacity: 1; }
     .kpi-card.kpi-dragging { opacity: 0.3; outline: 2px dashed var(--accent); outline-offset: 2px; transform: scale(0.97); transition: transform 0.1s; }
-    .kpi-card.kpi-drag-over { outline: 2px solid var(--accent); outline-offset: 2px; background: rgba(91,156,246,0.07); }
-    .kpi-grid.grid-drag-over { outline: 2px dashed rgba(91,156,246,0.3); border-radius: 12px; }
+    .kpi-drop-placeholder { background: rgba(91,156,246,0.07); border: 2px dashed rgba(91,156,246,0.45); border-radius: 10px; min-height: 82px; pointer-events: none; box-sizing: border-box; }
     .section-drag-handle { cursor: grab; opacity: 0; font-size: 14px; margin-left: 8px; color: var(--text-muted); transition: opacity 0.15s; user-select: none; vertical-align: middle; }
     body.layout-edit-mode .section-drag-handle { opacity: 0.5; }
     body.layout-edit-mode .section-label { cursor: grab; }
@@ -1715,73 +1714,74 @@
     }
 
     function initDragDrop() {
-      let _dragCard = null, _dragSection = null;
+      let _dragCard = null, _dragSection = null, _ph = null;
 
-      // ── Card drag & drop ──
+      // ── Placeholder slot ──
+      function makePh() {
+        const p = document.createElement('div');
+        p.className = 'kpi-drop-placeholder';
+        p.id = '_kpi_ph';
+        return p;
+      }
+      function removePh() {
+        const p = document.getElementById('_kpi_ph');
+        if (p) p.remove();
+        _ph = null;
+      }
+      // Returns the grid child to insert before (null = append)
+      function insertionCard(grid, clientX) {
+        const cards = [...grid.children].filter(el =>
+          el.classList.contains('kpi-card') && !el.classList.contains('kpi-dragging')
+        );
+        for (const c of cards) {
+          const r = c.getBoundingClientRect();
+          if (clientX < r.left + r.width / 2) return c;
+        }
+        return null;
+      }
+
+      // ── Card drag start/end ──
       document.querySelectorAll('.kpi-card[data-card-id]').forEach(card => {
         card.draggable = true;
-
         card.addEventListener('dragstart', e => {
           if (!_layoutEditMode) { e.preventDefault(); return; }
           _dragCard = card;
           _dragSection = null;
           e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', card.dataset.cardId);
+          _ph = makePh();
           setTimeout(() => card.classList.add('kpi-dragging'), 0);
-        }, { capture: true });
-
+        });
         card.addEventListener('dragend', () => {
           card.classList.remove('kpi-dragging');
-          document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('kpi-drag-over'));
-          document.querySelectorAll('.kpi-grid').forEach(g => g.classList.remove('grid-drag-over'));
+          removePh();
+          _dragCard = null;
+        });
+      });
+
+      // ── Grids handle ALL positioning + drop ──
+      document.querySelectorAll('.kpi-grid[data-grid-id]').forEach(grid => {
+        grid.addEventListener('dragover', e => {
+          if (!_layoutEditMode || !_dragCard || !_ph) return;
+          e.preventDefault();
+          const before = insertionCard(grid, e.clientX);
+          if (before) grid.insertBefore(_ph, before);
+          else grid.appendChild(_ph);
+        });
+        grid.addEventListener('dragleave', e => {
+          if (!grid.contains(e.relatedTarget)) removePh();
+        });
+        grid.addEventListener('drop', e => {
+          e.preventDefault();
+          if (!_dragCard) return;
+          if (_ph && _ph.parentNode) _ph.parentNode.insertBefore(_dragCard, _ph);
+          else grid.appendChild(_dragCard);
+          removePh();
           _dragCard = null;
           saveLayout();
         });
-
-        card.addEventListener('dragover', e => {
-          if (!_layoutEditMode || !_dragCard || _dragCard === card) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('kpi-drag-over'));
-          card.classList.add('kpi-drag-over');
-        });
-
-        card.addEventListener('dragleave', () => card.classList.remove('kpi-drag-over'));
-
-        card.addEventListener('drop', e => {
-          e.preventDefault(); e.stopPropagation();
-          card.classList.remove('kpi-drag-over');
-          if (!_dragCard || _dragCard === card) return;
-          const grid = card.closest('.kpi-grid');
-          if (!grid) return;
-          const rect = card.getBoundingClientRect();
-          // Insert before or after based on horizontal position (grid wraps)
-          const insertBefore = e.clientX < rect.left + rect.width / 2;
-          grid.insertBefore(_dragCard, insertBefore ? card : card.nextSibling);
-          saveLayout();
-        });
       });
 
-      // ── Grid drop zone (drop onto empty grid space) ──
-      document.querySelectorAll('.kpi-grid[data-grid-id]').forEach(grid => {
-        grid.addEventListener('dragover', e => {
-          if (!_layoutEditMode || !_dragCard) return;
-          e.preventDefault();
-          grid.classList.add('grid-drag-over');
-        });
-        grid.addEventListener('dragleave', e => {
-          if (!grid.contains(e.relatedTarget)) grid.classList.remove('grid-drag-over');
-        });
-        grid.addEventListener('drop', e => {
-          grid.classList.remove('grid-drag-over');
-          if (!_dragCard) return;
-          e.preventDefault();
-          // Only append if drop was directly on grid (not on a card)
-          if (e.target === grid) { grid.appendChild(_dragCard); saveLayout(); }
-        });
-      });
-
-      // ── Section drag & drop ──
+      // ── Section drag (grab the ⠿ handle in the section label) ──
       document.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
         const handle = sec.querySelector('.section-drag-handle');
         if (!handle) return;
@@ -1789,44 +1789,37 @@
 
         sec.addEventListener('dragstart', e => {
           if (!_layoutEditMode) { e.preventDefault(); return; }
-          // Only allow drag from the handle
-          if (!e.target.classList.contains('section-drag-handle') && e.target !== handle) {
-            // If it's a card drag, let card handler take it
-            if (e.target.closest('.kpi-card')) return;
+          // Only initiate section drag from the handle; let card drags pass through
+          if (!handle.contains(e.target) && !e.target.classList.contains('section-drag-handle')) {
+            if (e.target.closest && e.target.closest('.kpi-card')) return;
             e.preventDefault(); return;
           }
           _dragSection = sec;
           _dragCard = null;
           e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', sec.dataset.sectionId);
           setTimeout(() => sec.classList.add('section-dragging'), 0);
         });
-
         sec.addEventListener('dragend', () => {
           sec.classList.remove('section-dragging');
           document.querySelectorAll('.kpi-section').forEach(s => s.classList.remove('section-drag-over'));
           _dragSection = null;
           saveLayout();
         });
-
         sec.addEventListener('dragover', e => {
           if (!_layoutEditMode || !_dragSection || _dragSection === sec) return;
           e.preventDefault();
           document.querySelectorAll('.kpi-section').forEach(s => s.classList.remove('section-drag-over'));
           sec.classList.add('section-drag-over');
         });
-
         sec.addEventListener('dragleave', e => {
           if (!sec.contains(e.relatedTarget)) sec.classList.remove('section-drag-over');
         });
-
         sec.addEventListener('drop', e => {
           sec.classList.remove('section-drag-over');
           if (!_dragSection || _dragSection === sec) return;
           e.preventDefault(); e.stopPropagation();
-          const parent = sec.parentNode;
           const rect = sec.getBoundingClientRect();
-          parent.insertBefore(_dragSection, e.clientY < rect.top + rect.height / 2 ? sec : sec.nextSibling);
+          sec.parentNode.insertBefore(_dragSection, e.clientY < rect.top + rect.height / 2 ? sec : sec.nextSibling);
           saveLayout();
         });
       });
@@ -3434,6 +3427,11 @@
       // Business Suite total (page_messages_new_conversation_unique) → ad results → action-type fallback
       const numMessages    = parseNum(d.page_messages) ?? parseNum(d.results) ?? parseNum(d.messages);
       const costPerMessage = parseNum(d.cost_per_message); // edge fn now pre-calculates as spend/page_messages
+      // Source label: edge fn now tells us which source was used; fall back to detecting ourselves
+      const msgSource = d.message_source === 'business_suite' ? 'Business Suite'
+                      : d.message_source === 'meta_ads'       ? 'Meta Ads'
+                      : d.page_messages != null                ? 'Business Suite'
+                      : 'Meta Ads';
 
       // ── Manual entries (persisted per period in localStorage) ──
       const _periodKey  = `${currentOrgId}-${currentAgencyId}-${currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod}`;
@@ -3460,7 +3458,10 @@
       // Do NOT fall back to Clarity sessions — different counting methodology
       // produces a misleading number (e.g. 0.88% vs Shopify's actual 4.76%).
       const shopifyConversionRate = conversionRate !== null ? conversionRate : null;
-      const crSubLabel = 'Shopify Analytics';
+      // crSubLabel: show analytics error tooltip when the API is unavailable on the store's plan
+      const crSubLabel = (shopifyEnabled && analyticsError)
+        ? `<span title="${analyticsError.replace(/"/g,'&quot;')}" style="font-size:10px;color:var(--text-muted);font-weight:600;cursor:help">Analytics N/A ⓘ</span>`
+        : 'Shopify Analytics';
       const shopifySubLabel = !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : '<span class="shopify-badge">● Shopify</span>';
@@ -3509,8 +3510,8 @@
               </div>
               ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
               ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
-              ${kpi('c-orange', '💬', 'Number of Messages',    numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '—', 'Meta Ads')}
-              ${kpi('c-coral',  '💸', 'Cost per Message',      costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
+              ${kpi('c-orange', '💬', 'Number of Messages',    numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '—', msgSource)}
+              ${kpi('c-coral',  '💸', 'Cost per Message',      costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', `Spend ÷ ${msgSource}`)}
             </div>
           </div>
 
@@ -3524,7 +3525,7 @@
               ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
               ${kpi('c-navy solid',   '💵', 'Total Revenue',      (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               ${kpi('c-gold solid',   '📈', 'ROAS',               (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
-              ${kpi('c-sky solid',    '💸', 'Cost per Message',   costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', 'Spend ÷ Messages')}
+              ${kpi('c-sky solid',    '💸', 'Cost per Message',   costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', `Spend ÷ ${msgSource}`)}
               ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
             </div>
           </div>
