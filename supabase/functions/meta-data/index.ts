@@ -124,6 +124,7 @@ Deno.serve(async (req: Request) => {
       organization_id,
       account_name,
       business_manager_id,
+      facebook_page_id,
       meta_business_managers ( id, access_token, status )
     `)
     .eq("id", account_db_id)
@@ -481,7 +482,17 @@ Deno.serve(async (req: Request) => {
     };
 
     if (!skipPageInsights) {
-      // 7a. Get Business ID from the ad account
+      // 7a. Use stored facebook_page_id if available (fastest path, no discovery needed)
+      const storedPageId = (account as any).facebook_page_id as string | undefined;
+      if (storedPageId) {
+        console.log("Using stored page ID:", storedPageId);
+        pageMessages = await fetchPageInsights(storedPageId);
+        if (pageMessages !== null) messageSource = "business_suite";
+        console.log("pageMessages via stored page ID:", pageMessages);
+      }
+
+      if (pageMessages === null) {
+      // 7b. Get Business ID from the ad account
       const bizRes  = await fetch(`${META_API}/act_${account.meta_account_id}?fields=business&access_token=${accessToken}`);
       const bizData = await bizRes.json();
       const businessId = bizData.business?.id as string | undefined;
@@ -536,6 +547,7 @@ Deno.serve(async (req: Request) => {
           }
         }
       }
+      } // end if (pageMessages === null) BM discovery block
     }
   } catch (e) {
     console.log("Page messages fetch failed:", e);
