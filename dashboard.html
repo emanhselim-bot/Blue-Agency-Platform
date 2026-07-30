@@ -3415,6 +3415,8 @@
 
       // ── Meta values ──
       const spend          = parseNum(d.amount_spent);
+      const accountBalance = d.account_balance != null ? parseFloat(d.account_balance) : null;
+      const spendCap       = d.spend_cap != null ? parseFloat(d.spend_cap) : null;
       const costPerEngage  = parseNum(d['cost_per_action_type:page_engagement']);
       const costPerFollow  = parseNum(d['cost_per_action_type:like']);
       const numLikes       = parseNum(d['actions:like']);
@@ -3547,6 +3549,12 @@
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
               </div>
+              ${kpi('c-green', '💳', 'Ad Account Fund',
+                accountBalance !== null ? fmt(accountBalance, curr) : '—',
+                accountBalance !== null
+                  ? (spendCap !== null ? `● Balance · Cap: ${fmt(spendCap, curr)}` : '● Current balance')
+                  : 'Meta Ads'
+              )}
             </div>
           </div>
 
