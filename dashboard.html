@@ -492,8 +492,8 @@
     .kpi-sections-container { display: flex; flex-direction: column; }
 
     .rec-card {
-      background: white; border-radius: 14px; padding: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04);
+      background: var(--card-bg); border-radius: 14px; padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2), 0 1px 8px rgba(0,0,0,0.15);
       border-top: 3px solid transparent; display: flex; flex-direction: column; gap: 10px;
     }
     .rec-card.c-blue   { border-top-color: var(--blue-dark); }
@@ -502,9 +502,9 @@
     .rec-card.c-green  { border-top-color: #16A34A; }
     .rec-card-header { display: flex; align-items: center; gap: 8px; }
     .rec-card-icon { font-size: 20px; line-height: 1; }
-    .rec-card-title { font-size: 12px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 0.5px; }
+    .rec-card-title { font-size: 12px; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.5px; }
     .rec-card-body {
-      font-size: 13px; line-height: 1.65; color: #1a1a1a;
+      font-size: 13px; line-height: 1.65; color: var(--text-main);
       flex: 1; white-space: pre-wrap;
     }
     .rec-card-body.loading {
