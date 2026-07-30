@@ -4116,22 +4116,23 @@
       if (!container) return;
       if (!allAccounts.length) { container.innerHTML = ''; return; }
 
-      const acctBoxes = allAccounts.map(a =>
-        `<label class="access-checkbox">
-          <input type="checkbox" class="invite-account-cb" value="${escHtml(a.id)}" checked>
-          ${escHtml((a.account_name || a.meta_account_id || '').substring(0, 32))}
-        </label>`
-      ).join('');
-
       container.innerHTML = `
-        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px">Account Access</div>
-          <label class="access-checkbox" style="margin-bottom:6px">
-            <input type="checkbox" id="invite-full-access" checked onchange="toggleInviteFullAccess(this)">
-            <strong>Full Access</strong> — all accounts
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.12);
+          background:var(--blue-dark,#0A1CA3);border-radius:10px;padding:14px 16px;margin-top:12px">
+          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px">Account Access</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;padding:7px 10px;
+            border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);margin-bottom:0">
+            <input type="checkbox" id="invite-full-access" checked onchange="toggleInviteFullAccess(this)" style="accent-color:#fff;width:15px;height:15px;cursor:pointer">
+            Full Access — all accounts
           </label>
-          <div id="invite-account-checkboxes" style="display:none;margin-top:6px;margin-left:4px;display:flex;flex-wrap:wrap;gap:4px">
-            ${acctBoxes}
+          <div id="invite-account-checkboxes" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px">
+            ${allAccounts.map(a =>
+              `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#fff;cursor:pointer;padding:5px 10px;
+                border-radius:7px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.08)">
+                <input type="checkbox" class="invite-account-cb" value="${escHtml(a.id)}" checked style="accent-color:#fff;cursor:pointer">
+                ${escHtml((a.account_name || a.meta_account_id || '').substring(0, 32))}
+              </label>`
+            ).join('')}
           </div>
         </div>`;
 
