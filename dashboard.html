@@ -3450,6 +3450,8 @@
       const _autoMsgsBase = _storedNumMsg !== null ? parseInt(_storedNumMsg) : (numMessages != null ? Math.round(numMessages) : 0);
       const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
       const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
+      const _crKey        = `conv-rate-${_periodKey}`;
+      const _storedCr     = localStorage.getItem(_crKey);
       const totalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + msgOrders;
       const totalRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
       const totalPieces  = (pieces         !== null ? pieces         : 0) + msgPieces;
@@ -3517,7 +3519,19 @@
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub">Manual entry</div>
               </div>
-              ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
+              <div class="kpi-card c-teal" data-card-id="shopify-conversion-rate">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">🛍️</div>
+                <div class="kpi-label">Shopify Conversion Rate</div>
+                <div style="display:flex;align-items:baseline;gap:4px">
+                  <input id="kpi-conv-rate-input" type="number" min="0" max="100" step="0.01"
+                    value="${_storedCr !== null ? _storedCr : (shopifyConversionRate != null ? shopifyConversionRate.toFixed(2) : '')}"
+                    placeholder="${shopifyConversionRate != null ? shopifyConversionRate.toFixed(2) : '0.00'}"
+                    style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:calc(100% - 18px);padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                  <span style="font-size:18px;font-weight:700;color:var(--text-main)">%</span>
+                </div>
+                <div class="kpi-sub">Manual entry</div>
+              </div>
               ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
               <div class="kpi-card c-orange" data-card-id="number-of-messages">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
@@ -3748,6 +3762,15 @@
           }
           setCpmSubLabel();
           updateTotalsCpm();
+        });
+
+        const crInput = document.getElementById('kpi-conv-rate-input');
+        if (crInput) crInput.addEventListener('input', () => {
+          if (crInput.value === '') {
+            localStorage.removeItem(_crKey);
+          } else {
+            localStorage.setItem(_crKey, String(parseFloat(crInput.value) || 0));
+          }
         });
       }
 
