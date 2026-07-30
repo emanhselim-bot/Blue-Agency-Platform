@@ -719,8 +719,8 @@
     }
     #team-panel.hidden { display: none; }
     .team-panel-inner {
-      background: white; border-radius: 16px; width: 100%; max-width: 860px;
-      box-shadow: 0 24px 48px rgba(0,0,0,0.18); overflow: hidden;
+      background: #0b1d5e; border-radius: 16px; width: 100%; max-width: 860px;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.4); overflow: hidden;
     }
     .team-panel-header {
       background: linear-gradient(135deg, #0837BB 0%, #083BBF 100%);
@@ -732,29 +732,29 @@
       width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1;
       display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
     .team-panel-close:hover { background: rgba(255,255,255,0.25); }
-    .team-panel-body { padding: 28px; }
+    .team-panel-body { padding: 28px; color: #fff; }
     .team-section-title {
-      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.5);
       text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px;
       display: flex; align-items: center; gap: 8px;
     }
-    .team-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .team-section-title::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.15); }
     .member-card {
-      border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; margin-bottom: 12px; overflow: hidden;
     }
     .member-card-top {
       display: flex; align-items: center; gap: 14px; padding: 14px 18px;
-      cursor: pointer; user-select: none; background: white; transition: background 0.15s;
+      cursor: pointer; user-select: none; background: rgba(255,255,255,0.06); transition: background 0.15s;
     }
-    .member-card-top:hover { background: #f9faff; }
+    .member-card-top:hover { background: rgba(255,255,255,0.1); }
     .member-avatar {
       width: 38px; height: 38px; border-radius: 50%; background: var(--blue-light);
       display: flex; align-items: center; justify-content: center;
       font-size: 16px; font-weight: 700; color: var(--blue-dark); flex-shrink: 0;
     }
     .member-info { flex: 1; min-width: 0; }
-    .member-email { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .member-name  { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .member-email { font-size: 13px; font-weight: 600; color: #fff; }
+    .member-name  { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 1px; }
     .member-role-badge {
       font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
       text-transform: uppercase; letter-spacing: 0.5px;
@@ -770,7 +770,7 @@
     .status-pending { background: #fef9c3; color: #854d0e; }
     .member-expand-icon { color: var(--text-muted); font-size: 11px; transition: transform 0.2s; }
     .member-card.expanded .member-expand-icon { transform: rotate(180deg); }
-    .member-card-body { display: none; padding: 0 18px 18px; border-top: 1px solid var(--border); }
+    .member-card-body { display: none; padding: 0 18px 18px; border-top: 1px solid rgba(255,255,255,0.12); }
     .member-card.expanded .member-card-body { display: block; }
     .access-section { margin-top: 14px; }
     .access-section h4 { font-size: 11px; font-weight: 700; color: var(--text-muted);
@@ -795,18 +795,19 @@
       cursor: pointer; transition: background 0.15s; }
     .btn-remove-member:hover { background: #fef2f2; }
     .invite-box {
-      background: #f9faff; border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 20px;
     }
     .invite-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     .invite-email-input {
-      flex: 1; min-width: 200px; padding: 9px 14px; border: 1px solid var(--border);
+      flex: 1; min-width: 200px; padding: 9px 14px; border: 1px solid rgba(255,255,255,0.2);
       border-radius: 8px; font-size: 13px; font-family: inherit;
-      transition: border-color 0.15s;
+      background: rgba(255,255,255,0.1); color: #fff; transition: border-color 0.15s;
     }
-    .invite-email-input:focus { outline: none; border-color: var(--blue-dark); }
+    .invite-email-input::placeholder { color: rgba(255,255,255,0.4); }
+    .invite-email-input:focus { outline: none; border-color: rgba(255,255,255,0.5); }
     .invite-role-select {
-      padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
-      font-size: 12px; font-family: inherit; background: white; cursor: pointer;
+      padding: 9px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+      font-size: 12px; font-family: inherit; background: rgba(255,255,255,0.1); color: #fff; cursor: pointer;
     }
     .btn-send-invite {
       background: var(--blue-dark); color: white; border: none; padding: 9px 18px;
@@ -822,11 +823,11 @@
     .invite-result.success { background: #dcfce7; color: #15803d; display: block; }
     .invite-result.error   { background: #fee2e2; color: #991b1b; display: block; }
     .invite-link-box {
-      background: white; border: 1px solid #86efac; border-radius: 8px;
+      background: rgba(134,239,172,0.12); border: 1px solid rgba(134,239,172,0.35); border-radius: 8px;
       padding: 10px 14px; margin-top: 10px; font-size: 11px; word-break: break-all;
-      color: var(--blue-dark); font-weight: 600; display: none; cursor: pointer;
+      color: #86efac; font-weight: 600; display: none; cursor: pointer;
     }
-    .invite-link-box:hover { background: #f0fdf4; }
+    .invite-link-box:hover { background: rgba(134,239,172,0.2); }
     .access-restrict-note { font-size: 11px; color: var(--text-muted); margin-top: 6px; font-style: italic; }
     .team-owner-badge { background: linear-gradient(135deg,#FFD700,#FFA500); color: #7c2d12;
       font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
@@ -1054,8 +1055,8 @@
         <div style="margin-top:28px">
           <div class="team-section-title">Invite New Member</div>
           <div class="invite-box">
-            <div style="font-size:13px;color:var(--text-primary);font-weight:600">Send an invite link by email</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">The user will receive an invite link. You can also copy and share it manually.</div>
+            <div style="font-size:13px;color:#fff;font-weight:600">Send an invite link by email</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">The user will receive an invite link. You can also copy and share it manually.</div>
             <div class="invite-row">
               <input type="email" class="invite-email-input" id="invite-email" placeholder="colleague@example.com">
               <select class="invite-role-select" id="invite-role">
