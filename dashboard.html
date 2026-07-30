@@ -3552,6 +3552,12 @@
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
               </div>
+            </div>
+          </div>
+
+          <div class="kpi-section" data-section-id="spending">
+            <div class="section-label">Spending <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="spending">
               ${kpi('c-green', '💳', 'Ad Account Fund',
                 accountBalance !== null ? fmt(accountBalance, curr) : '—',
                 accountBalance !== null
