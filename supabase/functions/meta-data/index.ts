@@ -376,6 +376,8 @@ Deno.serve(async (req: Request) => {
 
   // ── level = "account" (default): existing aggregate behaviour ───
   let metaRes: Response;
+  let balanceRes: Response;
+  let campaignsRes: Response;
   try {
     const params = new URLSearchParams({
       fields: INSIGHTS_FIELDS,
@@ -383,15 +385,35 @@ Deno.serve(async (req: Request) => {
       access_token: accessToken,
       ...dateParams,
     });
-    metaRes = await fetch(
-      `${META_API}/act_${account.meta_account_id}/insights?${params.toString()}`
-    );
+    const campaignFilter = JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]);
+    // Fetch insights + account balance + active campaign budgets in parallel
+    [metaRes, balanceRes, campaignsRes] = await Promise.all([
+      fetch(`${META_API}/act_${account.meta_account_id}/insights?${params.toString()}`),
+      fetch(`${META_API}/act_${account.meta_account_id}?fields=balance,currency,spend_cap&access_token=${accessToken}`),
+      fetch(`${META_API}/act_${account.meta_account_id}/campaigns?fields=daily_budget,lifetime_budget,effective_status&filtering=${encodeURIComponent(campaignFilter)}&limit=50&access_token=${accessToken}`),
+    ]);
   } catch (e) {
     console.error("Meta API unreachable:", e);
     return jsonResponse({ error: "Meta API unreachable" }, 502);
   }
 
   const metaBody = await metaRes.json();
+  const balanceBody = await balanceRes.json().catch(() => ({}));
+  const campaignsBody = await campaignsRes.json().catch(() => ({}));
+
+  // balance is returned in cents by Meta — divide by 100 for display
+  const accountBalance = balanceBody.balance != null
+    ? parseFloat(balanceBody.balance) / 100
+    : null;
+  const spendCap = balanceBody.spend_cap != null && parseFloat(balanceBody.spend_cap) > 0
+    ? parseFloat(balanceBody.spend_cap) / 100
+    : null;
+
+  // Sum daily budgets of all active campaigns (also in cents)
+  const totalDailyBudgetCents = ((campaignsBody.data ?? []) as { daily_budget?: string }[])
+    .filter(c => c.daily_budget && parseInt(c.daily_budget) > 0)
+    .reduce((sum, c) => sum + parseInt(c.daily_budget!), 0);
+  const totalDailyBudget = totalDailyBudgetCents > 0 ? totalDailyBudgetCents / 100 : null;
 
   if (metaBody.error) {
     console.error("Meta API error:", metaBody.error);
@@ -594,6 +616,11 @@ Deno.serve(async (req: Request) => {
       name: insight.account_name ?? account.account_name ?? account.meta_account_id,
       date_start: insight.date_start,
       date_stop: insight.date_stop,
+
+      // Account balance (prepaid fund remaining)
+      account_balance:  accountBalance,
+      spend_cap:        spendCap,
+      daily_budget:     totalDailyBudget,
 
       // Primary spend
       amount_spent: insight.spend,

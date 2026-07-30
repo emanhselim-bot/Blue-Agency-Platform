@@ -3415,8 +3415,11 @@
 
       // ── Meta values ──
       const spend          = parseNum(d.amount_spent);
-      const accountBalance = d.account_balance != null ? parseFloat(d.account_balance) : null;
-      const spendCap       = d.spend_cap != null ? parseFloat(d.spend_cap) : null;
+      const accountBalance  = d.account_balance != null ? parseFloat(d.account_balance) : null;
+      const spendCap        = d.spend_cap != null ? parseFloat(d.spend_cap) : null;
+      const dailyBudget     = d.daily_budget != null ? parseFloat(d.daily_budget) : null;
+      const estimatedDays   = (accountBalance !== null && dailyBudget !== null && dailyBudget > 0)
+        ? Math.floor(accountBalance / dailyBudget) : null;
       const costPerEngage  = parseNum(d['cost_per_action_type:page_engagement']);
       const costPerFollow  = parseNum(d['cost_per_action_type:like']);
       const numLikes       = parseNum(d['actions:like']);
@@ -3554,6 +3557,16 @@
                 accountBalance !== null
                   ? (spendCap !== null ? `● Balance · Cap: ${fmt(spendCap, curr)}` : '● Current balance')
                   : 'Meta Ads'
+              )}
+              ${kpi('c-sky', '📅', 'Daily Budget',
+                dailyBudget !== null ? fmt(dailyBudget, curr) : '—',
+                dailyBudget !== null ? '● Active campaigns total' : 'Meta Ads'
+              )}
+              ${kpi('c-coral', '⏳', 'Days Remaining',
+                estimatedDays !== null ? String(estimatedDays) + ' days' : '—',
+                estimatedDays !== null
+                  ? `● Fund ÷ ${fmt(dailyBudget, curr)}/day`
+                  : 'Fund ÷ Daily Budget'
               )}
             </div>
           </div>
