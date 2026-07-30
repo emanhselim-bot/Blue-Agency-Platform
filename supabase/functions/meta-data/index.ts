@@ -435,6 +435,7 @@ Deno.serve(async (req: Request) => {
 
   let pageMessages: number | null = null;
   let messageSource: "business_suite" | "meta_ads" | null = null;
+  const _debugPageInsights: Record<string, unknown> = {};
 
   // page_messages_new_conversation_unique has a 24-48h reporting delay on Facebook's side.
   // For "today", this metric is always 0 regardless of actual conversations.
@@ -456,14 +457,35 @@ Deno.serve(async (req: Request) => {
     // since page insights require a user token or page token (not an app token).
     const fetchPageInsights = async (pageId: string): Promise<number | null> => {
       const { since, until } = periodToDates(period, custom_from, custom_to);
+      _debugPageInsights.pageId = pageId;
+      _debugPageInsights.since  = since;
+      _debugPageInsights.until  = until;
 
-      // Exchange user token for a page access token (works if user token has manage_pages)
+      // Exchange for a page access token.
+      // Try user token first, then App Token (APP_ID|APP_SECRET) as fallback —
+      // the App Token can get a page token for any page that has the app installed.
       let pageToken = accessToken;
       try {
         const ptRes  = await fetch(`${META_API}/${pageId}?fields=access_token&access_token=${accessToken}`);
         const ptData = await ptRes.json();
-        if (ptData.access_token) { pageToken = ptData.access_token; }
-      } catch (_) { /* fall through */ }
+        if (ptData.access_token) {
+          pageToken = ptData.access_token;
+          _debugPageInsights.pageTokenSource = "user_token";
+        } else if (appToken) {
+          const aptRes  = await fetch(`${META_API}/${pageId}?fields=access_token&access_token=${appToken}`);
+          const aptData = await aptRes.json();
+          if (aptData.access_token) {
+            pageToken = aptData.access_token;
+            _debugPageInsights.pageTokenSource = "app_token";
+          } else {
+            _debugPageInsights.pageTokenSource = "none";
+            _debugPageInsights.pageTokenError = aptData.error?.message ?? ptData.error?.message ?? "no token";
+          }
+        } else {
+          _debugPageInsights.pageTokenSource = "fallback_user";
+          _debugPageInsights.pageTokenError = ptData.error?.message ?? "no access_token field";
+        }
+      } catch (_) { _debugPageInsights.pageTokenSource = "error"; }
 
       const iParams = new URLSearchParams({
         metric: "page_messages_new_conversation_unique",
@@ -474,9 +496,15 @@ Deno.serve(async (req: Request) => {
       });
       const iRes  = await fetch(`${META_API}/${pageId}/insights?${iParams}`);
       const iData = await iRes.json();
-      if (iData.error) { console.log("Page insights error for", pageId, ":", iData.error.message); return null; }
+      _debugPageInsights.rawInsightsResponse = iData;
+      if (iData.error) {
+        console.log("Page insights error for", pageId, ":", iData.error.message);
+        _debugPageInsights.insightsError = iData.error.message;
+        return null;
+      }
       const vals  = (iData.data?.[0]?.values ?? []) as { value: number }[];
       const total = vals.reduce((s, v) => s + (v.value || 0), 0);
+      _debugPageInsights.total = total;
       console.log("Page insights total for", pageId, ":", total);
       return total > 0 ? total : null;
     };
@@ -602,5 +630,6 @@ Deno.serve(async (req: Request) => {
       "cost_per_action_type:like":            costPerAction["like"] ?? null,
     },
     currency: account.currency,
+    _debug_page_insights: _debugPageInsights,
   });
 });

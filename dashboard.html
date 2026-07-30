@@ -3441,6 +3441,10 @@
       const msgOrders   = parseInt(localStorage.getItem(_msgKey)   || '0') || 0;
       const msgRevenue  = parseFloat(localStorage.getItem(_revKey) || '0') || 0;
       const msgPieces   = parseInt(localStorage.getItem(_piecesKey) || '0') || 0;
+      const _numMsgKey   = `num-messages-${_periodKey}`;
+      const _cpmKey      = `cost-per-msg-${_periodKey}`;
+      const _storedNumMsg = localStorage.getItem(_numMsgKey);
+      const _storedCpm    = localStorage.getItem(_cpmKey);
       const totalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + msgOrders;
       const totalRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
       const totalPieces  = (pieces         !== null ? pieces         : 0) + msgPieces;
@@ -3510,8 +3514,22 @@
               </div>
               ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
               ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
-              ${kpi('c-orange', '💬', 'Number of Messages',    numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '—', msgSource)}
-              ${kpi('c-coral',  '💸', 'Cost per Message',      costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', `Spend ÷ ${msgSource}`)}
+              <div class="kpi-card c-orange" data-card-id="number-of-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Number of Messages</div>
+                <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '')}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              <div class="kpi-card c-coral" data-card-id="cost-per-message">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💸</div>
+                <div class="kpi-label">Cost per Message</div>
+                <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01" value="${_storedCpm !== null ? _storedCpm : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage.toFixed(2) : '')}" placeholder="${costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage.toFixed(2) : '0.00'}"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
             </div>
           </div>
 
@@ -3525,7 +3543,7 @@
               ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
               ${kpi('c-navy solid',   '💵', 'Total Revenue',      (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               ${kpi('c-gold solid',   '📈', 'ROAS',               (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
-              ${kpi('c-sky solid',    '💸', 'Cost per Message',   costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—', `Spend ÷ ${msgSource}`)}
+              ${kpi('c-sky solid',    '💸', 'Cost per Message',   (_storedCpm !== null && parseFloat(_storedCpm) > 0) ? fmt(parseFloat(_storedCpm), curr) : (costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—'), `Spend ÷ ${msgSource}`, null, null, null, 'kpi-totals-cpm-val')}
               ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
             </div>
           </div>
@@ -3609,8 +3627,8 @@
           ${metric('Comments',                fmt(numComments,'',0))}
           ${metric('Page Likes / Follows',    fmt(numLikes,'',0))}
           ${metric('Avg Cost per Follow',     fmt(costPerFollow, curr))}
-          ${metric('Number of Messages',      fmt(numMessages,'',0), true)}
-          ${metric('Cost per Message',        fmt(costPerMessage, curr))}
+          ${metric('Number of Messages',      (_storedNumMsg !== null ? parseInt(_storedNumMsg).toLocaleString('en') : fmt(numMessages,'',0)) + (_storedNumMsg !== null ? ' ✎' : ''), true)}
+          ${metric('Cost per Message',        (_storedCpm !== null && parseFloat(_storedCpm) > 0 ? fmt(parseFloat(_storedCpm), curr) : fmt(costPerMessage, curr)) + (_storedCpm !== null ? ' ✎' : ''))}
         </div>
 
         ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
@@ -3666,6 +3684,30 @@
           _curMsgPieces = parseInt(piecesInput.value) || 0;
           localStorage.setItem(_piecesKey, String(_curMsgPieces));
           recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
+        });
+
+        const numMsgInput = document.getElementById('kpi-num-messages-input');
+        const cpmInput    = document.getElementById('kpi-cost-per-message-input');
+
+        const updateTotalsCpm = () => {
+          const cpmEl = document.getElementById('kpi-totals-cpm-val');
+          if (!cpmEl) return;
+          const manualCpm = parseFloat(cpmInput?.value);
+          if (!isNaN(manualCpm) && manualCpm > 0) {
+            cpmEl.textContent = fmt(manualCpm, curr);
+          } else {
+            const manualMsgs = parseInt(numMsgInput?.value) || 0;
+            cpmEl.textContent = (manualMsgs > 0 && spend) ? fmt(spend / manualMsgs, curr) : '—';
+          }
+        };
+
+        if (numMsgInput) numMsgInput.addEventListener('input', () => {
+          localStorage.setItem(_numMsgKey, String(parseInt(numMsgInput.value) || 0));
+          updateTotalsCpm();
+        });
+        if (cpmInput) cpmInput.addEventListener('input', () => {
+          localStorage.setItem(_cpmKey, String(parseFloat(cpmInput.value) || 0));
+          updateTotalsCpm();
         });
       }
 

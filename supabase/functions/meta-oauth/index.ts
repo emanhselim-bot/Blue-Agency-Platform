@@ -27,7 +27,7 @@
  *   SUPABASE_URL        — set automatically
  *   SUPABASE_SERVICE_ROLE_KEY — set automatically
  *
- * Required Meta app scopes: ads_read, ads_management, business_management
+ * Required Meta app scopes: ads_read, ads_management, business_management, pages_read_engagement, read_insights, pages_messaging, pages_show_list
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -131,7 +131,7 @@ serve(async (req: Request) => {
       new URLSearchParams({
         client_id:     Deno.env.get("META_APP_ID")!,
         redirect_uri:  callbackUrl,
-        scope:         "ads_read,ads_management,business_management",
+        scope:         "ads_read,ads_management,business_management,pages_read_engagement,read_insights,pages_messaging,pages_show_list",
         response_type: "code",
         state,
       }).toString();
@@ -233,7 +233,7 @@ serve(async (req: Request) => {
           business_name:    biz.name,
           access_token:     accessToken,          // one token per Business Manager
           token_expires_at: tokenExpiresAt,
-          scopes:           ["ads_read", "ads_management", "business_management"],
+          scopes:           ["ads_read", "ads_management", "business_management", "pages_read_engagement", "read_insights", "pages_messaging", "pages_show_list"],
           connected_by:     userId,
           status:           "active",
           last_verified_at: new Date().toISOString(),
