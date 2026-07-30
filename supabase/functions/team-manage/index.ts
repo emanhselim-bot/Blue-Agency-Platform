@@ -136,7 +136,7 @@ Deno.serve(async (req: Request) => {
 
     const {
       email,
-      role = "analyst",
+      role = "viewer",
       allowed_account_ids = null,
       allowed_agency_ids  = null,
     } = body as {
@@ -146,6 +146,8 @@ Deno.serve(async (req: Request) => {
       allowed_agency_ids?:  string[] | null;
     };
     if (!email) return json({ error: "email is required" }, 400);
+    const validRoles = ["viewer", "editor", "admin", "analyst"]; // analyst kept for legacy
+    if (!validRoles.includes(role)) return json({ error: `Invalid role. Must be one of: ${validRoles.slice(0,3).join(", ")}` }, 400);
 
     const normalizedEmail = email.trim().toLowerCase();
 

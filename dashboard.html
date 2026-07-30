@@ -761,6 +761,7 @@
     }
     .role-owner  { background: #fef3c7; color: #92400e; }
     .role-admin  { background: #dbeafe; color: #1e40af; }
+    .role-editor { background: #d1fae5; color: #065f46; }
     .role-analyst { background: #f0fdf4; color: #166534; }
     .role-viewer  { background: #f5f3ff; color: #5b21b6; }
     .status-badge {
@@ -1060,7 +1061,8 @@
             <div class="invite-row">
               <input type="email" class="invite-email-input" id="invite-email" placeholder="colleague@example.com">
               <select class="invite-role-select" id="invite-role">
-                <option value="analyst">Analyst</option>
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
                 <option value="admin">Admin</option>
               </select>
               <button class="btn-send-invite" id="invite-submit-btn" onclick="submitInvite()">Send Invite →</button>
@@ -3764,6 +3766,20 @@
             localStorage.removeItem(_crKey);
           } else {
             localStorage.setItem(_crKey, String(parseFloat(crInput.value) || 0));
+          }
+        });
+      }
+
+      // ── Viewer role: lock all manual KPI inputs (read-only) ──
+      if (currentRole === 'viewer') {
+        ['kpi-num-messages-input','kpi-cost-per-message-input','kpi-conv-rate-input'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.readOnly = true;
+            el.style.cursor = 'default';
+            el.style.borderBottomColor = 'transparent';
+            el.style.opacity = '0.75';
+            el.title = 'View-only — contact your admin to change this';
           }
         });
       }
