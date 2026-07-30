@@ -3443,8 +3443,13 @@
       const msgPieces   = parseInt(localStorage.getItem(_piecesKey) || '0') || 0;
       const _numMsgKey   = `num-messages-${_periodKey}`;
       const _cpmKey      = `cost-per-msg-${_periodKey}`;
+      const _cpmManualKey = `cost-per-msg-manual-${_periodKey}`;
       const _storedNumMsg = localStorage.getItem(_numMsgKey);
       const _storedCpm    = localStorage.getItem(_cpmKey);
+      const _cpmIsManual  = localStorage.getItem(_cpmManualKey) === 'true';
+      const _autoMsgsBase = _storedNumMsg !== null ? parseInt(_storedNumMsg) : (numMessages != null ? Math.round(numMessages) : 0);
+      const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
+      const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
       const totalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + msgOrders;
       const totalRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
       const totalPieces  = (pieces         !== null ? pieces         : 0) + msgPieces;
@@ -3526,9 +3531,11 @@
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
                 <div class="kpi-icon">💸</div>
                 <div class="kpi-label">Cost per Message</div>
-                <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01" value="${_storedCpm !== null ? _storedCpm : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage.toFixed(2) : '')}" placeholder="${costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage.toFixed(2) : '0.00'}"
+                <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01"
+                  value="${_cpmDispVal !== null ? _cpmDispVal.toFixed(2) : ''}"
+                  placeholder="0.00"
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
+                <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
               </div>
             </div>
           </div>
@@ -3688,25 +3695,58 @@
 
         const numMsgInput = document.getElementById('kpi-num-messages-input');
         const cpmInput    = document.getElementById('kpi-cost-per-message-input');
+        let _cpmManualFlag = localStorage.getItem(_cpmManualKey) === 'true';
+
+        const getAutoCpm = () => {
+          const msgs = parseInt(numMsgInput?.value) || 0;
+          return (msgs > 0 && spend > 0) ? spend / msgs : null;
+        };
+
+        const setCpmSubLabel = () => {
+          const subEl = document.getElementById('kpi-cpm-sub');
+          if (subEl) subEl.textContent = _cpmManualFlag ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages';
+        };
 
         const updateTotalsCpm = () => {
           const cpmEl = document.getElementById('kpi-totals-cpm-val');
           if (!cpmEl) return;
-          const manualCpm = parseFloat(cpmInput?.value);
-          if (!isNaN(manualCpm) && manualCpm > 0) {
-            cpmEl.textContent = fmt(manualCpm, curr);
+          const cpmVal = parseFloat(cpmInput?.value);
+          if (!isNaN(cpmVal) && cpmVal > 0) {
+            cpmEl.textContent = fmt(cpmVal, curr);
           } else {
-            const manualMsgs = parseInt(numMsgInput?.value) || 0;
-            cpmEl.textContent = (manualMsgs > 0 && spend) ? fmt(spend / manualMsgs, curr) : '—';
+            const msgs = parseInt(numMsgInput?.value) || 0;
+            cpmEl.textContent = (msgs > 0 && spend) ? fmt(spend / msgs, curr) : '—';
           }
         };
 
         if (numMsgInput) numMsgInput.addEventListener('input', () => {
           localStorage.setItem(_numMsgKey, String(parseInt(numMsgInput.value) || 0));
+          // Auto-update CPM when messages changes, unless user manually set it
+          if (!_cpmManualFlag && cpmInput) {
+            const auto = getAutoCpm();
+            if (auto !== null) {
+              cpmInput.value = auto.toFixed(2);
+              localStorage.setItem(_cpmKey, String(auto));
+            }
+          }
           updateTotalsCpm();
         });
+
         if (cpmInput) cpmInput.addEventListener('input', () => {
-          localStorage.setItem(_cpmKey, String(parseFloat(cpmInput.value) || 0));
+          if (cpmInput.value === '') {
+            // Cleared → reset to auto
+            _cpmManualFlag = false;
+            localStorage.removeItem(_cpmManualKey);
+            localStorage.removeItem(_cpmKey);
+            const auto = getAutoCpm();
+            if (auto !== null) { cpmInput.value = auto.toFixed(2); localStorage.setItem(_cpmKey, String(auto)); }
+          } else {
+            // User typed a value → mark as manual
+            _cpmManualFlag = true;
+            localStorage.setItem(_cpmManualKey, 'true');
+            localStorage.setItem(_cpmKey, String(parseFloat(cpmInput.value) || 0));
+          }
+          setCpmSubLabel();
           updateTotalsCpm();
         });
       }
