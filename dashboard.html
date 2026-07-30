@@ -3450,8 +3450,6 @@
       const _autoMsgsBase = _storedNumMsg !== null ? parseInt(_storedNumMsg) : (numMessages != null ? Math.round(numMessages) : 0);
       const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
       const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
-      const _crKey        = `conv-rate-${_periodKey}`;
-      const _storedCr     = localStorage.getItem(_crKey);
       const totalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + msgOrders;
       const totalRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
       const totalPieces  = (pieces         !== null ? pieces         : 0) + msgPieces;
@@ -3519,7 +3517,12 @@
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub">Manual entry</div>
               </div>
-              ${kpi('c-teal',   '🛍️', 'Shopify Conversion Rate', shopifyConversionRate != null ? fmt(shopifyConversionRate,'',2) + '%' : (!shopifyEnabled ? 'N/A' : '—'), sfmtSub(crSubLabel))}
+              ${(() => {
+                const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
+                const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
+                const _crSub      = (shopifyConversionRate != null && shopifyConversionRate > 0) ? sfmtSub(crSubLabel) : (sessionsFromClarity ? '● Orders ÷ Clarity Sessions' : sfmtSub(crSubLabel));
+                return kpi('c-teal', '🛍️', 'Shopify Conversion Rate', _crDisplay != null ? fmt(_crDisplay,'',2)+'%' : '—', _crSub);
+              })()}
               ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
               <div class="kpi-card c-orange" data-card-id="number-of-messages">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
