@@ -3582,6 +3582,8 @@
                   ? `● Fund ÷ ${fmt(dailyBudget, curr)}/day`
                   : 'Fund ÷ Daily Budget'
               )}
+              ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+              ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
             </div>
           </div>
 
@@ -3592,8 +3594,6 @@
               ${kpi('c-green solid',  '📊', 'Total Orders',       (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—', 'Website + Messages', totalOrders, _t.orders, true, 'kpi-total-orders-val')}
               ${kpi('c-teal solid',   '📦', 'Total Pieces',       (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—', 'Website + Messages', null, null, null, 'kpi-total-pieces-val')}
               ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
-              ${kpi('c-navy solid',   '💵', 'Total Revenue',      (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
-              ${kpi('c-gold solid',   '📈', 'ROAS',               (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
               ${kpi('c-sky solid',    '💸', 'Cost per Message',   (_storedCpm !== null && parseFloat(_storedCpm) > 0) ? fmt(parseFloat(_storedCpm), curr) : (costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—'), `Spend ÷ ${msgSource}`, null, null, null, 'kpi-totals-cpm-val')}
               ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
             </div>
