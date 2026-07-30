@@ -1643,7 +1643,7 @@
     let currentUser      = null;
     let currentOrgId     = localStorage.getItem('dash_org_id')    || '';
     let currentAgencyId  = localStorage.getItem('dash_agency_id') || 'agency_blue';
-    let currentRole      = null;   // 'owner' | 'admin' | 'analyst' | 'viewer'
+    let currentRole      = null;   // 'owner' | 'admin' | 'editor' | 'viewer'
     let currentPlan      = 'free'; // 'free' | 'starter' | 'pro' | 'enterprise'
     let currentPeriod    = localStorage.getItem('dash_period') || 'today';
     let customFrom       = localStorage.getItem('dash_custom_from') || '';
@@ -4128,6 +4128,7 @@
     }
 
     function openTeamPanel() {
+      if (currentRole !== 'owner') return; // editor, admin, viewer: no team management
       document.getElementById('team-panel').classList.remove('hidden');
       loadTeamPanel();
     }
