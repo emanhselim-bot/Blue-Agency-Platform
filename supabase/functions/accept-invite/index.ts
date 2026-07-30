@@ -79,6 +79,8 @@ serve(async (req: Request) => {
       organization_id,
       expires_at,
       accepted_at,
+      allowed_account_ids,
+      allowed_agency_ids,
       organizations ( name )
     `)
     .eq("token", token)
@@ -118,10 +120,12 @@ serve(async (req: Request) => {
     .from("organization_members")
     .upsert(
       {
-        organization_id: orgId,
-        user_id:         user.id,
-        role:            invitation.role,
-        accepted_at:     new Date().toISOString(),
+        organization_id:     orgId,
+        user_id:             user.id,
+        role:                invitation.role,
+        accepted_at:         new Date().toISOString(),
+        allowed_account_ids: (invitation as any).allowed_account_ids ?? null,
+        allowed_agency_ids:  (invitation as any).allowed_agency_ids  ?? null,
       },
       { onConflict: "organization_id,user_id" }
     );

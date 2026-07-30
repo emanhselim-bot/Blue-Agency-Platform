@@ -92,7 +92,7 @@ Deno.serve(async (req: Request) => {
     // Pending invitations
     const { data: pending, error: pErr } = await supabaseAdmin
       .from("invitations")
-      .select("id, email, role, created_at, expires_at, token")
+      .select("id, email, role, created_at, expires_at, token, allowed_account_ids, allowed_agency_ids")
       .eq("organization_id", org_id)
       .is("accepted_at", null)
       .gt("expires_at", new Date().toISOString())
@@ -119,8 +119,8 @@ Deno.serve(async (req: Request) => {
       full_name:  null,
       role:       i.role,
       accepted_at: null,
-      allowed_account_ids: null,
-      allowed_agency_ids:  null,
+      allowed_account_ids: i.allowed_account_ids,
+      allowed_agency_ids:  i.allowed_agency_ids,
       is_pending: true,
       invite_url: `${APP_URL}/accept-invite.html?token=${i.token}`,
     }));
@@ -134,7 +134,17 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Owner access required" }, 403);
     }
 
-    const { email, role = "analyst" } = body as { email: string; role?: string };
+    const {
+      email,
+      role = "analyst",
+      allowed_account_ids = null,
+      allowed_agency_ids  = null,
+    } = body as {
+      email: string;
+      role?: string;
+      allowed_account_ids?: string[] | null;
+      allowed_agency_ids?:  string[] | null;
+    };
     if (!email) return json({ error: "email is required" }, 400);
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -159,7 +169,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Check for existing pending invite
+    // Check for existing pending invite — update it with new access settings
     const { data: existingInvite } = await supabaseAdmin
       .from("invitations")
       .select("id, token")
@@ -169,7 +179,16 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (existingInvite) {
-      // Return existing invite link
+      // Update access settings on the existing invite
+      await supabaseAdmin
+        .from("invitations")
+        .update({
+          role,
+          allowed_account_ids: allowed_account_ids ?? null,
+          allowed_agency_ids:  allowed_agency_ids  ?? null,
+        })
+        .eq("id", existingInvite.id);
+
       return json({
         invite_url: `${APP_URL}/accept-invite.html?token=${existingInvite.token}`,
         reused: true,
@@ -183,12 +202,14 @@ Deno.serve(async (req: Request) => {
     const { error: insertErr } = await supabaseAdmin
       .from("invitations")
       .insert({
-        organization_id: org_id,
-        email:           normalizedEmail,
+        organization_id:     org_id,
+        email:               normalizedEmail,
         role,
         token,
-        expires_at:      expiresAt,
-        invited_by:      user.id,
+        expires_at:          expiresAt,
+        invited_by:          user.id,
+        allowed_account_ids: allowed_account_ids ?? null,
+        allowed_agency_ids:  allowed_agency_ids  ?? null,
       });
 
     if (insertErr) return json({ error: insertErr.message }, 500);

@@ -1064,6 +1064,8 @@
               </select>
               <button class="btn-send-invite" id="invite-submit-btn" onclick="submitInvite()">Send Invite →</button>
             </div>
+            <!-- Account access selector — populated by buildInviteAccessSection() -->
+            <div id="invite-access-section"></div>
             <div class="invite-result" id="invite-result"></div>
             <div class="invite-link-box" id="invite-link-box" onclick="copyInviteLink(this)">
               🔗 Click to copy invite link
@@ -4098,6 +4100,7 @@
     async function loadTeamPanel() {
       document.getElementById('team-members-list').innerHTML =
         '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading team…</div>';
+      buildInviteAccessSection();
       const res = await callEdgeFunction('team-manage', { action: 'list', org_id: currentOrgId });
       if (res.error) {
         document.getElementById('team-members-list').innerHTML =
@@ -4105,6 +4108,46 @@
         return;
       }
       renderTeamMembers(res.members || []);
+    }
+
+    function buildInviteAccessSection() {
+      const allAccounts = Object.values(accountMap);
+      const container   = document.getElementById('invite-access-section');
+      if (!container) return;
+      if (!allAccounts.length) { container.innerHTML = ''; return; }
+
+      const acctBoxes = allAccounts.map(a =>
+        `<label class="access-checkbox">
+          <input type="checkbox" class="invite-account-cb" value="${escHtml(a.id)}" checked>
+          ${escHtml((a.account_name || a.meta_account_id || '').substring(0, 32))}
+        </label>`
+      ).join('');
+
+      container.innerHTML = `
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px">Account Access</div>
+          <label class="access-checkbox" style="margin-bottom:6px">
+            <input type="checkbox" id="invite-full-access" checked onchange="toggleInviteFullAccess(this)">
+            <strong>Full Access</strong> — all accounts
+          </label>
+          <div id="invite-account-checkboxes" style="display:none;margin-top:6px;margin-left:4px;display:flex;flex-wrap:wrap;gap:4px">
+            ${acctBoxes}
+          </div>
+        </div>`;
+
+      // Sync visibility to current state
+      const fullCb = document.getElementById('invite-full-access');
+      document.getElementById('invite-account-checkboxes').style.display =
+        (fullCb && fullCb.checked) ? 'none' : 'flex';
+    }
+
+    function toggleInviteFullAccess(cb) {
+      const wrapper = document.getElementById('invite-account-checkboxes');
+      if (!wrapper) return;
+      wrapper.style.display = cb.checked ? 'none' : 'flex';
+      if (cb.checked) {
+        wrapper.querySelectorAll('.invite-account-cb').forEach(c => c.checked = true);
+      }
     }
 
     function renderTeamMembers(members, containerId = 'team-members-list') {
@@ -4140,12 +4183,23 @@
 
         // Pending invite body
         if (m.is_pending) {
+          const inviteAccess = (() => {
+            if (!Array.isArray(m.allowed_account_ids) || !m.allowed_account_ids.length) return '🌐 Full access';
+            const names = m.allowed_account_ids.map(id => {
+              const a = accountMap[id];
+              return a ? escHtml((a.account_name || a.meta_account_id || id).substring(0, 24)) : id.substring(0, 8) + '…';
+            });
+            return '🔒 ' + names.join(', ');
+          })();
           return `<div class="member-card" id="mc_${m.id}">
             ${topSection}
-            <div style="padding:10px 18px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
-              ${m.invite_url ? `
-              <button class="btn-copy-link" onclick="copyText('${escHtml(m.invite_url)}',this)">📋 Copy Invite Link</button>` : ''}
-              <button class="btn-revoke-invite" onclick="revokeInvite('${m.id}')">Revoke Invite</button>
+            <div style="padding:10px 18px 14px;border-top:1px solid var(--border)">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${inviteAccess}</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                ${m.invite_url ? `
+                <button class="btn-copy-link" onclick="copyText('${escHtml(m.invite_url)}',this)">📋 Copy Invite Link</button>` : ''}
+                <button class="btn-revoke-invite" onclick="revokeInvite('${m.id}')">Revoke Invite</button>
+              </div>
             </div>
           </div>`;
         }
@@ -4289,11 +4343,22 @@
 
       if (!email) { result.className = 'invite-result error'; result.textContent = 'Please enter an email address.'; return; }
 
+      // Collect account access selection
+      const fullAccessCb = document.getElementById('invite-full-access');
+      let allowedAccountIds = null;
+      if (fullAccessCb && !fullAccessCb.checked) {
+        const checked = Array.from(document.querySelectorAll('.invite-account-cb:checked')).map(cb => cb.value);
+        allowedAccountIds = checked.length ? checked : null;
+      }
+
       btn.disabled = true; btn.textContent = 'Sending…';
       result.className = 'invite-result'; result.textContent = ''; result.style.display = 'none';
       linkBox.style.display = 'none';
 
-      const res = await callEdgeFunction('team-manage', { action: 'invite', org_id: currentOrgId, email, role });
+      const res = await callEdgeFunction('team-manage', {
+        action: 'invite', org_id: currentOrgId, email, role,
+        allowed_account_ids: allowedAccountIds,
+      });
 
       btn.disabled = false; btn.textContent = 'Send Invite →';
 
