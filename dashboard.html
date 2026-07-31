@@ -921,6 +921,7 @@
     </div>
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
+    <button class="layout-edit-btn" id="layout-reset-btn" onclick="resetToDefaultLayout()" style="display:none" title="Reset all section/card arrangements to defaults">↺ Reset Layout</button>
     <button class="layout-edit-btn" id="layout-edit-btn" onclick="toggleLayoutEdit()">⠿ Edit Layout</button>
   </div>
 
@@ -1708,15 +1709,91 @@
     function toggleLayoutEdit() {
       _layoutEditMode = !_layoutEditMode;
       document.body.classList.toggle('layout-edit-mode', _layoutEditMode);
-      const btn = document.getElementById('layout-edit-btn');
+      const btn    = document.getElementById('layout-edit-btn');
+      const rstBtn = document.getElementById('layout-reset-btn');
       if (btn) {
         btn.classList.toggle('active', _layoutEditMode);
         btn.textContent = _layoutEditMode ? '✓ Done' : '⠿ Edit Layout';
       }
+      if (rstBtn) rstBtn.style.display = _layoutEditMode ? '' : 'none';
     }
+
+    // Default layout — mirrors the static HTML order
+    const DEFAULT_LAYOUT = [
+      { id: 'primary-kpis', cards: [] },
+      { id: 'orders',       cards: [] },
+      { id: 'spending',     cards: [] },
+      { id: 'totals',       cards: [] },
+      { id: 'revenue',      cards: [] }
+    ];
 
     function _layoutKey() {
       return 'kpi-layout-v1-' + (currentOrgId || 'x') + '-' + (currentAgencyId || 'x');
+    }
+
+    // ── Server-side persistence ──────────────────────────────────────────────
+    // Debounced: both saveLayout() and _saveCust() queue a single server write.
+    let _serverSaveTimer = null;
+    function _scheduleServerSave() {
+      clearTimeout(_serverSaveTimer);
+      _serverSaveTimer = setTimeout(async () => {
+        if (!currentUser || !currentOrgId) return;
+        try {
+          const lsLayout = localStorage.getItem(_layoutKey());
+          const lsCust   = localStorage.getItem(_custKey());
+          await sb.from('user_layouts').upsert(
+            {
+              user_id:        currentUser.id,
+              org_id:         currentOrgId,
+              agency_id:      currentAgencyId || 'x',
+              layout:         lsLayout ? JSON.parse(lsLayout) : null,
+              customizations: lsCust   ? JSON.parse(lsCust)   : {},
+              updated_at:     new Date().toISOString()
+            },
+            { onConflict: 'user_id,org_id,agency_id' }
+          );
+          console.log('[Layout] server save ok');
+        } catch(e) { console.warn('[Layout] server save failed', e); }
+      }, 1500);
+    }
+
+    // Pull server record into localStorage so all sync code works normally.
+    async function _syncLayoutFromServer() {
+      if (!currentUser || !currentOrgId) return;
+      try {
+        const { data } = await sb.from('user_layouts')
+          .select('layout, customizations')
+          .eq('user_id',   currentUser.id)
+          .eq('org_id',    currentOrgId)
+          .eq('agency_id', currentAgencyId || 'x')
+          .maybeSingle();
+        if (data) {
+          if (data.layout)
+            try { localStorage.setItem(_layoutKey(), JSON.stringify(data.layout)); } catch(_) {}
+          if (data.customizations && Object.keys(data.customizations).length)
+            try { localStorage.setItem(_custKey(), JSON.stringify(data.customizations)); } catch(_) {}
+          console.log('[Layout] synced from server');
+        } else {
+          console.log('[Layout] no server record — will save defaults after load');
+        }
+      } catch(e) {
+        console.warn('[Layout] server sync failed, using local cache', e);
+      }
+    }
+
+    async function resetToDefaultLayout() {
+      if (!confirm('Reset to default layout?\n\nAll section/card arrangements and visibility customizations will be cleared.')) return;
+      try { localStorage.removeItem(_layoutKey()); } catch(_) {}
+      try { localStorage.removeItem(_custKey()); }  catch(_) {}
+      if (currentUser && currentOrgId) {
+        try {
+          await sb.from('user_layouts').delete()
+            .eq('user_id',   currentUser.id)
+            .eq('org_id',    currentOrgId)
+            .eq('agency_id', currentAgencyId || 'x');
+        } catch(e) { console.warn('[Layout] reset server clear failed', e); }
+      }
+      location.reload();
     }
 
     function saveLayout() {
@@ -1728,19 +1805,16 @@
         sec.querySelectorAll('.kpi-card[data-card-id]').forEach(c => cards.push(c.dataset.cardId));
         sections.push({ id: sec.dataset.sectionId, cards });
       });
-      try {
-        localStorage.setItem(_layoutKey(), JSON.stringify(sections));
-        console.log('[Layout] saved', sections.map(s => s.id), 'key:', _layoutKey());
-      } catch(e) { console.warn('[Layout] save failed', e); }
+      try { localStorage.setItem(_layoutKey(), JSON.stringify(sections)); }
+      catch(e) { console.warn('[Layout] localStorage save failed', e); }
+      _scheduleServerSave();
     }
 
     function restoreLayout() {
       let saved;
       try { saved = JSON.parse(localStorage.getItem(_layoutKey()) || 'null'); } catch(_) {}
 
-      // ── Migrate old object format → array format ──────────────────────────────
-      // A previous code version saved {sectionId: index} objects. Convert them
-      // so they're not silently ignored by the Array.isArray check below.
+      // Migrate old object format → array format (left over from a previous code version)
       if (saved && !Array.isArray(saved) && typeof saved === 'object') {
         const sectionEntries = Object.entries(saved).filter(([k]) => !k.startsWith('__cards__'));
         saved = sectionEntries
@@ -1750,7 +1824,6 @@
             const cards = Object.entries(cardObj).sort((a, b) => a[1] - b[1]).map(([k]) => k);
             return { id, cards };
           });
-        // Re-save in the correct array format
         try { localStorage.setItem(_layoutKey(), JSON.stringify(saved)); } catch(_) {}
       }
 
@@ -1758,7 +1831,6 @@
       if (!saved || !Array.isArray(saved)) return;
       const container = document.getElementById('kpi-sections-container');
       if (!container) return;
-      // Move each section to end of container in saved order (appendChild moves node)
       saved.forEach(({ id, cards }) => {
         const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
         if (sec) container.appendChild(sec);
@@ -1781,6 +1853,7 @@
     }
     function _saveCust(d) {
       try { localStorage.setItem(_custKey(), JSON.stringify(d)); } catch(_) {}
+      _scheduleServerSave();
     }
 
     // Inject CSS hiding rules immediately on page load (before any data render)
@@ -4250,10 +4323,11 @@
       }
 
       // ── Init drag-and-drop layout ──
+      await _syncLayoutFromServer(); // pull server record → localStorage (cross-device sync)
       applyCustomizations(); // render custom sections into DOM FIRST so restoreLayout sees them
-      restoreLayout();       // now restore saved order (includes custom sections)
+      restoreLayout();       // restore saved order from localStorage (already has server data)
       initDragDrop();        // set up drag-drop and ▲▼ buttons
-      saveLayout();          // persist current order (captures any newly added custom sections)
+      saveLayout();          // persist current order to localStorage + server
 
       // ── Capture context for Ask Claude sidebar ──
       try {
