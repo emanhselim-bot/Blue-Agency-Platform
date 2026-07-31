@@ -505,6 +505,10 @@
     .add-section-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(5,115,245,0.05); }
     .add-card-btn { display: flex; align-items: center; justify-content: center; min-height: 120px; border: 2px dashed var(--border); border-radius: 12px; background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; padding: 16px; }
     .add-card-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(5,115,245,0.05); }
+    .custom-card-input { font-size: 22px; font-weight: 700; color: var(--text-main); border: none; border-bottom: 2px solid var(--accent); background: transparent; outline: none; width: 100%; padding: 2px 0 4px; line-height: 1.1; letter-spacing: -0.5px; font-family: inherit; transition: border-color 0.15s; }
+    .custom-card-input::placeholder { color: var(--text-muted); font-weight: 400; font-size: 14px; }
+    .custom-card-input:focus { border-bottom-color: #fff; }
+    [data-theme="dark"] .custom-card-input:focus { border-bottom-color: #fff; }
 
     .rec-card {
       background: var(--card-bg); border-radius: 14px; padding: 20px;
@@ -1837,17 +1841,19 @@
         <span class="drag-handle" title="Drag to reorder">⠿</span>
         <div class="kpi-icon">📝</div>
         <div class="kpi-label">${card.name}</div>
-        <input type="number" min="0" step="0.01" placeholder="0.00"
+        <input type="number" min="0" step="any" placeholder="Enter value…"
           value="${card.value || ''}"
-          style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-        <div class="kpi-sub">Manual entry</div>`;
-      // Save value on input
-      el.querySelector('input').addEventListener('input', e => {
+          class="custom-card-input">
+        <div class="kpi-sub">✏️ Click to edit</div>`;
+      const input = el.querySelector('input');
+      input.addEventListener('focus', () => { input.nextElementSibling.textContent = 'Manual entry'; });
+      input.addEventListener('blur',  () => { if (!input.value) input.nextElementSibling.textContent = '✏️ Click to edit'; });
+      input.addEventListener('input', e => {
         const d = _loadCust();
         const sec = (d.customSections || []).find(s => s.id === secId);
         if (!sec) return;
         const c = (sec.cards || []).find(c => c.id === card.id);
-        if (c) c.value = e.target.value;
+        if (c) { c.value = e.target.value; input.nextElementSibling.textContent = 'Manual entry'; }
         _saveCust(d);
       });
       return el;
