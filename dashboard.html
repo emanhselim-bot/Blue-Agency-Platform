@@ -476,6 +476,22 @@
     /* ── DRAG & DROP LAYOUT ── */
     .layout-edit-btn { padding: 5px 11px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; white-space: nowrap; }
     .layout-edit-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    /* ── TEMPLATE PICKER ── */
+    #template-btn { position: relative; }
+    .tmpl-picker-wrap { position: relative; display: inline-block; }
+    .tmpl-picker { position: absolute; right: 0; top: calc(100% + 5px); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 5px; z-index: 300; box-shadow: 0 8px 30px rgba(0,0,0,0.35); min-width: 230px; }
+    .tmpl-option { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 7px; cursor: pointer; transition: background 0.12s; font-size: 12px; color: var(--text-main); }
+    .tmpl-option:hover { background: rgba(255,255,255,0.06); }
+    .tmpl-option.active { background: rgba(5,115,245,0.15); color: var(--accent); }
+    .tmpl-option-icon { font-size: 16px; width: 22px; text-align: center; }
+    .tmpl-option-body { flex: 1; }
+    .tmpl-option-title { font-weight: 700; font-size: 12px; }
+    .tmpl-option-desc  { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+    .tmpl-option.active .tmpl-option-desc { color: rgba(5,115,245,0.7); }
+    /* ── AWARENESS PLATFORM FILTER ── */
+    .platform-filter { display: flex; gap: 5px; margin: 2px 0 14px; }
+    .platform-tab { padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; letter-spacing: 0.2px; }
+    .platform-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .drag-handle { position: absolute; top: 7px; right: 8px; font-size: 15px; color: var(--text-muted); opacity: 0; cursor: grab; transition: opacity 0.15s; user-select: none; z-index: 2; pointer-events: none; }
     .kpi-card { position: relative; }
     body.layout-edit-mode .kpi-card { cursor: grab; }
@@ -923,6 +939,23 @@
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
     <button class="layout-edit-btn" id="layout-undo-btn" onclick="undoLayout()" style="display:none" disabled title="Undo last layout change">↩ Undo</button>
     <button class="layout-edit-btn" id="layout-reset-btn" onclick="resetToDefaultLayout()" style="display:none" title="Reset all section/card arrangements to defaults">↺ Reset</button>
+    <div class="tmpl-picker-wrap">
+      <button class="layout-edit-btn" id="template-btn" onclick="toggleTemplatePicker(event)">📋 Template</button>
+      <div class="tmpl-picker" id="template-picker" style="display:none">
+        <div class="tmpl-option" data-tmpl="full"      onclick="_setTemplate('full')">
+          <span class="tmpl-option-icon">🏪</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Full</div><div class="tmpl-option-desc">Website + Messages + Awareness</div></div>
+        </div>
+        <div class="tmpl-option" data-tmpl="awareness" onclick="_setTemplate('awareness')">
+          <span class="tmpl-option-icon">👁️</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Awareness</div><div class="tmpl-option-desc">Reach, Impressions, Engagement</div></div>
+        </div>
+        <div class="tmpl-option" data-tmpl="messages"  onclick="_setTemplate('messages')">
+          <span class="tmpl-option-icon">💬</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Messages Only</div><div class="tmpl-option-desc">Spending + Messages, no website</div></div>
+        </div>
+      </div>
+    </div>
     <button class="layout-edit-btn" id="layout-edit-btn" onclick="toggleLayoutEdit()">⠿ Edit Layout</button>
   </div>
 
@@ -1702,6 +1735,53 @@
     }
     function getAgencyTargets() {
       return getAgencySettings(currentOrgId, currentAgencyId).targets || {};
+    }
+
+    // ── Workspace Template System ──
+    function _tmplKey()      { return `ws-tmpl-${currentOrgId||'x'}-${currentAgencyId||'x'}`; }
+    function _getTemplate()  { return localStorage.getItem(_tmplKey()) || 'full'; }
+    function _setTemplate(t) {
+      localStorage.setItem(_tmplKey(), t);
+      const p = document.getElementById('template-picker');
+      if (p) p.style.display = 'none';
+      _updateTemplateBtnLabel(t);
+      loadData();
+    }
+    function _updateTemplateBtnLabel(t) {
+      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'💬 Messages' };
+      const btn = document.getElementById('template-btn');
+      if (btn) btn.textContent = M[t] || '📋 Template';
+    }
+    function toggleTemplatePicker(e) {
+      if (e) { e.stopPropagation(); }
+      const p = document.getElementById('template-picker');
+      if (!p) return;
+      const open = p.style.display !== 'none';
+      p.style.display = open ? 'none' : 'block';
+      if (!open) {
+        const cur = _getTemplate();
+        p.querySelectorAll('.tmpl-option').forEach(el => el.classList.toggle('active', el.dataset.tmpl === cur));
+      }
+    }
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.tmpl-picker-wrap')) {
+        const p = document.getElementById('template-picker');
+        if (p) p.style.display = 'none';
+      }
+    });
+    function switchAwarenessPlatform(src) {
+      ['t','f','i'].forEach(k => {
+        const btn = document.getElementById(`ptab-${k}`);
+        if (btn) btn.classList.toggle('active', k === src);
+      });
+      const attr = src === 't' ? 'data-av-t' : src === 'f' ? 'data-av-f' : 'data-av-i';
+      document.querySelectorAll('[data-card-id^="aw-"]').forEach(card => {
+        const valEl = card.querySelector('.aw-kv');
+        if (valEl) {
+          const v = card.getAttribute(attr);
+          if (v !== null) valEl.textContent = v;
+        }
+      });
     }
 
     // ── Drag & Drop Layout ──
@@ -4009,9 +4089,145 @@
         : '—';
 
       const _t = getAgencyTargets();
+      const _curTmpl = _getTemplate();
+      _updateTemplateBtnLabel(_curTmpl);
+
+      // ── Per-platform awareness data ──
+      const _fbPlat = platforms.find(p => p.publisher_platform === 'facebook')  || {};
+      const _igPlat = platforms.find(p => p.publisher_platform === 'instagram') || {};
+      const _fv = v => (v !== null && v !== undefined && !isNaN(v) && v > 0) ? v : null;
+      const _fbSpend = _fv(parseNum(_fbPlat.spend));
+      const _igSpend = _fv(parseNum(_igPlat.spend));
+      const _fbImpr  = _fv(parseNum(_fbPlat.impressions));
+      const _igImpr  = _fv(parseNum(_igPlat.impressions));
+      const _fbCpm   = (_fbSpend && _fbImpr) ? _fbSpend / _fbImpr * 1000 : null;
+      const _igCpm   = (_igSpend && _igImpr) ? _igSpend / _igImpr * 1000 : null;
+      const _fn  = v => _fv(v) !== null ? _fv(v).toLocaleString('en', {maximumFractionDigits:0}) : '—';
+      const _fc  = v => _fv(v) !== null ? fmt(_fv(v), curr) : '—';
+      const _ff  = v => _fv(v) !== null ? fmt(_fv(v), '', 2) : '—';
+      // Awareness card helper — stores platform values as data attributes for live switching
+      const _aw = (color, icon, label, totVal, fbVal, igVal, sub) => {
+        const cId = label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const t = totVal ?? '—', f = fbVal ?? '—', g = igVal ?? '—';
+        return `<div class="kpi-card ${color}" data-card-id="aw-${cId}" data-av-t="${String(t).replace(/"/g,'&quot;')}" data-av-f="${String(f).replace(/"/g,'&quot;')}" data-av-i="${String(g).replace(/"/g,'&quot;')}">
+          <span class="drag-handle" title="Drag to reorder">⠿</span>
+          <div class="kpi-icon">${icon}</div>
+          <div class="kpi-label">${label}</div>
+          <div class="kpi-value aw-kv">${t}</div>
+          <div class="kpi-sub">${sub}</div>
+        </div>`;
+      };
+
+      // ── Spending section (shared by all templates — no website/messages KPIs) ──
+      const _spendingSection = (includeRevenue) => `
+        <div class="kpi-section" data-section-id="spending">
+          <div class="section-label">${includeRevenue ? 'Spending / Revenue' : 'Spending / Budget'} <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          <div class="kpi-grid" data-grid-id="spending">
+            ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), 'Meta Ads', spend, _t.spend, false)}
+            ${kpi('c-green', '💳', 'Ad Account Fund',
+              accountBalance !== null ? fmt(accountBalance, curr) : '—',
+              accountBalance !== null
+                ? (spendCap !== null ? `● Balance · Cap: ${fmt(spendCap, curr)}` : '● Current balance')
+                : 'Meta Ads'
+            )}
+            ${kpi('c-sky', '📅', 'Daily Budget',
+              dailyBudget !== null ? fmt(dailyBudget, curr) : '—',
+              dailyBudget !== null ? '● Active campaigns total' : 'Meta Ads'
+            )}
+            ${kpi('c-coral', '⏳', 'Days Remaining',
+              estimatedDays !== null ? String(estimatedDays) + ' days' : '—',
+              estimatedDays !== null ? `● Fund ÷ ${fmt(dailyBudget, curr)}/day` : 'Fund ÷ Daily Budget'
+            )}
+            ${includeRevenue ? `
+            ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+            ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+            ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
+            ` : ''}
+          </div>
+        </div>`;
+
+      // ── Messages Analysis section (shared by 'full' and 'messages' templates) ──
+      const _messagesSection = `
+        <div class="kpi-section" data-section-id="messages-analysis">
+          <div class="section-label">Messages Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          <div class="kpi-grid" data-grid-id="messages-analysis">
+            <div class="kpi-card c-orange" data-card-id="number-of-messages">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💬</div>
+              <div class="kpi-label">Number of Messages</div>
+              <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '')}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
+                style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+              <div class="kpi-sub">Manual entry</div>
+            </div>
+            <div class="kpi-card c-coral" data-card-id="cost-per-message">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💬</div>
+              <div class="kpi-label">Cost per Message</div>
+              <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01" value="${_cpmDispVal !== null ? _cpmDispVal.toFixed(2) : ''}" placeholder="0.00"
+                style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+              <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
+            </div>
+            <div class="kpi-card c-teal" data-card-id="orders-from-messages">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💬</div>
+              <div class="kpi-label">Orders from Messages</div>
+              <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
+                style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+              <div class="kpi-sub">Manual entry</div>
+            </div>
+            <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💬</div>
+              <div class="kpi-label">Pieces from Messages</div>
+              <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
+                style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+              <div class="kpi-sub">Manual entry</div>
+            </div>
+            <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💬</div>
+              <div class="kpi-label">Revenue from Messages</div>
+              <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
+                style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+              <div class="kpi-sub">Manual entry</div>
+            </div>
+            ${kpi('c-orange solid', '📦', 'Cost per Order (Messages)', spend && msgOrders ? fmt(spend / msgOrders, curr) : '—', 'Spend ÷ Orders from Messages', null, null, null, 'kpi-msg-cost-per-order-val')}
+            ${kpi('c-coral solid',  '🏷️', 'Cost per Piece (Messages)', spend && msgPieces ? fmt(spend / msgPieces, curr) : '—', 'Spend ÷ Pieces from Messages', null, null, null, 'kpi-msg-cost-per-piece-val')}
+          </div>
+        </div>`;
+
       document.getElementById('content').innerHTML = `
         <div class="kpi-sections-container" id="kpi-sections-container">
 
+        ${_curTmpl === 'awareness' ? `
+          ${_spendingSection(false)}
+
+          <div class="kpi-section" data-section-id="awareness-kpis">
+            <div class="section-label">Awareness KPIs <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="platform-filter">
+              <button class="platform-tab active" id="ptab-t" onclick="switchAwarenessPlatform('t')">📊 Total</button>
+              <button class="platform-tab" id="ptab-f" onclick="switchAwarenessPlatform('f')">Facebook</button>
+              <button class="platform-tab" id="ptab-i" onclick="switchAwarenessPlatform('i')">Instagram</button>
+            </div>
+            <div class="kpi-grid" data-grid-id="awareness-kpis">
+              ${_aw('c-sky',          '👥', 'Reach',               _fn(reach),           '—', '—',        'Meta Ads · Unique accounts')}
+              ${_aw('c-blue solid',   '👁️', 'Impressions',         _fn(impressions),     _fn(_fbImpr), _fn(_igImpr), 'Meta Ads · Total views')}
+              ${_aw('c-gold solid',   '💰', 'CPM',                 _fc(cpm),             _fc(_fbCpm),  _fc(_igCpm),  'Cost per 1,000 impressions')}
+              ${_aw('c-teal',         '🔁', 'Frequency',           _ff(frequency),       '—', '—',        'Avg times shown per person')}
+              ${_aw('c-purple solid', '❤️', 'Engagements',         _fn(numEngagements),  '—', '—',        'Total post engagements')}
+              ${_aw('c-coral solid',  '💸', 'Cost per Engagement', _fc(costPerEngage),   '—', '—',        'Spend ÷ Engagements')}
+              ${_aw('c-green solid',  '👍', 'Follows',             _fn(numLikes),        '—', '—',        'Page likes / follows')}
+              ${_aw('c-navy solid',   '💸', 'Cost per Follow',     _fc(costPerFollow),   '—', '—',        'Spend ÷ Follows')}
+              ${_aw('c-orange',       '🎥', 'Video Views',         _fn(parseNum(d['actions:video_view'])), '—', '—', 'Total video views')}
+              ${_aw('c-sky solid',    '💸', 'Cost per Video View', _fc(parseNum(d['cost_per_action_type:video_view'])), '—', '—', 'Spend ÷ Video Views')}
+            </div>
+          </div>
+
+        ` : _curTmpl === 'messages' ? `
+          ${_spendingSection(false)}
+          ${_messagesSection}
+
+        ` : `
           <div class="kpi-section" data-section-id="spending">
             <div class="section-label">Spending / Revenue <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="spending">
@@ -4068,53 +4284,7 @@
             </div>
           </div>
 
-          <div class="kpi-section" data-section-id="messages-analysis">
-            <div class="section-label">Messages Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
-            <div class="kpi-grid" data-grid-id="messages-analysis">
-              <div class="kpi-card c-orange" data-card-id="number-of-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Number of Messages</div>
-                <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '')}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              <div class="kpi-card c-coral" data-card-id="cost-per-message">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Cost per Message</div>
-                <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01" value="${_cpmDispVal !== null ? _cpmDispVal.toFixed(2) : ''}" placeholder="0.00"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
-              </div>
-              <div class="kpi-card c-teal" data-card-id="orders-from-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Orders from Messages</div>
-                <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Pieces from Messages</div>
-                <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Revenue from Messages</div>
-                <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              ${kpi('c-orange solid', '📦', 'Cost per Order (Messages)', sfmt(spend && msgOrders ? spend / msgOrders : null, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders from Messages'), null, null, null, 'kpi-msg-cost-per-order-val')}
-              ${kpi('c-coral solid',  '🏷️', 'Cost per Piece (Messages)', sfmt(spend && msgPieces ? spend / msgPieces : null, v => fmt(v, curr)), sfmtSub('Spend ÷ Pieces from Messages'), null, null, null, 'kpi-msg-cost-per-piece-val')}
-            </div>
-          </div>
+          ${_messagesSection}
 
           <div class="kpi-section" data-section-id="primary-kpis">
             <div class="section-label">Primary KPIs <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
@@ -4124,6 +4294,7 @@
               ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
             </div>
           </div>
+        `}
 
         </div>`;
 
@@ -4382,19 +4553,21 @@
       applyCustomizations(); // render custom sections into DOM FIRST so restoreLayout sees them
       restoreLayout();       // restore saved order from localStorage (already has server data)
 
-      // One-time migration: enforce section order spending → totals → website-results → messages-analysis
-      (() => {
-        const _migKey = 'kpi-layout-migrated-v4';
-        if (localStorage.getItem(_migKey)) return;
-        const c = document.getElementById('kpi-sections-container');
-        if (!c) return;
-        const order = ['spending', 'totals', 'website-results', 'messages-analysis'];
-        order.slice().reverse().forEach(id => {
-          const sec = c.querySelector(`.kpi-section[data-section-id="${id}"]`);
-          if (sec) c.insertBefore(sec, c.firstElementChild);
-        });
-        localStorage.setItem(_migKey, '1');
-      })();
+      // One-time migration: enforce section order spending → totals → website-results → messages-analysis (full template only)
+      if (_curTmpl === 'full') {
+        (() => {
+          const _migKey = 'kpi-layout-migrated-v4';
+          if (localStorage.getItem(_migKey)) return;
+          const c = document.getElementById('kpi-sections-container');
+          if (!c) return;
+          const order = ['spending', 'totals', 'website-results', 'messages-analysis'];
+          order.slice().reverse().forEach(id => {
+            const sec = c.querySelector(`.kpi-section[data-section-id="${id}"]`);
+            if (sec) c.insertBefore(sec, c.firstElementChild);
+          });
+          localStorage.setItem(_migKey, '1');
+        })();
+      }
 
       initDragDrop();        // set up drag-drop and ▲▼ buttons
       saveLayout();          // persist current order to localStorage + server
