@@ -1755,25 +1755,48 @@
       try { localStorage.setItem(_custKey(), JSON.stringify(d)); } catch(_) {}
     }
 
+    // Inject CSS hiding rules immediately on page load (before any data render)
+    // so hidden items never flash visible on refresh.
+    (function _earlyHide() {
+      try {
+        const cust = _loadCust();
+        const hs = cust.hiddenSections || [];
+        const hc = cust.hiddenCards    || [];
+        if (!hs.length && !hc.length) return;
+        let s = document.getElementById('kpi-custom-hide-style');
+        if (!s) { s = document.createElement('style'); s.id = 'kpi-custom-hide-style'; document.head.appendChild(s); }
+        s.textContent = [
+          ...hs.map(id => `.kpi-section[data-section-id="${CSS.escape(id)}"] { display: none !important; }`),
+          ...hc.map(id => `.kpi-card[data-card-id="${CSS.escape(id)}"] { display: none !important; }`),
+        ].join('\n');
+      } catch(_) {}
+    })();
+
     function applyCustomizations() {
       const cust = _loadCust();
       const hiddenCards    = cust.hiddenCards    || [];
       const hiddenSections = cust.hiddenSections || [];
       const names          = cust.names          || {};
 
+      // ── Hiding via a persistent <style> tag ──────────────────────────────────
+      // CSS rules in a <style> tag survive innerHTML re-renders (unlike inline styles),
+      // so hidden items stay hidden even when the dashboard rebuilds its DOM.
+      let styleEl = document.getElementById('kpi-custom-hide-style');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'kpi-custom-hide-style';
+        document.head.appendChild(styleEl);
+      }
+      const rules = [
+        ...hiddenSections.map(id => `.kpi-section[data-section-id="${CSS.escape(id)}"] { display: none !important; }`),
+        ...hiddenCards.map(id    => `.kpi-card[data-card-id="${CSS.escape(id)}"] { display: none !important; }`),
+      ];
+      styleEl.textContent = rules.join('\n');
+
+      // ── Custom names & edit controls (re-applied after each render) ──────────
       const container = document.getElementById('kpi-sections-container');
       if (!container) return;
 
-      // Hide deleted sections
-      hiddenSections.forEach(id => {
-        const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
-        if (sec) sec.style.display = 'none';
-      });
-      // Hide deleted cards
-      hiddenCards.forEach(id => {
-        const card = container.querySelector(`.kpi-card[data-card-id="${id}"]`);
-        if (card) card.style.display = 'none';
-      });
       // Apply custom names
       Object.entries(names).forEach(([key, val]) => {
         if (key.startsWith('section:')) {
@@ -1794,14 +1817,14 @@
         }
       });
 
-      // Inject edit controls
-      _injectEditControls(cust, container);
+      // Inject ✎ / ✕ buttons on sections and ✕ on cards
+      _injectEditControls(container);
     }
 
-    function _injectEditControls(cust, container) {
-      // Sections: add ✎ rename and ✕ delete buttons
+    function _injectEditControls(container) {
+      // Sections: ✎ rename + ✕ delete
       container.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
-        if (sec.querySelector('.section-del-btn')) return; // already done
+        if (sec.querySelector('.section-del-btn')) return;
         const labelEl = sec.querySelector('.section-label');
         if (!labelEl) return;
         const secId = sec.dataset.sectionId;
@@ -1823,21 +1846,21 @@
 
         const btnDel = document.createElement('button');
         btnDel.className = 'section-del-btn';
-        btnDel.title = 'Delete section';
+        btnDel.title = 'Hide section';
         btnDel.textContent = '✕';
         btnDel.addEventListener('click', e => {
           e.stopPropagation();
-          if (!confirm('Hide this section? You can restore it from Settings → Dashboard.')) return;
+          if (!confirm('Hide this section? Restore it from Settings → Dashboard.')) return;
           const d = _loadCust(); d.hiddenSections = d.hiddenSections || [];
           if (!d.hiddenSections.includes(secId)) d.hiddenSections.push(secId);
-          _saveCust(d); sec.style.display = 'none';
+          _saveCust(d); applyCustomizations();
         });
 
         labelEl.appendChild(btnRename);
         labelEl.appendChild(btnDel);
       });
 
-      // Cards: add ✕ delete button and clickable label rename
+      // Cards: ✕ delete + click label to rename
       container.querySelectorAll('.kpi-card[data-card-id]').forEach(card => {
         if (card.querySelector('.card-del-btn')) return;
         const cardId = card.dataset.cardId;
@@ -1850,12 +1873,10 @@
           e.stopPropagation();
           const d = _loadCust(); d.hiddenCards = d.hiddenCards || [];
           if (!d.hiddenCards.includes(cardId)) d.hiddenCards.push(cardId);
-          _saveCust(d); card.style.display = 'none';
+          _saveCust(d); applyCustomizations();
         });
-        card.style.position = card.style.position || 'relative';
         card.appendChild(btnDel);
 
-        // Make label editable on click
         const labelEl = card.querySelector('.kpi-label');
         if (labelEl && !labelEl.dataset.editable) {
           labelEl.dataset.editable = '1';
@@ -1876,7 +1897,11 @@
 
     function resetCustomizations() {
       if (!confirm('Restore all hidden sections and cards, and reset all custom names?')) return;
-      try { localStorage.removeItem(_custKey()); } catch(_) {}
+      try {
+        localStorage.removeItem(_custKey());
+        const s = document.getElementById('kpi-custom-hide-style');
+        if (s) s.textContent = '';
+      } catch(_) {}
       location.reload();
     }
 
