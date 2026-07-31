@@ -1786,16 +1786,18 @@
         });
       });
 
-      // ── Section drag (grab the ⠿ handle in the section label) ──
+      // ── Section drag (grab anywhere on the section label) ──
       document.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
         const handle = sec.querySelector('.section-drag-handle');
+        const labelEl = sec.querySelector('.section-label');
         if (!handle) return;
         sec.draggable = true;
 
         sec.addEventListener('dragstart', e => {
           if (!_layoutEditMode) { e.preventDefault(); return; }
-          // Only initiate section drag from the handle; let card drags pass through
-          if (!handle.contains(e.target) && !e.target.classList.contains('section-drag-handle')) {
+          // Allow drag from anywhere in the section label; block if originating inside a card
+          const fromLabel = labelEl && labelEl.contains(e.target);
+          if (!fromLabel) {
             if (e.target.closest && e.target.closest('.kpi-card')) return;
             e.preventDefault(); return;
           }
