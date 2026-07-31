@@ -4055,54 +4055,6 @@
             </div>
           </div>
 
-          <div class="kpi-section" data-section-id="messages-analysis">
-            <div class="section-label">Messages Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
-            <div class="kpi-grid" data-grid-id="messages-analysis">
-              <div class="kpi-card c-orange" data-card-id="number-of-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Number of Messages</div>
-                <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '')}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              <div class="kpi-card c-coral" data-card-id="cost-per-message">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Cost per Message</div>
-                <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01" value="${_cpmDispVal !== null ? _cpmDispVal.toFixed(2) : ''}" placeholder="0.00"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
-              </div>
-              <div class="kpi-card c-teal" data-card-id="orders-from-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Orders from Messages</div>
-                <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Pieces from Messages</div>
-                <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💬</div>
-                <div class="kpi-label">Revenue from Messages</div>
-                <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>
-              ${kpi('c-orange solid', '📦', 'Cost per Order (Messages)', sfmt(spend && msgOrders ? spend / msgOrders : null, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders from Messages'), null, null, null, 'kpi-msg-cost-per-order-val')}
-              ${kpi('c-coral solid',  '🏷️', 'Cost per Piece (Messages)', sfmt(spend && msgPieces ? spend / msgPieces : null, v => fmt(v, curr)), sfmtSub('Spend ÷ Pieces from Messages'), null, null, null, 'kpi-msg-cost-per-piece-val')}
-            </div>
-          </div>
-
           <div class="kpi-section" data-section-id="totals">
             <div class="section-label">Total <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="totals">
@@ -4125,49 +4077,6 @@
             </div>
           </div>
 
-          <div class="kpi-section" data-section-id="orders">
-            <div class="section-label">Orders <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
-            <div class="kpi-grid" data-grid-id="orders">
-              ${kpi('c-sky', '🛒', 'Orders from Website', sfmt(shopifyOrders, v => v.toLocaleString('en')), shopifySubLabel)}
-              ${kpi('c-orange solid', '📦', 'Cost Per', sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
-            </div>
-          </div>
-
-          ${(() => {
-            // ── Revenue section — manual entry cards ──
-            const _revKeys = ['rev-source-1','rev-source-2','rev-source-3','rev-source-4'];
-            const _revVals = _revKeys.map(k => {
-              try { return parseFloat(localStorage.getItem('kpi-' + k + '-' + (currentOrgId||'x') + '-' + (currentAgencyId||'x')) || '0') || 0; } catch(_) { return 0; }
-            });
-            const _revTotal = _revVals.reduce((s,v) => s + v, 0);
-            const revCard = (cardId, icon, label, keyIdx) => `
-              <div class="kpi-card c-green" data-card-id="${cardId}">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">${icon}</div>
-                <div class="kpi-label">${label}</div>
-                <input id="kpi-${cardId}-input" type="number" min="0" step="0.01"
-                  value="${_revVals[keyIdx] || ''}" placeholder="0.00"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Manual entry</div>
-              </div>`;
-            return `
-            <div class="kpi-section" data-section-id="revenue">
-              <div class="section-label">Revenue <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
-              <div class="kpi-grid" data-grid-id="revenue">
-                ${revCard('rev-source-1','💵','Revenue Source 1', 0)}
-                ${revCard('rev-source-2','💵','Revenue Source 2', 1)}
-                ${revCard('rev-source-3','💵','Revenue Source 3', 2)}
-                ${revCard('rev-source-4','💵','Revenue Source 4', 3)}
-                <div class="kpi-card c-gold solid" data-card-id="rev-total">
-                  <span class="drag-handle" title="Drag to reorder">⠿</span>
-                  <div class="kpi-icon">💰</div>
-                  <div class="kpi-label">Total Revenue</div>
-                  <div class="kpi-value" id="kpi-rev-total-val">${_revTotal > 0 ? fmt(_revTotal, curr) : '—'}</div>
-                  <div class="kpi-sub">Sum of all sources</div>
-                </div>
-              </div>
-            </div>`;
-          })()}
 
         </div>`;
 
