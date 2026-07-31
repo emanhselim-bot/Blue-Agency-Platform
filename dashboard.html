@@ -4034,6 +4034,7 @@
               )}
               ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+              ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${(() => {
                 const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
                 const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
