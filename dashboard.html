@@ -4038,6 +4038,19 @@
             </div>
           </div>
 
+          <div class="kpi-section" data-section-id="totals">
+            <div class="section-label">Total <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="totals">
+              ${kpi('c-green solid',  '📊', 'Total Orders',           (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—',    'Website + Messages',             totalOrders, _t.orders, true, 'kpi-total-orders-val')}
+              ${kpi('c-teal solid',   '📦', 'Total Pieces',           (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—',    'Website + Messages',             null, null, null, 'kpi-total-pieces-val')}
+              ${kpi('c-coral solid',  '🏷️', 'Avg Cost per Piece',    sfmt(avgCostPerPiece,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Pieces'),  null, null, null, 'kpi-avg-cost-per-piece-val')}
+              ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—',                   costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
+              ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
+              ${kpi('c-purple solid', '🎯', 'Total Conversion Rate',  sfmt(adConversionRate, v => fmt(v,'',2) + '%'),                               sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
+              ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+            </div>
+          </div>
+
           <div class="kpi-section" data-section-id="website-results">
             <div class="section-label">Website Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="website-results">
@@ -4055,16 +4068,51 @@
             </div>
           </div>
 
-          <div class="kpi-section" data-section-id="totals">
-            <div class="section-label">Total <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
-            <div class="kpi-grid" data-grid-id="totals">
-              ${kpi('c-green solid',  '📊', 'Total Orders',           (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—',    'Website + Messages',             totalOrders, _t.orders, true, 'kpi-total-orders-val')}
-              ${kpi('c-teal solid',   '📦', 'Total Pieces',           (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—',    'Website + Messages',             null, null, null, 'kpi-total-pieces-val')}
-              ${kpi('c-coral solid',  '🏷️', 'Avg Cost per Piece',    sfmt(avgCostPerPiece,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Pieces'),  null, null, null, 'kpi-avg-cost-per-piece-val')}
-              ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—',                   costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
-              ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
-              ${kpi('c-purple solid', '🎯', 'Total Conversion Rate',  sfmt(adConversionRate, v => fmt(v,'',2) + '%'),                               sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
-              ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+          <div class="kpi-section" data-section-id="messages-analysis">
+            <div class="section-label">Messages Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="messages-analysis">
+              <div class="kpi-card c-orange" data-card-id="number-of-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Number of Messages</div>
+                <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '')}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              <div class="kpi-card c-coral" data-card-id="cost-per-message">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Cost per Message</div>
+                <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01" value="${_cpmDispVal !== null ? _cpmDispVal.toFixed(2) : ''}" placeholder="0.00"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
+              </div>
+              <div class="kpi-card c-teal" data-card-id="orders-from-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Orders from Messages</div>
+                <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Pieces from Messages</div>
+                <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">💬</div>
+                <div class="kpi-label">Revenue from Messages</div>
+                <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              ${kpi('c-orange solid', '📦', 'Cost per Order (Messages)', sfmt(spend && msgOrders ? spend / msgOrders : null, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders from Messages'), null, null, null, 'kpi-msg-cost-per-order-val')}
+              ${kpi('c-coral solid',  '🏷️', 'Cost per Piece (Messages)', sfmt(spend && msgPieces ? spend / msgPieces : null, v => fmt(v, curr)), sfmtSub('Spend ÷ Pieces from Messages'), null, null, null, 'kpi-msg-cost-per-piece-val')}
             </div>
           </div>
 
@@ -4076,7 +4124,6 @@
               ${kpi('c-navy',   '👁️', 'Sessions',              displaySessions != null ? displaySessions.toLocaleString('en') : (!shopifyEnabled ? 'N/A' : analyticsUnavailableLabel), sessionsFromClarity ? `<span class="shopify-badge" style="background:rgba(23,155,180,0.15);color:#179BB4">● Clarity</span>${analyticsError ? ` <span title="Shopify Analytics unavailable — ${analyticsError.replace(/"/g,'&quot;')}" style="cursor:help;color:#FA8500;font-size:10px">⚠</span>` : ''}` : shopifySubLabel)}
             </div>
           </div>
-
 
         </div>`;
 
@@ -4335,16 +4382,17 @@
       applyCustomizations(); // render custom sections into DOM FIRST so restoreLayout sees them
       restoreLayout();       // restore saved order from localStorage (already has server data)
 
-      // One-time migration: ensure spending is first, totals is second
+      // One-time migration: enforce section order spending → totals → website-results → messages-analysis
       (() => {
-        const _migKey = 'kpi-layout-migrated-v3';
+        const _migKey = 'kpi-layout-migrated-v4';
         if (localStorage.getItem(_migKey)) return;
         const c = document.getElementById('kpi-sections-container');
         if (!c) return;
-        const spending = c.querySelector('.kpi-section[data-section-id="spending"]');
-        const totals   = c.querySelector('.kpi-section[data-section-id="totals"]');
-        if (spending) c.insertBefore(spending, c.firstElementChild);
-        if (totals)   c.insertBefore(totals, spending ? spending.nextElementSibling : c.firstElementChild);
+        const order = ['spending', 'totals', 'website-results', 'messages-analysis'];
+        order.slice().reverse().forEach(id => {
+          const sec = c.querySelector(`.kpi-section[data-section-id="${id}"]`);
+          if (sec) c.insertBefore(sec, c.firstElementChild);
+        });
         localStorage.setItem(_migKey, '1');
       })();
 
