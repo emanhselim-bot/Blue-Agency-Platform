@@ -492,6 +492,15 @@
     .kpi-section.section-dragging { opacity: 0.35; }
     .kpi-section.section-drag-over { outline: 2px solid var(--accent); border-radius: 12px; padding: 8px; margin: -8px; }
     .kpi-sections-container { display: flex; flex-direction: column; }
+    /* ── Customization edit buttons ── */
+    .section-rename-btn, .section-del-btn { display: inline-block; margin-left: 3px; padding: 1px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; line-height: 1.6; vertical-align: middle; opacity: 0.55; transition: opacity 0.15s, background 0.15s; }
+    .section-rename-btn:hover { opacity: 1; background: #6366f1; color: #fff; border-color: #6366f1; }
+    .section-del-btn:hover { opacity: 1; background: #e53e3e; color: #fff; border-color: #e53e3e; }
+    .card-del-btn { position: absolute; top: 5px; right: 26px; width: 17px; height: 17px; border-radius: 50%; background: rgba(220,38,38,0.75); color: #fff; border: none; cursor: pointer; font-size: 9px; line-height: 17px; text-align: center; opacity: 0; transition: opacity 0.15s; padding: 0; z-index: 10; }
+    .kpi-card:hover .card-del-btn { opacity: 1; }
+    .card-del-btn:hover { background: #dc2626; opacity: 1; }
+    .kpi-label[data-editable] { cursor: pointer; }
+    .kpi-label[data-editable]:hover { text-decoration: underline dotted; }
 
     .rec-card {
       background: var(--card-bg); border-radius: 14px; padding: 20px;
@@ -1102,9 +1111,10 @@
           <button class="settings-nav-item"        id="snav-google-ads" onclick="setSettingsTab('google-ads')"> <span class="settings-nav-icon">🔍</span> Google Ads</button>
           <button class="settings-nav-item"        id="snav-tiktok-ads" onclick="setSettingsTab('tiktok-ads')"> <span class="settings-nav-icon">🎵</span> TikTok Ads</button>
           <div class="settings-nav-section">Configuration</div>
-          <button class="settings-nav-item"        id="snav-linked"   onclick="setSettingsTab('linked')">  <span class="settings-nav-icon">🔗</span> Linked Accounts</button>
-          <button class="settings-nav-item"        id="snav-link"     onclick="setSettingsTab('link')">    <span class="settings-nav-icon">⛓</span> Quick Link</button>
-          <button class="settings-nav-item"        id="snav-agencies" onclick="setSettingsTab('agencies')"><span class="settings-nav-icon">🏢</span> Agency Workspaces</button>
+          <button class="settings-nav-item"        id="snav-linked"    onclick="setSettingsTab('linked')">   <span class="settings-nav-icon">🔗</span> Linked Accounts</button>
+          <button class="settings-nav-item"        id="snav-link"      onclick="setSettingsTab('link')">     <span class="settings-nav-icon">⛓</span> Quick Link</button>
+          <button class="settings-nav-item"        id="snav-agencies"  onclick="setSettingsTab('agencies')"> <span class="settings-nav-icon">🏢</span> Agency Workspaces</button>
+          <button class="settings-nav-item"        id="snav-dashboard" onclick="setSettingsTab('dashboard')"><span class="settings-nav-icon">🎛️</span> Dashboard</button>
         </div>
 
         <!-- Content area -->
@@ -1356,6 +1366,20 @@
           </div>
         </div>
         </div><!-- /spanel-agencies -->
+
+        <!-- ── TAB: Dashboard Customization ── -->
+        <div class="settings-panel" id="spanel-dashboard">
+        <div class="modal-section">
+          <div class="modal-section-title">Dashboard Customization</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">
+            Restore sections or cards you've hidden, and reset all custom names.
+          </p>
+          <div id="dashboard-hidden-summary" style="font-size:13px;color:var(--text-muted);margin-bottom:16px"></div>
+          <button onclick="resetCustomizations()" style="padding:9px 18px;background:#e53e3e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+            🔄 Restore all hidden items & reset names
+          </button>
+        </div>
+        </div><!-- /spanel-dashboard -->
 
         </div><!-- /modal-body -->
         </div><!-- /settings-content -->
@@ -1718,6 +1742,142 @@
           if (card) grid.appendChild(card);
         });
       });
+    }
+
+    // ── Dashboard Customization: hide/rename cards & sections ────────────────
+    function _custKey() {
+      return 'kpi-custom-v1-' + (currentOrgId || 'x') + '-' + (currentAgencyId || 'x');
+    }
+    function _loadCust() {
+      try { return JSON.parse(localStorage.getItem(_custKey()) || '{}'); } catch(_) { return {}; }
+    }
+    function _saveCust(d) {
+      try { localStorage.setItem(_custKey(), JSON.stringify(d)); } catch(_) {}
+    }
+
+    function applyCustomizations() {
+      const cust = _loadCust();
+      const hiddenCards    = cust.hiddenCards    || [];
+      const hiddenSections = cust.hiddenSections || [];
+      const names          = cust.names          || {};
+
+      const container = document.getElementById('kpi-sections-container');
+      if (!container) return;
+
+      // Hide deleted sections
+      hiddenSections.forEach(id => {
+        const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
+        if (sec) sec.style.display = 'none';
+      });
+      // Hide deleted cards
+      hiddenCards.forEach(id => {
+        const card = container.querySelector(`.kpi-card[data-card-id="${id}"]`);
+        if (card) card.style.display = 'none';
+      });
+      // Apply custom names
+      Object.entries(names).forEach(([key, val]) => {
+        if (key.startsWith('section:')) {
+          const sec = container.querySelector(`.kpi-section[data-section-id="${key.slice(8)}"]`);
+          if (sec) {
+            const labelEl = sec.querySelector('.section-label');
+            if (labelEl) {
+              const tn = Array.from(labelEl.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+              if (tn) tn.textContent = val + ' ';
+            }
+          }
+        } else if (key.startsWith('card:')) {
+          const card = container.querySelector(`.kpi-card[data-card-id="${key.slice(5)}"]`);
+          if (card) {
+            const labelEl = card.querySelector('.kpi-label');
+            if (labelEl) labelEl.textContent = val;
+          }
+        }
+      });
+
+      // Inject edit controls
+      _injectEditControls(cust, container);
+    }
+
+    function _injectEditControls(cust, container) {
+      // Sections: add ✎ rename and ✕ delete buttons
+      container.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
+        if (sec.querySelector('.section-del-btn')) return; // already done
+        const labelEl = sec.querySelector('.section-label');
+        if (!labelEl) return;
+        const secId = sec.dataset.sectionId;
+
+        const btnRename = document.createElement('button');
+        btnRename.className = 'section-rename-btn';
+        btnRename.title = 'Rename section';
+        btnRename.textContent = '✎';
+        btnRename.addEventListener('click', e => {
+          e.stopPropagation();
+          const current = (Array.from(labelEl.childNodes).find(n => n.nodeType === Node.TEXT_NODE) || {}).textContent?.trim() || secId;
+          const newName = prompt('Rename section:', current);
+          if (newName && newName.trim()) {
+            const d = _loadCust(); d.names = d.names || {};
+            d.names[`section:${secId}`] = newName.trim();
+            _saveCust(d); applyCustomizations();
+          }
+        });
+
+        const btnDel = document.createElement('button');
+        btnDel.className = 'section-del-btn';
+        btnDel.title = 'Delete section';
+        btnDel.textContent = '✕';
+        btnDel.addEventListener('click', e => {
+          e.stopPropagation();
+          if (!confirm('Hide this section? You can restore it from Settings → Dashboard.')) return;
+          const d = _loadCust(); d.hiddenSections = d.hiddenSections || [];
+          if (!d.hiddenSections.includes(secId)) d.hiddenSections.push(secId);
+          _saveCust(d); sec.style.display = 'none';
+        });
+
+        labelEl.appendChild(btnRename);
+        labelEl.appendChild(btnDel);
+      });
+
+      // Cards: add ✕ delete button and clickable label rename
+      container.querySelectorAll('.kpi-card[data-card-id]').forEach(card => {
+        if (card.querySelector('.card-del-btn')) return;
+        const cardId = card.dataset.cardId;
+
+        const btnDel = document.createElement('button');
+        btnDel.className = 'card-del-btn';
+        btnDel.title = 'Hide card';
+        btnDel.textContent = '✕';
+        btnDel.addEventListener('click', e => {
+          e.stopPropagation();
+          const d = _loadCust(); d.hiddenCards = d.hiddenCards || [];
+          if (!d.hiddenCards.includes(cardId)) d.hiddenCards.push(cardId);
+          _saveCust(d); card.style.display = 'none';
+        });
+        card.style.position = card.style.position || 'relative';
+        card.appendChild(btnDel);
+
+        // Make label editable on click
+        const labelEl = card.querySelector('.kpi-label');
+        if (labelEl && !labelEl.dataset.editable) {
+          labelEl.dataset.editable = '1';
+          labelEl.title = 'Click to rename';
+          labelEl.addEventListener('click', e => {
+            e.stopPropagation();
+            const current = labelEl.textContent.trim();
+            const newName = prompt('Rename card:', current);
+            if (newName && newName.trim()) {
+              const d = _loadCust(); d.names = d.names || {};
+              d.names[`card:${cardId}`] = newName.trim();
+              _saveCust(d); labelEl.textContent = newName.trim();
+            }
+          });
+        }
+      });
+    }
+
+    function resetCustomizations() {
+      if (!confirm('Restore all hidden sections and cards, and reset all custom names?')) return;
+      try { localStorage.removeItem(_custKey()); } catch(_) {}
+      location.reload();
     }
 
     function initDragDrop() {
@@ -3578,16 +3738,6 @@
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub">Manual entry</div>
               </div>
-              <div class="kpi-card c-coral" data-card-id="cost-per-message">
-                <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">💸</div>
-                <div class="kpi-label">Cost per Message</div>
-                <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01"
-                  value="${_cpmDispVal !== null ? _cpmDispVal.toFixed(2) : ''}"
-                  placeholder="0.00"
-                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub" id="kpi-cpm-sub">${_cpmIsManual ? 'Manual ✎ · clear to reset' : 'Auto · Spend ÷ Messages'}</div>
-              </div>
             </div>
           </div>
 
@@ -3603,7 +3753,7 @@
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub">Manual entry</div>
               </div>
-              ${kpi('c-orange solid', '📦', 'Cost per Order', sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
+              ${kpi('c-orange solid', '📦', 'Cost Per', sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Orders'), null, null, null, 'kpi-avg-cost-per-order-val')}
             </div>
           </div>
 
@@ -3639,7 +3789,6 @@
               ${kpi('c-green solid',  '📊', 'Total Orders',       (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—', 'Website + Messages', totalOrders, _t.orders, true, 'kpi-total-orders-val')}
               ${kpi('c-teal solid',   '📦', 'Total Pieces',       (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—', 'Website + Messages', null, null, null, 'kpi-total-pieces-val')}
               ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
-              ${kpi('c-sky solid',    '💸', 'Cost per Message',   (_storedCpm !== null && parseFloat(_storedCpm) > 0) ? fmt(parseFloat(_storedCpm), curr) : (costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—'), `Spend ÷ ${msgSource}`, null, null, null, 'kpi-totals-cpm-val')}
               ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—', costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
             </div>
@@ -3725,7 +3874,6 @@
           ${metric('Page Likes / Follows',    fmt(numLikes,'',0))}
           ${metric('Avg Cost per Follow',     fmt(costPerFollow, curr))}
           ${metric('Number of Messages',      (_storedNumMsg !== null ? parseInt(_storedNumMsg).toLocaleString('en') : fmt(numMessages,'',0)) + (_storedNumMsg !== null ? ' ✎' : ''), true)}
-          ${metric('Cost per Message',        (_storedCpm !== null && parseFloat(_storedCpm) > 0 ? fmt(parseFloat(_storedCpm), curr) : fmt(costPerMessage, curr)) + (_storedCpm !== null ? ' ✎' : ''))}
         </div>
 
         ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
@@ -3867,6 +4015,7 @@
       // ── Init drag-and-drop layout ──
       restoreLayout();
       initDragDrop();
+      applyCustomizations();
 
       // ── Capture context for Ask Claude sidebar ──
       try {
@@ -4581,7 +4730,7 @@
     });
 
     function setSettingsTab(name) {
-      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','linked','link','agencies'].forEach(t => {
+      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','linked','link','agencies','dashboard'].forEach(t => {
         const nav = document.getElementById('snav-'   + t);
         const pan = document.getElementById('spanel-' + t);
         if (nav) nav.classList.toggle('active', t === name);
@@ -4593,6 +4742,21 @@
       if (name === 'google-ads') loadGoogleAdsList();
       if (name === 'tiktok-ads') loadTikTokAdsList();
       if (name === 'agencies')   renderAgencySettings();
+      if (name === 'dashboard')  renderDashboardCustomPanel();
+    }
+
+    function renderDashboardCustomPanel() {
+      const cust = _loadCust();
+      const hs = cust.hiddenSections || [];
+      const hc = cust.hiddenCards    || [];
+      const n  = Object.keys(cust.names || {}).length;
+      const el = document.getElementById('dashboard-hidden-summary');
+      if (!el) return;
+      const parts = [];
+      if (hs.length) parts.push(`<b>${hs.length}</b> hidden section${hs.length > 1 ? 's' : ''}: ${hs.join(', ')}`);
+      if (hc.length) parts.push(`<b>${hc.length}</b> hidden card${hc.length > 1 ? 's' : ''}: ${hc.join(', ')}`);
+      if (n)         parts.push(`<b>${n}</b> custom name${n > 1 ? 's' : ''}`);
+      el.innerHTML = parts.length ? parts.join('<br>') : 'No customizations saved.';
     }
 
     // ── Client Accounts ─────────────────────────────────────────────────────
