@@ -501,6 +501,10 @@
     .card-del-btn:hover { background: #dc2626; opacity: 1; }
     .kpi-label[data-editable] { cursor: pointer; }
     .kpi-label[data-editable]:hover { text-decoration: underline dotted; }
+    .add-section-btn { display: block; margin: 18px auto 0; padding: 10px 28px; background: transparent; border: 2px dashed var(--border); border-radius: 10px; color: var(--text-muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; }
+    .add-section-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(5,115,245,0.05); }
+    .add-card-btn { display: flex; align-items: center; justify-content: center; min-height: 120px; border: 2px dashed var(--border); border-radius: 12px; background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; padding: 16px; }
+    .add-card-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(5,115,245,0.05); }
 
     .rec-card {
       background: var(--card-bg); border-radius: 14px; padding: 20px;
@@ -1772,6 +1776,9 @@
       } catch(_) {}
     })();
 
+    // ── uid generator for custom sections/cards ──
+    function _uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
     function applyCustomizations() {
       const cust = _loadCust();
       const hiddenCards    = cust.hiddenCards    || [];
@@ -1779,25 +1786,24 @@
       const names          = cust.names          || {};
 
       // ── Hiding via a persistent <style> tag ──────────────────────────────────
-      // CSS rules in a <style> tag survive innerHTML re-renders (unlike inline styles),
-      // so hidden items stay hidden even when the dashboard rebuilds its DOM.
       let styleEl = document.getElementById('kpi-custom-hide-style');
       if (!styleEl) {
         styleEl = document.createElement('style');
         styleEl.id = 'kpi-custom-hide-style';
         document.head.appendChild(styleEl);
       }
-      const rules = [
+      styleEl.textContent = [
         ...hiddenSections.map(id => `.kpi-section[data-section-id="${CSS.escape(id)}"] { display: none !important; }`),
         ...hiddenCards.map(id    => `.kpi-card[data-card-id="${CSS.escape(id)}"] { display: none !important; }`),
-      ];
-      styleEl.textContent = rules.join('\n');
+      ].join('\n');
 
-      // ── Custom names & edit controls (re-applied after each render) ──────────
       const container = document.getElementById('kpi-sections-container');
       if (!container) return;
 
-      // Apply custom names
+      // ── Render custom sections (re-inject after every data render) ────────────
+      _renderCustomSections(cust, container);
+
+      // ── Apply custom names ────────────────────────────────────────────────────
       Object.entries(names).forEach(([key, val]) => {
         if (key.startsWith('section:')) {
           const sec = container.querySelector(`.kpi-section[data-section-id="${key.slice(8)}"]`);
@@ -1817,8 +1823,92 @@
         }
       });
 
-      // Inject ✎ / ✕ buttons on sections and ✕ on cards
+      // ── Inject edit controls & "Add Section" button ───────────────────────────
       _injectEditControls(container);
+      _injectAddSectionButton(container);
+    }
+
+    // ── Custom section DOM builder ────────────────────────────────────────────
+    function _makeCustomCardEl(card, secId) {
+      const el = document.createElement('div');
+      el.className = 'kpi-card c-teal';
+      el.dataset.cardId = card.id;
+      el.innerHTML = `
+        <span class="drag-handle" title="Drag to reorder">⠿</span>
+        <div class="kpi-icon">📝</div>
+        <div class="kpi-label">${card.name}</div>
+        <input type="number" min="0" step="0.01" placeholder="0.00"
+          value="${card.value || ''}"
+          style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+        <div class="kpi-sub">Manual entry</div>`;
+      // Save value on input
+      el.querySelector('input').addEventListener('input', e => {
+        const d = _loadCust();
+        const sec = (d.customSections || []).find(s => s.id === secId);
+        if (!sec) return;
+        const c = (sec.cards || []).find(c => c.id === card.id);
+        if (c) c.value = e.target.value;
+        _saveCust(d);
+      });
+      return el;
+    }
+
+    function _renderCustomSections(cust, container) {
+      (cust.customSections || []).forEach(sec => {
+        // Skip if already in DOM
+        if (container.querySelector(`.kpi-section[data-section-id="${sec.id}"]`)) return;
+        const secEl = document.createElement('div');
+        secEl.className = 'kpi-section';
+        secEl.dataset.sectionId = sec.id;
+        secEl.innerHTML = `
+          <div class="section-label">${sec.name} <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          <div class="kpi-grid" data-grid-id="${sec.id}"></div>`;
+        const grid = secEl.querySelector('.kpi-grid');
+        (sec.cards || []).forEach(card => grid.appendChild(_makeCustomCardEl(card, sec.id)));
+        container.appendChild(secEl);
+      });
+      // Inject "＋ Add Card" button in every custom section
+      (cust.customSections || []).forEach(sec => {
+        const secEl = container.querySelector(`.kpi-section[data-section-id="${sec.id}"]`);
+        if (!secEl || secEl.querySelector('.add-card-btn')) return;
+        const grid = secEl.querySelector('.kpi-grid');
+        if (!grid) return;
+        const btn = document.createElement('button');
+        btn.className = 'add-card-btn';
+        btn.textContent = '＋ Add Card';
+        btn.addEventListener('click', () => {
+          const name = prompt('Card name:');
+          if (!name || !name.trim()) return;
+          const d = _loadCust();
+          const s = (d.customSections || []).find(s => s.id === sec.id);
+          if (!s) return;
+          const card = { id: 'cc-' + _uid(), name: name.trim(), value: '' };
+          s.cards = s.cards || [];
+          s.cards.push(card);
+          _saveCust(d);
+          grid.insertBefore(_makeCustomCardEl(card, sec.id), btn);
+          applyCustomizations();
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    function _injectAddSectionButton(container) {
+      if (document.getElementById('add-section-btn')) return;
+      const btn = document.createElement('button');
+      btn.id = 'add-section-btn';
+      btn.className = 'add-section-btn';
+      btn.textContent = '＋ Add Section';
+      btn.addEventListener('click', () => {
+        const name = prompt('Section name:');
+        if (!name || !name.trim()) return;
+        const d = _loadCust();
+        d.customSections = d.customSections || [];
+        d.customSections.push({ id: 'cs-' + _uid(), name: name.trim(), cards: [] });
+        _saveCust(d);
+        applyCustomizations();
+      });
+      container.parentNode.insertBefore(btn, container.nextSibling);
     }
 
     function _injectEditControls(container) {
@@ -1828,6 +1918,7 @@
         const labelEl = sec.querySelector('.section-label');
         if (!labelEl) return;
         const secId = sec.dataset.sectionId;
+        const isCustom = secId.startsWith('cs-');
 
         const btnRename = document.createElement('button');
         btnRename.className = 'section-rename-btn';
@@ -1837,22 +1928,36 @@
           e.stopPropagation();
           const current = (Array.from(labelEl.childNodes).find(n => n.nodeType === Node.TEXT_NODE) || {}).textContent?.trim() || secId;
           const newName = prompt('Rename section:', current);
-          if (newName && newName.trim()) {
-            const d = _loadCust(); d.names = d.names || {};
+          if (!newName || !newName.trim()) return;
+          const d = _loadCust();
+          if (isCustom) {
+            const s = (d.customSections || []).find(s => s.id === secId);
+            if (s) s.name = newName.trim();
+          } else {
+            d.names = d.names || {};
             d.names[`section:${secId}`] = newName.trim();
-            _saveCust(d); applyCustomizations();
           }
+          _saveCust(d); applyCustomizations();
         });
 
         const btnDel = document.createElement('button');
         btnDel.className = 'section-del-btn';
-        btnDel.title = 'Hide section';
+        btnDel.title = isCustom ? 'Delete section' : 'Hide section';
         btnDel.textContent = '✕';
         btnDel.addEventListener('click', e => {
           e.stopPropagation();
-          if (!confirm('Hide this section? Restore it from Settings → Dashboard.')) return;
-          const d = _loadCust(); d.hiddenSections = d.hiddenSections || [];
-          if (!d.hiddenSections.includes(secId)) d.hiddenSections.push(secId);
+          const msg = isCustom
+            ? 'Delete this section and all its cards permanently?'
+            : 'Hide this section? Restore it from Settings → Dashboard.';
+          if (!confirm(msg)) return;
+          const d = _loadCust();
+          if (isCustom) {
+            d.customSections = (d.customSections || []).filter(s => s.id !== secId);
+            sec.remove();
+          } else {
+            d.hiddenSections = d.hiddenSections || [];
+            if (!d.hiddenSections.includes(secId)) d.hiddenSections.push(secId);
+          }
           _saveCust(d); applyCustomizations();
         });
 
@@ -1864,15 +1969,25 @@
       container.querySelectorAll('.kpi-card[data-card-id]').forEach(card => {
         if (card.querySelector('.card-del-btn')) return;
         const cardId = card.dataset.cardId;
+        const isCustomCard = cardId.startsWith('cc-');
 
         const btnDel = document.createElement('button');
         btnDel.className = 'card-del-btn';
-        btnDel.title = 'Hide card';
+        btnDel.title = isCustomCard ? 'Delete card' : 'Hide card';
         btnDel.textContent = '✕';
         btnDel.addEventListener('click', e => {
           e.stopPropagation();
-          const d = _loadCust(); d.hiddenCards = d.hiddenCards || [];
-          if (!d.hiddenCards.includes(cardId)) d.hiddenCards.push(cardId);
+          const d = _loadCust();
+          if (isCustomCard) {
+            // Remove from parent custom section
+            (d.customSections || []).forEach(s => {
+              s.cards = (s.cards || []).filter(c => c.id !== cardId);
+            });
+            card.remove();
+          } else {
+            d.hiddenCards = d.hiddenCards || [];
+            if (!d.hiddenCards.includes(cardId)) d.hiddenCards.push(cardId);
+          }
           _saveCust(d); applyCustomizations();
         });
         card.appendChild(btnDel);
@@ -1885,18 +2000,25 @@
             e.stopPropagation();
             const current = labelEl.textContent.trim();
             const newName = prompt('Rename card:', current);
-            if (newName && newName.trim()) {
-              const d = _loadCust(); d.names = d.names || {};
+            if (!newName || !newName.trim()) return;
+            const d = _loadCust();
+            if (isCustomCard) {
+              (d.customSections || []).forEach(s => {
+                const c = (s.cards || []).find(c => c.id === cardId);
+                if (c) c.name = newName.trim();
+              });
+            } else {
+              d.names = d.names || {};
               d.names[`card:${cardId}`] = newName.trim();
-              _saveCust(d); labelEl.textContent = newName.trim();
             }
+            _saveCust(d); labelEl.textContent = newName.trim();
           });
         }
       });
     }
 
     function resetCustomizations() {
-      if (!confirm('Restore all hidden sections and cards, and reset all custom names?')) return;
+      if (!confirm('This will restore all hidden items, delete all custom sections, and reset all names. Continue?')) return;
       try {
         localStorage.removeItem(_custKey());
         const s = document.getElementById('kpi-custom-hide-style');
