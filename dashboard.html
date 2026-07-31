@@ -1784,6 +1784,7 @@
         try {
           const lsLayout = localStorage.getItem(_layoutKey());
           const lsCust   = localStorage.getItem(_custKey());
+          const now      = new Date().toISOString();
           await sb.from('user_layouts').upsert(
             {
               user_id:        currentUser.id,
@@ -1791,33 +1792,45 @@
               agency_id:      currentAgencyId || 'x',
               layout:         lsLayout ? JSON.parse(lsLayout) : null,
               customizations: lsCust   ? JSON.parse(lsCust)   : {},
-              updated_at:     new Date().toISOString()
+              updated_at:     now
             },
             { onConflict: 'user_id,org_id,agency_id' }
           );
+          // Record when server was last written so _syncLayoutFromServer can compare
+          try { localStorage.setItem(_layoutKey() + '_server_ts', now); } catch(_) {}
           console.log('[Layout] server save ok');
         } catch(e) { console.warn('[Layout] server save failed', e); }
-      }, 1500);
+      }, 500);
     }
 
-    // Pull server record into localStorage so all sync code works normally.
+    // Pull server record into localStorage — but only if server is newer than local.
+    // This prevents a stale server copy from overwriting changes the user just made.
     async function _syncLayoutFromServer() {
       if (!currentUser || !currentOrgId) return;
       try {
         const { data } = await sb.from('user_layouts')
-          .select('layout, customizations')
+          .select('layout, customizations, updated_at')
           .eq('user_id',   currentUser.id)
           .eq('org_id',    currentOrgId)
           .eq('agency_id', currentAgencyId || 'x')
           .maybeSingle();
-        if (data) {
+        if (!data) { console.log('[Layout] no server record'); return; }
+
+        // Compare: server timestamp vs last-known server write timestamp stored locally.
+        // If local was written AFTER the last server sync, local is newer — keep it.
+        const serverTs   = new Date(data.updated_at).getTime();
+        const localSaved = parseInt(localStorage.getItem(_layoutKey() + '_server_ts') || '0');
+        const serverIsNewer = serverTs > localSaved;
+
+        if (serverIsNewer) {
           if (data.layout)
             try { localStorage.setItem(_layoutKey(), JSON.stringify(data.layout)); } catch(_) {}
           if (data.customizations && Object.keys(data.customizations).length)
             try { localStorage.setItem(_custKey(), JSON.stringify(data.customizations)); } catch(_) {}
-          console.log('[Layout] synced from server');
+          try { localStorage.setItem(_layoutKey() + '_server_ts', data.updated_at); } catch(_) {}
+          console.log('[Layout] synced from server (server newer)');
         } else {
-          console.log('[Layout] no server record — will save defaults after load');
+          console.log('[Layout] local is newer than server — keeping local');
         }
       } catch(e) {
         console.warn('[Layout] server sync failed, using local cache', e);
