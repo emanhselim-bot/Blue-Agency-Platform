@@ -487,9 +487,8 @@
     .section-drag-handle { cursor: grab; opacity: 0; font-size: 14px; margin-left: 8px; color: var(--text-muted); transition: opacity 0.15s; user-select: none; vertical-align: middle; }
     body.layout-edit-mode .section-drag-handle { opacity: 0.5; }
     body.layout-edit-mode .section-label { cursor: grab; }
-    .section-move-btn { display: none; margin-left: 5px; padding: 1px 7px; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; line-height: 1.6; vertical-align: middle; }
-    .section-move-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-    body.layout-edit-mode .section-move-btn { display: inline-block; }
+    .section-move-btn { display: inline-block; margin-left: 4px; padding: 1px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; line-height: 1.6; vertical-align: middle; opacity: 0.6; transition: opacity 0.15s, background 0.15s; }
+    .section-move-btn:hover { opacity: 1; background: var(--accent); color: #fff; border-color: var(--accent); }
     .kpi-section.section-dragging { opacity: 0.35; }
     .kpi-section.section-drag-over { outline: 2px solid var(--accent); border-radius: 12px; padding: 8px; margin: -8px; }
     .kpi-sections-container { display: flex; flex-direction: column; }
