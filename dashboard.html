@@ -921,7 +921,8 @@
     </div>
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
-    <button class="layout-edit-btn" id="layout-reset-btn" onclick="resetToDefaultLayout()" style="display:none" title="Reset all section/card arrangements to defaults">↺ Reset Layout</button>
+    <button class="layout-edit-btn" id="layout-undo-btn" onclick="undoLayout()" style="display:none" disabled title="Undo last layout change">↩ Undo</button>
+    <button class="layout-edit-btn" id="layout-reset-btn" onclick="resetToDefaultLayout()" style="display:none" title="Reset all section/card arrangements to defaults">↺ Reset</button>
     <button class="layout-edit-btn" id="layout-edit-btn" onclick="toggleLayoutEdit()">⠿ Edit Layout</button>
   </div>
 
@@ -1711,11 +1712,53 @@
       document.body.classList.toggle('layout-edit-mode', _layoutEditMode);
       const btn    = document.getElementById('layout-edit-btn');
       const rstBtn = document.getElementById('layout-reset-btn');
+      const undoBtn = document.getElementById('layout-undo-btn');
       if (btn) {
         btn.classList.toggle('active', _layoutEditMode);
         btn.textContent = _layoutEditMode ? '✓ Done' : '⠿ Edit Layout';
       }
-      if (rstBtn) rstBtn.style.display = _layoutEditMode ? '' : 'none';
+      if (rstBtn)  rstBtn.style.display  = _layoutEditMode ? '' : 'none';
+      if (undoBtn) undoBtn.style.display = _layoutEditMode ? '' : 'none';
+    }
+
+    // ── Layout undo history ──────────────────────────────────────────────────
+    let _layoutHistory = [];
+    const _MAX_HISTORY = 20;
+
+    function _pushHistory() {
+      const container = document.getElementById('kpi-sections-container');
+      if (!container) return;
+      const snap = [];
+      container.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
+        const cards = [];
+        sec.querySelectorAll('.kpi-card[data-card-id]').forEach(c => cards.push(c.dataset.cardId));
+        snap.push({ id: sec.dataset.sectionId, cards });
+      });
+      _layoutHistory.push(snap);
+      if (_layoutHistory.length > _MAX_HISTORY) _layoutHistory.shift();
+      const btn = document.getElementById('layout-undo-btn');
+      if (btn) btn.disabled = false;
+    }
+
+    function undoLayout() {
+      if (!_layoutHistory.length) return;
+      const prev = _layoutHistory.pop();
+      const btn = document.getElementById('layout-undo-btn');
+      if (btn) btn.disabled = _layoutHistory.length === 0;
+      const container = document.getElementById('kpi-sections-container');
+      if (!container) return;
+      prev.forEach(({ id, cards }) => {
+        const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
+        if (sec) container.appendChild(sec);
+        if (!cards || !sec) return;
+        const grid = sec.querySelector('.kpi-grid[data-grid-id]');
+        if (!grid) return;
+        cards.forEach(cid => {
+          const card = grid.querySelector(`.kpi-card[data-card-id="${cid}"]`);
+          if (card) grid.appendChild(card);
+        });
+      });
+      saveLayout();
     }
 
     // Default layout — mirrors the static HTML order
@@ -2164,6 +2207,7 @@
         card.draggable = true;
         card.addEventListener('dragstart', e => {
           if (!_layoutEditMode) { e.preventDefault(); return; }
+          _pushHistory();
           _dragCard = card;
           _dragSection = null;
           e.dataTransfer.effectAllowed = 'move';
@@ -2217,6 +2261,7 @@
             e.stopPropagation();
             const prev = sec.previousElementSibling;
             if (prev && prev.classList.contains('kpi-section')) {
+              _pushHistory();
               sec.parentNode.insertBefore(sec, prev);
               saveLayout();
             }
@@ -2229,6 +2274,7 @@
             e.stopPropagation();
             const next = sec.nextElementSibling;
             if (next && next.classList.contains('kpi-section')) {
+              _pushHistory();
               sec.parentNode.insertBefore(next, sec);
               saveLayout();
             }
@@ -2249,6 +2295,7 @@
             if (e.target.closest && e.target.closest('.kpi-card')) return;
             e.preventDefault(); return;
           }
+          _pushHistory();
           _sectionDragOk = false;
           _dragSection = sec;
           _dragCard = null;
