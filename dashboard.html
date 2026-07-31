@@ -1720,19 +1720,24 @@
 
     function initDragDrop() {
       let _dragCard = null, _dragSection = null, _ph = null;
+      let _sectionDragOk = false;
 
-      // ── Placeholder slot ──
+      // ── Placeholder ── (keep reference even when removed from DOM)
       function makePh() {
         const p = document.createElement('div');
         p.className = 'kpi-drop-placeholder';
         p.id = '_kpi_ph';
         return p;
       }
-      function removePh() {
-        const p = document.getElementById('_kpi_ph');
-        if (p) p.remove();
+      function detachPh() {
+        // Remove from DOM but keep _ph reference so cross-section dragover can re-insert it
+        if (_ph && _ph.parentNode) _ph.parentNode.removeChild(_ph);
+      }
+      function destroyPh() {
+        detachPh();
         _ph = null;
       }
+
       // Returns the grid child to insert before (null = append)
       function insertionCard(grid, clientX) {
         const cards = [...grid.children].filter(el =>
@@ -1745,7 +1750,7 @@
         return null;
       }
 
-      // ── Card drag start/end ──
+      // ── Card drag ──
       document.querySelectorAll('.kpi-card[data-card-id]').forEach(card => {
         card.draggable = true;
         card.addEventListener('dragstart', e => {
@@ -1758,49 +1763,53 @@
         });
         card.addEventListener('dragend', () => {
           card.classList.remove('kpi-dragging');
-          removePh();
+          destroyPh();
           _dragCard = null;
         });
       });
 
-      // ── Grids handle ALL positioning + drop ──
+      // ── Grids accept card drops (including cross-section) ──
       document.querySelectorAll('.kpi-grid[data-grid-id]').forEach(grid => {
         grid.addEventListener('dragover', e => {
-          if (!_layoutEditMode || !_dragCard || !_ph) return;
+          if (!_layoutEditMode || !_dragCard) return;
+          if (!_ph) _ph = makePh(); // recreate if destroyed
           e.preventDefault();
           const before = insertionCard(grid, e.clientX);
           if (before) grid.insertBefore(_ph, before);
           else grid.appendChild(_ph);
         });
         grid.addEventListener('dragleave', e => {
-          if (!grid.contains(e.relatedTarget)) removePh();
+          // Only detach (not destroy) so cross-section drags can re-use _ph
+          if (!grid.contains(e.relatedTarget)) detachPh();
         });
         grid.addEventListener('drop', e => {
           e.preventDefault();
           if (!_dragCard) return;
           if (_ph && _ph.parentNode) _ph.parentNode.insertBefore(_dragCard, _ph);
           else grid.appendChild(_dragCard);
-          removePh();
+          destroyPh();
           _dragCard = null;
           saveLayout();
         });
       });
 
-      // ── Section drag (grab anywhere on the section label) ──
+      // ── Section drag (mousedown on label sets flag so dragstart knows it's intentional) ──
       document.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
-        const handle = sec.querySelector('.section-drag-handle');
         const labelEl = sec.querySelector('.section-label');
-        if (!handle) return;
+        if (!labelEl) return;
         sec.draggable = true;
+
+        labelEl.addEventListener('mousedown', () => { _sectionDragOk = true; });
+        document.addEventListener('mouseup', () => { _sectionDragOk = false; }, { once: false });
 
         sec.addEventListener('dragstart', e => {
           if (!_layoutEditMode) { e.preventDefault(); return; }
-          // Allow drag from anywhere in the section label; block if originating inside a card
-          const fromLabel = labelEl && labelEl.contains(e.target);
-          if (!fromLabel) {
+          if (!_sectionDragOk) {
+            // Not from label — pass through for card drags, block everything else
             if (e.target.closest && e.target.closest('.kpi-card')) return;
             e.preventDefault(); return;
           }
+          _sectionDragOk = false;
           _dragSection = sec;
           _dragCard = null;
           e.dataTransfer.effectAllowed = 'move';
