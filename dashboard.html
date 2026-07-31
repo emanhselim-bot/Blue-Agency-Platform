@@ -1763,11 +1763,12 @@
 
     // Default layout — mirrors the static HTML order
     const DEFAULT_LAYOUT = [
-      { id: 'primary-kpis', cards: [] },
-      { id: 'orders',       cards: [] },
-      { id: 'spending',     cards: [] },
-      { id: 'totals',       cards: [] },
-      { id: 'revenue',      cards: [] }
+      { id: 'primary-kpis',    cards: [] },
+      { id: 'orders',          cards: [] },
+      { id: 'spending',        cards: [] },
+      { id: 'website-results', cards: [] },
+      { id: 'totals',          cards: [] },
+      { id: 'revenue',         cards: [] }
     ];
 
     function _layoutKey() {
@@ -4087,6 +4088,17 @@
               )}
               ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+            </div>
+          </div>
+
+          <div class="kpi-section" data-section-id="website-results">
+            <div class="section-label">Website Results <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="website-results">
+              ${kpi('c-sky',          '🛒', 'Website Orders',          sfmt(shopifyOrders, v => v.toLocaleString('en')),                                                         shopifySubLabel, shopifyOrders, _t.orders, true)}
+              ${kpi('c-teal',         '🧮', 'Website Pieces',          sfmt(pieces,        v => v.toLocaleString('en')),                                                         shopifySubLabel)}
+              ${kpi('c-orange solid', '📦', 'Cost per Website Order',  sfmt(shopifyOrders && spend ? spend / shopifyOrders : null, v => fmt(v, curr)),                           sfmtSub('Spend ÷ Website Orders'))}
+              ${kpi('c-coral solid',  '🏷️', 'Cost per Website Piece', sfmt(pieces && spend ? spend / pieces : null, v => fmt(v, curr)),                                         sfmtSub('Spend ÷ Website Pieces'))}
+              ${kpi('c-gold solid',   '💵', 'Website Revenue',         sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})),      shopifySubLabel, revenue, _t.revenue, true)}
             </div>
           </div>
 
