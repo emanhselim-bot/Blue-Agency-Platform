@@ -1784,7 +1784,8 @@
         try {
           const lsLayout = localStorage.getItem(_layoutKey());
           const lsCust   = localStorage.getItem(_custKey());
-          const now      = new Date().toISOString();
+          const nowMs  = Date.now();
+          const nowIso = new Date(nowMs).toISOString();
           await sb.from('user_layouts').upsert(
             {
               user_id:        currentUser.id,
@@ -1792,12 +1793,12 @@
               agency_id:      currentAgencyId || 'x',
               layout:         lsLayout ? JSON.parse(lsLayout) : null,
               customizations: lsCust   ? JSON.parse(lsCust)   : {},
-              updated_at:     now
+              updated_at:     nowIso
             },
             { onConflict: 'user_id,org_id,agency_id' }
           );
-          // Record when server was last written so _syncLayoutFromServer can compare
-          try { localStorage.setItem(_layoutKey() + '_server_ts', now); } catch(_) {}
+          // Store as Unix ms so parseInt() comparison works correctly
+          try { localStorage.setItem(_layoutKey() + '_server_ts', nowMs.toString()); } catch(_) {}
           console.log('[Layout] server save ok');
         } catch(e) { console.warn('[Layout] server save failed', e); }
       }, 500);
@@ -1827,7 +1828,7 @@
             try { localStorage.setItem(_layoutKey(), JSON.stringify(data.layout)); } catch(_) {}
           if (data.customizations && Object.keys(data.customizations).length)
             try { localStorage.setItem(_custKey(), JSON.stringify(data.customizations)); } catch(_) {}
-          try { localStorage.setItem(_layoutKey() + '_server_ts', data.updated_at); } catch(_) {}
+          try { localStorage.setItem(_layoutKey() + '_server_ts', new Date(data.updated_at).getTime().toString()); } catch(_) {}
           console.log('[Layout] synced from server (server newer)');
         } else {
           console.log('[Layout] local is newer than server — keeping local');
