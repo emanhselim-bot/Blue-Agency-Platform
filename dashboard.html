@@ -4039,7 +4039,7 @@
           </div>
 
           <div class="kpi-section" data-section-id="totals">
-            <div class="section-label">Total <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="section-label">Total / Cost <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="totals">
               ${kpi('c-green solid',  '📊', 'Total Orders',           (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—',    'Website + Messages',             totalOrders, _t.orders, true, 'kpi-total-orders-val')}
               ${kpi('c-teal solid',   '📦', 'Total Pieces',           (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—',    'Website + Messages',             null, null, null, 'kpi-total-pieces-val')}
