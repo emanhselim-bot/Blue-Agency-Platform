@@ -1722,38 +1722,53 @@
     function saveLayout() {
       const container = document.getElementById('kpi-sections-container');
       if (!container) return;
-      const order = {};
-      [...container.querySelectorAll('.kpi-section[data-section-id]')].forEach((sec, i) => {
-        order[sec.dataset.sectionId] = i;
-        // Save card order within this section
-        const cards = {};
-        [...sec.querySelectorAll('.kpi-card[data-card-id]')].forEach((card, j) => {
-          cards[card.dataset.cardId] = j;
-        });
-        order['__cards__' + sec.dataset.sectionId] = cards;
+      const sections = [];
+      container.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
+        const cards = [];
+        sec.querySelectorAll('.kpi-card[data-card-id]').forEach(c => cards.push(c.dataset.cardId));
+        sections.push({ id: sec.dataset.sectionId, cards });
       });
-      try { localStorage.setItem(_layoutKey(), JSON.stringify(order)); } catch(_) {}
+      try {
+        localStorage.setItem(_layoutKey(), JSON.stringify(sections));
+        console.log('[Layout] saved', sections.map(s => s.id), 'key:', _layoutKey());
+      } catch(e) { console.warn('[Layout] save failed', e); }
     }
 
     function restoreLayout() {
       let saved;
       try { saved = JSON.parse(localStorage.getItem(_layoutKey()) || 'null'); } catch(_) {}
-      if (!saved || Array.isArray(saved) || typeof saved !== 'object') {
-        // Handle legacy array format: ignore it, nothing to restore
-        return;
-      }
-      // Apply CSS order to each section independently — no DOM reshuffling needed
-      document.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
-        const pos = saved[sec.dataset.sectionId];
-        if (pos != null) sec.style.order = pos;
-        // Restore card order within this section
-        const cards = saved['__cards__' + sec.dataset.sectionId];
-        if (cards && typeof cards === 'object') {
-          sec.querySelectorAll('.kpi-card[data-card-id]').forEach(card => {
-            const cpos = cards[card.dataset.cardId];
-            if (cpos != null) card.style.order = cpos;
+
+      // ── Migrate old object format → array format ──────────────────────────────
+      // A previous code version saved {sectionId: index} objects. Convert them
+      // so they're not silently ignored by the Array.isArray check below.
+      if (saved && !Array.isArray(saved) && typeof saved === 'object') {
+        const sectionEntries = Object.entries(saved).filter(([k]) => !k.startsWith('__cards__'));
+        saved = sectionEntries
+          .sort((a, b) => a[1] - b[1])
+          .map(([id]) => {
+            const cardObj = saved['__cards__' + id] || {};
+            const cards = Object.entries(cardObj).sort((a, b) => a[1] - b[1]).map(([k]) => k);
+            return { id, cards };
           });
-        }
+        // Re-save in the correct array format
+        try { localStorage.setItem(_layoutKey(), JSON.stringify(saved)); } catch(_) {}
+      }
+
+      console.log('[Layout] restoring — key:', _layoutKey(), '→ saved order:', saved ? saved.map(s => s.id) : 'none');
+      if (!saved || !Array.isArray(saved)) return;
+      const container = document.getElementById('kpi-sections-container');
+      if (!container) return;
+      // Move each section to end of container in saved order (appendChild moves node)
+      saved.forEach(({ id, cards }) => {
+        const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
+        if (sec) container.appendChild(sec);
+        if (!cards || !sec) return;
+        const grid = sec.querySelector('.kpi-grid[data-grid-id]');
+        if (!grid) return;
+        cards.forEach(cid => {
+          const card = grid.querySelector(`.kpi-card[data-card-id="${cid}"]`);
+          if (card) grid.appendChild(card);
+        });
       });
     }
 
