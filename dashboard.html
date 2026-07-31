@@ -3819,6 +3819,42 @@
             </div>
           </div>
 
+          ${(() => {
+            // ── Revenue section — manual entry cards ──
+            const _revKeys = ['rev-source-1','rev-source-2','rev-source-3','rev-source-4'];
+            const _revVals = _revKeys.map(k => {
+              try { return parseFloat(localStorage.getItem('kpi-' + k + '-' + (currentOrgId||'x') + '-' + (currentAgencyId||'x')) || '0') || 0; } catch(_) { return 0; }
+            });
+            const _revTotal = _revVals.reduce((s,v) => s + v, 0);
+            const revCard = (cardId, icon, label, keyIdx) => `
+              <div class="kpi-card c-green" data-card-id="${cardId}">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">${icon}</div>
+                <div class="kpi-label">${label}</div>
+                <input id="kpi-${cardId}-input" type="number" min="0" step="0.01"
+                  value="${_revVals[keyIdx] || ''}" placeholder="0.00"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>`;
+            return `
+            <div class="kpi-section" data-section-id="revenue">
+              <div class="section-label">Revenue <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="revenue">
+                ${revCard('rev-source-1','💵','Revenue Source 1', 0)}
+                ${revCard('rev-source-2','💵','Revenue Source 2', 1)}
+                ${revCard('rev-source-3','💵','Revenue Source 3', 2)}
+                ${revCard('rev-source-4','💵','Revenue Source 4', 3)}
+                <div class="kpi-card c-gold solid" data-card-id="rev-total">
+                  <span class="drag-handle" title="Drag to reorder">⠿</span>
+                  <div class="kpi-icon">💰</div>
+                  <div class="kpi-label">Total Revenue</div>
+                  <div class="kpi-value" id="kpi-rev-total-val">${_revTotal > 0 ? fmt(_revTotal, curr) : '—'}</div>
+                  <div class="kpi-sub">Sum of all sources</div>
+                </div>
+              </div>
+            </div>`;
+          })()}
+
         </div>`;
 
       document.getElementById('content').innerHTML += `
@@ -4020,6 +4056,33 @@
           } else {
             localStorage.setItem(_crKey, String(parseFloat(crInput.value) || 0));
           }
+        });
+      }
+
+      // ── Revenue section manual inputs ──
+      {
+        const _revCardIds = ['rev-source-1','rev-source-2','rev-source-3','rev-source-4'];
+        const _revStorageKey = (id) => 'kpi-' + id + '-' + (currentOrgId||'x') + '-' + (currentAgencyId||'x');
+        const updateRevTotal = () => {
+          const total = _revCardIds.reduce((sum, id) => {
+            const el = document.getElementById('kpi-' + id + '-input');
+            return sum + (parseFloat(el?.value) || 0);
+          }, 0);
+          const el = document.getElementById('kpi-rev-total-val');
+          if (el) el.textContent = total > 0 ? fmt(total, curr) : '—';
+        };
+        _revCardIds.forEach(id => {
+          const input = document.getElementById('kpi-' + id + '-input');
+          if (!input) return;
+          input.addEventListener('input', () => {
+            const v = parseFloat(input.value);
+            if (!isNaN(v) && v > 0) {
+              localStorage.setItem(_revStorageKey(id), String(v));
+            } else {
+              localStorage.removeItem(_revStorageKey(id));
+            }
+            updateRevTotal();
+          });
         });
       }
 
