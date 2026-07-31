@@ -487,6 +487,9 @@
     .section-drag-handle { cursor: grab; opacity: 0; font-size: 14px; margin-left: 8px; color: var(--text-muted); transition: opacity 0.15s; user-select: none; vertical-align: middle; }
     body.layout-edit-mode .section-drag-handle { opacity: 0.5; }
     body.layout-edit-mode .section-label { cursor: grab; }
+    .section-move-btn { display: none; margin-left: 5px; padding: 1px 7px; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; line-height: 1.6; vertical-align: middle; }
+    .section-move-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    body.layout-edit-mode .section-move-btn { display: inline-block; }
     .kpi-section.section-dragging { opacity: 0.35; }
     .kpi-section.section-drag-over { outline: 2px solid var(--accent); border-radius: 12px; padding: 8px; margin: -8px; }
     .kpi-sections-container { display: flex; flex-direction: column; }
@@ -1793,10 +1796,41 @@
         });
       });
 
-      // ── Section drag (mousedown on label sets flag so dragstart knows it's intentional) ──
+      // ── Section drag + ▲▼ move buttons ──
       document.querySelectorAll('.kpi-section[data-section-id]').forEach(sec => {
         const labelEl = sec.querySelector('.section-label');
         if (!labelEl) return;
+
+        // Inject ▲ ▼ buttons into the label (only once)
+        if (!labelEl.querySelector('.section-move-btn')) {
+          const btnUp = document.createElement('button');
+          btnUp.className = 'section-move-btn';
+          btnUp.textContent = '▲';
+          btnUp.title = 'Move section up';
+          btnUp.addEventListener('click', e => {
+            e.stopPropagation();
+            const prev = sec.previousElementSibling;
+            if (prev && prev.classList.contains('kpi-section')) {
+              sec.parentNode.insertBefore(sec, prev);
+              saveLayout();
+            }
+          });
+          const btnDown = document.createElement('button');
+          btnDown.className = 'section-move-btn';
+          btnDown.textContent = '▼';
+          btnDown.title = 'Move section down';
+          btnDown.addEventListener('click', e => {
+            e.stopPropagation();
+            const next = sec.nextElementSibling;
+            if (next && next.classList.contains('kpi-section')) {
+              sec.parentNode.insertBefore(next, sec);
+              saveLayout();
+            }
+          });
+          labelEl.appendChild(btnUp);
+          labelEl.appendChild(btnDown);
+        }
+
         sec.draggable = true;
 
         labelEl.addEventListener('mousedown', () => { _sectionDragOk = true; });
