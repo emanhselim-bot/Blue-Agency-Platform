@@ -1913,6 +1913,7 @@
         d.customSections.push({ id: 'cs-' + _uid(), name: name.trim(), cards: [] });
         _saveCust(d);
         applyCustomizations();
+        saveLayout();
       });
       container.parentNode.insertBefore(btn, container.nextSibling);
     }
@@ -1964,7 +1965,7 @@
             d.hiddenSections = d.hiddenSections || [];
             if (!d.hiddenSections.includes(secId)) d.hiddenSections.push(secId);
           }
-          _saveCust(d); applyCustomizations();
+          _saveCust(d); applyCustomizations(); saveLayout();
         });
 
         labelEl.appendChild(btnRename);
@@ -4229,9 +4230,10 @@
       }
 
       // ── Init drag-and-drop layout ──
-      restoreLayout();
-      initDragDrop();
-      applyCustomizations();
+      applyCustomizations(); // render custom sections into DOM FIRST so restoreLayout sees them
+      restoreLayout();       // now restore saved order (includes custom sections)
+      initDragDrop();        // set up drag-drop and ▲▼ buttons
+      saveLayout();          // persist current order (captures any newly added custom sections)
 
       // ── Capture context for Ask Claude sidebar ──
       try {
