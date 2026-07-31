@@ -655,6 +655,8 @@ Deno.serve(async (req: Request) => {
       // Cost per action
       "cost_per_action_type:page_engagement": costPerAction["page_engagement"] ?? null,
       "cost_per_action_type:like":            costPerAction["like"] ?? null,
+      "cost_per_action_type:omni_purchase":   costPerAction["omni_purchase"] ?? costPerAction["offsite_conversion.fb_pixel_purchase"] ?? null,
+      "actions:omni_purchase":               actions["omni_purchase"] ?? actions["offsite_conversion.fb_pixel_purchase"] ?? null,
     },
     currency: account.currency,
     _debug_page_insights: _debugPageInsights,

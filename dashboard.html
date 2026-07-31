@@ -3464,8 +3464,9 @@
       const dailyBudget     = d.daily_budget != null ? parseFloat(d.daily_budget) : null;
       const estimatedDays   = (accountBalance !== null && dailyBudget !== null && dailyBudget > 0)
         ? Math.floor(accountBalance / dailyBudget) : null;
-      const costPerEngage  = parseNum(d['cost_per_action_type:page_engagement']);
-      const costPerFollow  = parseNum(d['cost_per_action_type:like']);
+      const costPerEngage   = parseNum(d['cost_per_action_type:page_engagement']);
+      const costPerFollow   = parseNum(d['cost_per_action_type:like']);
+      const costPerPurchase = parseNum(d['cost_per_action_type:omni_purchase']);
       const numLikes       = parseNum(d['actions:like']);
       const numEngagements = parseNum(d['actions:page_engagement']);
       const numComments    = parseNum(d['actions:comment']);
@@ -3640,6 +3641,7 @@
               ${kpi('c-coral solid',  '🏷️', 'Cost per Piece',    sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Total Pieces'), null, null, null, 'kpi-avg-cost-per-piece-val')}
               ${kpi('c-sky solid',    '💸', 'Cost per Message',   (_storedCpm !== null && parseFloat(_storedCpm) > 0) ? fmt(parseFloat(_storedCpm), curr) : (costPerMessage != null && !isNaN(costPerMessage) ? fmt(costPerMessage, curr) : '—'), `Spend ÷ ${msgSource}`, null, null, null, 'kpi-totals-cpm-val')}
               ${kpi('c-purple solid', '🎯', 'Conversion Rate',    sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
+              ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—', costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
             </div>
           </div>
 
