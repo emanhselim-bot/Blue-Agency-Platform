@@ -2692,6 +2692,7 @@
 
     // ── Agency Targets panel ──
     function toggleTargetsPanel(open) {
+      if (open !== false && !_targetsEnabled()) return;
       const panel = document.getElementById('targets-panel');
       const btn   = document.getElementById('targets-toggle-btn');
       const isOpen = panel.classList.contains('open');
@@ -2703,6 +2704,19 @@
     // ── FLEXIBLE KPI TARGETS ─────────────────────────────────
     // Stored per workspace (org + agency) as agencySettings.targetsV2:
     // [{ id: cardId, label, value, dir: 'up'|'down' }]
+    // Flexible targets are enabled only for the Kepler agency workspace
+    function _targetsEnabled() {
+      return currentAgencyId === 'agency_kepler';
+    }
+    function _updateTargetsBtnVisibility() {
+      const btn = document.getElementById('targets-toggle-btn');
+      if (btn) btn.style.display = _targetsEnabled() ? '' : 'none';
+      if (!_targetsEnabled()) {
+        document.getElementById('targets-panel')?.classList.remove('open');
+        document.querySelectorAll('#content .kpi-card .kpi-tprog').forEach(el => el.remove());
+      }
+    }
+
     function getFlexTargets() {
       return getAgencySettings(currentOrgId, currentAgencyId).targetsV2 || [];
     }
@@ -2775,6 +2789,8 @@
 
     // Decorate rendered KPI cards with progress bars
     function applyFlexTargets() {
+      _updateTargetsBtnVisibility();
+      if (!_targetsEnabled()) return;
       const targets = getFlexTargets();
       document.querySelectorAll('#content .kpi-card .kpi-tprog').forEach(el => el.remove());
       targets.forEach(t => {
@@ -3063,6 +3079,7 @@
     function setActiveAgency(agencyId) {
       currentAgencyId = agencyId;
       localStorage.setItem('dash_agency_id', agencyId);
+      try { _updateTargetsBtnVisibility(); } catch(e) {}
 
       // Restore per-agency period
       const agCfg = getAgencySettings(currentOrgId, agencyId);
