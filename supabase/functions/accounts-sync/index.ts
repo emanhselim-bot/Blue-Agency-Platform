@@ -109,6 +109,14 @@ Deno.serve(async (req: Request) => {
       .eq("organization_id", orgId).eq("is_active", true).limit(1);
     const src = srcRows?.[0];
     if (src?.refresh_token) {
+      // Self-heal: strip the known-bad leading 'x' on the developer token
+      // (old GOOGLE_ADS_DEVELOPER_TOKEN env value had a typo)
+      if (src.developer_token === "xdt3g6D5TtvUIfHaVwg5nfQ") {
+        src.developer_token = "dt3g6D5TtvUIfHaVwg5nfQ";
+        await supabaseAdmin.from("google_ads_accounts")
+          .update({ developer_token: src.developer_token, updated_at: new Date().toISOString() })
+          .eq("organization_id", orgId).eq("developer_token", "xdt3g6D5TtvUIfHaVwg5nfQ");
+      }
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -129,7 +137,8 @@ Deno.serve(async (req: Request) => {
             .from("google_ads_accounts").select("customer_id")
             .eq("organization_id", orgId);
           const gSet = new Set((gExisting ?? []).map(a => String(a.customer_id).replace(/-/g, "")));
-          const gNew = ids.filter(id => !gSet.has(id)).map(id => ({
+          const mccId = String(src.login_customer_id ?? "").replace(/-/g, "");
+          const gNew = ids.filter(id => !gSet.has(id) && id !== mccId).map(id => ({
             organization_id: orgId,
             customer_id: id,
             account_name: id,
