@@ -394,6 +394,31 @@
     .status-archived { background: var(--text-muted); }
 
     /* ── CLAUDE RECOMMENDATIONS SECTION ── */
+    /* ── BILLING HISTORY SECTION ── */
+    #billing-section { display: none; padding: 0 24px 40px; }
+    .bill-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .bill-title { font-size: 17px; font-weight: 800; color: var(--text-main); flex: 1; }
+    .bill-add-btn { background: var(--blue-light); color: #fff; border: none; padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .bill-add-btn:hover { background: var(--blue-dark); }
+    .bill-funds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .bill-funds { grid-template-columns: repeat(2, 1fr); } }
+    .bill-fund-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .bill-fund-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: var(--text-muted); }
+    .bill-fund-val { font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 6px; }
+    .bill-fund-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .bill-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .bill-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .bill-table th { text-align: left; padding: 10px 16px; background: var(--bg); color: var(--text-muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+    .bill-table td { padding: 10px 16px; border-top: 1px solid var(--border); color: var(--text-main); }
+    .bill-chip { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .bill-chip.fund_added { background: #DCFCE7; color: #16A34A; }
+    .bill-chip.charge { background: #EAF2FE; color: #0573F5; }
+    .bill-chip.refund { background: #FEF3C7; color: #B45309; }
+    .bill-chip.adjustment { background: #F3E8FF; color: #7C3AED; }
+    .bill-empty { padding: 26px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .bill-del { background: none; border: none; cursor: pointer; font-size: 13px; opacity: .55; }
+    .bill-del:hover { opacity: 1; }
+
     #recs-section { display: none; padding: 0 24px 40px; }
 
     /* ── Agency Targets panel ── */
@@ -1095,6 +1120,42 @@
   <!-- MAIN CONTENT (unchanged) -->
   <div class="content" id="content">
     <div class="loading-state">Select an account above to load data.</div>
+  </div>
+
+  <!-- BILLING HISTORY SECTION -->
+  <div id="billing-section">
+    <div class="bill-header">
+      <div class="bill-title">💳 Billing History</div>
+      <button class="bill-add-btn" onclick="openBillModal()">＋ Add transaction</button>
+    </div>
+    <div class="bill-funds" id="bill-funds"></div>
+    <div class="bill-table-wrap" id="bill-table-wrap"><div class="bill-empty">Loading…</div></div>
+  </div>
+
+  <!-- BILLING TRANSACTION MODAL -->
+  <div class="hub-modal hidden" id="bill-modal">
+    <div class="hub-modal-box">
+      <h3>Add transaction</h3>
+      <label>TYPE</label>
+      <select class="hub-input" id="bt-type">
+        <option value="fund_added">💵 Funds added</option>
+        <option value="charge">🧾 Charge / billed</option>
+        <option value="refund">↩ Refund</option>
+        <option value="adjustment">⚖ Adjustment</option>
+      </select>
+      <label>AMOUNT *</label>
+      <div style="display:flex;gap:8px">
+        <input class="hub-input" id="bt-amount" type="number" min="0" step="0.01" placeholder="0.00" style="flex:1">
+        <select class="hub-input" id="bt-currency" style="width:90px"><option>USD</option><option>EGP</option><option>SAR</option><option>AED</option></select>
+      </div>
+      <label>DATE</label><input class="hub-input" id="bt-date" type="date">
+      <label>DESCRIPTION</label><input class="hub-input" id="bt-desc" placeholder="e.g. Client top-up via bank transfer">
+      <div class="hub-modal-actions">
+        <button class="ghost" onclick="document.getElementById('bill-modal').classList.add('hidden')">Cancel</button>
+        <button class="primary" onclick="saveBillTx()">Save</button>
+      </div>
+      <div class="auth-error" id="bt-error"></div>
+    </div>
   </div>
 
   <!-- CLAUDE RECOMMENDATIONS SECTION -->
@@ -3723,6 +3784,7 @@
       btn.disabled = true; btn.textContent = '⏳ Loading…';
       _recsEnabled = false;
       document.getElementById('recs-section').style.display = 'none';
+      try { document.getElementById('billing-section').style.display = 'none'; } catch(e) {}
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching Google Ads data…</div>`;
       try {
@@ -3941,6 +4003,7 @@
       btn.disabled = true; btn.textContent = '⏳ Loading…';
       _recsEnabled = false;
       document.getElementById('recs-section').style.display = 'none';
+      try { document.getElementById('billing-section').style.display = 'none'; } catch(e) {}
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching TikTok Ads data…</div>`;
       try {
@@ -4163,6 +4226,7 @@
 
       // Hide recommendations while loading
       document.getElementById('recs-section').style.display = 'none';
+      document.getElementById('billing-section').style.display = 'none';
 
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching ${PERIOD_LABELS[currentPeriod]} data…</div>`;
@@ -4907,6 +4971,9 @@
           topProducts: topProductRows.slice(0, 8),
         };
       } catch(ctxErr) { console.warn('[context capture]', ctxErr); }
+
+      // Billing history (funds + transactions)
+      try { renderBillingSection(d, curr.trim(), accountDbId); } catch(bErr) { console.warn('[billing]', bErr); }
 
       // Auto-generate recommendations (non-blocking, Meta only)
       _recsEnabled = true;
@@ -6644,6 +6711,86 @@
     // Guard against concurrent loadOrgs() calls (e.g. TOKEN_REFRESHED during initial load)
     let _orgsLoading = false;
 
+    // ── BILLING HISTORY (funds + transactions) ────
+    let _billAccountKey = null;
+    let _billCurrency = 'USD';
+    const BILL_TYPE_LABELS = { fund_added: 'Funds added', charge: 'Charge', refund: 'Refund', adjustment: 'Adjustment' };
+
+    function renderBillingSection(d, currency, accountKey) {
+      _billAccountKey = accountKey;
+      _billCurrency = d.account_currency || currency || 'USD';
+      const cur = _billCurrency;
+      const fmt = (v) => v == null ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' ' + cur;
+      document.getElementById('bill-funds').innerHTML =
+        '<div class="bill-fund-card"><div class="bill-fund-label">FUNDING SOURCE</div><div class="bill-fund-val" style="font-size:16px">' + escHtml(d.funding_source || '—') + '</div><div class="bill-fund-sub">Payment method on Meta</div></div>' +
+        '<div class="bill-fund-card"><div class="bill-fund-label">CURRENT BALANCE</div><div class="bill-fund-val">' + fmt(d.account_balance) + '</div><div class="bill-fund-sub">Unbilled spend / prepaid funds</div></div>' +
+        '<div class="bill-fund-card"><div class="bill-fund-label">LIFETIME SPENT</div><div class="bill-fund-val">' + fmt(d.lifetime_spent) + '</div><div class="bill-fund-sub">Total ever spent on this account</div></div>' +
+        '<div class="bill-fund-card"><div class="bill-fund-label">SPEND CAP</div><div class="bill-fund-val">' + fmt(d.spend_cap) + '</div><div class="bill-fund-sub">' + (d.spend_cap ? 'Account spending limit' : 'No limit set') + '</div></div>';
+      document.getElementById('billing-section').style.display = 'block';
+      loadBillingTx();
+    }
+
+    async function loadBillingTx() {
+      const wrap = document.getElementById('bill-table-wrap');
+      wrap.innerHTML = '<div class="bill-empty">Loading transactions…</div>';
+      const { data, error } = await sb.from('billing_transactions').select('*')
+        .eq('organization_id', currentOrgId).eq('account_key', _billAccountKey)
+        .order('tx_date', { ascending: false }).order('created_at', { ascending: false }).limit(100);
+      if (error) { wrap.innerHTML = '<div class="bill-empty">Error: ' + escHtml(error.message) + '</div>'; return; }
+      if (!data?.length) { wrap.innerHTML = '<div class="bill-empty">No transactions recorded yet. Click "＋ Add transaction" to log funds added or charges.</div>'; return; }
+      let bal = 0;
+      const rows = [...data].reverse().map(t => {
+        const sign = (t.type === 'fund_added' || t.type === 'refund') ? 1 : -1;
+        bal += sign * Number(t.amount);
+        return { ...t, _running: bal, _sign: sign };
+      }).reverse();
+      wrap.innerHTML = '<table class="bill-table"><thead><tr><th>Date</th><th>Type</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Running Total</th><th></th></tr></thead><tbody>' +
+        rows.map(t =>
+          '<tr><td>' + (t.tx_date || '—') + '</td>' +
+          '<td><span class="bill-chip ' + t.type + '">' + BILL_TYPE_LABELS[t.type] + '</span></td>' +
+          '<td style="color:var(--text-muted)">' + escHtml(t.description || '—') + '</td>' +
+          '<td style="text-align:right;font-weight:700;color:' + (t._sign > 0 ? '#16A34A' : 'var(--text-main)') + '">' + (t._sign > 0 ? '+' : '−') + Number(t.amount).toLocaleString() + ' ' + escHtml(t.currency || '') + '</td>' +
+          '<td style="text-align:right;font-weight:700">' + t._running.toLocaleString() + ' ' + escHtml(t.currency || '') + '</td>' +
+          '<td style="text-align:right"><button class="bill-del" title="Delete" onclick="deleteBillTx(\'' + t.id + '\')">🗑</button></td></tr>'
+        ).join('') + '</tbody></table>';
+    }
+
+    function openBillModal() {
+      document.getElementById('bt-type').value = 'fund_added';
+      document.getElementById('bt-amount').value = '';
+      document.getElementById('bt-currency').value = _billCurrency || 'USD';
+      document.getElementById('bt-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('bt-desc').value = '';
+      document.getElementById('bt-error').textContent = '';
+      document.getElementById('bill-modal').classList.remove('hidden');
+    }
+
+    async function saveBillTx() {
+      const amount = Number(document.getElementById('bt-amount').value);
+      const errEl = document.getElementById('bt-error');
+      if (!amount || amount <= 0) { errEl.textContent = 'Amount must be greater than 0.'; return; }
+      const { error } = await sb.from('billing_transactions').insert({
+        organization_id: currentOrgId,
+        account_key: _billAccountKey,
+        type: document.getElementById('bt-type').value,
+        amount,
+        currency: document.getElementById('bt-currency').value,
+        description: document.getElementById('bt-desc').value.trim() || null,
+        tx_date: document.getElementById('bt-date').value || null,
+        created_by: currentUser?.id
+      });
+      if (error) { errEl.textContent = error.message; return; }
+      document.getElementById('bill-modal').classList.add('hidden');
+      loadBillingTx();
+    }
+
+    async function deleteBillTx(id) {
+      if (!confirm('Delete this transaction?')) return;
+      const { error } = await sb.from('billing_transactions').delete().eq('id', id);
+      if (error) { alert('Error: ' + error.message); return; }
+      loadBillingTx();
+    }
+
     // ── HOME HUB MODULES: PIPELINE & FINANCE ─────
     function _hubEsc(t) { const d = document.createElement('div'); d.textContent = t ?? ''; return d.innerHTML; }
     async function _hubWaitOrg() {
@@ -7079,7 +7226,8 @@
           context: _dashContext,
         });
         // Race-condition guard: bail if view changed away from Meta while AI was thinking
-        if (!_recsEnabled) { document.getElementById('recs-section').style.display = 'none'; return; }
+        if (!_recsEnabled) { document.getElementById('recs-section').style.display = 'none';
+      try { document.getElementById('billing-section').style.display = 'none'; } catch(e) {} return; }
         if (result?.error) { recsError('⚠️ ' + result.error); return; }
         const text = result?.reply || '';
         // Parse JSON — strip any accidental markdown fences

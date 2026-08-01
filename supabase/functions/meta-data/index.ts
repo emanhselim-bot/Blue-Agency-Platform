@@ -389,7 +389,7 @@ Deno.serve(async (req: Request) => {
     // Fetch insights + account balance + active campaign budgets in parallel
     [metaRes, balanceRes, campaignsRes] = await Promise.all([
       fetch(`${META_API}/act_${account.meta_account_id}/insights?${params.toString()}`),
-      fetch(`${META_API}/act_${account.meta_account_id}?fields=balance,currency,spend_cap&access_token=${accessToken}`),
+      fetch(`${META_API}/act_${account.meta_account_id}?fields=balance,currency,spend_cap,amount_spent,funding_source_details{display_string,type}&access_token=${accessToken}`),
       fetch(`${META_API}/act_${account.meta_account_id}/campaigns?fields=daily_budget,lifetime_budget,effective_status&filtering=${encodeURIComponent(campaignFilter)}&limit=50&access_token=${accessToken}`),
     ]);
   } catch (e) {
@@ -621,6 +621,9 @@ Deno.serve(async (req: Request) => {
       account_balance:  accountBalance,
       spend_cap:        spendCap,
       daily_budget:     totalDailyBudget,
+      account_currency: balanceBody.currency ?? account.currency ?? null,
+      funding_source:   balanceBody.funding_source_details?.display_string ?? null,
+      lifetime_spent:   balanceBody.amount_spent != null ? parseFloat(balanceBody.amount_spent) / 100 : null,
 
       // Primary spend
       amount_spent: insight.spend,
