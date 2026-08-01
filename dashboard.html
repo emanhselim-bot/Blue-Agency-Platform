@@ -3569,6 +3569,15 @@
         const _gaLeadsKey = `ga-leads-${currentOrgId||'x'}-${currentAgencyId||'x'}`;
         const _gaStored = (() => { try { return JSON.parse(localStorage.getItem(_gaLeadsKey) || '{}'); } catch(_) { return {}; } })();
         const _gaInit = (k) => _gaStored[k] != null ? _gaStored[k] : '';
+        // GA card helper: uses "ga-" prefix on data-card-id to avoid inheriting Meta Ads hidden-card CSS rules
+        const gaKpi = (color, icon, label, value, sub, valId) =>
+          `<div class="kpi-card ${color}" data-card-id="ga-${label.toLowerCase().replace(/[^a-z0-9]+/g,'-')}">
+            <span class="drag-handle" title="Drag to reorder">⠿</span>
+            <div class="kpi-icon">${icon}</div>
+            <div class="kpi-label">${label}</div>
+            <div class="kpi-value"${valId?` id="${valId}"`:''}>${value}</div>
+            <div class="kpi-sub">${sub}</div>
+          </div>`;
 
         _updateTemplateBtnLabel('google-ads');
         document.getElementById('content').innerHTML = `
@@ -3577,7 +3586,7 @@
             <div class="kpi-section" data-section-id="ga-traffic">
               <div class="section-label">Traffic / Reach <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
               <div class="kpi-grid" data-grid-id="ga-traffic">
-                ${kpi('c-blue solid', '💰', 'Total Spend',  fmtAds(gaSpend, curr),          'Google Ads')}
+                ${gaKpi('c-blue solid', '💰', 'Total Spend',  fmtAds(gaSpend, curr),                               'Google Ads')}
                 <div class="kpi-card c-green" data-card-id="ga-daily-budget">
                   <span class="drag-handle" title="Drag to reorder">⠿</span>
                   <div class="kpi-icon">📅</div>
@@ -3586,11 +3595,11 @@
                     style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                   <div class="kpi-sub">Manual entry</div>
                 </div>
-                ${kpi('c-sky',        '👁️', 'Impressions',  fmtAds(gaImpr, '', 0),          'Google Ads')}
-                ${kpi('c-teal solid', '🖱️', 'Clicks',       fmtAds(gaClicks, '', 0),        'Google Ads')}
-                ${kpi('c-gold solid', '💰', 'CPM',           gaCpm !== null ? fmtAds(gaCpm, curr) : '—', 'Spend ÷ 1K Impressions')}
-                ${kpi('c-coral',      '💸', 'CPC',           fmtAds(t.cpc, curr),            'Cost per Click')}
-                ${kpi('c-navy',       '📊', 'CTR',           fmtAds(t.ctr) + '%',            'Clicks ÷ Impressions')}
+                ${gaKpi('c-sky',        '👁️', 'Impressions',  fmtAds(gaImpr, '', 0),                               'Google Ads')}
+                ${gaKpi('c-teal solid', '🖱️', 'Clicks',       fmtAds(gaClicks, '', 0),                             'Google Ads')}
+                ${gaKpi('c-gold solid', '💰', 'CPM',           gaCpm !== null ? fmtAds(gaCpm, curr) : '—',          'Spend ÷ 1K Impressions')}
+                ${gaKpi('c-coral',      '💸', 'CPC',           fmtAds(t.cpc, curr),                                 'Cost per Click')}
+                ${gaKpi('c-navy',       '📊', 'CTR',           fmtAds(t.ctr) + '%',                                 'Clicks ÷ Impressions')}
               </div>
             </div>
 
@@ -3607,8 +3616,8 @@
                   <div class="kpi-sub">Manual entry</div>
                 </div>
 
-                ${kpi('c-orange solid', '💸', 'CPL', '—', 'Spend ÷ Total Leads', null, null, null, 'ga-cpl-val')}
-                ${kpi('c-purple solid', '🎯', 'CR%', '—', 'Total Leads ÷ Clicks', null, null, null, 'ga-cr-val')}
+                ${gaKpi('c-orange solid', '💸', 'CPL', '—', 'Spend ÷ Total Leads', 'ga-cpl-val')}
+                ${gaKpi('c-purple solid', '🎯', 'CR%', '—', 'Total Leads ÷ Clicks', 'ga-cr-val')}
 
                 <div class="kpi-card c-teal" data-card-id="ga-prospects">
                   <span class="drag-handle" title="Drag to reorder">⠿</span>
