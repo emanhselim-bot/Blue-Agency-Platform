@@ -1126,7 +1126,7 @@
   <div id="billing-section">
     <div class="bill-header">
       <div class="bill-title">💳 Billing History</div>
-      <button class="bill-add-btn" onclick="openBillModal()">＋ Add transaction</button>
+      <span style="font-size:11px;color:var(--text-muted)">Auto-synced from Meta · last 6 months</span>
     </div>
     <div class="bill-funds" id="bill-funds"></div>
     <div class="bill-table-wrap" id="bill-table-wrap"><div class="bill-empty">Loading…</div></div>
@@ -6732,27 +6732,34 @@
 
     async function loadBillingTx() {
       const wrap = document.getElementById('bill-table-wrap');
-      wrap.innerHTML = '<div class="bill-empty">Loading transactions…</div>';
-      const { data, error } = await sb.from('billing_transactions').select('*')
-        .eq('organization_id', currentOrgId).eq('account_key', _billAccountKey)
-        .order('tx_date', { ascending: false }).order('created_at', { ascending: false }).limit(100);
-      if (error) { wrap.innerHTML = '<div class="bill-empty">Error: ' + escHtml(error.message) + '</div>'; return; }
-      if (!data?.length) { wrap.innerHTML = '<div class="bill-empty">No transactions recorded yet. Click "＋ Add transaction" to log funds added or charges.</div>'; return; }
-      let bal = 0;
-      const rows = [...data].reverse().map(t => {
-        const sign = (t.type === 'fund_added' || t.type === 'refund') ? 1 : -1;
-        bal += sign * Number(t.amount);
-        return { ...t, _running: bal, _sign: sign };
-      }).reverse();
-      wrap.innerHTML = '<table class="bill-table"><thead><tr><th>Date</th><th>Type</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Running Total</th><th></th></tr></thead><tbody>' +
-        rows.map(t =>
-          '<tr><td>' + (t.tx_date || '—') + '</td>' +
-          '<td><span class="bill-chip ' + t.type + '">' + BILL_TYPE_LABELS[t.type] + '</span></td>' +
-          '<td style="color:var(--text-muted)">' + escHtml(t.description || '—') + '</td>' +
-          '<td style="text-align:right;font-weight:700;color:' + (t._sign > 0 ? '#16A34A' : 'var(--text-main)') + '">' + (t._sign > 0 ? '+' : '−') + Number(t.amount).toLocaleString() + ' ' + escHtml(t.currency || '') + '</td>' +
-          '<td style="text-align:right;font-weight:700">' + t._running.toLocaleString() + ' ' + escHtml(t.currency || '') + '</td>' +
-          '<td style="text-align:right"><button class="bill-del" title="Delete" onclick="deleteBillTx(\'' + t.id + '\')">🗑</button></td></tr>'
-        ).join('') + '</tbody></table>';
+      wrap.innerHTML = '<div class="bill-empty">Loading transactions from Meta…</div>';
+      const j = await callEdgeFunction('meta-data', { account_db_id: _billAccountKey, level: 'billing' });
+      if (j.error) { wrap.innerHTML = '<div class="bill-empty">Could not load transactions: ' + escHtml(j.error) + '</div>'; return; }
+      const txs = j.transactions || [];
+      if (!txs.length) { wrap.innerHTML = '<div class="bill-empty">No billing activity found in the last 6 months.</div>'; return; }
+      const CHIP = {
+        funding_event_successful:            ['fund_added',  'Funds added'],
+        funding_event_initiated:             ['adjustment',  'Top-up initiated'],
+        ad_account_billing_charge:           ['charge',      'Account billed'],
+        ad_account_billing_charge_failed:    ['adjustment',  'Charge failed'],
+        ad_account_billing_refund:           ['refund',      'Refund'],
+        ad_account_billing_chargeback:       ['refund',      'Chargeback'],
+        ad_account_billing_chargeback_reversal: ['charge',   'Chargeback reversal'],
+        ad_account_add_funding_source:       ['adjustment',  'Payment method added'],
+        ad_account_remove_funding_source:    ['adjustment',  'Payment method removed'],
+      };
+      wrap.innerHTML = '<table class="bill-table"><thead><tr><th>Date</th><th>Type</th><th>Details</th><th style="text-align:right">Amount</th></tr></thead><tbody>' +
+        txs.map(t => {
+          const [cls, label] = CHIP[t.event_type] || ['adjustment', t.label || t.event_type];
+          const plus = t.event_type === 'funding_event_successful' || t.event_type === 'ad_account_billing_refund' || t.event_type === 'ad_account_billing_chargeback';
+          const details = [t.network ? escHtml(t.network) : null, t.fee ? 'fee ' + t.fee.toLocaleString() + ' ' + escHtml(t.currency || '') : null, t.transaction_id ? '<span style="font-size:10px;opacity:.6">#' + escHtml(String(t.transaction_id).slice(0, 20)) + '</span>' : null].filter(Boolean).join(' · ');
+          return '<tr><td style="white-space:nowrap">' + (t.date || '').slice(0, 10) + '</td>' +
+            '<td><span class="bill-chip ' + cls + '">' + escHtml(label) + '</span></td>' +
+            '<td style="color:var(--text-muted)">' + (details || '—') + '</td>' +
+            '<td style="text-align:right;font-weight:700;color:' + (plus ? '#16A34A' : 'var(--text-main)') + '">' +
+              (t.amount != null ? (plus ? '+' : '−') + Number(t.amount).toLocaleString() + ' ' + escHtml(t.currency || '') : '—') +
+            '</td></tr>';
+        }).join('') + '</tbody></table>';
     }
 
     function openBillModal() {

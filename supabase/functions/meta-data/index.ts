@@ -374,6 +374,58 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ads, currency: account.currency });
   }
 
+  // ── level = "billing": billing charges + fund top-ups from account activities ──
+  if (level === "billing") {
+    const BILLING_EVENTS = new Set([
+      "ad_account_billing_charge",
+      "ad_account_billing_charge_failed",
+      "ad_account_billing_refund",
+      "ad_account_billing_chargeback",
+      "ad_account_billing_chargeback_reversal",
+      "funding_event_successful",
+      "funding_event_initiated",
+      "ad_account_add_funding_source",
+      "ad_account_remove_funding_source",
+    ]);
+    const sinceDate = new Date(Date.now() - 180 * 86_400_000).toISOString().slice(0, 10);
+    const txs: Record<string, unknown>[] = [];
+    let url: string | null = `${META_API}/act_${account.meta_account_id}/activities?fields=event_type,translated_event_type,event_time,extra_data&since=${sinceDate}&limit=500&access_token=${accessToken}`;
+    try {
+      for (let page = 0; page < 4 && url; page++) {
+        const res = await fetch(url);
+        const body = await res.json();
+        if (body.error) {
+          if (body.error.code === 190 || body.error.type === "OAuthException") {
+            if (bm?.id) await markTokenExpired(bm.id);
+            return jsonResponse({ error: "TOKEN_EXPIRED" }, 401);
+          }
+          return jsonResponse({ error: body.error.message ?? "Meta API error" }, 422);
+        }
+        for (const e of (body.data ?? []) as { event_type: string; translated_event_type: string; event_time: string; extra_data?: string }[]) {
+          if (!BILLING_EVENTS.has(e.event_type)) continue;
+          let x: Record<string, unknown> = {};
+          try { x = JSON.parse(e.extra_data ?? "{}"); } catch { /* ignore */ }
+          const cents = (x.new_value ?? x.amount) as number | undefined;
+          txs.push({
+            date: e.event_time,
+            event_type: e.event_type,
+            label: e.translated_event_type,
+            amount: cents != null ? cents / 100 : null,
+            currency: (x.currency as string) ?? account.currency ?? null,
+            fee: x.fee != null ? (x.fee as number) / 100 : null,
+            network: (x.network_id as string) ?? null,
+            transaction_id: (x.transaction_id as string) ?? null,
+          });
+        }
+        url = (body.paging?.next as string) ?? null;
+      }
+    } catch (e) {
+      console.error("Billing activities fetch failed:", e);
+      return jsonResponse({ error: "Meta API unreachable" }, 502);
+    }
+    return jsonResponse({ transactions: txs, currency: account.currency });
+  }
+
   // ── level = "account" (default): existing aggregate behaviour ───
   let metaRes: Response;
   let balanceRes: Response;
