@@ -3469,6 +3469,17 @@
 
       accountMap = {};
 
+      // Auto-discover newly granted Meta / Google ad accounts (once per session).
+      // Runs in the background; if new accounts were found, reload the list.
+      if (!window._acctSyncDone) {
+        window._acctSyncDone = true;
+        callEdgeFunction('accounts-sync', { organization_id: currentOrgId }).then(r => {
+          const added = (r?.meta_added || 0) + (r?.google_added || 0) + (r?.meta_relinked || 0);
+          console.log('[accounts-sync]', JSON.stringify(r));
+          if (added > 0) loadAccounts(false);
+        }).catch(e => console.warn('[accounts-sync]', e));
+      }
+
       // Auto-sync campaign flags if any account hasn't been synced in >24 h.
       // Only runs once per session (flag prevents the post-sync loadAccounts(false)
       // call from triggering another sync → infinite loop).
@@ -3488,13 +3499,12 @@
           });
       }
 
-      // Only show accounts with active campaigns (or not-yet-synced = null)
+      // Show all connected active accounts (accounts appear as soon as access is granted)
       const { data: accounts } = await sb
         .from('meta_ad_accounts_safe')  // safe view, no tokens
         .select('id, meta_account_id, account_name, currency, shopify_store_id, campaigns_last_synced_at')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true)
-        .or('has_active_campaigns.is.null,has_active_campaigns.eq.true')
         .order('account_name');
 
       // Populate accountMap — apply per-user access restrictions for non-owners
