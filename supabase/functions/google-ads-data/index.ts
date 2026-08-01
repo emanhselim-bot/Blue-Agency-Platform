@@ -128,7 +128,8 @@ async function fetchGoogleAdsMetrics(
   developerToken: string,
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  loginCustomerId?: string
 ): Promise<GoogleAdsMetrics> {
   // Remove dashes from customer ID
   const cid = customerId.replace(/-/g, "");
@@ -146,15 +147,18 @@ async function fetchGoogleAdsMetrics(
       AND campaign.status != 'REMOVED'
   `;
 
+  const metricsHeaders: Record<string, string> = {
+    "Authorization": `Bearer ${accessToken}`,
+    "developer-token": developerToken,
+    "Content-Type": "application/json",
+  };
+  if (loginCustomerId) metricsHeaders["login-customer-id"] = loginCustomerId;
+
   const res = await fetch(
     `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
     {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "developer-token": developerToken,
-        "Content-Type": "application/json",
-      },
+      headers: metricsHeaders,
       body: JSON.stringify({ query: gaql }),
       signal: AbortSignal.timeout(20_000),
     }
@@ -237,7 +241,8 @@ async function fetchGoogleAdsCampaigns(
   developerToken: string,
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  loginCustomerId?: string
 ): Promise<CampaignRow[]> {
   const cid = customerId.replace(/-/g, "");
 
@@ -257,15 +262,18 @@ async function fetchGoogleAdsCampaigns(
     LIMIT 10
   `;
 
+  const campHeaders: Record<string, string> = {
+    "Authorization": `Bearer ${accessToken}`,
+    "developer-token": developerToken,
+    "Content-Type": "application/json",
+  };
+  if (loginCustomerId) campHeaders["login-customer-id"] = loginCustomerId;
+
   const res = await fetch(
     `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
     {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "developer-token": developerToken,
-        "Content-Type": "application/json",
-      },
+      headers: campHeaders,
       body: JSON.stringify({ query: gaql }),
       signal: AbortSignal.timeout(20_000),
     }
@@ -328,7 +336,8 @@ async function fetchGoogleAdsBestAd(
   developerToken: string,
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  loginCustomerId?: string
 ): Promise<AdRow | null> {
   const cid = customerId.replace(/-/g, "");
 
@@ -352,15 +361,18 @@ async function fetchGoogleAdsBestAd(
     LIMIT 1
   `;
 
+  const adHeaders: Record<string, string> = {
+    "Authorization": `Bearer ${accessToken}`,
+    "developer-token": developerToken,
+    "Content-Type": "application/json",
+  };
+  if (loginCustomerId) adHeaders["login-customer-id"] = loginCustomerId;
+
   const res = await fetch(
     `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
     {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "developer-token": developerToken,
-        "Content-Type": "application/json",
-      },
+      headers: adHeaders,
       body: JSON.stringify({ query: gaql }),
       signal: AbortSignal.timeout(20_000),
     }
@@ -430,7 +442,8 @@ async function fetchGoogleAdsKeywords(
   developerToken: string,
   accessToken: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  loginCustomerId?: string
 ): Promise<KeywordRow[]> {
   const cid = customerId.replace(/-/g, "");
 
@@ -452,15 +465,18 @@ async function fetchGoogleAdsKeywords(
     LIMIT 10
   `;
 
+  const kwHeaders: Record<string, string> = {
+    "Authorization": `Bearer ${accessToken}`,
+    "developer-token": developerToken,
+    "Content-Type": "application/json",
+  };
+  if (loginCustomerId) kwHeaders["login-customer-id"] = loginCustomerId;
+
   const res = await fetch(
     `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
     {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "developer-token": developerToken,
-        "Content-Type": "application/json",
-      },
+      headers: kwHeaders,
       body: JSON.stringify({ query: gaql }),
       signal: AbortSignal.timeout(20_000),
     }
@@ -508,6 +524,49 @@ async function fetchGoogleAdsKeywords(
   return keywords.slice(0, 10);
 }
 
+// ── Diagnostic: list accessible customers ─────────────────────────────────────
+async function listAccessibleCustomers(
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string,
+  developerToken: string
+): Promise<string[]> {
+  console.log("[diag] refreshToken len:", refreshToken?.length, "prefix:", refreshToken?.slice(0, 20));
+  console.log("[diag] clientId prefix:", clientId?.slice(0, 30));
+  console.log("[diag] clientSecret len:", clientSecret?.length);
+  console.log("[diag] developerToken:", developerToken);
+
+  let accessToken: string;
+  try {
+    accessToken = await refreshAccessToken(clientId, clientSecret, refreshToken);
+  } catch (e) {
+    console.error("[diag] refreshAccessToken THREW:", (e as Error).message);
+    throw e;
+  }
+
+  console.log("[diag] accessToken defined:", !!accessToken, "len:", accessToken?.length, "prefix:", accessToken?.slice(0, 15));
+
+  const res = await fetch(
+    "https://googleads.googleapis.com/v24/customers:listAccessibleCustomers",
+    {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "developer-token": developerToken,
+      },
+      signal: AbortSignal.timeout(10_000),
+    }
+  );
+  const text = await res.text();
+  console.log("[diag] listAccessibleCustomers status:", res.status, "body:", text.slice(0, 600));
+  if (!res.ok) {
+    throw new Error(`listAccessibleCustomers ${res.status}: ${text.slice(0, 500)}`);
+  }
+  const json = JSON.parse(text);
+  // Returns { resourceNames: ["customers/123", ...] }
+  return (json.resourceNames ?? []).map((r: string) => r.replace("customers/", ""));
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -520,11 +579,114 @@ Deno.serve(async (req: Request) => {
   );
   if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  let body: { account_id?: string; organization_id?: string; since?: string; until?: string; include_campaigns?: boolean; include_ads?: boolean; include_keywords?: boolean };
+  let body: { account_id?: string; organization_id?: string; since?: string; until?: string; include_campaigns?: boolean; include_ads?: boolean; include_keywords?: boolean; diagnostic?: boolean };
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "Invalid JSON" }, 400); }
 
-  const { account_id, organization_id, since = "last_30_days", until = "last_30_days", include_campaigns = false, include_ads = false, include_keywords = false } = body;
+  const { account_id, organization_id, since = "last_30_days", until = "last_30_days", include_campaigns = false, include_ads = false, include_keywords = false, diagnostic = false } = body;
+
+  // Diagnostic mode: step-by-step debug — returns all intermediate info in response body
+  if (diagnostic) {
+    if (!organization_id) return jsonResponse({ error: "organization_id required" }, 400);
+    const { data: accts } = await supabaseAdmin
+      .from("google_ads_accounts").select("*")
+      .eq("organization_id", organization_id).eq("is_active", true).limit(1);
+    if (!accts?.length) return jsonResponse({ error: "No accounts found" }, 404);
+    const a = accts[0];
+
+    const debug: Record<string, unknown> = {
+      clientIdPrefix: a.client_id?.slice(0, 30),
+      clientSecretLen: a.client_secret?.length,
+      refreshTokenPrefix: a.refresh_token?.slice(0, 30),
+      refreshTokenLen: a.refresh_token?.length,
+      developerToken: a.developer_token,
+    };
+
+    // Step 1: refresh the access token, capture raw response
+    let accessToken: string | undefined;
+    try {
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: a.client_id,
+          client_secret: a.client_secret,
+          refresh_token: a.refresh_token,
+          grant_type: "refresh_token",
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const tokenText = await tokenRes.text();
+      debug.tokenStatus = tokenRes.status;
+      let tokenJson: Record<string, unknown> = {};
+      try { tokenJson = JSON.parse(tokenText); } catch { debug.tokenRawBody = tokenText.slice(0, 300); }
+      accessToken = tokenJson.access_token as string | undefined;
+      debug.accessTokenDefined = !!accessToken;
+      debug.accessTokenLen = accessToken?.length;
+      debug.accessTokenPrefix = accessToken?.slice(0, 15);
+      debug.tokenScope = tokenJson.scope;
+      debug.tokenError = tokenJson.error;
+      debug.tokenErrorDesc = tokenJson.error_description;
+    } catch (e) {
+      debug.tokenRefreshThrew = (e as Error).message;
+      return jsonResponse({ debug, error: "Token refresh threw exception" }, 500);
+    }
+
+    if (!accessToken) {
+      return jsonResponse({ debug, error: "Token refresh returned no access_token" }, 500);
+    }
+
+    // Step 2: call listAccessibleCustomers, capture raw response
+    try {
+      const listRes = await fetch("https://googleads.googleapis.com/v24/customers:listAccessibleCustomers", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "developer-token": a.developer_token,
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+      const listText = await listRes.text();
+      debug.listStatus = listRes.status;
+      debug.listBody = listText.slice(0, 800);
+      if (!listRes.ok) {
+        return jsonResponse({ debug, error: `listAccessibleCustomers ${listRes.status}` }, 500);
+      }
+      const listJson = JSON.parse(listText);
+      const customerIds = (listJson.resourceNames ?? []).map((r: string) => r.replace("customers/", ""));
+
+      // Step 3: test searchStream on the first active account — try with AND without login-customer-id
+      const testCid = a.customer_id.replace(/-/g, "");
+      const testQuery = `SELECT campaign.name, metrics.impressions FROM campaign WHERE segments.date BETWEEN '2026-07-01' AND '2026-07-31' AND campaign.status != 'REMOVED' LIMIT 1`;
+
+      // 3a: without login-customer-id
+      const ssResA = await fetch(`https://googleads.googleapis.com/v24/customers/${testCid}/googleAds:searchStream`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "developer-token": a.developer_token, "Content-Type": "application/json" },
+        body: JSON.stringify({ query: testQuery }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const ssTextA = await ssResA.text();
+      debug.ssNoLoginId_status = ssResA.status;
+      debug.ssNoLoginId_body = ssTextA.slice(0, 600);
+
+      // 3b: with login-customer-id
+      const ssResB = await fetch(`https://googleads.googleapis.com/v24/customers/${testCid}/googleAds:searchStream`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "developer-token": a.developer_token, "Content-Type": "application/json", "login-customer-id": a.login_customer_id ?? "4652578348" },
+        body: JSON.stringify({ query: testQuery }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const ssTextB = await ssResB.text();
+      debug.ssWithLoginId_status = ssResB.status;
+      debug.ssWithLoginId_body = ssTextB.slice(0, 600);
+
+      return jsonResponse({ debug, accessible_customer_ids: customerIds });
+    } catch (e) {
+      debug.listThrew = (e as Error).message;
+      return jsonResponse({ debug, error: "listAccessibleCustomers threw exception" }, 500);
+    }
+  }
 
   if (!organization_id) return jsonResponse({ error: "organization_id required" }, 400);
 
@@ -561,16 +723,17 @@ Deno.serve(async (req: Request) => {
       const accessToken = await refreshAccessToken(
         acct.client_id, acct.client_secret, acct.refresh_token
       );
+      const lcid = acct.login_customer_id ?? undefined;
       const [metrics, campaigns, bestAd, keywords] = await Promise.all([
-        fetchGoogleAdsMetrics(acct.customer_id, acct.developer_token, accessToken, start, end),
+        fetchGoogleAdsMetrics(acct.customer_id, acct.developer_token, accessToken, start, end, lcid),
         include_campaigns
-          ? fetchGoogleAdsCampaigns(acct.customer_id, acct.developer_token, accessToken, start, end)
+          ? fetchGoogleAdsCampaigns(acct.customer_id, acct.developer_token, accessToken, start, end, lcid)
           : Promise.resolve([]),
         include_ads
-          ? fetchGoogleAdsBestAd(acct.customer_id, acct.developer_token, accessToken, start, end)
+          ? fetchGoogleAdsBestAd(acct.customer_id, acct.developer_token, accessToken, start, end, lcid)
           : Promise.resolve(null),
         include_keywords
-          ? fetchGoogleAdsKeywords(acct.customer_id, acct.developer_token, accessToken, start, end)
+          ? fetchGoogleAdsKeywords(acct.customer_id, acct.developer_token, accessToken, start, end, lcid)
           : Promise.resolve([]),
       ]);
       return { account_id: acct.id, account_name: acct.account_name ?? acct.customer_id, metrics, campaigns, bestAd, keywords };

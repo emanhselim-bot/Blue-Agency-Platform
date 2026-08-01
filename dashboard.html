@@ -195,6 +195,87 @@
     /* ── AUTH OVERLAY ── */
     .auth-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #0573F5 0%, #083BBF 55%, #0A1CA3 100%); z-index: 9999; display: flex; align-items: center; justify-content: center; }
     .auth-overlay.hidden { display: none; }
+
+    /* ── HOME HUB ─────────────────────────────────── */
+    .home-hub { position: fixed; inset: 0; background: linear-gradient(135deg, #0573F5 0%, #083BBF 55%, #0A1CA3 100%); z-index: 9000; display: flex; align-items: center; justify-content: center; overflow-y: auto; }
+    .home-hub.hidden { display: none; }
+    .hub-inner { width: 100%; max-width: 1040px; padding: 40px 24px; text-align: center; }
+    .hub-logo { display: inline-flex; gap: 5px; align-items: flex-end; height: 40px; margin-bottom: 14px; }
+    .hub-logo span { width: 9px; border-radius: 3px; background: #fff; display: inline-block; }
+    .hub-logo span:nth-child(1) { height: 16px; opacity: .75; }
+    .hub-logo span:nth-child(2) { height: 26px; opacity: .85; }
+    .hub-logo span:nth-child(3) { height: 36px; opacity: .95; }
+    .hub-logo span:nth-child(4) { height: 22px; opacity: .8; }
+    .hub-title { color: #fff; font-size: 30px; font-weight: 800; letter-spacing: 4px; }
+    .hub-sub { color: rgba(255,255,255,.75); font-size: 11px; letter-spacing: 3px; margin-bottom: 44px; }
+    .hub-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
+    .hub-card { background: rgba(255,255,255,.97); border-radius: 18px; padding: 34px 26px 30px; cursor: pointer; text-align: center; transition: transform .18s, box-shadow .18s; box-shadow: 0 8px 30px rgba(0,0,0,.25); border: 2px solid transparent; }
+    .hub-card:hover { transform: translateY(-6px); box-shadow: 0 16px 44px rgba(0,0,0,.35); border-color: #0573F5; }
+    .hub-card-icon { font-size: 44px; margin-bottom: 16px; }
+    .hub-card-title { font-size: 19px; font-weight: 800; color: #0A1CA3; margin-bottom: 8px; }
+    .hub-card-desc { font-size: 13px; color: #5B6472; line-height: 1.5; }
+    .hub-card-badge { display: inline-block; margin-top: 14px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 20px; background: #EAF2FE; color: #0573F5; }
+    .hub-signout { margin-top: 40px; background: none; border: 1px solid rgba(255,255,255,.4); color: rgba(255,255,255,.85); padding: 8px 22px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .hub-signout:hover { background: rgba(255,255,255,.1); }
+    /* section placeholder views */
+    .hub-section { background: rgba(255,255,255,.97); border-radius: 18px; padding: 60px 40px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    .hub-section h2 { color: #0A1CA3; font-size: 24px; font-weight: 800; margin-bottom: 10px; }
+    .hub-section p { color: #5B6472; font-size: 14px; margin-bottom: 28px; }
+    .hub-back-btn { background: #0573F5; color: #fff; border: none; padding: 10px 26px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+    .hub-back-btn:hover { background: #083BBF; }
+
+    /* hub modules (pipeline / finance) */
+    .hub-inner.wide { max-width: 1400px; text-align: left; }
+    .hub-mod-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+    .hub-mod-head h2 { color: #fff; font-size: 24px; font-weight: 800; flex: 1; }
+    .hub-mod-btn { background: #fff; color: #0A1CA3; border: none; padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700; }
+    .hub-mod-btn:hover { background: #EAF2FE; }
+    .hub-mod-back { background: none; border: 1px solid rgba(255,255,255,.4); color: rgba(255,255,255,.9); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .hub-mod-back:hover { background: rgba(255,255,255,.1); }
+    .hub-loading { color: rgba(255,255,255,.8); padding: 40px; text-align: center; font-size: 14px; grid-column: 1 / -1; }
+    /* pipeline kanban */
+    .pipe-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: start; }
+    @media (max-width: 1000px) { .pipe-board { grid-template-columns: repeat(2, 1fr); } }
+    .pipe-col { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 14px; padding: 12px; min-height: 320px; }
+    .pipe-col.drag-over { background: rgba(255,255,255,.22); }
+    .pipe-col-head { color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .pipe-count { background: rgba(255,255,255,.25); border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+    .pipe-col-total { color: rgba(255,255,255,.65); font-size: 11px; margin-bottom: 10px; min-height: 14px; }
+    .pipe-card { background: #fff; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: grab; box-shadow: 0 3px 10px rgba(0,0,0,.18); transition: transform .12s; }
+    .pipe-card:hover { transform: translateY(-2px); }
+    .pipe-card-name { font-size: 14px; font-weight: 700; color: #111827; }
+    .pipe-card-sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
+    .pipe-card-val { font-size: 12px; font-weight: 700; color: #0573F5; margin-top: 6px; }
+    /* finance */
+    .fin-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+    @media (max-width: 800px) { .fin-summary { grid-template-columns: 1fr; } }
+    .fin-sum-card { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 14px; padding: 18px 20px; }
+    .fin-sum-label { color: rgba(255,255,255,.7); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; }
+    .fin-sum-val { color: #fff; font-size: 22px; font-weight: 800; margin-top: 6px; }
+    .fin-table-wrap { background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    .fin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .fin-table th { text-align: left; padding: 12px 16px; background: #F3F6FB; color: #374151; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+    .fin-table td { padding: 12px 16px; border-top: 1px solid #EEF1F6; color: #111827; }
+    .fin-chip { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .fin-chip.paid { background: #DCFCE7; color: #16A34A; }
+    .fin-chip.invoiced { background: #EAF2FE; color: #0573F5; }
+    .fin-chip.overdue { background: #FEE2E2; color: #DC2626; }
+    .fin-act-btn { background: none; border: 1px solid #D6DEE9; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; margin-right: 6px; }
+    .fin-act-btn:hover { background: #F3F6FB; }
+    .fin-empty { padding: 40px; text-align: center; color: #6B7280; font-size: 14px; }
+    /* hub modal */
+    .hub-modal { position: fixed; inset: 0; background: rgba(10,20,60,.55); z-index: 9500; display: flex; align-items: center; justify-content: center; }
+    .hub-modal.hidden { display: none; }
+    .hub-modal-box { background: #fff; border-radius: 16px; padding: 26px 26px 22px; width: 420px; max-width: 92vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+    .hub-modal-box h3 { font-size: 17px; font-weight: 800; color: #0A1CA3; margin-bottom: 16px; }
+    .hub-modal-box label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .5px; color: #6B7280; margin: 12px 0 4px; }
+    .hub-input { width: 100%; padding: 9px 12px; border: 1.5px solid #D6DEE9; border-radius: 8px; font-size: 13px; box-sizing: border-box; font-family: inherit; }
+    .hub-input:focus { outline: none; border-color: #0573F5; }
+    .hub-modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .hub-modal-actions .primary { flex: 1; background: #0573F5; color: #fff; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; }
+    .hub-modal-actions .primary:hover { background: #083BBF; }
+    .hub-modal-actions .ghost { background: none; border: 1.5px solid #D6DEE9; padding: 10px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+    .hub-modal-actions .danger { background: none; border: 1.5px solid #FCA5A5; color: #DC2626; padding: 10px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
     .auth-box { background: white; border-radius: 16px; padding: 40px 36px 36px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
     .auth-logo { display: flex; align-items: center; justify-content: center; gap: 3px; margin-bottom: 20px; }
     .auth-logo span { display: inline-block; width: 7px; border-radius: 2px; background: var(--blue-dark); }
@@ -900,6 +981,7 @@
       </div>
       <span id="auto-refresh-label"></span>
       <button class="header-btn" id="team-btn" style="display:none">👥 Team</button>
+      <button class="header-btn" id="home-btn" title="Back to home" onclick="showHomeHub()">🏠 Home</button>
       <button class="header-btn" id="darkmode-btn" title="Toggle dark mode">🌙</button>
       <button class="header-btn" id="settings-btn">⚙ Settings</button>
       <button class="header-btn" id="signout-btn">Sign out</button>
@@ -1090,6 +1172,107 @@
         <div class="auth-error" id="forgot-status"></div>
         <span class="auth-link" id="back-login-link-2">← Back to sign in</span>
       </div>
+    </div>
+  </div>
+
+  <!-- HOME HUB -->
+  <div class="home-hub hidden" id="home-hub">
+    <div class="hub-inner">
+      <div id="hub-cards-view">
+        <div class="hub-logo"><span></span><span></span><span></span><span></span></div>
+        <div class="hub-title">BLUE AD</div>
+        <div class="hub-sub">DIGITAL PERFORMANCE MARKETING AGENCY</div>
+        <div class="hub-cards">
+          <div class="hub-card" onclick="hubOpen('pipeline')">
+            <div class="hub-card-icon">🤝</div>
+            <div class="hub-card-title">Clients Pipeline</div>
+            <div class="hub-card-desc">Track leads, prospects and active clients through every stage of your sales pipeline.</div>
+            <div class="hub-card-badge">COMING SOON</div>
+          </div>
+          <div class="hub-card" onclick="hubOpen('media')">
+            <div class="hub-card-icon">📊</div>
+            <div class="hub-card-title">Media Buying Dashboard</div>
+            <div class="hub-card-desc">Live performance across Meta Ads, Google Ads and Shopify — all your client accounts in one place.</div>
+            <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
+          </div>
+          <div class="hub-card" onclick="hubOpen('finance')">
+            <div class="hub-card-icon">💰</div>
+            <div class="hub-card-title">Finance</div>
+            <div class="hub-card-desc">Payments management — client invoices, collections and outstanding balances.</div>
+            <div class="hub-card-badge">COMING SOON</div>
+          </div>
+        </div>
+        <button class="hub-signout" onclick="document.getElementById('signout-btn').click()">Sign out</button>
+      </div>
+      <div id="hub-pipeline-view" style="display:none">
+        <div class="hub-mod-head">
+          <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+          <h2>🤝 Clients Pipeline</h2>
+          <button class="hub-mod-btn" onclick="openPipeModal()">＋ Add client</button>
+        </div>
+        <div class="pipe-board" id="pipe-board"><div class="hub-loading">Loading…</div></div>
+      </div>
+      <div id="hub-finance-view" style="display:none">
+        <div class="hub-mod-head">
+          <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+          <h2>💰 Finance</h2>
+          <button class="hub-mod-btn" onclick="openFinModal()">＋ Add payment</button>
+        </div>
+        <div class="fin-summary" id="fin-summary"></div>
+        <div class="fin-table-wrap" id="fin-table-wrap"><div class="fin-empty">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIPELINE CLIENT MODAL -->
+  <div class="hub-modal hidden" id="pipe-modal">
+    <div class="hub-modal-box">
+      <h3 id="pipe-modal-title">Add client</h3>
+      <input type="hidden" id="pm-id">
+      <label>CLIENT NAME *</label><input class="hub-input" id="pm-name" placeholder="e.g. Urbanleaf">
+      <label>CONTACT</label><input class="hub-input" id="pm-contact" placeholder="Name / phone / email">
+      <label>MONTHLY VALUE</label>
+      <div style="display:flex;gap:8px">
+        <input class="hub-input" id="pm-value" type="number" min="0" placeholder="0" style="flex:1">
+        <select class="hub-input" id="pm-currency" style="width:90px"><option>EGP</option><option>USD</option><option>SAR</option><option>AED</option></select>
+      </div>
+      <label>STAGE</label>
+      <select class="hub-input" id="pm-stage">
+        <option value="lead">🔍 Lead</option><option value="contacted">📞 Contacted</option>
+        <option value="proposal">📄 Proposal</option><option value="active">✅ Active</option>
+        <option value="churned">💤 Churned</option>
+      </select>
+      <label>NOTES</label><textarea class="hub-input" id="pm-notes" rows="3" placeholder="Optional notes…"></textarea>
+      <div class="hub-modal-actions">
+        <button class="danger" id="pm-delete" style="display:none" onclick="deletePipeClient()">Delete</button>
+        <button class="ghost" onclick="document.getElementById('pipe-modal').classList.add('hidden')">Cancel</button>
+        <button class="primary" onclick="savePipeClient()">Save</button>
+      </div>
+      <div class="auth-error" id="pm-error"></div>
+    </div>
+  </div>
+
+  <!-- FINANCE PAYMENT MODAL -->
+  <div class="hub-modal hidden" id="fin-modal">
+    <div class="hub-modal-box">
+      <h3 id="fin-modal-title">Add payment</h3>
+      <input type="hidden" id="fm-id">
+      <label>CLIENT NAME *</label><input class="hub-input" id="fm-client" placeholder="e.g. Urbanleaf">
+      <label>DESCRIPTION</label><input class="hub-input" id="fm-desc" placeholder="e.g. August management fee">
+      <label>AMOUNT *</label>
+      <div style="display:flex;gap:8px">
+        <input class="hub-input" id="fm-amount" type="number" min="0" placeholder="0" style="flex:1">
+        <select class="hub-input" id="fm-currency" style="width:90px"><option>EGP</option><option>USD</option><option>SAR</option><option>AED</option></select>
+      </div>
+      <label>STATUS</label>
+      <select class="hub-input" id="fm-status"><option value="invoiced">Invoiced</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select>
+      <label>DUE DATE</label><input class="hub-input" id="fm-due" type="date">
+      <div class="hub-modal-actions">
+        <button class="danger" id="fm-delete" style="display:none" onclick="deleteFinPayment()">Delete</button>
+        <button class="ghost" onclick="document.getElementById('fin-modal').classList.add('hidden')">Cancel</button>
+        <button class="primary" onclick="saveFinPayment()">Save</button>
+      </div>
+      <div class="auth-error" id="fm-error"></div>
     </div>
   </div>
 
@@ -6461,6 +6644,232 @@
     // Guard against concurrent loadOrgs() calls (e.g. TOKEN_REFRESHED during initial load)
     let _orgsLoading = false;
 
+    // ── HOME HUB MODULES: PIPELINE & FINANCE ─────
+    function _hubEsc(t) { const d = document.createElement('div'); d.textContent = t ?? ''; return d.innerHTML; }
+    async function _hubWaitOrg() {
+      for (let i = 0; i < 40; i++) { if (currentOrgId) return true; await new Promise(r => setTimeout(r, 250)); }
+      return false;
+    }
+    function _fmtMoney(n, cur) { return Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' ' + (cur || 'EGP'); }
+    function _sumByCur(rows) {
+      const m = {};
+      rows.forEach(r => { const c = r.currency || 'EGP'; m[c] = (m[c] || 0) + Number(r.amount ?? r.value ?? 0); });
+      const parts = Object.entries(m).filter(([, v]) => v > 0).map(([c, v]) => _fmtMoney(v, c));
+      return parts.length ? parts.join(' + ') : '0';
+    }
+
+    // ── PIPELINE ──
+    const PIPE_STAGES = [['lead', '🔍 Leads'], ['contacted', '📞 Contacted'], ['proposal', '📄 Proposal'], ['active', '✅ Active'], ['churned', '💤 Churned']];
+    let _pipeClients = [];
+
+    async function loadPipeline() {
+      const box = document.getElementById('pipe-board');
+      box.innerHTML = '<div class="hub-loading">Loading…</div>';
+      if (!await _hubWaitOrg()) { box.innerHTML = '<div class="hub-loading">No organization loaded — open the Media Buying Dashboard once, then come back.</div>'; return; }
+      const { data, error } = await sb.from('pipeline_clients').select('*').eq('organization_id', currentOrgId).order('created_at');
+      if (error) { box.innerHTML = '<div class="hub-loading">Error: ' + _hubEsc(error.message) + '</div>'; return; }
+      _pipeClients = data || [];
+      renderPipeline();
+    }
+
+    function renderPipeline() {
+      const box = document.getElementById('pipe-board');
+      box.innerHTML = PIPE_STAGES.map(([key, label]) => {
+        const cards = _pipeClients.filter(c => c.stage === key);
+        return '<div class="pipe-col" data-stage="' + key + '" ondragover="event.preventDefault();this.classList.add(\'drag-over\')" ondragleave="this.classList.remove(\'drag-over\')" ondrop="pipeDrop(event,\'' + key + '\')">' +
+          '<div class="pipe-col-head">' + label + ' <span class="pipe-count">' + cards.length + '</span></div>' +
+          '<div class="pipe-col-total">' + (cards.length ? _sumByCur(cards) + ' /mo' : '') + '</div>' +
+          cards.map(c =>
+            '<div class="pipe-card" draggable="true" ondragstart="event.dataTransfer.setData(\'text/plain\',\'' + c.id + '\')" onclick="openPipeModal(\'' + c.id + '\')">' +
+            '<div class="pipe-card-name">' + _hubEsc(c.name) + '</div>' +
+            (c.contact ? '<div class="pipe-card-sub">' + _hubEsc(c.contact) + '</div>' : '') +
+            (Number(c.value) ? '<div class="pipe-card-val">' + _fmtMoney(c.value, c.currency) + ' /mo</div>' : '') +
+            '</div>').join('') +
+          '</div>';
+      }).join('');
+    }
+
+    async function pipeDrop(ev, stage) {
+      ev.preventDefault();
+      document.querySelectorAll('.pipe-col').forEach(c => c.classList.remove('drag-over'));
+      const id = ev.dataTransfer.getData('text/plain');
+      const client = _pipeClients.find(c => c.id === id);
+      if (!client || client.stage === stage) return;
+      client.stage = stage;
+      renderPipeline();
+      const { error } = await sb.from('pipeline_clients').update({ stage, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) { alert('Could not move card: ' + error.message); loadPipeline(); }
+    }
+
+    function openPipeModal(id) {
+      const c = id ? _pipeClients.find(x => x.id === id) : null;
+      document.getElementById('pipe-modal-title').textContent = c ? 'Edit client' : 'Add client';
+      document.getElementById('pm-id').value = c?.id || '';
+      document.getElementById('pm-name').value = c?.name || '';
+      document.getElementById('pm-contact').value = c?.contact || '';
+      document.getElementById('pm-value').value = c?.value || '';
+      document.getElementById('pm-currency').value = c?.currency || 'EGP';
+      document.getElementById('pm-stage').value = c?.stage || 'lead';
+      document.getElementById('pm-notes').value = c?.notes || '';
+      document.getElementById('pm-delete').style.display = c ? '' : 'none';
+      document.getElementById('pm-error').textContent = '';
+      document.getElementById('pipe-modal').classList.remove('hidden');
+    }
+
+    async function savePipeClient() {
+      const id = document.getElementById('pm-id').value;
+      const name = document.getElementById('pm-name').value.trim();
+      const errEl = document.getElementById('pm-error');
+      if (!name) { errEl.textContent = 'Client name is required.'; return; }
+      const row = {
+        name,
+        contact: document.getElementById('pm-contact').value.trim() || null,
+        value: Number(document.getElementById('pm-value').value) || 0,
+        currency: document.getElementById('pm-currency').value,
+        stage: document.getElementById('pm-stage').value,
+        notes: document.getElementById('pm-notes').value.trim() || null,
+        updated_at: new Date().toISOString()
+      };
+      let error;
+      if (id) ({ error } = await sb.from('pipeline_clients').update(row).eq('id', id));
+      else ({ error } = await sb.from('pipeline_clients').insert({ ...row, organization_id: currentOrgId, created_by: currentUser?.id }));
+      if (error) { errEl.textContent = error.message; return; }
+      document.getElementById('pipe-modal').classList.add('hidden');
+      loadPipeline();
+    }
+
+    async function deletePipeClient() {
+      const id = document.getElementById('pm-id').value;
+      if (!id || !confirm('Delete this client from the pipeline?')) return;
+      const { error } = await sb.from('pipeline_clients').delete().eq('id', id);
+      if (error) { document.getElementById('pm-error').textContent = error.message; return; }
+      document.getElementById('pipe-modal').classList.add('hidden');
+      loadPipeline();
+    }
+
+    // ── FINANCE ──
+    let _finRows = [];
+
+    async function loadFinance() {
+      const wrap = document.getElementById('fin-table-wrap');
+      wrap.innerHTML = '<div class="fin-empty">Loading…</div>';
+      document.getElementById('fin-summary').innerHTML = '';
+      if (!await _hubWaitOrg()) { wrap.innerHTML = '<div class="fin-empty">No organization loaded — open the Media Buying Dashboard once, then come back.</div>'; return; }
+      const { data, error } = await sb.from('finance_payments').select('*').eq('organization_id', currentOrgId).order('created_at', { ascending: false });
+      if (error) { wrap.innerHTML = '<div class="fin-empty">Error: ' + _hubEsc(error.message) + '</div>'; return; }
+      _finRows = data || [];
+      renderFinance();
+    }
+
+    function _finEffStatus(r) {
+      if (r.status === 'invoiced' && r.due_date && r.due_date < new Date().toISOString().slice(0, 10)) return 'overdue';
+      return r.status;
+    }
+
+    function renderFinance() {
+      const rows = _finRows;
+      const paid = rows.filter(r => r.status === 'paid');
+      const outstanding = rows.filter(r => r.status !== 'paid');
+      document.getElementById('fin-summary').innerHTML =
+        '<div class="fin-sum-card"><div class="fin-sum-label">TOTAL INVOICED</div><div class="fin-sum-val">' + _sumByCur(rows) + '</div></div>' +
+        '<div class="fin-sum-card"><div class="fin-sum-label">COLLECTED</div><div class="fin-sum-val" style="color:#7CFCB1">' + _sumByCur(paid) + '</div></div>' +
+        '<div class="fin-sum-card"><div class="fin-sum-label">OUTSTANDING</div><div class="fin-sum-val" style="color:#FFB4B4">' + _sumByCur(outstanding) + '</div></div>';
+      const wrap = document.getElementById('fin-table-wrap');
+      if (!rows.length) { wrap.innerHTML = '<div class="fin-empty">No payments yet. Click "＋ Add payment" to create the first one.</div>'; return; }
+      wrap.innerHTML = '<table class="fin-table"><thead><tr><th>Client</th><th>Description</th><th>Amount</th><th>Status</th><th>Due</th><th>Paid</th><th></th></tr></thead><tbody>' +
+        rows.map(r => {
+          const st = _finEffStatus(r);
+          return '<tr>' +
+            '<td style="font-weight:700">' + _hubEsc(r.client_name) + '</td>' +
+            '<td style="color:#6B7280">' + _hubEsc(r.description || '—') + '</td>' +
+            '<td style="font-weight:700">' + _fmtMoney(r.amount, r.currency) + '</td>' +
+            '<td><span class="fin-chip ' + st + '">' + st.toUpperCase() + '</span></td>' +
+            '<td>' + (r.due_date || '—') + '</td>' +
+            '<td>' + (r.paid_date || '—') + '</td>' +
+            '<td style="white-space:nowrap;text-align:right">' +
+              (r.status !== 'paid' ? '<button class="fin-act-btn" onclick="markFinPaid(\'' + r.id + '\')" title="Mark as paid">✓ Paid</button>' : '') +
+              '<button class="fin-act-btn" onclick="openFinModal(\'' + r.id + '\')" title="Edit">✎</button>' +
+            '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+
+    async function markFinPaid(id) {
+      const { error } = await sb.from('finance_payments').update({ status: 'paid', paid_date: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) { alert('Error: ' + error.message); return; }
+      loadFinance();
+    }
+
+    function openFinModal(id) {
+      const r = id ? _finRows.find(x => x.id === id) : null;
+      document.getElementById('fin-modal-title').textContent = r ? 'Edit payment' : 'Add payment';
+      document.getElementById('fm-id').value = r?.id || '';
+      document.getElementById('fm-client').value = r?.client_name || '';
+      document.getElementById('fm-desc').value = r?.description || '';
+      document.getElementById('fm-amount').value = r?.amount || '';
+      document.getElementById('fm-currency').value = r?.currency || 'EGP';
+      document.getElementById('fm-status').value = r?.status || 'invoiced';
+      document.getElementById('fm-due').value = r?.due_date || '';
+      document.getElementById('fm-delete').style.display = r ? '' : 'none';
+      document.getElementById('fm-error').textContent = '';
+      document.getElementById('fin-modal').classList.remove('hidden');
+    }
+
+    async function saveFinPayment() {
+      const id = document.getElementById('fm-id').value;
+      const client = document.getElementById('fm-client').value.trim();
+      const amount = Number(document.getElementById('fm-amount').value);
+      const errEl = document.getElementById('fm-error');
+      if (!client) { errEl.textContent = 'Client name is required.'; return; }
+      if (!amount || amount <= 0) { errEl.textContent = 'Amount must be greater than 0.'; return; }
+      const status = document.getElementById('fm-status').value;
+      const row = {
+        client_name: client,
+        description: document.getElementById('fm-desc').value.trim() || null,
+        amount,
+        currency: document.getElementById('fm-currency').value,
+        status,
+        due_date: document.getElementById('fm-due').value || null,
+        paid_date: status === 'paid' ? new Date().toISOString().slice(0, 10) : null,
+        updated_at: new Date().toISOString()
+      };
+      let error;
+      if (id) ({ error } = await sb.from('finance_payments').update(row).eq('id', id));
+      else ({ error } = await sb.from('finance_payments').insert({ ...row, organization_id: currentOrgId, created_by: currentUser?.id }));
+      if (error) { errEl.textContent = error.message; return; }
+      document.getElementById('fin-modal').classList.add('hidden');
+      loadFinance();
+    }
+
+    async function deleteFinPayment() {
+      const id = document.getElementById('fm-id').value;
+      if (!id || !confirm('Delete this payment record?')) return;
+      const { error } = await sb.from('finance_payments').delete().eq('id', id);
+      if (error) { document.getElementById('fm-error').textContent = error.message; return; }
+      document.getElementById('fin-modal').classList.add('hidden');
+      loadFinance();
+    }
+
+    // ── HOME HUB ──────────────────────────────────
+    function hubShowView(v) {
+      document.getElementById('hub-cards-view').style.display    = v === 'cards'    ? '' : 'none';
+      document.getElementById('hub-pipeline-view').style.display = v === 'pipeline' ? '' : 'none';
+      document.getElementById('hub-finance-view').style.display  = v === 'finance'  ? '' : 'none';
+      document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
+      if (v === 'pipeline') loadPipeline();
+      if (v === 'finance')  loadFinance();
+    }
+    function showHomeHub() {
+      hubShowView('cards');
+      document.getElementById('home-hub').classList.remove('hidden');
+    }
+    function hubOpen(section) {
+      if (section === 'media') {
+        document.getElementById('home-hub').classList.add('hidden');
+        return;
+      }
+      hubShowView(section);
+    }
+
     Auth.onAuthStateChange((event, session) => {
       const overlay = document.getElementById('auth-overlay');
       if (session?.user) {
@@ -6472,6 +6881,7 @@
         // TOKEN_REFRESHED fires periodically and must not re-run loadOrgs()
         // while the user is actively using the dashboard.
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+          showHomeHub();
           if (_orgsLoading) return;
           _orgsLoading = true;
           // Defer outside the Supabase navigator.locks session lock.
@@ -6503,6 +6913,7 @@
         _orgsLoading = false;
         if (timer) clearInterval(timer);
         overlay.classList.remove('hidden');
+        document.getElementById('home-hub').classList.add('hidden');
         setTimeout(() => document.getElementById('auth-email').focus(), 50);
         orgSel.innerHTML = '<option value="">—</option>';
         sel.innerHTML = '<option value="">— Select Account —</option>';
