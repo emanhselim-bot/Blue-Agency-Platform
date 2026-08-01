@@ -406,7 +406,10 @@
     .bill-fund-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: var(--text-muted); }
     .bill-fund-val { font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 6px; }
     .bill-fund-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
-    .bill-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .bill-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: auto; height: 420px; min-height: 140px; max-height: 85vh; resize: vertical; position: relative; }
+    .bill-table-wrap::-webkit-resizer { background: linear-gradient(135deg, transparent 50%, var(--blue-light) 50%); border-radius: 0 0 10px 0; }
+    .bill-table thead th { position: sticky; top: 0; z-index: 2; }
+    .bill-resize-hint { font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 4px; opacity: .7; }
     .bill-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .bill-table th { text-align: left; padding: 10px 16px; background: var(--bg); color: var(--text-muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
     .bill-table td { padding: 10px 16px; border-top: 1px solid var(--border); color: var(--text-main); }
@@ -1130,6 +1133,7 @@
     </div>
     <div class="bill-funds" id="bill-funds"></div>
     <div class="bill-table-wrap" id="bill-table-wrap"><div class="bill-empty">Loading…</div></div>
+    <div class="bill-resize-hint">⇕ Drag the bottom-right corner to resize</div>
   </div>
 
   <!-- BILLING TRANSACTION MODAL -->
@@ -6729,6 +6733,20 @@
       document.getElementById('billing-section').style.display = 'block';
       loadBillingTx();
     }
+
+    // Persist billing table height across sessions
+    (function() {
+      document.addEventListener('DOMContentLoaded', () => {
+        const wrap = document.getElementById('bill-table-wrap');
+        if (!wrap) return;
+        const saved = localStorage.getItem('bill_table_h');
+        if (saved) wrap.style.height = saved + 'px';
+        new ResizeObserver(() => {
+          const h = Math.round(wrap.getBoundingClientRect().height);
+          if (h > 100) localStorage.setItem('bill_table_h', h);
+        }).observe(wrap);
+      });
+    })();
 
     async function loadBillingTx() {
       const wrap = document.getElementById('bill-table-wrap');
