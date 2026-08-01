@@ -3560,28 +3560,74 @@
         const keywords = data.keywords ?? [];
         const curr = '$';
         const dr = data.date_range;
+        const gaSpend  = t.spend  || 0;
+        const gaClicks = t.clicks || 0;
+        const gaImpr   = t.impressions || 0;
+        const gaCpm    = gaImpr > 0 ? gaSpend / gaImpr * 1000 : null;
+
+        // ── Restore saved leads ──
+        const _gaLeadsKey = `ga-leads-${currentOrgId||'x'}-${currentAgencyId||'x'}`;
+        const _gaStored = (() => { try { return JSON.parse(localStorage.getItem(_gaLeadsKey) || '{}'); } catch(_) { return {}; } })();
+        const _gaInit = (k) => _gaStored[k] != null ? _gaStored[k] : '';
+
         _updateTemplateBtnLabel('google-ads');
         document.getElementById('content').innerHTML = `
           <div class="kpi-sections-container" id="kpi-sections-container">
 
-            <div class="kpi-section" data-section-id="ga-spend">
-              <div class="section-label">Spend / Traffic <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
-              <div class="kpi-grid" data-grid-id="ga-spend">
-                ${kpi('c-blue solid', '💰', 'Total Spend',   fmtAds(t.spend, curr),          'Google Ads')}
-                ${kpi('c-sky',        '👁️', 'Impressions',   fmtAds(t.impressions, '', 0),   'Google Ads')}
-                ${kpi('c-teal solid', '🖱️', 'Clicks',        fmtAds(t.clicks, '', 0),        'Google Ads')}
-                ${kpi('c-navy',       '📊', 'CTR',            fmtAds(t.ctr) + '%',            'Google Ads')}
-                ${kpi('c-coral',      '💸', 'CPC',            fmtAds(t.cpc, curr),            'Cost per Click')}
+            <div class="kpi-section" data-section-id="ga-traffic">
+              <div class="section-label">Traffic / Reach <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="ga-traffic">
+                ${kpi('c-sky',        '👁️', 'Impressions', fmtAds(gaImpr, '', 0),         'Google Ads')}
+                ${kpi('c-teal solid', '🖱️', 'Clicks',      fmtAds(gaClicks, '', 0),        'Google Ads')}
+                ${kpi('c-gold solid', '💰', 'CPM',          gaCpm !== null ? fmtAds(gaCpm, curr) : '—', 'Spend ÷ 1K Impressions')}
+                ${kpi('c-coral',      '💸', 'CPC',          fmtAds(t.cpc, curr),            'Cost per Click')}
+                ${kpi('c-navy',       '📊', 'CTR',          fmtAds(t.ctr) + '%',            'Clicks ÷ Impressions')}
               </div>
             </div>
 
-            <div class="kpi-section" data-section-id="ga-conversions">
-              <div class="section-label">Conversions / Results <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
-              <div class="kpi-grid" data-grid-id="ga-conversions">
-                ${kpi('c-green solid',  '✅', 'Conversions',          fmtAds(t.conversions, '', 1),         'Google Ads')}
-                ${kpi('c-orange solid', '💸', 'Cost per Conversion',  fmtAds(t.cost_per_conversion, curr),  'Spend ÷ Conversions')}
-                ${kpi('c-gold solid',   '💵', 'Conversion Value',     fmtAds(t.conversion_value, curr),     'Google Ads')}
-                ${kpi('c-purple solid', '📈', 'ROAS',                 t.roas > 0 ? fmtAds(t.roas, '', 2) + 'x' : '—', 'Value ÷ Spend')}
+            <div class="kpi-section" data-section-id="ga-leads">
+              <div class="section-label">Leads Breakdown <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="ga-leads">
+
+                <div class="kpi-card c-blue" data-card-id="ga-no-of-leads">
+                  <span class="drag-handle" title="Drag to reorder">⠿</span>
+                  <div class="kpi-icon">📋</div>
+                  <div class="kpi-label">No. of Leads</div>
+                  <input id="ga-leads-total" type="number" min="0" value="${_gaInit('total')}" placeholder="0"
+                    style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                  <div class="kpi-sub">Manual entry</div>
+                </div>
+
+                ${kpi('c-orange solid', '💸', 'CPL', '—', 'Spend ÷ Total Leads', null, null, null, 'ga-cpl-val')}
+                ${kpi('c-purple solid', '🎯', 'CR%', '—', 'Total Leads ÷ Clicks', null, null, null, 'ga-cr-val')}
+
+                <div class="kpi-card c-teal" data-card-id="ga-prospects">
+                  <span class="drag-handle" title="Drag to reorder">⠿</span>
+                  <div class="kpi-icon">🤝</div>
+                  <div class="kpi-label">Prospects</div>
+                  <input id="ga-leads-prospects" type="number" min="0" value="${_gaInit('prospects')}" placeholder="0"
+                    style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                  <div class="kpi-sub">Manual entry</div>
+                </div>
+
+                <div class="kpi-card c-sky" data-card-id="ga-suppliers">
+                  <span class="drag-handle" title="Drag to reorder">⠿</span>
+                  <div class="kpi-icon">🏭</div>
+                  <div class="kpi-label">Suppliers</div>
+                  <input id="ga-leads-suppliers" type="number" min="0" value="${_gaInit('suppliers')}" placeholder="0"
+                    style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                  <div class="kpi-sub">Manual entry</div>
+                </div>
+
+                <div class="kpi-card c-green" data-card-id="ga-job">
+                  <span class="drag-handle" title="Drag to reorder">⠿</span>
+                  <div class="kpi-icon">👷</div>
+                  <div class="kpi-label">Job</div>
+                  <input id="ga-leads-job" type="number" min="0" value="${_gaInit('job')}" placeholder="0"
+                    style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                  <div class="kpi-sub">Manual entry</div>
+                </div>
+
               </div>
             </div>
 
@@ -3652,6 +3698,31 @@
               </tr>`).join('')}</tbody>
             </table>
           </div>` : ''}`;
+
+        // ── Leads live recalc ──
+        const _gaRecalc = () => {
+          const totalLeads = parseInt(document.getElementById('ga-leads-total')?.value || '0') || 0;
+          const cpl = gaSpend && totalLeads ? fmt(gaSpend / totalLeads, curr) : '—';
+          const cr  = totalLeads && gaClicks ? fmt(totalLeads / gaClicks * 100, '', 2) + '%' : '—';
+          const cplEl = document.getElementById('ga-cpl-val');
+          const crEl  = document.getElementById('ga-cr-val');
+          if (cplEl) cplEl.textContent = cpl;
+          if (crEl)  crEl.textContent  = cr;
+        };
+        const _gaSave = () => {
+          const s = {};
+          ['total','prospects','suppliers','job'].forEach(k => {
+            const v = document.getElementById(`ga-leads-${k}`)?.value;
+            if (v != null) s[k] = v;
+          });
+          try { localStorage.setItem(_gaLeadsKey, JSON.stringify(s)); } catch(_) {}
+        };
+        document.getElementById('ga-leads-total')?.addEventListener('input', () => { _gaRecalc(); _gaSave(); });
+        ['prospects','suppliers','job'].forEach(k => {
+          document.getElementById(`ga-leads-${k}`)?.addEventListener('input', _gaSave);
+        });
+        _gaRecalc(); // init computed values on load
+
         initDragDrop();
       } catch(e) {
         document.getElementById('content').innerHTML = `<div class="error-state">⚠️ Google Ads error:\n${e.message}</div>`;
