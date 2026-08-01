@@ -954,6 +954,10 @@
           <span class="tmpl-option-icon">💬</span>
           <div class="tmpl-option-body"><div class="tmpl-option-title">Messages Only</div><div class="tmpl-option-desc">Spending + Messages, no website</div></div>
         </div>
+        <div class="tmpl-option" data-tmpl="google-ads" onclick="_setTemplate('google-ads')">
+          <span class="tmpl-option-icon">🔍</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Google Ads</div><div class="tmpl-option-desc">Spend, Clicks, Conversions, Keywords</div></div>
+        </div>
       </div>
     </div>
     <button class="layout-edit-btn" id="layout-edit-btn" onclick="toggleLayoutEdit()">⠿ Edit Layout</button>
@@ -1748,7 +1752,7 @@
       loadData();
     }
     function _updateTemplateBtnLabel(t) {
-      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'💬 Messages' };
+      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'💬 Messages', 'google-ads':'🔍 Google Ads' };
       const btn = document.getElementById('template-btn');
       if (btn) btn.textContent = M[t] || '📋 Template';
     }
@@ -3556,16 +3560,31 @@
         const keywords = data.keywords ?? [];
         const curr = '$';
         const dr = data.date_range;
+        _updateTemplateBtnLabel('google-ads');
         document.getElementById('content').innerHTML = `
-          <div class="section-label">Google Ads — ${account.account_name} <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${dr?.start ?? ''} – ${dr?.end ?? ''}</span></div>
-          <div class="kpi-grid">
-            ${kpi('c-sky',    '👁️', 'Impressions',         fmtAds(t.impressions, '', 0),         'Google Ads')}
-            ${kpi('c-teal',   '🖱️', 'CPC',                 fmtAds(t.cpc, curr),                  'Google Ads')}
-            ${kpi('c-blue',   '🖱️', 'No. of Clicks',       fmtAds(t.clicks, '', 0),              'Google Ads')}
-            ${kpi('c-green',  '✅', 'Conversions',          fmtAds(t.conversions, '', 1),          'Google Ads')}
-            ${kpi('c-orange', '💸', 'Cost per Conversion', fmtAds(t.cost_per_conversion, curr),   'Google Ads')}
-            ${kpi('c-gold',   '💰', 'Spending',             fmtAds(t.spend, curr),                'Google Ads')}
-            ${kpi('c-purple', '📊', 'CTR',                  fmtAds(t.ctr) + '%',                  'Google Ads')}
+          <div class="kpi-sections-container" id="kpi-sections-container">
+
+            <div class="kpi-section" data-section-id="ga-spend">
+              <div class="section-label">Spend / Traffic <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="ga-spend">
+                ${kpi('c-blue solid', '💰', 'Total Spend',   fmtAds(t.spend, curr),          'Google Ads')}
+                ${kpi('c-sky',        '👁️', 'Impressions',   fmtAds(t.impressions, '', 0),   'Google Ads')}
+                ${kpi('c-teal solid', '🖱️', 'Clicks',        fmtAds(t.clicks, '', 0),        'Google Ads')}
+                ${kpi('c-navy',       '📊', 'CTR',            fmtAds(t.ctr) + '%',            'Google Ads')}
+                ${kpi('c-coral',      '💸', 'CPC',            fmtAds(t.cpc, curr),            'Cost per Click')}
+              </div>
+            </div>
+
+            <div class="kpi-section" data-section-id="ga-conversions">
+              <div class="section-label">Conversions / Results <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="ga-conversions">
+                ${kpi('c-green solid',  '✅', 'Conversions',          fmtAds(t.conversions, '', 1),         'Google Ads')}
+                ${kpi('c-orange solid', '💸', 'Cost per Conversion',  fmtAds(t.cost_per_conversion, curr),  'Spend ÷ Conversions')}
+                ${kpi('c-gold solid',   '💵', 'Conversion Value',     fmtAds(t.conversion_value, curr),     'Google Ads')}
+                ${kpi('c-purple solid', '📈', 'ROAS',                 t.roas > 0 ? fmtAds(t.roas, '', 2) + 'x' : '—', 'Value ÷ Spend')}
+              </div>
+            </div>
+
           </div>
           ${campaigns.length ? `
           <div class="section-label">Campaigns</div>
@@ -3633,6 +3652,7 @@
               </tr>`).join('')}</tbody>
             </table>
           </div>` : ''}`;
+        initDragDrop();
       } catch(e) {
         document.getElementById('content').innerHTML = `<div class="error-state">⚠️ Google Ads error:\n${e.message}</div>`;
       } finally {
