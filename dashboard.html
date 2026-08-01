@@ -1104,7 +1104,7 @@
     </div>
     <div class="tgt-body">
       <div class="tgt-section-label">KPI Targets</div>
-      <div class="tgt-note" style="margin-bottom:10px">Pick any KPI from the dashboard and set a target for this workspace. Progress updates live with each data refresh.</div>
+      <div class="tgt-note" style="margin-bottom:10px">Targets are saved per account — each client account keeps its own targets. Pick any KPI from the loaded dashboard (Meta or Google Ads) and set a goal.</div>
       <select class="tgt-add-select" id="tgt-add-select" onchange="flexAddTarget(this.value)">
         <option value="">＋ Add a KPI target…</option>
       </select>
@@ -2717,11 +2717,23 @@
       }
     }
 
+    // Targets are stored PER ACCOUNT — each client account keeps its own
+    // independent target set (accounts have different KPIs and goals).
+    function _tgtAccountKey() { return sel?.value || '__none__'; }
     function getFlexTargets() {
-      return getAgencySettings(currentOrgId, currentAgencyId).targetsV2 || [];
+      const cfg = getAgencySettings(currentOrgId, currentAgencyId);
+      const byAcct = cfg.targetsV2ByAccount || {};
+      const acct = _tgtAccountKey();
+      if (byAcct[acct]) return byAcct[acct];
+      // one-time migration: agency-wide targets become this account's starting set
+      if (cfg.targetsV2?.length) return cfg.targetsV2;
+      return [];
     }
     function setFlexTargets(list) {
-      saveAgencySettings(currentOrgId, currentAgencyId, { targetsV2: list });
+      const cfg = getAgencySettings(currentOrgId, currentAgencyId);
+      const byAcct = cfg.targetsV2ByAccount || {};
+      byAcct[_tgtAccountKey()] = list;
+      saveAgencySettings(currentOrgId, currentAgencyId, { targetsV2ByAccount: byAcct, targetsV2: [] });
     }
     // KPIs whose label suggests "lower is better" (costs, frequency, spend)
     function _guessDir(label) {
@@ -2821,8 +2833,10 @@
       document.getElementById('tgt-period').value = cfg.period ?? '';
       const agencies = getAgencies(currentOrgId);
       const agency = agencies.find(a => a.id === currentAgencyId);
+      const acct = accountMap[sel?.value];
+      const acctName = sel?.value === '__all__' ? 'All Accounts' : (acct?.account_name || '');
       const nameEl = document.getElementById('tgt-agency-name');
-      if (nameEl) nameEl.textContent = agency?.name || '';
+      if (nameEl) nameEl.textContent = [agency?.name, acctName].filter(Boolean).join(' · ');
       renderTargetRows();
       // populate the add-KPI dropdown from what's on screen
       const selEl = document.getElementById('tgt-add-select');
