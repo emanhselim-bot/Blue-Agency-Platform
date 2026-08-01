@@ -446,6 +446,28 @@
     .tgt-note { font-size: 10px; color: var(--text-muted); margin: 4px 0 0; }
     .tgt-save { margin: 0 20px 20px; padding: 10px; background: var(--blue-dark); border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; width: calc(100% - 40px); }
     .tgt-save:hover { opacity: 0.9; }
+    /* ── Flexible targets ── */
+    .tgt-row { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .tgt-row-head { display: flex; align-items: center; gap: 8px; }
+    .tgt-row-label { flex: 1; font-size: 12px; font-weight: 700; color: var(--text); }
+    .tgt-row-del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; }
+    .tgt-row-del:hover { color: #F87171; }
+    .tgt-row-inputs { display: flex; gap: 8px; margin-top: 8px; }
+    .tgt-row-inputs input { flex: 1; padding: 6px 10px; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; min-width: 0; }
+    .tgt-row-inputs select { padding: 6px 8px; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 11px; }
+    .tgt-row-progress { margin-top: 9px; }
+    .tgt-add-select { width: 100%; padding: 8px 11px; background: var(--bg); border: 1.5px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 12px; margin-bottom: 14px; }
+    /* progress bar (shared: panel + cards) */
+    .tprog-bar { height: 6px; background: rgba(128,128,128,.18); border-radius: 4px; overflow: hidden; }
+    .tprog-fill { height: 100%; border-radius: 4px; transition: width .4s ease; }
+    .tprog-meta { display: flex; justify-content: space-between; font-size: 10px; margin-top: 4px; color: var(--text-muted); }
+    .tprog-status { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 9px; font-weight: 800; letter-spacing: .4px; }
+    .tprog-status.achieved  { background: #DCFCE7; color: #15803D; }
+    .tprog-status.ontrack   { background: #EAF2FE; color: #0557D9; }
+    .tprog-status.attention { background: #FEE2E2; color: #DC2626; }
+    .kpi-card .kpi-tprog { margin-top: 8px; }
+    .kpi-card .kpi-tprog .tprog-meta { font-size: 9.5px; }
+
     /* Targets button in controls bar */
     .targets-btn { padding: 5px 11px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
     .targets-btn:hover, .targets-btn.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
@@ -1081,20 +1103,12 @@
       <button class="tgt-close" onclick="toggleTargetsPanel(false)">✕</button>
     </div>
     <div class="tgt-body">
-      <div class="tgt-section-label">Spend & Revenue</div>
-      <div class="tgt-field"><label>Monthly Spend Budget ($)</label><input id="tgt-spend" type="number" placeholder="e.g. 10000" min="0"></div>
-      <div class="tgt-field"><label>Target Revenue ($)</label><input id="tgt-revenue" type="number" placeholder="e.g. 40000" min="0"></div>
-      <div class="tgt-field"><label>Target ROAS</label><input id="tgt-roas" type="number" placeholder="e.g. 3.5" min="0" step="0.1"></div>
-
-      <div class="tgt-section-label">Efficiency</div>
-      <div class="tgt-field"><label>Target CPM ($)</label><input id="tgt-cpm" type="number" placeholder="e.g. 8.00" min="0" step="0.01"></div>
-      <div class="tgt-field"><label>Target CPC ($)</label><input id="tgt-cpc" type="number" placeholder="e.g. 1.50" min="0" step="0.01"></div>
-      <div class="tgt-field"><label>Target CTR (%)</label><input id="tgt-ctr" type="number" placeholder="e.g. 2.0" min="0" step="0.1"></div>
-      <div class="tgt-field"><label>Target Cost/Result ($)</label><input id="tgt-cpr" type="number" placeholder="e.g. 15.00" min="0" step="0.01"></div>
-
-      <div class="tgt-section-label">Conversions</div>
-      <div class="tgt-field"><label>Target Orders (period)</label><input id="tgt-orders" type="number" placeholder="e.g. 500" min="0"></div>
-      <div class="tgt-field"><label>Target Conv. Rate (%)</label><input id="tgt-cvr" type="number" placeholder="e.g. 3.0" min="0" step="0.1"></div>
+      <div class="tgt-section-label">KPI Targets</div>
+      <div class="tgt-note" style="margin-bottom:10px">Pick any KPI from the dashboard and set a target for this workspace. Progress updates live with each data refresh.</div>
+      <select class="tgt-add-select" id="tgt-add-select" onchange="flexAddTarget(this.value)">
+        <option value="">＋ Add a KPI target…</option>
+      </select>
+      <div id="tgt-rows"></div>
 
       <div class="tgt-section-label">Default Settings</div>
       <div class="tgt-field">
@@ -2686,38 +2700,191 @@
       panel.classList.toggle('open', shouldOpen);
       if (btn) btn.classList.toggle('active', shouldOpen);
     }
+    // ── FLEXIBLE KPI TARGETS ─────────────────────────────────
+    // Stored per workspace (org + agency) as agencySettings.targetsV2:
+    // [{ id: cardId, label, value, dir: 'up'|'down' }]
+    function getFlexTargets() {
+      return getAgencySettings(currentOrgId, currentAgencyId).targetsV2 || [];
+    }
+    function setFlexTargets(list) {
+      saveAgencySettings(currentOrgId, currentAgencyId, { targetsV2: list });
+    }
+    // KPIs whose label suggests "lower is better" (costs, frequency, spend)
+    function _guessDir(label) {
+      return /cost|cpm|cpc|cpl|cpe|cpr|spend|frequency/i.test(label) ? 'down' : 'up';
+    }
+    // Read the current numeric value of a rendered KPI card
+    function _kpiCurrentValue(card) {
+      const input = card.querySelector('input[type="number"]');
+      if (input) { const v = parseFloat(input.value); return isNaN(v) ? null : v; }
+      const el = card.querySelector('.kpi-value');
+      if (!el) return null;
+      const txt = (el.textContent || '').replace(/[^0-9.\-]/g, '');
+      if (!txt) return null;
+      const v = parseFloat(txt);
+      return isNaN(v) ? null : v;
+    }
+    // List every KPI currently rendered on the dashboard
+    function _availableKpis() {
+      const seen = new Set(); const out = [];
+      document.querySelectorAll('#content .kpi-card[data-card-id]').forEach(c => {
+        const id = c.dataset.cardId;
+        if (seen.has(id)) return;
+        seen.add(id);
+        const label = c.querySelector('.kpi-label')?.textContent?.trim() || id;
+        out.push({ id, label });
+      });
+      return out;
+    }
+    // Compute progress + status for a target
+    function _flexProgress(t, current) {
+      if (current == null || !t.value) return null;
+      let pct, remaining, exceeded = false;
+      if (t.dir === 'down') {
+        // lower is better: achieved when current <= target
+        pct = current > 0 ? Math.min(100, (t.value / current) * 100) : 100;
+        remaining = current - t.value;               // how much to cut
+        exceeded = current <= t.value;
+      } else {
+        pct = (current / t.value) * 100;
+        remaining = t.value - current;               // how much left
+        exceeded = current >= t.value;
+      }
+      let status, cls;
+      if (exceeded)            { status = '✓ Target achieved'; cls = 'achieved'; }
+      else if (pct >= 70)      { status = 'On track';          cls = 'ontrack'; }
+      else                     { status = 'Needs attention';   cls = 'attention'; }
+      return { pct: Math.max(0, Math.min(100, pct)), rawPct: pct, remaining, exceeded, status, cls };
+    }
+    const _fmtTgtNum = v => v == null ? '—' : Number(v).toLocaleString('en', { maximumFractionDigits: 2 });
+    function _tprogHTML(t, current, compact) {
+      const p = _flexProgress(t, current);
+      if (!p) return '<div class="tprog-meta"><span>No live data for this KPI yet</span></div>';
+      const barColor = p.cls === 'achieved' ? '#16A34A' : p.cls === 'ontrack' ? '#0573F5' : '#EF4444';
+      const remainTxt = p.exceeded
+        ? (t.dir === 'down' ? 'Under target ✓' : 'Exceeded by ' + _fmtTgtNum(Math.abs(p.remaining)))
+        : (t.dir === 'down' ? _fmtTgtNum(p.remaining) + ' over target' : _fmtTgtNum(p.remaining) + ' to go');
+      return `
+        <div class="tprog-bar"><div class="tprog-fill" style="width:${p.pct}%;background:${barColor}"></div></div>
+        <div class="tprog-meta">
+          <span>${_fmtTgtNum(current)} / ${_fmtTgtNum(t.value)} · ${Math.round(p.rawPct)}%</span>
+          <span>${compact ? '' : remainTxt + ' · '}<span class="tprog-status ${p.cls}">${p.status}</span></span>
+        </div>
+        ${compact ? `<div class="tprog-meta"><span>${remainTxt}</span></div>` : ''}`;
+    }
+
+    // Decorate rendered KPI cards with progress bars
+    function applyFlexTargets() {
+      const targets = getFlexTargets();
+      document.querySelectorAll('#content .kpi-card .kpi-tprog').forEach(el => el.remove());
+      targets.forEach(t => {
+        document.querySelectorAll(`#content .kpi-card[data-card-id="${CSS.escape(t.id)}"]`).forEach(card => {
+          const current = _kpiCurrentValue(card);
+          card.querySelector('.kpi-target')?.remove();  // remove legacy badge to avoid duplication
+          const div = document.createElement('div');
+          div.className = 'kpi-tprog';
+          div.innerHTML = `<div class="tprog-meta" style="margin-bottom:3px"><span>🎯 Target: ${_fmtTgtNum(t.value)}</span></div>` + _tprogHTML(t, current, true);
+          card.appendChild(div);
+        });
+      });
+      // live re-apply when manual-entry inputs change
+      if (!window._flexInputHooked) {
+        window._flexInputHooked = true;
+        document.getElementById('content').addEventListener('input', (e) => {
+          if (e.target.closest('.kpi-card')) {
+            clearTimeout(window._flexInputTimer);
+            window._flexInputTimer = setTimeout(applyFlexTargets, 600);
+          }
+        });
+      }
+    }
+
+    // ── Targets panel UI ──
     function loadTargetsPanel() {
       const cfg = getAgencySettings(currentOrgId, currentAgencyId);
-      const t = cfg.targets || {};
-      document.getElementById('tgt-spend').value   = t.spend   ?? '';
-      document.getElementById('tgt-revenue').value = t.revenue ?? '';
-      document.getElementById('tgt-roas').value    = t.roas    ?? '';
-      document.getElementById('tgt-cpm').value     = t.cpm     ?? '';
-      document.getElementById('tgt-cpc').value     = t.cpc     ?? '';
-      document.getElementById('tgt-ctr').value     = t.ctr     ?? '';
-      document.getElementById('tgt-cpr').value     = t.cpr     ?? '';
-      document.getElementById('tgt-orders').value  = t.orders  ?? '';
-      document.getElementById('tgt-cvr').value     = t.cvr     ?? '';
-      document.getElementById('tgt-period').value  = cfg.period ?? '';
+      document.getElementById('tgt-period').value = cfg.period ?? '';
       const agencies = getAgencies(currentOrgId);
       const agency = agencies.find(a => a.id === currentAgencyId);
       const nameEl = document.getElementById('tgt-agency-name');
       if (nameEl) nameEl.textContent = agency?.name || '';
+      renderTargetRows();
+      // populate the add-KPI dropdown from what's on screen
+      const selEl = document.getElementById('tgt-add-select');
+      const existing = new Set(getFlexTargets().map(t => t.id));
+      const kpis = _availableKpis().filter(k => !existing.has(k.id));
+      selEl.innerHTML = '<option value="">＋ Add a KPI target…</option>' +
+        (kpis.length
+          ? kpis.map(k => `<option value="${escHtml(k.id)}">${escHtml(k.label)}</option>`).join('')
+          : '<option value="" disabled>Load an account first to see available KPIs</option>');
     }
+
+    function renderTargetRows() {
+      const box = document.getElementById('tgt-rows');
+      const targets = getFlexTargets();
+      if (!targets.length) {
+        box.innerHTML = '<div class="tgt-note" style="padding:14px 0">No targets yet. Pick a KPI above to start tracking progress against client goals.</div>';
+        return;
+      }
+      // map current values from rendered cards
+      const currentById = {};
+      document.querySelectorAll('#content .kpi-card[data-card-id]').forEach(c => {
+        if (currentById[c.dataset.cardId] === undefined) currentById[c.dataset.cardId] = _kpiCurrentValue(c);
+      });
+      box.innerHTML = targets.map((t, i) => `
+        <div class="tgt-row">
+          <div class="tgt-row-head">
+            <span class="tgt-row-label">${escHtml(t.label)}</span>
+            <button class="tgt-row-del" title="Remove target" onclick="flexRemoveTarget(${i})">🗑</button>
+          </div>
+          <div class="tgt-row-inputs">
+            <input type="number" min="0" step="any" value="${t.value ?? ''}" placeholder="Target value"
+              onchange="flexUpdateTarget(${i}, 'value', parseFloat(this.value))">
+            <select onchange="flexUpdateTarget(${i}, 'dir', this.value)">
+              <option value="up" ${t.dir !== 'down' ? 'selected' : ''}>Higher = better</option>
+              <option value="down" ${t.dir === 'down' ? 'selected' : ''}>Lower = better</option>
+            </select>
+          </div>
+          <div class="tgt-row-progress">${t.value ? _tprogHTML(t, currentById[t.id] ?? null, false) : ''}</div>
+        </div>`).join('');
+    }
+
+    function flexAddTarget(cardId) {
+      if (!cardId) return;
+      const k = _availableKpis().find(x => x.id === cardId);
+      if (!k) return;
+      const targets = getFlexTargets();
+      targets.push({ id: k.id, label: k.label, value: null, dir: _guessDir(k.label) });
+      setFlexTargets(targets);
+      loadTargetsPanel();
+    }
+    function flexUpdateTarget(i, field, val) {
+      const targets = getFlexTargets();
+      if (!targets[i]) return;
+      targets[i][field] = field === 'value' ? (isNaN(val) ? null : val) : val;
+      setFlexTargets(targets);
+      renderTargetRows();
+      applyFlexTargets();
+    }
+    function flexRemoveTarget(i) {
+      const targets = getFlexTargets();
+      targets.splice(i, 1);
+      setFlexTargets(targets);
+      loadTargetsPanel();
+      applyFlexTargets();
+    }
+
     function saveTargets() {
-      const num = id => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; };
-      const targets = { spend: num('tgt-spend'), revenue: num('tgt-revenue'), roas: num('tgt-roas'), cpm: num('tgt-cpm'), cpc: num('tgt-cpc'), ctr: num('tgt-ctr'), cpr: num('tgt-cpr'), orders: num('tgt-orders'), cvr: num('tgt-cvr') };
       const period = document.getElementById('tgt-period').value || null;
-      saveAgencySettings(currentOrgId, currentAgencyId, { targets, ...(period ? { period } : {}) });
-      // Apply period immediately if set
       if (period) {
+        saveAgencySettings(currentOrgId, currentAgencyId, { period });
         currentPeriod = period;
         localStorage.setItem('dash_period', period);
         document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === period));
         document.getElementById('custom-dates')?.classList.remove('visible');
       }
+      applyFlexTargets();
       toggleTargetsPanel(false);
-      if (sel.value) loadData();
+      if (period && sel.value) loadData();
     }
 
     const PERIOD_LABELS = {
@@ -3994,6 +4161,7 @@
         _gaRecalc(); // init computed values on load
 
         initDragDrop();
+        try { applyFlexTargets(); } catch(tErr) { console.warn('[targets]', tErr); }
       } catch(e) {
         document.getElementById('content').innerHTML = `<div class="error-state">⚠️ Google Ads error:\n${e.message}</div>`;
       } finally {
@@ -4058,6 +4226,7 @@
               </tr>`).join('')}</tbody>
             </table>
           </div>` : ''}`;
+        try { applyFlexTargets(); } catch(tErr) { console.warn('[targets]', tErr); }
       } catch(e) {
         document.getElementById('content').innerHTML = `<div class="error-state">⚠️ TikTok Ads error:\n${e.message}</div>`;
       } finally {
@@ -4978,6 +5147,7 @@
 
       // Billing history (funds + transactions)
       try { renderBillingSection(d, curr.trim(), accountDbId); } catch(bErr) { console.warn('[billing]', bErr); }
+      try { applyFlexTargets(); } catch(tErr) { console.warn('[targets]', tErr); }
 
       // Auto-generate recommendations (non-blocking, Meta only)
       _recsEnabled = true;
