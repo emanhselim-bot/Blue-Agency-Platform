@@ -4023,8 +4023,18 @@
         const gaCpm    = gaImpr > 0 ? gaSpend / gaImpr * 1000 : null;
 
         // ── Restore saved leads ──
-        const _gaLeadsKey = `ga-leads-${currentOrgId||'x'}-${currentAgencyId||'x'}`;
-        const _gaStored = (() => { try { return JSON.parse(localStorage.getItem(_gaLeadsKey) || '{}'); } catch(_) { return {}; } })();
+        // Manual KPI entries are stored PER ACCOUNT — each Google Ads account
+        // keeps its own leads/prospects/budget values.
+        const _gaLeadsKey = `ga-leads-${currentOrgId||'x'}-${currentAgencyId||'x'}-${account.id}`;
+        const _gaLegacyKey = `ga-leads-${currentOrgId||'x'}-${currentAgencyId||'x'}`;
+        const _gaStored = (() => {
+          try {
+            const own = JSON.parse(localStorage.getItem(_gaLeadsKey) || 'null');
+            if (own) return own;
+            // fall back to the old shared values the first time (then saves go to the per-account key)
+            return JSON.parse(localStorage.getItem(_gaLegacyKey) || '{}');
+          } catch(_) { return {}; }
+        })();
         const _gaInit = (k) => _gaStored[k] != null ? _gaStored[k] : '';
         // GA card helper: uses "ga-" prefix on data-card-id to avoid inheriting Meta Ads hidden-card CSS rules
         const gaKpi = (color, icon, label, value, sub, valId) =>
