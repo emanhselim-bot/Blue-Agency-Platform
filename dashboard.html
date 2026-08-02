@@ -4223,30 +4223,34 @@
               </div>
             </div>
 
-            <div class="kpi-section" data-section-id="ga-keywords-best">
-              <div class="section-label">Best 10 Keywords <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Manual entry · results / competition</span></div>
-              <div class="table-wrapper">
-                <table class="data-table">
-                  <thead><tr><th class="tl" style="min-width:280px">Keyword</th><th class="tr">Results</th><th class="tr">Competition</th></tr></thead>
-                  <tbody>${Array.from({length:10}, (_, i) => `<tr>
-                    <td class="tl">${_seoInput('kw', i, 'text', 'Keyword…')}</td>
-                    <td class="tr">${_seoInput('kw', i, 'results', '0', 'number', 'right')}</td>
-                    <td class="tr">${_seoInput('kw', i, 'competition', 'High / 0.82', 'text', 'right')}</td>
-                  </tr>`).join('')}</tbody>
-                </table>
-              </div>
-            </div>
-
-            <div class="kpi-section" data-section-id="ga-cities">
-              <div class="section-label">Top Cities <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Manual entry</span></div>
-              <div class="table-wrapper">
-                <table class="data-table">
-                  <thead><tr><th class="tl" style="min-width:200px">City</th><th class="tr">Results</th></tr></thead>
-                  <tbody>${[0,1,2,3,4,5].map(i => `<tr>
-                    <td class="tl">${_seoInput('cities', i, 'text', 'City name…')}</td>
-                    <td class="tr">${_seoInput('cities', i, 'results', '0', 'number', 'right')}</td>
-                  </tr>`).join('')}</tbody>
-                </table>
+            <div class="kpi-section" data-section-id="ga-keywords-cities">
+              <div class="section-label">Best Keywords &amp; Top Cities <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Manual entry</span></div>
+              <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start">
+                <div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Best 10 Keywords</div>
+                  <div class="table-wrapper">
+                    <table class="data-table">
+                      <thead><tr><th class="tl" style="min-width:220px">Keyword</th><th class="tr">Results</th><th class="tr">Competition</th></tr></thead>
+                      <tbody>${Array.from({length:10}, (_, i) => `<tr>
+                        <td class="tl">${_seoInput('kw', i, 'text', 'Keyword…')}</td>
+                        <td class="tr">${_seoInput('kw', i, 'results', '0', 'number', 'right')}</td>
+                        <td class="tr">${_seoInput('kw', i, 'competition', 'High / 0.82', 'text', 'right')}</td>
+                      </tr>`).join('')}</tbody>
+                    </table>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Top Cities</div>
+                  <div class="table-wrapper">
+                    <table class="data-table">
+                      <thead><tr><th class="tl" style="min-width:140px">City</th><th class="tr">Results</th></tr></thead>
+                      <tbody>${Array.from({length:10}, (_, i) => `<tr>
+                        <td class="tl">${_seoInput('cities', i, 'text', 'City…')}</td>
+                        <td class="tr">${_seoInput('cities', i, 'results', '0', 'number', 'right')}</td>
+                      </tr>`).join('')}</tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
 
