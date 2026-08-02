@@ -4061,6 +4061,25 @@
         const _wpInput = (i, f, ph, type = 'text', align = 'right') =>
           `<input class="ga-wp-input" data-wp-row="${i}" data-wp-field="${f}" type="${type}" value="${_wpVal(i, f)}" placeholder="${ph}"
             style="width:100%;border:none;background:transparent;outline:none;color:var(--text-main);font-size:12px;font-family:inherit;text-align:${align};padding:2px 0">`;
+        const _seoStored = _gaStored.seo || {};
+        const _seoVal = (l, i, f) => { const v = _seoStored[l]?.[i]?.[f]; return v != null ? String(v).replace(/"/g,'&quot;') : ''; };
+        const _seoInput = (l, i, f, ph, type = 'text', align = 'left') =>
+          `<input class="ga-seo-input" data-seo-list="${l}" data-seo-row="${i}" data-seo-field="${f}" type="${type}" value="${_seoVal(l, i, f)}" placeholder="${ph}"
+            style="width:100%;border:none;background:transparent;outline:none;color:var(--text-main);font-size:12px;font-family:inherit;text-align:${align};padding:2px 0">`;
+        const _seoTable = (label, list, rows, textPh) => `
+          <div style="margin-bottom:18px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">${label}</div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead><tr><th class="tl" style="min-width:260px">Text</th><th class="tr">Results</th><th class="tr">Competition</th></tr></thead>
+                <tbody>${Array.from({length: rows}, (_, i) => `<tr>
+                  <td class="tl">${_seoInput(list, i, 'text', textPh)}</td>
+                  <td class="tr">${_seoInput(list, i, 'results', '0', 'number', 'right')}</td>
+                  <td class="tr">${_seoInput(list, i, 'competition', 'e.g. High / 0.82', 'text', 'right')}</td>
+                </tr>`).join('')}</tbody>
+              </table>
+            </div>
+          </div>`;
 
         _updateTemplateBtnLabel('google-ads');
         document.getElementById('content').innerHTML = `
@@ -4195,6 +4214,47 @@
               </div>
             </div>
 
+            <div class="kpi-section" data-section-id="ga-seo">
+              <div class="section-label">Search Performance <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Manual entry · results / competition</span></div>
+              ${_seoTable('Best 3 Meta Titles', 'mt', 3, 'Meta title…')}
+              ${_seoTable('Best 10 Keywords', 'kw', 10, 'Keyword…')}
+              ${_seoTable('Best 3 Meta Descriptions', 'md', 3, 'Meta description…')}
+            </div>
+
+            <div class="kpi-section" data-section-id="ga-cities">
+              <div class="section-label">Top Cities <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Manual entry</span></div>
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead><tr><th class="tl" style="min-width:200px">City</th><th class="tr">Results</th></tr></thead>
+                  <tbody>${[0,1,2,3,4,5].map(i => `<tr>
+                    <td class="tl">${_seoInput('cities', i, 'text', 'City name…')}</td>
+                    <td class="tr">${_seoInput('cities', i, 'results', '0', 'number', 'right')}</td>
+                  </tr>`).join('')}</tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="kpi-section" data-section-id="ga-recs">
+              <div class="section-label" style="display:flex;align-items:center;gap:10px">✦ Claude Recommendations
+                <span class="section-drag-handle" title="Drag to reorder section">⠿</span>
+                <button onclick="gaRecsGenerate()" style="margin-left:auto;background:var(--blue-light);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">↻ Regenerate</button>
+              </div>
+              <div class="recs-grid" style="grid-template-columns:repeat(3,1fr)">
+                <div class="rec-card c-blue">
+                  <div class="rec-card-header"><span class="rec-card-icon">⚙️</span><span class="rec-card-title">Campaign Technicalities</span></div>
+                  <div class="rec-card-body loading" id="ga-rec-technical">Generating…</div>
+                </div>
+                <div class="rec-card c-teal">
+                  <div class="rec-card-header"><span class="rec-card-icon">🔑</span><span class="rec-card-title">Recommended Keywords</span></div>
+                  <div class="rec-card-body loading" id="ga-rec-keywords">Generating…</div>
+                </div>
+                <div class="rec-card c-gold">
+                  <div class="rec-card-header"><span class="rec-card-icon">📝</span><span class="rec-card-title">Meta Title & Description</span></div>
+                  <div class="rec-card-body loading" id="ga-rec-meta">Generating…</div>
+                </div>
+              </div>
+            </div>
+
           </div>
           ${campaigns.length ? `
           <div class="section-label">Campaigns</div>
@@ -4292,9 +4352,60 @@
             if (wp[r] && inp.value !== '') wp[r][f] = inp.value;
           });
           if (wp.some(row => Object.keys(row).length)) s.wp = wp;
+          // SEO tables (meta titles / keywords / descriptions / cities)
+          const seo = {};
+          document.querySelectorAll('.ga-seo-input').forEach(inp => {
+            const l = inp.dataset.seoList, r = parseInt(inp.dataset.seoRow), f = inp.dataset.seoField;
+            if (!seo[l]) seo[l] = [];
+            if (!seo[l][r]) seo[l][r] = {};
+            if (inp.value !== '') seo[l][r][f] = inp.value;
+          });
+          Object.keys(seo).forEach(l => { seo[l] = seo[l].map(row => row || {}); });
+          if (Object.keys(seo).length) s.seo = seo;
           try { localStorage.setItem(_gaLeadsKey, JSON.stringify(s)); } catch(_) {}
         };
-        document.querySelectorAll('.ga-m-input, .ga-wp-input').forEach(inp => inp.addEventListener('input', _gaSave));
+        document.querySelectorAll('.ga-m-input, .ga-wp-input, .ga-seo-input').forEach(inp => inp.addEventListener('input', _gaSave));
+
+        // ── Claude recommendations for Google Ads ──
+        window.gaRecsGenerate = async () => {
+          const setAll = (txt, loading) => ['technical','keywords','meta'].forEach(k => {
+            const el = document.getElementById('ga-rec-' + k);
+            if (el) { el.textContent = txt; el.classList.toggle('loading', !!loading); }
+          });
+          setAll('Generating…', true);
+          const grab = (l) => { const st = JSON.parse(localStorage.getItem(_gaLeadsKey) || '{}'); return st.seo?.[l] || []; };
+          const ctx = {
+            platform: 'Google Ads',
+            accountName: account.account_name || account.customer_id,
+            period: currentPeriod,
+            spend: gaSpend, impressions: gaImpr, clicks: gaClicks,
+            cpc: t.cpc, ctr: t.ctr,
+            leads: document.getElementById('ga-leads-total')?.value || null,
+            campaigns: (campaigns || []).slice(0, 10).map(c => ({ name: c.name, spend: c.spend, clicks: c.clicks, ctr: c.ctr })),
+            keywords_entered: grab('kw').map(k => k.text).filter(Boolean),
+            meta_titles: grab('mt').map(k => k.text).filter(Boolean),
+            meta_descriptions: grab('md').map(k => k.text).filter(Boolean),
+            top_cities: grab('cities').map(c => ({ city: c.text, results: c.results })).filter(c => c.city),
+          };
+          const PROMPT = `You are a Google Ads and SEO expert. Analyse this Google Ads account data (including manually tracked keywords, meta titles/descriptions and top cities) and respond with ONLY a valid JSON object — no markdown fences, just raw JSON — with exactly these three keys:
+{
+  "technical": "2-3 specific recommendations about campaign technicalities: bidding strategy, budget allocation, ad scheduling, match types, negative keywords, or quality score improvements.",
+  "keywords": "Recommend 5-8 specific new keywords or keyword optimisations based on the tracked keywords and cities. Be concrete — list actual keyword suggestions.",
+  "meta": "Recommend improved meta titles and meta descriptions (give 1-2 concrete examples of each) based on the tracked ones and the account's focus."
+}`;
+          try {
+            const result = await callEdgeFunction('ai-chat', { message: PROMPT, context: ctx });
+            if (result?.error) { setAll('⚠️ ' + result.error); return; }
+            const clean = (result?.reply || '').replace(/```json|```/g, '').trim();
+            let parsed;
+            try { parsed = JSON.parse(clean); } catch { setAll('Could not parse — click Regenerate.'); return; }
+            [['technical','technical'],['keywords','keywords'],['meta','meta']].forEach(([key, id]) => {
+              const el = document.getElementById('ga-rec-' + id);
+              if (el) { el.textContent = parsed[key] || '—'; el.classList.remove('loading'); }
+            });
+          } catch (err) { setAll('⚠️ ' + (err?.message || err)); }
+        };
+        gaRecsGenerate(); // auto-generate on load (non-blocking)
         document.getElementById('ga-leads-total')?.addEventListener('input', () => { _gaRecalc(); _gaSave(); });
         document.getElementById('ga-daily-budget-input')?.addEventListener('input', _gaSave);
         ['prospects','suppliers','job'].forEach(k => {
