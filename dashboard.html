@@ -7830,8 +7830,6 @@
                 <div class="cp-tcard">
                   <div class="cp-stage-head">
                     <span class="cp-stage-name">${escHtml(st.stage || 'Stage')}</span>
-                    <input type="date" class="cp-date ${st.date ? '' : 'empty'}" value="${st.date || ''}" title="Stage deadline"
-                      onchange="cpSetStageDate(${si}, this.value)">
                     <span class="cp-stage-prog">${d}/${items.length}</span>
                     <button class="cp-btn ghost" onclick="cpAddItem(${si})">＋</button>
                     <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
@@ -7839,8 +7837,6 @@
                   ${items.length ? items.map((it, ii) => `
                     <div class="cp-item ${it.status === 'done' ? 'done' : ''}">
                       <span class="cp-item-name">${escHtml(it.name)}</span>
-                      <input type="date" class="cp-date cp-item-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Due date"
-                        onchange="cpSetItemDate(${si}, ${ii}, this.value)">
                       <button class="cp-status ${it.status || 'pending'}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[it.status || 'pending']}</button>
                       <button class="cp-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
                     </div>`).join('')
@@ -7854,16 +7850,6 @@
     }
 
     function cpSetMonth(m) { _cpMonth = m; _cpMapPickerOpen = false; renderClientProfile(); }
-    function cpSetStageDate(si, val) {
-      const proc = JSON.parse(JSON.stringify(_cpProc()));
-      proc[si].date = val || '';
-      _cpSaveProc(proc);
-    }
-    function cpSetItemDate(si, ii, val) {
-      const proc = JSON.parse(JSON.stringify(_cpProc()));
-      proc[si].items[ii].date = val || '';
-      _cpSaveProc(proc);
-    }
     function cpCopyPrevMonth() {
       const prev = _cpShiftMonth(_cpMonth, -1);
       const src = _cpAllMonths()[prev];
