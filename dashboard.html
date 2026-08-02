@@ -313,6 +313,14 @@
     .cp-mchip:hover { border-color: #0573F5; color: #0573F5; }
     .cp-mchip.active { background: #0573F5; color: #fff; border-color: #0573F5; }
     .cp-mchip.has { color: #0A1CA3; border-color: #A9C7F5; }
+    .cp-mapgroup { margin-bottom: 20px; }
+    .cp-maphead { display: flex; align-items: center; gap: 9px; background: #EAF2FE; border: 1px solid #C9DDF9; border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; }
+    .cp-mapname { font-size: 12.5px; font-weight: 800; color: #0A1CA3; flex: 1; }
+    .cp-mapprog { font-size: 11px; font-weight: 700; color: #0557D9; }
+    [data-theme="dark"] .cp-maphead { background: #16294A; border-color: #1E3A8A; }
+    [data-theme="dark"] .cp-mapname { color: #BFDBFE; }
+    [data-theme="dark"] .cp-mapprog { color: #93C5FD; }
+
     /* timeline */
     .cp-timeline { position: relative; padding-left: 34px; }
     .cp-timeline::before { content: ''; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(#0573F5, #A9C7F5); border-radius: 2px; }
@@ -1459,6 +1467,7 @@
         <input class="hub-input" id="pm-value" type="number" min="0" placeholder="0" style="flex:1">
         <select class="hub-input" id="pm-currency" style="width:90px"><option>EGP</option><option>USD</option><option>SAR</option><option>AED</option></select>
       </div>
+      <label>STARTING DATE</label><input class="hub-input" id="pm-start" type="date">
       <label>STAGE</label>
       <select class="hub-input" id="pm-stage">
         <option value="lead">🔍 Lead</option><option value="contacted">📞 Contacted</option>
@@ -7740,6 +7749,7 @@
             <div class="cp-meta">
               ${c.contact ? escHtml(c.contact) + ' · ' : ''}
               ${Number(c.value) ? _fmtMoney(c.value, c.currency) + '/mo · ' : ''}
+              ${c.start_date ? 'Started ' + new Date(c.start_date + 'T00:00:00').toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' : ''}
               Stage: <strong>${escHtml((PIPE_STAGES.find(p => p[0] === c.stage) || ['', c.stage])[1])}</strong>
             </div>
           </div>
@@ -7795,7 +7805,7 @@
                 return months.map(m => {
                   const has = (_cpAllMonths()[m] || []).length;
                   const [yy, mm] = m.split('-');
-                  return `<button class="cp-mchip ${m === _cpMonth ? 'active' : (has ? 'has' : '')}" onclick="cpSetMonth('${m}')">${CP_MONTH_NAMES[+mm-1].slice(0,3)} ${yy.slice(2)}${has ? ' ·' + has : ''}</button>`;
+                  return `<button class="cp-mchip ${m === _cpMonth ? 'active' : (has ? 'has' : '')}" title="${CP_MONTH_NAMES[+mm-1]} ${yy}" onclick="cpSetMonth('${m}')">${CP_MONTH_NAMES[+mm-1].slice(0,3)}${has ? ' ·' + has : ''}</button>`;
                 }).join('');
               })()}
             </div>
@@ -7818,15 +7828,33 @@
 
           ${allItems.length ? `<div class="cp-bar" style="margin-bottom:16px"><div class="cp-bar-fill" style="width:${pct}%"></div></div>` : ''}
 
-          ${proc.length ? `<div class="cp-timeline">
-            ${proc.map((st, si) => {
+          ${proc.length ? (() => {
+            // group stages by their source map so a client can run several maps at once
+            const groups = [];
+            proc.forEach((st, si) => {
+              const key = st.map || 'Custom stages';
+              let g = groups.find(x => x.name === key);
+              if (!g) { g = { name: key, stages: [] }; groups.push(g); }
+              g.stages.push({ st, si });
+            });
+            return groups.map(g => {
+              const gItems = g.stages.flatMap(x => x.st.items || []);
+              const gDone = gItems.filter(i => i.status === 'done').length;
+              return `<div class="cp-mapgroup">
+                <div class="cp-maphead">
+                  <span class="cp-mapname">🗺 ${escHtml(g.name)}</span>
+                  <span class="cp-mapprog">${gDone}/${gItems.length} · ${gItems.length ? Math.round(gDone / gItems.length * 100) : 0}%</span>
+                  <button class="cp-del" title="Remove this map" onclick="cpRemoveMap('${g.name.replace(/'/g, "\\'")}')">🗑</button>
+                </div>
+                <div class="cp-timeline">
+                ${g.stages.map(({ st, si }, gi) => {
               const items = st.items || [];
               const d = items.filter(i => i.status === 'done').length;
               const allDone = items.length > 0 && d === items.length;
               const started = d > 0 || items.some(i => i.status === 'in_progress');
               const cls = allDone ? 'done' : (started ? 'active' : '');
               return `<div class="cp-tstage ${cls}">
-                <div class="cp-tdot">${allDone ? '✓' : si + 1}</div>
+                <div class="cp-tdot">${allDone ? '✓' : gi + 1}</div>
                 <div class="cp-tcard">
                   <div class="cp-stage-head">
                     <span class="cp-stage-name">${escHtml(st.stage || 'Stage')}</span>
@@ -7843,8 +7871,11 @@
                   : '<div class="cp-empty">No deliverables in this stage yet.</div>'}
                 </div>
               </div>`;
-            }).join('')}
-          </div>`
+                }).join('')}
+                </div>
+              </div>`;
+            }).join('');
+          })()
           : `<div class="cp-empty">No process for <strong>${_cpMonthLabel(_cpMonth)}</strong> yet — click <strong>🗺 Load map</strong> to add a workflow, or <strong>⧉ Copy last month</strong> to reuse the previous month's plan.</div>`}
         </div>`;
     }
@@ -7857,8 +7888,8 @@
       if (_cpProc().length && !confirm('This month already has stages. Add a copy of ' + _cpMonthLabel(prev) + ' anyway?')) return;
       // copy structure, reset statuses and dates
       const copy = JSON.parse(JSON.stringify(src)).map(st => ({
-        stage: st.stage, date: '',
-        items: (st.items || []).map(it => ({ name: it.name, status: 'pending', date: '' })),
+        map: st.map || 'Custom stages', stage: st.stage,
+        items: (st.items || []).map(it => ({ name: it.name, status: 'pending' })),
       }));
       _cpSaveProc([..._cpProc(), ...copy]);
     }
@@ -7868,13 +7899,20 @@
       const tpl = CP_MAPS[key];
       if (!tpl) return;
       const existing = _cpProc();
-      const existingNames = new Set(existing.map(st => st.stage));
-      const added = tpl
-        .filter(st => !existingNames.has(st.stage))
-        .map(st => ({ stage: st.stage, date: '', items: st.items.map(n => ({ name: n, status: 'pending', date: '' })) }));
-      if (!added.length) { alert('This map is already loaded for this month.'); return; }
+      const already = existing.some(st => (st.map || '') === key);
+      if (already && !confirm(`"${key}" is already loaded for ${_cpMonthLabel(_cpMonth)}. Add another copy?`)) return;
+      const label = already ? `${key} (${existing.filter(st => (st.map || '').startsWith(key)).length ? '2' : '2'})` : key;
+      const added = tpl.map(st => ({
+        map: label,
+        stage: st.stage,
+        items: st.items.map(n => ({ name: n, status: 'pending' })),
+      }));
       _cpMapPickerOpen = false;
       _cpSaveProc([...existing, ...added]);
+    }
+    function cpRemoveMap(mapName) {
+      if (!confirm(`Remove the "${mapName}" map and all its stages for ${_cpMonthLabel(_cpMonth)}?`)) return;
+      _cpSaveProc(_cpProc().filter(st => (st.map || 'Custom stages') !== mapName));
     }
 
     function cpTogglePicker() { _cpPickerOpen = !_cpPickerOpen; renderClientProfile(); }
@@ -7896,7 +7934,7 @@
     function cpAddStage() {
       const name = prompt('Stage name (e.g. Onboarding, Campaign Setup, Launch, Reporting):');
       if (!name?.trim()) return;
-      _cpSaveProc([..._cpProc(), { stage: name.trim(), date: '', items: [] }]);
+      _cpSaveProc([..._cpProc(), { map: 'Custom stages', stage: name.trim(), items: [] }]);
     }
     function cpRemoveStage(si) {
       if (!confirm('Delete this stage and its deliverables?')) return;
@@ -7930,6 +7968,7 @@
       document.getElementById('pm-contact').value = c?.contact || '';
       document.getElementById('pm-value').value = c?.value || '';
       document.getElementById('pm-currency').value = c?.currency || 'EGP';
+      document.getElementById('pm-start').value = c?.start_date || '';
       document.getElementById('pm-stage').value = c?.stage || 'lead';
       document.getElementById('pm-notes').value = c?.notes || '';
       document.getElementById('pm-delete').style.display = c ? '' : 'none';
@@ -7947,6 +7986,7 @@
         contact: document.getElementById('pm-contact').value.trim() || null,
         value: Number(document.getElementById('pm-value').value) || 0,
         currency: document.getElementById('pm-currency').value,
+        start_date: document.getElementById('pm-start').value || null,
         stage: document.getElementById('pm-stage').value,
         notes: document.getElementById('pm-notes').value.trim() || null,
         updated_at: new Date().toISOString()
