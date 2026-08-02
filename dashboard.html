@@ -7489,6 +7489,110 @@
       'AI Reels', 'UGC Video', 'Video Editing', 'Voice over',
       'Influencer Campaign', 'Models', 'Equipment Renting', 'Studio renting',
     ];
+    // ── Process map templates (one per service) ──
+    const CP_MAPS = {
+      'Monthly content calendar': [
+        { stage: '🚀 Onboarding', items: ['New Client', 'Quotation Sent', 'Quotation Approved', 'Contract Signed', 'Partial Payment Received', 'WhatsApp/Slack Group Created', 'Kickoff Meeting', 'Assets & Access Received'] },
+        { stage: '🔍 Strategy Phase', items: ['Brand Analysis', 'Competitor Analysis', 'Content Strategy', 'Monthly Content Plan', '👤 Client Approval — Plan', '✏️ Plan Revisions (if needed)'] },
+        { stage: '✍️ Copywriting', items: ['Copywriting', '👤 Copy Approval', '✏️ Copy Edits (if needed)'] },
+        { stage: '🎨 Design', items: ['Design', '👤 Design Approval', '✏️ Design Edits (if needed)'] },
+        { stage: '📤 Delivery', items: ['Final Delivery', '👤 Final Client Review', '🔄 Final Edits (if needed)'] },
+        { stage: '🚀 Publishing', items: ['Scheduling', 'Publishing', 'Community Management'] },
+        { stage: '📈 Reporting', items: ['Monthly Reporting', 'Next Month Planning'] },
+      ],
+      'Meta Ads': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Payment Received', 'Business Manager Access', 'Ad Account & Pixel Access', 'Kickoff Meeting'] },
+        { stage: '🔍 Strategy', items: ['Brand & Offer Analysis', 'Competitor Analysis', 'Audience Research', 'Funnel & Campaign Structure', 'Budget Plan', '👤 Client Approval'] },
+        { stage: '🎨 Creative', items: ['Creative Brief', 'Copywriting', 'Design / Video Production', '👤 Creative Approval'] },
+        { stage: '⚙️ Setup', items: ['Pixel & Conversions API Check', 'Audience Building', 'Campaign Build', 'QA Before Launch'] },
+        { stage: '📈 Optimization', items: ['Launch', 'Daily Monitoring', 'A/B Testing', 'Weekly Optimization', 'Scaling Winners'] },
+        { stage: '📊 Reporting', items: ['Weekly Update', 'Monthly Report', 'Next Month Planning'] },
+      ],
+      'Google Ads': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Payment Received', 'Google Ads Access', 'GA4 & Conversion Tracking Access', 'Kickoff Meeting'] },
+        { stage: '🔍 Strategy', items: ['Business & Offer Analysis', 'Competitor Analysis', 'Keyword Research', 'Campaign Structure Plan', 'Budget & Bidding Strategy', '👤 Client Approval'] },
+        { stage: '⚙️ Setup', items: ['Conversion Tracking Setup', 'Keyword & Negative Lists', 'Ad Copy Writing', 'Extensions & Assets', 'Landing Page Review', 'QA Before Launch'] },
+        { stage: '📈 Optimization', items: ['Launch', 'Search Terms Review', 'Bid & Budget Adjustments', 'A/B Ad Testing', 'Quality Score Improvements'] },
+        { stage: '📊 Reporting', items: ['Weekly Update', 'Monthly Report', 'Next Month Planning'] },
+      ],
+      'TikTok Ads': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Payment Received', 'TikTok Business Center Access', 'Pixel Access', 'Kickoff Meeting'] },
+        { stage: '🔍 Strategy', items: ['Audience & Trend Research', 'Competitor Analysis', 'Campaign Structure', 'Budget Plan', '👤 Client Approval'] },
+        { stage: '🎬 Creative', items: ['Hook & Script Writing', 'UGC / Video Production', 'Editing', '👤 Creative Approval'] },
+        { stage: '⚙️ Setup & Launch', items: ['Pixel & Events Check', 'Campaign Build', 'QA', 'Launch'] },
+        { stage: '📈 Optimization', items: ['Daily Monitoring', 'Creative Refresh', 'Scaling Winners'] },
+        { stage: '📊 Reporting', items: ['Monthly Report', 'Next Month Planning'] },
+      ],
+      'Website development': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Partial Payment Received', 'Kickoff Meeting', 'Brand Assets & Access Received'] },
+        { stage: '🔍 Discovery', items: ['Requirements Gathering', 'Competitor Benchmark', 'Sitemap & User Flow', '👤 Client Approval'] },
+        { stage: '🎨 Design', items: ['Wireframes', 'UI Design', '👤 Design Approval', '✏️ Design Revisions'] },
+        { stage: '💻 Development', items: ['Frontend Build', 'Backend / CMS Setup', 'Content Upload', 'Responsive & Speed Optimisation', 'SEO Basics'] },
+        { stage: '✅ QA & Launch', items: ['Cross-browser Testing', 'Client UAT', 'Final Payment', 'Domain & Hosting Setup', 'Go Live'] },
+        { stage: '🔧 Post-launch', items: ['Handover & Training', 'Maintenance Period', 'Performance Report'] },
+      ],
+      'Brand Identity': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Payment Received', 'Kickoff Meeting', 'Brand Questionnaire'] },
+        { stage: '🔍 Discovery', items: ['Brand Analysis', 'Competitor Analysis', 'Positioning & Tone of Voice', 'Moodboard', '👤 Client Approval'] },
+        { stage: '🎨 Concepts', items: ['Logo Concepts', '👤 Concept Selection', '✏️ Refinements'] },
+        { stage: '📐 System', items: ['Colour Palette', 'Typography', 'Iconography & Patterns', 'Application Mockups'] },
+        { stage: '📤 Delivery', items: ['Brand Guidelines Document', 'Final Files Package', 'Handover Meeting'] },
+      ],
+      'SEO': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Payment Received', 'Search Console & GA4 Access', 'Kickoff Meeting'] },
+        { stage: '🔍 Audit', items: ['Technical SEO Audit', 'Competitor Analysis', 'Keyword Research', 'Content Gap Analysis', '👤 Strategy Approval'] },
+        { stage: '⚙️ On-page', items: ['Meta Titles & Descriptions', 'Heading Structure', 'Internal Linking', 'Image Optimisation', 'Schema Markup'] },
+        { stage: '🔧 Technical', items: ['Site Speed Fixes', 'Mobile Usability', 'Crawl & Index Fixes', 'Sitemap & Robots'] },
+        { stage: '✍️ Content', items: ['Content Calendar', 'Article Writing', 'Publishing', 'Content Refresh'] },
+        { stage: '📊 Reporting', items: ['Ranking Report', 'Traffic Report', 'Monthly Report', 'Next Month Planning'] },
+      ],
+      'Media Production': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Partial Payment Received', 'Kickoff Meeting'] },
+        { stage: '📝 Pre-production', items: ['Creative Brief', 'Concept & Treatment', 'Script Writing', '👤 Script Approval', 'Storyboard', 'Shot List', 'Location & Talent Booking', 'Equipment Booking', 'Call Sheet'] },
+        { stage: '🎬 Production', items: ['Shoot Day', 'Footage Backup', 'Client Review on Set'] },
+        { stage: '✂️ Post-production', items: ['Rough Cut', '👤 Rough Cut Approval', 'Colour Grading', 'Sound Design & Voice Over', 'Motion Graphics', 'Final Cut', '👤 Final Approval'] },
+        { stage: '📤 Delivery', items: ['Export Deliverables', 'Final Payment', 'File Handover'] },
+      ],
+      'Photography': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Payment Received', 'Kickoff Meeting'] },
+        { stage: '📝 Pre-shoot', items: ['Creative Brief', 'Moodboard', 'Shot List', 'Location / Studio Booking', 'Talent & Styling', '👤 Client Approval'] },
+        { stage: '📸 Shoot', items: ['Shoot Day', 'On-set Selects', 'Backup'] },
+        { stage: '✨ Post', items: ['Image Selection', '👤 Selection Approval', 'Retouching', '👤 Final Approval'] },
+        { stage: '📤 Delivery', items: ['Export in Required Formats', 'Final Payment', 'File Handover'] },
+      ],
+      'Influencer Campaign': [
+        { stage: '🚀 Onboarding', items: ['Quotation Approved', 'Contract Signed', 'Payment Received', 'Kickoff Meeting'] },
+        { stage: '🔍 Planning', items: ['Campaign Objectives', 'Influencer Research & Shortlist', '👤 Client Approval of List', 'Negotiation & Contracts', 'Content Brief'] },
+        { stage: '🎬 Content', items: ['Influencer Content Creation', '👤 Content Approval', 'Revisions'] },
+        { stage: '🚀 Live', items: ['Publishing Schedule', 'Go Live', 'Engagement Monitoring', 'Amplification / Whitelisting'] },
+        { stage: '📊 Reporting', items: ['Performance Tracking', 'Campaign Report', 'Learnings & Next Steps'] },
+      ],
+      'Monthly report': [
+        { stage: '📊 Data Collection', items: ['Pull Ads Data', 'Pull Analytics Data', 'Pull Social Data', 'Collect Client Inputs'] },
+        { stage: '🔍 Analysis', items: ['Performance vs Targets', 'Channel Breakdown', 'Creative Performance', 'Insights & Learnings'] },
+        { stage: '📄 Report', items: ['Build Report', 'Internal Review', '👤 Client Presentation', 'Action Plan for Next Month'] },
+      ],
+    };
+    const CP_MAP_ALIASES = {
+      'Content Strategy': 'Monthly content calendar',
+      'Content writing': 'Monthly content calendar',
+      'Scheduling and Posting': 'Monthly content calendar',
+      'Designing': 'Monthly content calendar',
+      'Reel Creation': 'Media Production',
+      'Lifestyle video': 'Media Production',
+      'Video Editing': 'Media Production',
+      'Script writing': 'Media Production',
+      'AI Reels': 'Media Production',
+      'UGC Video': 'Media Production',
+      'Voice over': 'Media Production',
+      'Motion Graphics': 'Media Production',
+      'Studio renting': 'Photography',
+      'Equipment Renting': 'Media Production',
+      'Models': 'Photography',
+      'Digital Consultation': 'Monthly report',
+    };
+    let _cpMapPickerOpen = false;
+
     let _cpPickerOpen = false;
 
     function _cpSvc()  { return Array.isArray(_cpClient?.services) ? _cpClient.services : []; }
@@ -7557,8 +7661,23 @@
           <div class="cp-sec-head">
             <span class="cp-sec-title">Process &amp; deliverables</span>
             <span class="cp-stage-prog">${doneCount}/${allItems.length} done</span>
-            <button class="cp-btn" onclick="cpAddStage()">＋ Add stage</button>
+            <button class="cp-btn" onclick="cpToggleMapPicker()">${_cpMapPickerOpen ? '✓ Close' : '🗺 Load map'}</button>
+            <button class="cp-btn ghost" onclick="cpAddStage()">＋ Stage</button>
           </div>
+          ${_cpMapPickerOpen ? `
+            <div class="cp-picker">
+              <div style="font-size:11px;color:#6B7280;margin-bottom:9px">Pick a process map — its stages and deliverables are added to this client. You can load more than one and edit everything after.</div>
+              ${(() => {
+                const svc = _cpSvc();
+                const suggested = [...new Set(svc.map(x => CP_MAPS[x] ? x : CP_MAP_ALIASES[x]).filter(Boolean))];
+                const others = Object.keys(CP_MAPS).filter(k => !suggested.includes(k));
+                const btn = (k, hot) => `<button class="cp-btn ${hot ? '' : 'ghost'}" style="margin:0 6px 6px 0" onclick="cpLoadMap('${k.replace(/'/g, "\\'")}')">${escHtml(k)} <span style="opacity:.7;font-weight:600">· ${CP_MAPS[k].length} stages</span></button>`;
+                return (suggested.length
+                    ? `<div style="font-size:10px;font-weight:800;letter-spacing:1px;color:#0573F5;margin-bottom:6px">FOR THIS CLIENT'S SERVICES</div><div style="margin-bottom:12px">${suggested.map(k => btn(k, true)).join('')}</div>`
+                    : '')
+                  + `<div style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6B7280;margin-bottom:6px">ALL MAPS</div><div>${others.map(k => btn(k, false)).join('')}</div>`;
+              })()}
+            </div>` : ''}
           ${allItems.length ? `<div class="cp-bar"><div class="cp-bar-fill" style="width:${pct}%"></div></div>` : ''}
           <div style="margin-top:12px">
             ${proc.length ? proc.map((st, si) => {
@@ -7580,9 +7699,23 @@
                 : '<div class="cp-empty">No deliverables in this stage yet.</div>'}
               </div>`;
             }).join('')
-            : '<div class="cp-empty">No process yet. Add a stage (e.g. Onboarding, Setup, Launch, Reporting) and list the deliverables inside it.</div>'}
+            : '<div class="cp-empty">No process yet — click <strong>🗺 Load map</strong> to add a ready-made workflow for this client\'s services, or add a stage manually.</div>'}
           </div>
         </div>`;
+    }
+
+    function cpToggleMapPicker() { _cpMapPickerOpen = !_cpMapPickerOpen; renderClientProfile(); }
+    function cpLoadMap(key) {
+      const tpl = CP_MAPS[key];
+      if (!tpl) return;
+      const existing = _cpProc();
+      const existingNames = new Set(existing.map(st => st.stage));
+      const added = tpl
+        .filter(st => !existingNames.has(st.stage))
+        .map(st => ({ stage: st.stage, items: st.items.map(n => ({ name: n, status: 'pending' })) }));
+      if (!added.length) { alert('This map is already loaded for this client.'); return; }
+      _cpMapPickerOpen = false;
+      _cpSave({ process: [...existing, ...added] });
     }
 
     function cpTogglePicker() { _cpPickerOpen = !_cpPickerOpen; renderClientProfile(); }
