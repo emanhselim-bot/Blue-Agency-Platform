@@ -280,6 +280,14 @@
     .cp-chip button { background: none; border: none; cursor: pointer; color: #7C90AE; font-size: 12px; line-height: 1; }
     .cp-chip button:hover { color: #DC2626; }
     .cp-empty { font-size: 12px; color: #9AA4B2; padding: 6px 0; }
+    .cp-picker { border: 1px solid #E4E9F2; border-radius: 12px; padding: 14px; background: #FAFBFE; margin-bottom: 12px; }
+    .cp-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+    .cp-opt { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: #111827; transition: background .12s; }
+    .cp-opt:hover { background: #EAF2FE; }
+    .cp-opt input { accent-color: #0573F5; cursor: pointer; width: 15px; height: 15px; }
+    .cp-picker-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #E4E9F2; }
+    .cp-picker-foot input[type=text] { flex: 1; padding: 6px 10px; border: 1px solid #D6DEE9; border-radius: 7px; font-size: 12px; font-family: inherit; }
+
     /* process map */
     .cp-stage { border: 1px solid #E4E9F2; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; background: #FAFBFE; }
     .cp-stage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -7472,6 +7480,17 @@
       renderClientProfile();
     }
 
+    const CP_SERVICE_OPTIONS = [
+      'Website development', 'Brand Identity', 'Digital Consultation',
+      'Meta Ads', 'Google Ads', 'TikTok Ads', 'SEO',
+      'Monthly report', 'Content Strategy', 'Content writing',
+      'Designing', 'Scheduling and Posting', 'Motion Graphics', 'Photography',
+      'Lifestyle video', 'Media Production', 'Reel Creation', 'Script writing',
+      'AI Reels', 'UGC Video', 'Video Editing', 'Voice over',
+      'Influencer Campaign', 'Models', 'Equipment Renting', 'Studio renting',
+    ];
+    let _cpPickerOpen = false;
+
     function _cpSvc()  { return Array.isArray(_cpClient?.services) ? _cpClient.services : []; }
     function _cpProc() { return Array.isArray(_cpClient?.process)  ? _cpClient.process  : []; }
 
@@ -7510,12 +7529,27 @@
         <div class="cp-sec">
           <div class="cp-sec-head">
             <span class="cp-sec-title">Services we deliver</span>
-            <button class="cp-btn" onclick="cpAddService()">＋ Add service</button>
+            <span class="cp-stage-prog">${_cpSvc().length} selected</span>
+            <button class="cp-btn" onclick="cpTogglePicker()">${_cpPickerOpen ? '✓ Done' : '＋ Select services'}</button>
           </div>
+          ${_cpPickerOpen ? `
+            <div class="cp-picker">
+              <div class="cp-picker-grid">
+                ${CP_SERVICE_OPTIONS.map(opt => `
+                  <label class="cp-opt">
+                    <input type="checkbox" ${_cpSvc().includes(opt) ? 'checked' : ''} onchange="cpToggleService('${opt.replace(/'/g, "\\'")}', this.checked)">
+                    <span>${escHtml(opt)}</span>
+                  </label>`).join('')}
+              </div>
+              <div class="cp-picker-foot">
+                <input type="text" id="cp-custom-svc" placeholder="Other service…" onkeydown="if(event.key==='Enter')cpAddCustomService()">
+                <button class="cp-btn ghost" onclick="cpAddCustomService()">＋ Add</button>
+              </div>
+            </div>` : ''}
           <div class="cp-services">
             ${_cpSvc().length
               ? _cpSvc().map((sv, i) => `<span class="cp-chip">${escHtml(sv)}<button onclick="cpRemoveService(${i})" title="Remove">✕</button></span>`).join('')
-              : '<div class="cp-empty">No services yet — add what your agency delivers for this client.</div>'}
+              : '<div class="cp-empty">No services yet — click “Select services” to choose what we deliver for this client.</div>'}
           </div>
         </div>
 
@@ -7551,10 +7585,17 @@
         </div>`;
     }
 
-    function cpAddService() {
-      const name = prompt('Service name (e.g. Meta Ads management, SEO, Creative production):');
-      if (!name?.trim()) return;
-      _cpSave({ services: [..._cpSvc(), name.trim()] });
+    function cpTogglePicker() { _cpPickerOpen = !_cpPickerOpen; renderClientProfile(); }
+    function cpToggleService(name, checked) {
+      const cur = _cpSvc();
+      const next = checked ? [...cur, name] : cur.filter(x => x !== name);
+      _cpSave({ services: [...new Set(next)] });
+    }
+    function cpAddCustomService() {
+      const el = document.getElementById('cp-custom-svc');
+      const name = el?.value.trim();
+      if (!name) return;
+      _cpSave({ services: [...new Set([..._cpSvc(), name])] });
     }
     function cpRemoveService(i) {
       const list = [..._cpSvc()]; list.splice(i, 1);
