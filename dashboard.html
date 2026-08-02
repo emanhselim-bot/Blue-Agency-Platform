@@ -263,6 +263,41 @@
     .fin-act-btn { background: none; border: 1px solid #D6DEE9; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; margin-right: 6px; }
     .fin-act-btn:hover { background: #F3F6FB; }
     .fin-empty { padding: 40px; text-align: center; color: #6B7280; font-size: 14px; }
+    /* client profile view */
+    .cp-wrap { background: rgba(255,255,255,.97); border-radius: 18px; padding: 26px 28px 30px; box-shadow: 0 8px 30px rgba(0,0,0,.25); text-align: left; max-height: 78vh; overflow-y: auto; }
+    .cp-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 6px; }
+    .cp-name { font-size: 22px; font-weight: 800; color: #0A1CA3; flex: 1; }
+    .cp-meta { font-size: 12px; color: #6B7280; margin-bottom: 20px; }
+    .cp-sec { margin-top: 22px; }
+    .cp-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .cp-sec-title { font-size: 12px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: #6B7280; flex: 1; }
+    .cp-btn { background: #0573F5; color: #fff; border: none; padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; }
+    .cp-btn:hover { background: #083BBF; }
+    .cp-btn.ghost { background: none; color: #0573F5; border: 1.5px solid #D6DEE9; }
+    .cp-btn.ghost:hover { background: #EAF2FE; }
+    .cp-services { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cp-chip { display: inline-flex; align-items: center; gap: 6px; background: #EAF2FE; color: #0557D9; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 700; }
+    .cp-chip button { background: none; border: none; cursor: pointer; color: #7C90AE; font-size: 12px; line-height: 1; }
+    .cp-chip button:hover { color: #DC2626; }
+    .cp-empty { font-size: 12px; color: #9AA4B2; padding: 6px 0; }
+    /* process map */
+    .cp-stage { border: 1px solid #E4E9F2; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; background: #FAFBFE; }
+    .cp-stage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .cp-stage-name { font-size: 13px; font-weight: 800; color: #111827; flex: 1; }
+    .cp-stage-prog { font-size: 11px; color: #6B7280; font-weight: 700; }
+    .cp-item { display: flex; align-items: center; gap: 9px; padding: 6px 0; border-top: 1px solid #EEF1F6; }
+    .cp-item:first-of-type { border-top: none; }
+    .cp-item-name { flex: 1; font-size: 13px; color: #111827; }
+    .cp-item.done .cp-item-name { text-decoration: line-through; color: #9AA4B2; }
+    .cp-status { border: 1px solid #D6DEE9; border-radius: 20px; padding: 2px 10px; font-size: 10px; font-weight: 800; cursor: pointer; background: #fff; }
+    .cp-status.pending { color: #6B7280; }
+    .cp-status.in_progress { color: #B45309; background: #FEF3C7; border-color: #FDE68A; }
+    .cp-status.done { color: #15803D; background: #DCFCE7; border-color: #BBF7D0; }
+    .cp-del { background: none; border: none; cursor: pointer; opacity: .45; font-size: 12px; }
+    .cp-del:hover { opacity: 1; }
+    .cp-bar { height: 5px; background: #E9EDF5; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+    .cp-bar-fill { height: 100%; background: #16A34A; border-radius: 4px; transition: width .3s; }
+
     /* hub modal */
     .hub-modal { position: fixed; inset: 0; background: rgba(10,20,60,.55); z-index: 9500; display: flex; align-items: center; justify-content: center; }
     .hub-modal.hidden { display: none; }
@@ -1290,6 +1325,13 @@
           <button class="hub-mod-btn" onclick="openPipeModal()">＋ Add client</button>
         </div>
         <div class="pipe-board" id="pipe-board"><div class="hub-loading">Loading…</div></div>
+      </div>
+      <div id="hub-client-view" style="display:none">
+        <div class="hub-mod-head">
+          <button class="hub-mod-back" onclick="hubShowView('pipeline')">← Pipeline</button>
+          <h2 id="cp-title">Client</h2>
+        </div>
+        <div class="cp-wrap" id="cp-body"></div>
       </div>
       <div id="hub-finance-view" style="display:none">
         <div class="hub-mod-head">
@@ -7391,8 +7433,10 @@
           '<div class="pipe-col-head">' + label + ' <span class="pipe-count">' + cards.length + '</span></div>' +
           '<div class="pipe-col-total">' + (cards.length ? _sumByCur(cards) + ' /mo' : '') + '</div>' +
           cards.map(c =>
-            '<div class="pipe-card" draggable="true" ondragstart="event.dataTransfer.setData(\'text/plain\',\'' + c.id + '\')" onclick="openPipeModal(\'' + c.id + '\')">' +
-            '<div class="pipe-card-name">' + _hubEsc(c.name) + '</div>' +
+            '<div class="pipe-card" draggable="true" ondragstart="event.dataTransfer.setData(\'text/plain\',\'' + c.id + '\')" onclick="openClientProfile(\'' + c.id + '\')">' +
+            '<div class="pipe-card-name">' + _hubEsc(c.name) +
+              '<button title="Edit details" onclick="event.stopPropagation();openPipeModal(\'' + c.id + '\')" style="float:right;background:none;border:none;cursor:pointer;opacity:.45;font-size:12px">✎</button>' +
+            '</div>' +
             (c.contact ? '<div class="pipe-card-sub">' + _hubEsc(c.contact) + '</div>' : '') +
             (Number(c.value) ? '<div class="pipe-card-val">' + _fmtMoney(c.value, c.currency) + ' /mo</div>' : '') +
             '</div>').join('') +
@@ -7410,6 +7454,139 @@
       renderPipeline();
       const { error } = await sb.from('pipeline_clients').update({ stage, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) { alert('Could not move card: ' + error.message); loadPipeline(); }
+    }
+
+    // ── CLIENT PROFILE (services + process/deliverables map) ──
+    let _cpClient = null;
+    const CP_STATUS = ['pending', 'in_progress', 'done'];
+    const CP_STATUS_LABEL = { pending: 'Not started', in_progress: 'In progress', done: '✓ Done' };
+
+    async function openClientProfile(id) {
+      _cpClient = _pipeClients.find(c => c.id === id) || null;
+      if (!_cpClient) {
+        const { data } = await sb.from('pipeline_clients').select('*').eq('id', id).single();
+        _cpClient = data;
+      }
+      if (!_cpClient) return;
+      hubShowView('client');
+      renderClientProfile();
+    }
+
+    function _cpSvc()  { return Array.isArray(_cpClient?.services) ? _cpClient.services : []; }
+    function _cpProc() { return Array.isArray(_cpClient?.process)  ? _cpClient.process  : []; }
+
+    async function _cpSave(patch) {
+      Object.assign(_cpClient, patch);
+      renderClientProfile();
+      const { error } = await sb.from('pipeline_clients')
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq('id', _cpClient.id);
+      if (error) alert('Could not save: ' + error.message);
+      const idx = _pipeClients.findIndex(c => c.id === _cpClient.id);
+      if (idx >= 0) Object.assign(_pipeClients[idx], patch);
+    }
+
+    function renderClientProfile() {
+      const c = _cpClient;
+      document.getElementById('cp-title').textContent = c.name || 'Client';
+      const proc = _cpProc();
+      const allItems = proc.flatMap(st => st.items || []);
+      const doneCount = allItems.filter(i => i.status === 'done').length;
+      const pct = allItems.length ? Math.round(doneCount / allItems.length * 100) : 0;
+
+      document.getElementById('cp-body').innerHTML = `
+        <div class="cp-head">
+          <div>
+            <div class="cp-name">${escHtml(c.name)}</div>
+            <div class="cp-meta">
+              ${c.contact ? escHtml(c.contact) + ' · ' : ''}
+              ${Number(c.value) ? _fmtMoney(c.value, c.currency) + '/mo · ' : ''}
+              Stage: <strong>${escHtml((PIPE_STAGES.find(p => p[0] === c.stage) || ['', c.stage])[1])}</strong>
+            </div>
+          </div>
+          <button class="cp-btn ghost" onclick="openPipeModal('${c.id}')">✎ Edit details</button>
+        </div>
+
+        <div class="cp-sec">
+          <div class="cp-sec-head">
+            <span class="cp-sec-title">Services we deliver</span>
+            <button class="cp-btn" onclick="cpAddService()">＋ Add service</button>
+          </div>
+          <div class="cp-services">
+            ${_cpSvc().length
+              ? _cpSvc().map((sv, i) => `<span class="cp-chip">${escHtml(sv)}<button onclick="cpRemoveService(${i})" title="Remove">✕</button></span>`).join('')
+              : '<div class="cp-empty">No services yet — add what your agency delivers for this client.</div>'}
+          </div>
+        </div>
+
+        <div class="cp-sec">
+          <div class="cp-sec-head">
+            <span class="cp-sec-title">Process &amp; deliverables</span>
+            <span class="cp-stage-prog">${doneCount}/${allItems.length} done</span>
+            <button class="cp-btn" onclick="cpAddStage()">＋ Add stage</button>
+          </div>
+          ${allItems.length ? `<div class="cp-bar"><div class="cp-bar-fill" style="width:${pct}%"></div></div>` : ''}
+          <div style="margin-top:12px">
+            ${proc.length ? proc.map((st, si) => {
+              const items = st.items || [];
+              const d = items.filter(i => i.status === 'done').length;
+              return `<div class="cp-stage">
+                <div class="cp-stage-head">
+                  <span class="cp-stage-name">${escHtml(st.stage || 'Stage')}</span>
+                  <span class="cp-stage-prog">${d}/${items.length}</span>
+                  <button class="cp-btn ghost" onclick="cpAddItem(${si})">＋ Item</button>
+                  <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
+                </div>
+                ${items.length ? items.map((it, ii) => `
+                  <div class="cp-item ${it.status === 'done' ? 'done' : ''}">
+                    <span class="cp-item-name">${escHtml(it.name)}</span>
+                    <button class="cp-status ${it.status || 'pending'}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[it.status || 'pending']}</button>
+                    <button class="cp-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
+                  </div>`).join('')
+                : '<div class="cp-empty">No deliverables in this stage yet.</div>'}
+              </div>`;
+            }).join('')
+            : '<div class="cp-empty">No process yet. Add a stage (e.g. Onboarding, Setup, Launch, Reporting) and list the deliverables inside it.</div>'}
+          </div>
+        </div>`;
+    }
+
+    function cpAddService() {
+      const name = prompt('Service name (e.g. Meta Ads management, SEO, Creative production):');
+      if (!name?.trim()) return;
+      _cpSave({ services: [..._cpSvc(), name.trim()] });
+    }
+    function cpRemoveService(i) {
+      const list = [..._cpSvc()]; list.splice(i, 1);
+      _cpSave({ services: list });
+    }
+    function cpAddStage() {
+      const name = prompt('Stage name (e.g. Onboarding, Campaign Setup, Launch, Reporting):');
+      if (!name?.trim()) return;
+      _cpSave({ process: [..._cpProc(), { stage: name.trim(), items: [] }] });
+    }
+    function cpRemoveStage(si) {
+      if (!confirm('Delete this stage and its deliverables?')) return;
+      const proc = JSON.parse(JSON.stringify(_cpProc())); proc.splice(si, 1);
+      _cpSave({ process: proc });
+    }
+    function cpAddItem(si) {
+      const name = prompt('Deliverable (e.g. Ad account setup, 8 creatives, Monthly report):');
+      if (!name?.trim()) return;
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      proc[si].items = [...(proc[si].items || []), { name: name.trim(), status: 'pending' }];
+      _cpSave({ process: proc });
+    }
+    function cpRemoveItem(si, ii) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      proc[si].items.splice(ii, 1);
+      _cpSave({ process: proc });
+    }
+    function cpCycleStatus(si, ii) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const cur = proc[si].items[ii].status || 'pending';
+      proc[si].items[ii].status = CP_STATUS[(CP_STATUS.indexOf(cur) + 1) % CP_STATUS.length];
+      _cpSave({ process: proc });
     }
 
     function openPipeModal(id) {
@@ -7446,7 +7623,11 @@
       else ({ error } = await sb.from('pipeline_clients').insert({ ...row, organization_id: currentOrgId, created_by: currentUser?.id }));
       if (error) { errEl.textContent = error.message; return; }
       document.getElementById('pipe-modal').classList.add('hidden');
-      loadPipeline();
+      await loadPipeline();
+      if (_cpClient && document.getElementById('hub-client-view')?.style.display !== 'none') {
+        _cpClient = _pipeClients.find(x => x.id === _cpClient.id) || _cpClient;
+        renderClientProfile();
+      }
     }
 
     async function deletePipeClient() {
@@ -7565,6 +7746,8 @@
       document.getElementById('hub-cards-view').style.display    = v === 'cards'    ? '' : 'none';
       document.getElementById('hub-pipeline-view').style.display = v === 'pipeline' ? '' : 'none';
       document.getElementById('hub-finance-view').style.display  = v === 'finance'  ? '' : 'none';
+      const cv = document.getElementById('hub-client-view');
+      if (cv) cv.style.display = v === 'client' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
       if (v === 'pipeline') loadPipeline();
       if (v === 'finance')  loadFinance();
