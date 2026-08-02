@@ -4011,6 +4011,16 @@
           include_cities: true,
         });
         if (data?.error) throw new Error(data.error);
+        // GA4 / Search Console data (non-blocking — sections fall back to manual entry)
+        const ga4 = await callEdgeFunction('google-analytics-data', {
+          account_id: account.id,
+          organization_id: currentOrgId,
+          period: currentPeriod,
+          custom_from: customFrom,
+          custom_to: customTo,
+        }).catch(() => null);
+        const g4 = (ga4 && ga4.configured && !ga4.error) ? ga4 : null;
+        const _liveTag = '<span style="color:#16A34A;font-weight:600;font-size:9px;margin-left:5px">● live</span>';
         const t = data?.totals;
         if (!t) { document.getElementById('content').innerHTML = `<div class="no-data"><strong>No Google Ads data for this period.</strong></div>`; return; }
         const campaigns = data.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
@@ -4142,42 +4152,64 @@
             <div class="kpi-section" data-section-id="ga-leads-overview">
               <div class="section-label">Leads Overview <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
               <div class="kpi-grid" data-grid-id="ga-leads-overview">
-                ${gaManual('c-blue solid', '🆕', 'New Users', 'newUsers')}
-                ${gaManual('c-teal solid', '🔄', 'Returning Users', 'returningUsers')}
+                ${g4?.users
+                  ? gaKpi('c-blue solid', '🆕', 'New Users', (g4.users.newUsers ?? 0).toLocaleString(), '● Google Analytics') +
+                    gaKpi('c-teal solid', '🔄', 'Returning Users', (g4.users.returningUsers ?? 0).toLocaleString(), '● Google Analytics')
+                  : gaManual('c-blue solid', '🆕', 'New Users', 'newUsers') +
+                    gaManual('c-teal solid', '🔄', 'Returning Users', 'returningUsers')}
               </div>
             </div>
 
             <div class="kpi-section" data-section-id="ga-leads-placement">
               <div class="section-label">Leads Placement <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
               <div class="kpi-grid" data-grid-id="ga-leads-placement">
-                ${gaManual('c-navy',         '➡️', 'Direct',         'pl_direct',   'Leads from direct traffic')}
-                ${gaManual('c-blue',         '🔍', 'Paid Search',    'pl_paid',     'Leads from paid search')}
-                ${gaManual('c-purple',       '📣', 'Organic Social', 'pl_social',   'Leads from organic social')}
-                ${gaManual('c-gold',         '🔗', 'Referral',       'pl_referral', 'Leads from referrals')}
-                ${gaManual('c-teal',         '🤖', 'AI',             'pl_ai',       'Leads from AI assistants')}
-                ${gaManual('c-orange',       '🌐', 'Cross Network',  'pl_cross',    'Leads from cross-network')}
+                ${(() => {
+                  const PL = [['Direct','➡️','c-navy'],['Paid Search','🔍','c-blue'],['Organic Social','📣','c-purple'],['Referral','🔗','c-gold'],['AI','🤖','c-teal'],['Cross-network','🌐','c-orange']];
+                  if (g4?.placement?.length) {
+                    const map = {}; g4.placement.forEach(r => { map[(r.channel||'').toLowerCase()] = r; });
+                    return PL.map(([name, icon, color]) => {
+                      const hit = map[name.toLowerCase()] || {};
+                      return gaKpi(color, icon, name, (hit.leads ?? 0).toLocaleString(), `● ${(hit.sessions ?? 0).toLocaleString()} sessions`);
+                    }).join('');
+                  }
+                  return [
+                    gaManual('c-navy','➡️','Direct','pl_direct','Leads from direct traffic'),
+                    gaManual('c-blue','🔍','Paid Search','pl_paid','Leads from paid search'),
+                    gaManual('c-purple','📣','Organic Social','pl_social','Leads from organic social'),
+                    gaManual('c-gold','🔗','Referral','pl_referral','Leads from referrals'),
+                    gaManual('c-teal','🤖','AI','pl_ai','Leads from AI assistants'),
+                    gaManual('c-orange','🌐','Cross Network','pl_cross','Leads from cross-network'),
+                  ].join('');
+                })()}
               </div>
             </div>
 
             <div class="kpi-section" data-section-id="ga-leads-source">
-              <div class="section-label">Leads Source <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="section-label">Leads Source <span class="section-drag-handle" title="Drag to reorder section">⠿</span>${g4?.sources?.length ? _liveTag : ''}</div>
               <div class="kpi-grid" data-grid-id="ga-leads-source">
-                ${gaManual('c-blue',   '🇬', 'Google',           'src_google')}
-                ${gaManual('c-navy',   '➡️', 'Direct',           'src_direct')}
-                ${gaManual('c-teal',   '🌍', 'i.wl.co',          'src_iwl')}
-                ${gaManual('c-sky',    '💼', 'LinkedIn',          'src_linkedin')}
-                ${gaManual('c-coral',  '🎵', 'TikTok',            'src_tiktok')}
-                ${gaManual('c-gold',   '📢', 'ads.google.com',    'src_adsgoogle')}
-                ${gaManual('c-green',  '🅱️', 'Bing',              'src_bing')}
-                ${gaManual('c-purple', '🤖', 'ChatGPT',           'src_chatgpt')}
-                ${gaManual('c-blue',   '📘', 'Facebook',          'src_facebook')}
-                ${gaManual('c-coral',  '📸', 'Instagram',         'src_instagram')}
-                ${gaManual('c-navy',   '❔', 'Unavailable Data',  'src_unavailable')}
+                ${(() => {
+                  const SRC = [['Google','🇬','c-blue','src_google'],['Direct','➡️','c-navy','src_direct'],['i.wl.co','🌍','c-teal','src_iwl'],['LinkedIn','💼','c-sky','src_linkedin'],['TikTok','🎵','c-coral','src_tiktok'],['ads.google.com','📢','c-gold','src_adsgoogle'],['Bing','🅱️','c-green','src_bing'],['ChatGPT','🤖','c-purple','src_chatgpt'],['Facebook','📘','c-blue','src_facebook'],['Instagram','📸','c-coral','src_instagram'],['Unavailable Data','❔','c-navy','src_unavailable']];
+                  if (g4?.sources?.length) {
+                    const map = {};
+                    g4.sources.forEach(r => { map[(r.source || '').toLowerCase()] = r; });
+                    const pick = (name) => {
+                      const n = name.toLowerCase();
+                      const aliases = { 'google':['google'], 'direct':['(direct)','direct'], 'linkedin':['linkedin.com','linkedin'], 'tiktok':['tiktok.com','tiktok'], 'ads.google.com':['ads.google.com'], 'bing':['bing','bing.com'], 'chatgpt':['chatgpt.com','chat.openai.com','chatgpt'], 'facebook':['facebook.com','facebook','m.facebook.com'], 'instagram':['instagram.com','instagram','l.instagram.com'], 'i.wl.co':['i.wl.co'], 'unavailable data':['(not set)','(none)','unavailable'] };
+                      for (const key of (aliases[n] || [n])) if (map[key]) return map[key];
+                      return null;
+                    };
+                    return SRC.map(([name, icon, color]) => {
+                      const hit = pick(name) || {};
+                      return gaKpi(color, icon, name, (hit.leads ?? 0).toLocaleString(), `● ${(hit.sessions ?? 0).toLocaleString()} sessions`);
+                    }).join('');
+                  }
+                  return SRC.map(([name, icon, color, key]) => gaManual(color, icon, name, key)).join('');
+                })()}
               </div>
             </div>
 
             <div class="kpi-section" data-section-id="ga-web-pages">
-              <div class="section-label">Web Page Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Best 5 pages · manual entry</span></div>
+              <div class="section-label">Web Page Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Best 5 pages</span>${g4?.pages?.length ? _liveTag : ''}</div>
               <div class="table-wrapper">
                 <table class="data-table">
                   <thead><tr>
@@ -4189,14 +4221,23 @@
                     <th class="tr">Key Events</th>
                   </tr></thead>
                   <tbody>
-                    ${[0,1,2,3,4].map(i => `<tr>
-                      <td class="tl">${_wpInput(i, 'page', '/page-path', 'text', 'left')}</td>
-                      <td class="tr">${_wpInput(i, 'views', '0', 'number')}</td>
-                      <td class="tr">${_wpInput(i, 'users', '0', 'number')}</td>
-                      <td class="tr">${_wpInput(i, 'engagement', 'e.g. 1m 32s', 'text')}</td>
-                      <td class="tr">${_wpInput(i, 'events', '0', 'number')}</td>
-                      <td class="tr">${_wpInput(i, 'keyEvents', '0', 'number')}</td>
-                    </tr>`).join('')}
+                    ${g4?.pages?.length
+                      ? g4.pages.map(pg => `<tr>
+                          <td class="tl">${escHtml(pg.page || '/')}</td>
+                          <td class="tr">${(pg.views ?? 0).toLocaleString()}</td>
+                          <td class="tr">${(pg.users ?? 0).toLocaleString()}</td>
+                          <td class="tr">${escHtml(pg.engagement || '—')}</td>
+                          <td class="tr">${(pg.events ?? 0).toLocaleString()}</td>
+                          <td class="tr">${(pg.keyEvents ?? 0).toLocaleString()}</td>
+                        </tr>`).join('')
+                      : [0,1,2,3,4].map(i => `<tr>
+                          <td class="tl">${_wpInput(i, 'page', '/page-path', 'text', 'left')}</td>
+                          <td class="tr">${_wpInput(i, 'views', '0', 'number')}</td>
+                          <td class="tr">${_wpInput(i, 'users', '0', 'number')}</td>
+                          <td class="tr">${_wpInput(i, 'engagement', 'e.g. 1m 32s', 'text')}</td>
+                          <td class="tr">${_wpInput(i, 'events', '0', 'number')}</td>
+                          <td class="tr">${_wpInput(i, 'keyEvents', '0', 'number')}</td>
+                        </tr>`).join('')}
                   </tbody>
                 </table>
               </div>
@@ -4230,11 +4271,17 @@
               <div class="section-label">Best Keywords &amp; Top Cities <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Manual entry</span></div>
               <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start">
                 <div>
-                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Best 10 Keywords ${keywords.length ? '<span style="color:#16A34A;font-weight:600">● live from Google Ads</span>' : ''}</div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Best 10 Keywords ${g4?.queries?.length ? '<span style="color:#16A34A;font-weight:600">● live from Search Console</span>' : (keywords.length ? '<span style="color:#16A34A;font-weight:600">● live from Google Ads</span>' : '')}</div>
                   <div class="table-wrapper">
                     <table class="data-table">
-                      <thead><tr><th class="tl" style="min-width:220px">Keyword</th><th class="tr">Results</th><th class="tr">${keywords.length ? 'Match Type' : 'Competition'}</th></tr></thead>
-                      <tbody>${keywords.length
+                      <thead><tr><th class="tl" style="min-width:220px">Keyword</th><th class="tr">Results</th><th class="tr">${g4?.queries?.length ? 'Position' : (keywords.length ? 'Match Type' : 'Competition')}</th></tr></thead>
+                      <tbody>${g4?.queries?.length
+                        ? g4.queries.map(q => `<tr>
+                            <td class="tl">${escHtml(q.query || '—')}</td>
+                            <td class="tr">${(q.clicks ?? 0).toLocaleString()}</td>
+                            <td class="tr" style="font-size:10px;color:var(--text-muted)">#${q.position ?? '—'}</td>
+                          </tr>`).join('')
+                        : keywords.length
                         ? keywords.map(kw => `<tr>
                             <td class="tl">${escHtml(kw.text || '—')}</td>
                             <td class="tr">${(kw.conversions ?? kw.clicks ?? 0).toLocaleString()}</td>
@@ -4420,6 +4467,10 @@
             meta_titles: grab('mt').map(k => k.text).filter(Boolean),
             meta_descriptions: grab('md').map(k => k.text).filter(Boolean),
             top_cities: grab('cities').map(c => ({ city: c.text, results: c.results })).filter(c => c.city),
+            analytics: g4 ? {
+              users: g4.users, placement: g4.placement, sources: (g4.sources || []).slice(0, 10),
+              top_pages: g4.pages, search_queries: g4.queries, search_pages: g4.sc_pages,
+            } : null,
           };
           const PROMPT = `You are a Google Ads and SEO expert. Analyse this Google Ads account data (including manually tracked keywords, meta titles/descriptions and top cities) and respond with ONLY a valid JSON object — no markdown fences, just raw JSON — with exactly these three keys:
 {
@@ -4522,6 +4573,19 @@
     }
 
     // ── Google Ads settings CRUD ──────────────────────────────────
+    async function saveGoogleAnalyticsLinks(id) {
+      const ga4 = document.getElementById('ga4-' + id)?.value.trim() || null;
+      const sc  = document.getElementById('sc-'  + id)?.value.trim() || null;
+      const st  = document.getElementById('galinks-status-' + id);
+      const { error } = await sb.from('google_ads_accounts')
+        .update({ ga4_property_id: ga4, search_console_site: sc, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (st) {
+        st.textContent = error ? ('⚠️ ' + error.message) : '✓ Saved — reload the account to pull live Analytics data';
+        st.style.color = error ? '#F87171' : '#16A34A';
+      }
+    }
+
     async function loadGoogleAdsList() {
       if (!currentOrgId) return;
       const el = document.getElementById('google-ads-list');
@@ -4533,12 +4597,30 @@
       const active  = data.filter(a => a.customer_id !== 'SETUP_REQUIRED');
 
       let html = active.map(a => `
-        <div class="store-item" style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-weight:600;font-size:13px">🔍 ${a.account_name || a.customer_id}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Customer ID: ${a.customer_id}</div>
+        <div class="store-item">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:600;font-size:13px">🔍 ${escHtml(a.account_name || a.customer_id)}</div>
+              <div style="font-size:11px;color:var(--text-muted)">Customer ID: ${escHtml(a.customer_id)}</div>
+            </div>
+            <button onclick="deleteGoogleAdsAccount('${a.id}')" style="background:none;border:none;color:var(--coral);cursor:pointer;font-size:13px;padding:4px 8px">✕ Remove</button>
           </div>
-          <button onclick="deleteGoogleAdsAccount('${a.id}')" style="background:none;border:none;color:var(--coral);cursor:pointer;font-size:13px;padding:4px 8px">✕ Remove</button>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:180px">
+              <label style="font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:3px">GA4 PROPERTY ID</label>
+              <input id="ga4-${a.id}" type="text" value="${escHtml(a.ga4_property_id || '')}" placeholder="e.g. 312345678"
+                style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text-main);box-sizing:border-box">
+            </div>
+            <div style="flex:1.4;min-width:220px">
+              <label style="font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:3px">SEARCH CONSOLE SITE</label>
+              <input id="sc-${a.id}" type="text" value="${escHtml(a.search_console_site || '')}" placeholder="https://example.com/ or sc-domain:example.com"
+                style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text-main);box-sizing:border-box">
+            </div>
+            <div style="display:flex;align-items:flex-end">
+              <button onclick="saveGoogleAnalyticsLinks('${a.id}')" style="padding:7px 14px;background:var(--blue-light);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Save</button>
+            </div>
+          </div>
+          <div id="galinks-status-${a.id}" style="font-size:11px;margin-top:5px"></div>
         </div>`).join('');
 
       if (pending) {

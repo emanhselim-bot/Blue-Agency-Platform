@@ -20,7 +20,11 @@ const DEVELOPER_TOKEN     = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN")!;
 
 const REDIRECT_URI        = `${SUPABASE_URL}/functions/v1/google-ads-oauth`;
 const GOOGLE_ADS_API      = "https://googleads.googleapis.com/v24";
-const SCOPES              = "https://www.googleapis.com/auth/adwords";
+const SCOPES              = [
+  "https://www.googleapis.com/auth/adwords",
+  "https://www.googleapis.com/auth/analytics.readonly",
+  "https://www.googleapis.com/auth/webmasters.readonly",
+].join(" ");
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
