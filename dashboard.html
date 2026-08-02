@@ -303,6 +303,31 @@
     .cp-status.done { color: #15803D; background: #DCFCE7; border-color: #BBF7D0; }
     .cp-del { background: none; border: none; cursor: pointer; opacity: .45; font-size: 12px; }
     .cp-del:hover { opacity: 1; }
+    /* month bar */
+    .cp-monthbar { display: flex; align-items: center; gap: 8px; background: #F3F6FB; border: 1px solid #E4E9F2; border-radius: 12px; padding: 8px 10px; margin-bottom: 14px; }
+    .cp-mnav { background: #fff; border: 1px solid #D6DEE9; border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; color: #0A1CA3; line-height: 1; }
+    .cp-mnav:hover { background: #EAF2FE; border-color: #0573F5; }
+    .cp-mlabel { font-size: 14px; font-weight: 800; color: #0A1CA3; min-width: 150px; text-align: center; }
+    .cp-mchips { display: flex; gap: 5px; overflow-x: auto; flex: 1; padding: 2px; }
+    .cp-mchip { border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 4px 11px; font-size: 11px; font-weight: 700; cursor: pointer; color: #6B7280; white-space: nowrap; }
+    .cp-mchip:hover { border-color: #0573F5; color: #0573F5; }
+    .cp-mchip.active { background: #0573F5; color: #fff; border-color: #0573F5; }
+    .cp-mchip.has { color: #0A1CA3; border-color: #A9C7F5; }
+    /* timeline */
+    .cp-timeline { position: relative; padding-left: 34px; }
+    .cp-timeline::before { content: ''; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(#0573F5, #A9C7F5); border-radius: 2px; }
+    .cp-tstage { position: relative; margin-bottom: 14px; }
+    .cp-tdot { position: absolute; left: -34px; top: 10px; width: 28px; height: 28px; border-radius: 50%; background: #fff; border: 2px solid #0573F5; color: #0573F5; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; z-index: 1; }
+    .cp-tstage.done .cp-tdot { background: #16A34A; border-color: #16A34A; color: #fff; }
+    .cp-tstage.active .cp-tdot { background: #FCBA00; border-color: #FCBA00; color: #fff; }
+    .cp-tcard { border: 1px solid #E4E9F2; border-left: 4px solid #0573F5; border-radius: 12px; padding: 12px 14px; background: #fff; }
+    .cp-tstage.done .cp-tcard { border-left-color: #16A34A; background: #F7FDF9; }
+    .cp-tstage.active .cp-tcard { border-left-color: #FCBA00; background: #FFFCF4; }
+    .cp-date { border: 1px solid #E1E7F0; border-radius: 7px; padding: 3px 7px; font-size: 11px; color: #4B5563; font-family: inherit; background: #fff; }
+    .cp-date:focus { outline: none; border-color: #0573F5; }
+    .cp-date.empty { color: #B6BFCC; }
+    .cp-item-date { width: 128px; }
+
     .cp-bar { height: 5px; background: #E9EDF5; border-radius: 4px; overflow: hidden; margin-top: 10px; }
     .cp-bar-fill { height: 100%; background: #16A34A; border-radius: 4px; transition: width .3s; }
 
@@ -7592,11 +7617,33 @@
       'Digital Consultation': 'Monthly report',
     };
     let _cpMapPickerOpen = false;
+    let _cpMonth = new Date().toISOString().slice(0, 7);   // YYYY-MM
+    const CP_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    function _cpMonthLabel(m) { const [y, mo] = m.split('-'); return `${CP_MONTH_NAMES[+mo - 1]} ${y}`; }
+    function _cpShiftMonth(m, delta) {
+      const [y, mo] = m.split('-').map(Number);
+      const d = new Date(y, mo - 1 + delta, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
 
     let _cpPickerOpen = false;
 
     function _cpSvc()  { return Array.isArray(_cpClient?.services) ? _cpClient.services : []; }
-    function _cpProc() { return Array.isArray(_cpClient?.process)  ? _cpClient.process  : []; }
+    function _cpAllMonths() {
+      const m = _cpClient?.process_by_month;
+      return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {};
+    }
+    function _cpProc() {
+      const byMonth = _cpAllMonths();
+      if (byMonth[_cpMonth]) return byMonth[_cpMonth];
+      // legacy single-list process → show it on the current month until first edit
+      const legacy = Array.isArray(_cpClient?.process) ? _cpClient.process : [];
+      return (_cpMonth === new Date().toISOString().slice(0, 7)) ? legacy : [];
+    }
+    function _cpSaveProc(list) {
+      const byMonth = { ..._cpAllMonths(), [_cpMonth]: list };
+      _cpSave({ process_by_month: byMonth, process: [] });
+    }
 
     async function _cpSave(patch) {
       Object.assign(_cpClient, patch);
@@ -7660,13 +7707,34 @@
         <div class="cp-sec">
           <div class="cp-sec-head">
             <span class="cp-sec-title">Process &amp; deliverables</span>
-            <span class="cp-stage-prog">${doneCount}/${allItems.length} done</span>
+            <span class="cp-stage-prog">${doneCount}/${allItems.length} done · ${pct}%</span>
             <button class="cp-btn" onclick="cpToggleMapPicker()">${_cpMapPickerOpen ? '✓ Close' : '🗺 Load map'}</button>
+            <button class="cp-btn ghost" onclick="cpCopyPrevMonth()" title="Copy last month's structure">⧉ Copy last month</button>
             <button class="cp-btn ghost" onclick="cpAddStage()">＋ Stage</button>
           </div>
+
+          <div class="cp-monthbar">
+            <button class="cp-mnav" onclick="cpSetMonth(_cpShiftMonth(_cpMonth,-1))" title="Previous month">‹</button>
+            <div class="cp-mlabel">${_cpMonthLabel(_cpMonth)}</div>
+            <button class="cp-mnav" onclick="cpSetMonth(_cpShiftMonth(_cpMonth,1))" title="Next month">›</button>
+            <div class="cp-mchips">
+              ${(() => {
+                const months = [];
+                for (let i = -3; i <= 3; i++) months.push(_cpShiftMonth(new Date().toISOString().slice(0,7), i));
+                Object.keys(_cpAllMonths()).forEach(m => { if (!months.includes(m)) months.push(m); });
+                months.sort();
+                return months.map(m => {
+                  const has = (_cpAllMonths()[m] || []).length;
+                  const [yy, mm] = m.split('-');
+                  return `<button class="cp-mchip ${m === _cpMonth ? 'active' : (has ? 'has' : '')}" onclick="cpSetMonth('${m}')">${CP_MONTH_NAMES[+mm-1].slice(0,3)} ${yy.slice(2)}${has ? ' ·' + has : ''}</button>`;
+                }).join('');
+              })()}
+            </div>
+          </div>
+
           ${_cpMapPickerOpen ? `
             <div class="cp-picker">
-              <div style="font-size:11px;color:#6B7280;margin-bottom:9px">Pick a process map — its stages and deliverables are added to this client. You can load more than one and edit everything after.</div>
+              <div style="font-size:11px;color:#6B7280;margin-bottom:9px">Pick a process map for <strong>${_cpMonthLabel(_cpMonth)}</strong>. Each month keeps its own stages, deliverables and dates.</div>
               ${(() => {
                 const svc = _cpSvc();
                 const suggested = [...new Set(svc.map(x => CP_MAPS[x] ? x : CP_MAP_ALIASES[x]).filter(Boolean))];
@@ -7678,30 +7746,66 @@
                   + `<div style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6B7280;margin-bottom:6px">ALL MAPS</div><div>${others.map(k => btn(k, false)).join('')}</div>`;
               })()}
             </div>` : ''}
-          ${allItems.length ? `<div class="cp-bar"><div class="cp-bar-fill" style="width:${pct}%"></div></div>` : ''}
-          <div style="margin-top:12px">
-            ${proc.length ? proc.map((st, si) => {
+
+          ${allItems.length ? `<div class="cp-bar" style="margin-bottom:16px"><div class="cp-bar-fill" style="width:${pct}%"></div></div>` : ''}
+
+          ${proc.length ? `<div class="cp-timeline">
+            ${proc.map((st, si) => {
               const items = st.items || [];
               const d = items.filter(i => i.status === 'done').length;
-              return `<div class="cp-stage">
-                <div class="cp-stage-head">
-                  <span class="cp-stage-name">${escHtml(st.stage || 'Stage')}</span>
-                  <span class="cp-stage-prog">${d}/${items.length}</span>
-                  <button class="cp-btn ghost" onclick="cpAddItem(${si})">＋ Item</button>
-                  <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
+              const allDone = items.length > 0 && d === items.length;
+              const started = d > 0 || items.some(i => i.status === 'in_progress');
+              const cls = allDone ? 'done' : (started ? 'active' : '');
+              return `<div class="cp-tstage ${cls}">
+                <div class="cp-tdot">${allDone ? '✓' : si + 1}</div>
+                <div class="cp-tcard">
+                  <div class="cp-stage-head">
+                    <span class="cp-stage-name">${escHtml(st.stage || 'Stage')}</span>
+                    <input type="date" class="cp-date ${st.date ? '' : 'empty'}" value="${st.date || ''}" title="Stage deadline"
+                      onchange="cpSetStageDate(${si}, this.value)">
+                    <span class="cp-stage-prog">${d}/${items.length}</span>
+                    <button class="cp-btn ghost" onclick="cpAddItem(${si})">＋</button>
+                    <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
+                  </div>
+                  ${items.length ? items.map((it, ii) => `
+                    <div class="cp-item ${it.status === 'done' ? 'done' : ''}">
+                      <span class="cp-item-name">${escHtml(it.name)}</span>
+                      <input type="date" class="cp-date cp-item-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Due date"
+                        onchange="cpSetItemDate(${si}, ${ii}, this.value)">
+                      <button class="cp-status ${it.status || 'pending'}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[it.status || 'pending']}</button>
+                      <button class="cp-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
+                    </div>`).join('')
+                  : '<div class="cp-empty">No deliverables in this stage yet.</div>'}
                 </div>
-                ${items.length ? items.map((it, ii) => `
-                  <div class="cp-item ${it.status === 'done' ? 'done' : ''}">
-                    <span class="cp-item-name">${escHtml(it.name)}</span>
-                    <button class="cp-status ${it.status || 'pending'}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[it.status || 'pending']}</button>
-                    <button class="cp-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
-                  </div>`).join('')
-                : '<div class="cp-empty">No deliverables in this stage yet.</div>'}
               </div>`;
-            }).join('')
-            : '<div class="cp-empty">No process yet — click <strong>🗺 Load map</strong> to add a ready-made workflow for this client\'s services, or add a stage manually.</div>'}
-          </div>
+            }).join('')}
+          </div>`
+          : `<div class="cp-empty">No process for <strong>${_cpMonthLabel(_cpMonth)}</strong> yet — click <strong>🗺 Load map</strong> to add a workflow, or <strong>⧉ Copy last month</strong> to reuse the previous month's plan.</div>`}
         </div>`;
+    }
+
+    function cpSetMonth(m) { _cpMonth = m; _cpMapPickerOpen = false; renderClientProfile(); }
+    function cpSetStageDate(si, val) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      proc[si].date = val || '';
+      _cpSaveProc(proc);
+    }
+    function cpSetItemDate(si, ii, val) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      proc[si].items[ii].date = val || '';
+      _cpSaveProc(proc);
+    }
+    function cpCopyPrevMonth() {
+      const prev = _cpShiftMonth(_cpMonth, -1);
+      const src = _cpAllMonths()[prev];
+      if (!src?.length) { alert('Nothing to copy — ' + _cpMonthLabel(prev) + ' has no process yet.'); return; }
+      if (_cpProc().length && !confirm('This month already has stages. Add a copy of ' + _cpMonthLabel(prev) + ' anyway?')) return;
+      // copy structure, reset statuses and dates
+      const copy = JSON.parse(JSON.stringify(src)).map(st => ({
+        stage: st.stage, date: '',
+        items: (st.items || []).map(it => ({ name: it.name, status: 'pending', date: '' })),
+      }));
+      _cpSaveProc([..._cpProc(), ...copy]);
     }
 
     function cpToggleMapPicker() { _cpMapPickerOpen = !_cpMapPickerOpen; renderClientProfile(); }
@@ -7712,10 +7816,10 @@
       const existingNames = new Set(existing.map(st => st.stage));
       const added = tpl
         .filter(st => !existingNames.has(st.stage))
-        .map(st => ({ stage: st.stage, items: st.items.map(n => ({ name: n, status: 'pending' })) }));
-      if (!added.length) { alert('This map is already loaded for this client.'); return; }
+        .map(st => ({ stage: st.stage, date: '', items: st.items.map(n => ({ name: n, status: 'pending', date: '' })) }));
+      if (!added.length) { alert('This map is already loaded for this month.'); return; }
       _cpMapPickerOpen = false;
-      _cpSave({ process: [...existing, ...added] });
+      _cpSaveProc([...existing, ...added]);
     }
 
     function cpTogglePicker() { _cpPickerOpen = !_cpPickerOpen; renderClientProfile(); }
@@ -7737,30 +7841,30 @@
     function cpAddStage() {
       const name = prompt('Stage name (e.g. Onboarding, Campaign Setup, Launch, Reporting):');
       if (!name?.trim()) return;
-      _cpSave({ process: [..._cpProc(), { stage: name.trim(), items: [] }] });
+      _cpSaveProc([..._cpProc(), { stage: name.trim(), date: '', items: [] }]);
     }
     function cpRemoveStage(si) {
       if (!confirm('Delete this stage and its deliverables?')) return;
       const proc = JSON.parse(JSON.stringify(_cpProc())); proc.splice(si, 1);
-      _cpSave({ process: proc });
+      _cpSaveProc(proc);
     }
     function cpAddItem(si) {
       const name = prompt('Deliverable (e.g. Ad account setup, 8 creatives, Monthly report):');
       if (!name?.trim()) return;
       const proc = JSON.parse(JSON.stringify(_cpProc()));
-      proc[si].items = [...(proc[si].items || []), { name: name.trim(), status: 'pending' }];
-      _cpSave({ process: proc });
+      proc[si].items = [...(proc[si].items || []), { name: name.trim(), status: 'pending', date: '' }];
+      _cpSaveProc(proc);
     }
     function cpRemoveItem(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       proc[si].items.splice(ii, 1);
-      _cpSave({ process: proc });
+      _cpSaveProc(proc);
     }
     function cpCycleStatus(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       const cur = proc[si].items[ii].status || 'pending';
       proc[si].items[ii].status = CP_STATUS[(CP_STATUS.indexOf(cur) + 1) % CP_STATUS.length];
-      _cpSave({ process: proc });
+      _cpSaveProc(proc);
     }
 
     function openPipeModal(id) {
