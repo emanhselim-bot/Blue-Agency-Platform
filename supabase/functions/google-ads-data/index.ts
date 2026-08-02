@@ -568,6 +568,64 @@ async function listAccessibleCustomers(
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
+interface CityRow { city: string; clicks: number; impressions: number; conversions: number; spend: number; }
+
+async function fetchGoogleAdsCities(
+  customerId: string,
+  developerToken: string,
+  accessToken: string,
+  startDate: string,
+  endDate: string,
+  loginCustomerId?: string
+): Promise<CityRow[]> {
+  const cid = customerId.replace(/-/g, "");
+  const gaql = `
+    SELECT
+      geographic_view.country_criterion_id,
+      campaign.name,
+      metrics.clicks,
+      metrics.impressions,
+      metrics.conversions,
+      metrics.cost_micros
+    FROM geographic_view
+    WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
+    ORDER BY metrics.conversions DESC
+    LIMIT 25
+  `;
+  const h: Record<string, string> = {
+    "Authorization": `Bearer ${accessToken}`,
+    "developer-token": developerToken,
+    "Content-Type": "application/json",
+  };
+  if (loginCustomerId) h["login-customer-id"] = loginCustomerId;
+  try {
+    const res = await fetch(
+      `https://googleads.googleapis.com/v24/customers/${cid}/googleAds:searchStream`,
+      { method: "POST", headers: h, body: JSON.stringify({ query: gaql }), signal: AbortSignal.timeout(20_000) }
+    );
+    if (!res.ok) return [];
+    const text = await res.text();
+    let batches: unknown[] = [];
+    try { const parsed = JSON.parse(text); batches = Array.isArray(parsed) ? parsed : [parsed]; }
+    catch { batches = text.trim().split("\n").filter(Boolean).map(l => JSON.parse(l)); }
+    const out: CityRow[] = [];
+    for (const batch of batches) {
+      for (const row of ((batch as { results?: unknown[] }).results ?? [])) {
+        const r = row as { geographicView?: Record<string, unknown>; metrics?: Record<string, number | string> };
+        const m = r.metrics ?? {};
+        out.push({
+          city: String(r.geographicView?.countryCriterionId ?? "Unknown"),
+          clicks: Number(m.clicks ?? 0),
+          impressions: Number(m.impressions ?? 0),
+          conversions: Number(m.conversions ?? 0),
+          spend: Number(m.costMicros ?? m.cost_micros ?? 0) / 1_000_000,
+        });
+      }
+    }
+    return out.sort((a, b) => b.conversions - a.conversions || b.clicks - a.clicks).slice(0, 10);
+  } catch { return []; }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -579,11 +637,11 @@ Deno.serve(async (req: Request) => {
   );
   if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  let body: { account_id?: string; organization_id?: string; since?: string; until?: string; include_campaigns?: boolean; include_ads?: boolean; include_keywords?: boolean; diagnostic?: boolean };
+  let body: { account_id?: string; organization_id?: string; since?: string; until?: string; include_campaigns?: boolean; include_ads?: boolean; include_keywords?: boolean; include_cities?: boolean; diagnostic?: boolean };
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "Invalid JSON" }, 400); }
 
-  const { account_id, organization_id, since = "last_30_days", until = "last_30_days", include_campaigns = false, include_ads = false, include_keywords = false, diagnostic = false } = body;
+  const { account_id, organization_id, since = "last_30_days", until = "last_30_days", include_campaigns = false, include_ads = false, include_keywords = false, include_cities = false, diagnostic = false } = body;
 
   // Diagnostic mode: step-by-step debug — returns all intermediate info in response body
   if (diagnostic) {
@@ -724,7 +782,7 @@ Deno.serve(async (req: Request) => {
         acct.client_id, acct.client_secret, acct.refresh_token
       );
       const lcid = acct.login_customer_id ?? undefined;
-      const [metrics, campaigns, bestAd, keywords] = await Promise.all([
+      const [metrics, campaigns, bestAd, keywords, cities] = await Promise.all([
         fetchGoogleAdsMetrics(acct.customer_id, acct.developer_token, accessToken, start, end, lcid),
         include_campaigns
           ? fetchGoogleAdsCampaigns(acct.customer_id, acct.developer_token, accessToken, start, end, lcid)
@@ -735,8 +793,11 @@ Deno.serve(async (req: Request) => {
         include_keywords
           ? fetchGoogleAdsKeywords(acct.customer_id, acct.developer_token, accessToken, start, end, lcid)
           : Promise.resolve([]),
+        include_cities
+          ? fetchGoogleAdsCities(acct.customer_id, acct.developer_token, accessToken, start, end, lcid)
+          : Promise.resolve([]),
       ]);
-      return { account_id: acct.id, account_name: acct.account_name ?? acct.customer_id, metrics, campaigns, bestAd, keywords };
+      return { account_id: acct.id, account_name: acct.account_name ?? acct.customer_id, metrics, campaigns, bestAd, keywords, cities };
     } catch (e) {
       console.error("[google-ads-data] error for account", acct.id, (e as Error).message);
       return { account_id: acct.id, account_name: acct.account_name ?? acct.customer_id, error: (e as Error).message };
@@ -783,5 +844,13 @@ Deno.serve(async (req: Request) => {
       .slice(0, 10);
   }
 
-  return jsonResponse({ totals, accounts: results, date_range: { start, end }, bestAd: aggregatedBestAd, keywords: aggregatedKeywords });
+  // Aggregate cities across accounts
+  let aggregatedCities: CityRow[] = [];
+  if (include_cities) {
+    const all: CityRow[] = [];
+    for (const r of results) all.push(...((r as { cities?: CityRow[] }).cities ?? []));
+    aggregatedCities = all.sort((a, b) => b.conversions - a.conversions || b.clicks - a.clicks).slice(0, 10);
+  }
+
+  return jsonResponse({ totals, accounts: results, date_range: { start, end }, bestAd: aggregatedBestAd, keywords: aggregatedKeywords, cities: aggregatedCities });
 });

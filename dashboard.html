@@ -4008,6 +4008,7 @@
           include_campaigns: true,
           include_ads: true,
           include_keywords: true,
+          include_cities: true,
         });
         if (data?.error) throw new Error(data.error);
         const t = data?.totals;
@@ -4015,6 +4016,8 @@
         const campaigns = data.accounts?.flatMap(a => a.campaigns ?? []) ?? [];
         const bestAd   = data.bestAd ?? null;
         const keywords = data.keywords ?? [];
+        const gaCities = data.cities ?? [];
+        const gaConversions = t.conversions ?? null;   // Google Ads conversions = leads
         const curr = '$';
         const dr = data.date_range;
         const gaSpend  = t.spend  || 0;
@@ -4227,27 +4230,38 @@
               <div class="section-label">Best Keywords &amp; Top Cities <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Manual entry</span></div>
               <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start">
                 <div>
-                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Best 10 Keywords</div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Best 10 Keywords ${keywords.length ? '<span style="color:#16A34A;font-weight:600">● live from Google Ads</span>' : ''}</div>
                   <div class="table-wrapper">
                     <table class="data-table">
-                      <thead><tr><th class="tl" style="min-width:220px">Keyword</th><th class="tr">Results</th><th class="tr">Competition</th></tr></thead>
-                      <tbody>${Array.from({length:10}, (_, i) => `<tr>
-                        <td class="tl">${_seoInput('kw', i, 'text', 'Keyword…')}</td>
-                        <td class="tr">${_seoInput('kw', i, 'results', '0', 'number', 'right')}</td>
-                        <td class="tr">${_seoInput('kw', i, 'competition', 'High / 0.82', 'text', 'right')}</td>
-                      </tr>`).join('')}</tbody>
+                      <thead><tr><th class="tl" style="min-width:220px">Keyword</th><th class="tr">Results</th><th class="tr">${keywords.length ? 'Match Type' : 'Competition'}</th></tr></thead>
+                      <tbody>${keywords.length
+                        ? keywords.map(kw => `<tr>
+                            <td class="tl">${escHtml(kw.text || '—')}</td>
+                            <td class="tr">${(kw.conversions ?? kw.clicks ?? 0).toLocaleString()}</td>
+                            <td class="tr" style="font-size:10px;color:var(--text-muted)">${escHtml(kw.matchType || '')}</td>
+                          </tr>`).join('')
+                        : Array.from({length:10}, (_, i) => `<tr>
+                            <td class="tl">${_seoInput('kw', i, 'text', 'Keyword…')}</td>
+                            <td class="tr">${_seoInput('kw', i, 'results', '0', 'number', 'right')}</td>
+                            <td class="tr">${_seoInput('kw', i, 'competition', 'High / 0.82', 'text', 'right')}</td>
+                          </tr>`).join('')}</tbody>
                     </table>
                   </div>
                 </div>
                 <div>
-                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Top Cities</div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Top Cities ${gaCities.length ? '<span style="color:#16A34A;font-weight:600">● live from Google Ads</span>' : ''}</div>
                   <div class="table-wrapper">
                     <table class="data-table">
                       <thead><tr><th class="tl" style="min-width:140px">City</th><th class="tr">Results</th></tr></thead>
-                      <tbody>${Array.from({length:10}, (_, i) => `<tr>
-                        <td class="tl">${_seoInput('cities', i, 'text', 'City…')}</td>
-                        <td class="tr">${_seoInput('cities', i, 'results', '0', 'number', 'right')}</td>
-                      </tr>`).join('')}</tbody>
+                      <tbody>${gaCities.length
+                        ? gaCities.map(c => `<tr>
+                            <td class="tl">${escHtml(c.city || '—')}</td>
+                            <td class="tr">${Math.round(c.conversions || c.clicks || 0).toLocaleString()}</td>
+                          </tr>`).join('')
+                        : Array.from({length:10}, (_, i) => `<tr>
+                            <td class="tl">${_seoInput('cities', i, 'text', 'City…')}</td>
+                            <td class="tr">${_seoInput('cities', i, 'results', '0', 'number', 'right')}</td>
+                          </tr>`).join('')}</tbody>
                     </table>
                   </div>
                 </div>
