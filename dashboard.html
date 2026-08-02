@@ -4046,6 +4046,22 @@
             <div class="kpi-sub">${sub}</div>
           </div>`;
 
+        // Manual-entry KPI card (value persisted per account)
+        const gaManual = (color, icon, label, storeKey, sub = 'Manual entry') =>
+          `<div class="kpi-card ${color}" data-card-id="ga-m-${storeKey.toLowerCase().replace(/[^a-z0-9]+/g,'-')}">
+            <span class="drag-handle" title="Drag to reorder">⠿</span>
+            <div class="kpi-icon">${icon}</div>
+            <div class="kpi-label">${label}</div>
+            <input class="ga-m-input" data-store-key="${storeKey}" type="number" min="0" value="${_gaInit(storeKey)}" placeholder="0"
+              style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+            <div class="kpi-sub">${sub}</div>
+          </div>`;
+        const _wpStored = Array.isArray(_gaStored.wp) ? _gaStored.wp : [];
+        const _wpVal = (i, f) => { const v = _wpStored[i]?.[f]; return v != null ? String(v).replace(/"/g,'&quot;') : ''; };
+        const _wpInput = (i, f, ph, type = 'text', align = 'right') =>
+          `<input class="ga-wp-input" data-wp-row="${i}" data-wp-field="${f}" type="${type}" value="${_wpVal(i, f)}" placeholder="${ph}"
+            style="width:100%;border:none;background:transparent;outline:none;color:var(--text-main);font-size:12px;font-family:inherit;text-align:${align};padding:2px 0">`;
+
         _updateTemplateBtnLabel('google-ads');
         document.getElementById('content').innerHTML = `
           <div class="kpi-sections-container" id="kpi-sections-container">
@@ -4113,6 +4129,69 @@
                   <div class="kpi-sub">Manual entry</div>
                 </div>
 
+              </div>
+            </div>
+
+            <div class="kpi-section" data-section-id="ga-leads-overview">
+              <div class="section-label">Leads Overview <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="ga-leads-overview">
+                ${gaManual('c-blue solid', '🆕', 'New Users', 'newUsers')}
+                ${gaManual('c-teal solid', '🔄', 'Returning Users', 'returningUsers')}
+              </div>
+            </div>
+
+            <div class="kpi-section" data-section-id="ga-leads-placement">
+              <div class="section-label">Leads Placement <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="ga-leads-placement">
+                ${gaManual('c-navy',         '➡️', 'Direct',         'pl_direct',   'Leads from direct traffic')}
+                ${gaManual('c-blue',         '🔍', 'Paid Search',    'pl_paid',     'Leads from paid search')}
+                ${gaManual('c-purple',       '📣', 'Organic Social', 'pl_social',   'Leads from organic social')}
+                ${gaManual('c-gold',         '🔗', 'Referral',       'pl_referral', 'Leads from referrals')}
+                ${gaManual('c-teal',         '🤖', 'AI',             'pl_ai',       'Leads from AI assistants')}
+                ${gaManual('c-orange',       '🌐', 'Cross Network',  'pl_cross',    'Leads from cross-network')}
+              </div>
+            </div>
+
+            <div class="kpi-section" data-section-id="ga-leads-source">
+              <div class="section-label">Leads Source <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+              <div class="kpi-grid" data-grid-id="ga-leads-source">
+                ${gaManual('c-blue',   '🇬', 'Google',           'src_google')}
+                ${gaManual('c-navy',   '➡️', 'Direct',           'src_direct')}
+                ${gaManual('c-teal',   '🌍', 'i.wl.co',          'src_iwl')}
+                ${gaManual('c-sky',    '💼', 'LinkedIn',          'src_linkedin')}
+                ${gaManual('c-coral',  '🎵', 'TikTok',            'src_tiktok')}
+                ${gaManual('c-gold',   '📢', 'ads.google.com',    'src_adsgoogle')}
+                ${gaManual('c-green',  '🅱️', 'Bing',              'src_bing')}
+                ${gaManual('c-purple', '🤖', 'ChatGPT',           'src_chatgpt')}
+                ${gaManual('c-blue',   '📘', 'Facebook',          'src_facebook')}
+                ${gaManual('c-coral',  '📸', 'Instagram',         'src_instagram')}
+                ${gaManual('c-navy',   '❔', 'Unavailable Data',  'src_unavailable')}
+              </div>
+            </div>
+
+            <div class="kpi-section" data-section-id="ga-web-pages">
+              <div class="section-label">Web Page Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span> <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Best 5 pages · manual entry</span></div>
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead><tr>
+                    <th class="tl" style="min-width:180px">Page</th>
+                    <th class="tr">Views</th>
+                    <th class="tr">Active Users</th>
+                    <th class="tr">Avg Engagement Time</th>
+                    <th class="tr">All Event Count</th>
+                    <th class="tr">Key Events</th>
+                  </tr></thead>
+                  <tbody>
+                    ${[0,1,2,3,4].map(i => `<tr>
+                      <td class="tl">${_wpInput(i, 'page', '/page-path', 'text', 'left')}</td>
+                      <td class="tr">${_wpInput(i, 'views', '0', 'number')}</td>
+                      <td class="tr">${_wpInput(i, 'users', '0', 'number')}</td>
+                      <td class="tr">${_wpInput(i, 'engagement', 'e.g. 1m 32s', 'text')}</td>
+                      <td class="tr">${_wpInput(i, 'events', '0', 'number')}</td>
+                      <td class="tr">${_wpInput(i, 'keyEvents', '0', 'number')}</td>
+                    </tr>`).join('')}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -4202,8 +4281,20 @@
           });
           const db = document.getElementById('ga-daily-budget-input')?.value;
           if (db != null) s['dailyBudget'] = db;
+          // generic manual cards (leads overview / placement / source)
+          document.querySelectorAll('.ga-m-input').forEach(inp => {
+            if (inp.value !== '') s[inp.dataset.storeKey] = inp.value;
+          });
+          // web page analysis table
+          const wp = [[],[],[],[],[]].map(() => ({}));
+          document.querySelectorAll('.ga-wp-input').forEach(inp => {
+            const r = parseInt(inp.dataset.wpRow), f = inp.dataset.wpField;
+            if (wp[r] && inp.value !== '') wp[r][f] = inp.value;
+          });
+          if (wp.some(row => Object.keys(row).length)) s.wp = wp;
           try { localStorage.setItem(_gaLeadsKey, JSON.stringify(s)); } catch(_) {}
         };
+        document.querySelectorAll('.ga-m-input, .ga-wp-input').forEach(inp => inp.addEventListener('input', _gaSave));
         document.getElementById('ga-leads-total')?.addEventListener('input', () => { _gaRecalc(); _gaSave(); });
         document.getElementById('ga-daily-budget-input')?.addEventListener('input', _gaSave);
         ['prospects','suppliers','job'].forEach(k => {
