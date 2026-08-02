@@ -4766,6 +4766,11 @@
       const _curTmpl = _getTemplate();
       _updateTemplateBtnLabel(_curTmpl);
 
+      // Manual leads entries for the Google Ads (lead-gen) template — per account
+      const _mlKey = `meta-leads-${currentOrgId||'x'}-${currentAgencyId||'x'}-${accountDbId}`;
+      const _mlStored = (() => { try { return JSON.parse(localStorage.getItem(_mlKey) || '{}'); } catch(_) { return {}; } })();
+      const _mlInit = (k) => _mlStored[k] != null ? _mlStored[k] : '';
+
       // ── Per-platform awareness data ──
       const _fbPlat = platforms.find(p => p.publisher_platform === 'facebook')  || {};
       const _igPlat = platforms.find(p => p.publisher_platform === 'instagram') || {};
@@ -4900,6 +4905,61 @@
         ` : _curTmpl === 'messages' ? `
           ${_spendingSection(false)}
           ${_messagesSection}
+
+        ` : _curTmpl === 'google-ads' ? `
+          ${_spendingSection(false)}
+
+          <div class="kpi-section" data-section-id="lead-traffic">
+            <div class="section-label">Traffic / Reach <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="lead-traffic">
+              ${kpi('c-sky',        '👥', 'Reach',       reach != null ? reach.toLocaleString('en') : '—',       'Meta Ads · Unique accounts')}
+              ${kpi('c-blue solid', '👁️', 'Impressions', impressions != null ? impressions.toLocaleString('en') : '—', 'Meta Ads · Total views')}
+              ${kpi('c-teal solid', '🖱️', 'Clicks',      clicks != null ? clicks.toLocaleString('en') : '—',     'Meta Ads')}
+              ${kpi('c-gold solid', '💰', 'CPM',          cpm != null ? fmt(cpm, curr) : '—',                     'Cost per 1K impressions')}
+              ${kpi('c-coral',      '💸', 'CPC',          cpc != null ? fmt(cpc, curr) : '—',                     'Cost per Click')}
+              ${kpi('c-navy',       '📊', 'CTR',          ctr != null ? fmt(ctr, '', 2) + '%' : '—',              'Clicks ÷ Impressions')}
+            </div>
+          </div>
+
+          <div class="kpi-section" data-section-id="lead-breakdown">
+            <div class="section-label">Leads Breakdown <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+            <div class="kpi-grid" data-grid-id="lead-breakdown">
+              <div class="kpi-card c-blue" data-card-id="ml-no-of-leads">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">📋</div>
+                <div class="kpi-label">No. of Leads</div>
+                <input id="ml-total" type="number" min="0" value="${_mlInit('total')}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              ${kpi('c-orange solid', '💸', 'CPL', '—', 'Spend ÷ Total Leads', null, null, null, 'ml-cpl-val')}
+              ${kpi('c-purple solid', '🎯', 'CR%', '—', 'Total Leads ÷ Clicks', null, null, null, 'ml-cr-val')}
+              <div class="kpi-card c-teal" data-card-id="ml-prospects">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">🤝</div>
+                <div class="kpi-label">Prospects</div>
+                <input id="ml-prospects" type="number" min="0" value="${_mlInit('prospects')}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              <div class="kpi-card c-sky" data-card-id="ml-suppliers">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">🏭</div>
+                <div class="kpi-label">Suppliers</div>
+                <input id="ml-suppliers" type="number" min="0" value="${_mlInit('suppliers')}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+              <div class="kpi-card c-green" data-card-id="ml-job">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">👷</div>
+                <div class="kpi-label">Job</div>
+                <input id="ml-job" type="number" min="0" value="${_mlInit('job')}" placeholder="0"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Manual entry</div>
+              </div>
+            </div>
+          </div>
 
         ` : `
           <div class="kpi-section" data-section-id="spending">
@@ -5220,6 +5280,29 @@
             el.title = 'View-only — contact your admin to change this';
           }
         });
+      }
+
+      // ── Google Ads (lead-gen) template: manual leads persistence + CPL/CR calc ──
+      if (_curTmpl === 'google-ads') {
+        const _mlRecalc = () => {
+          const totalLeads = parseInt(document.getElementById('ml-total')?.value || '0') || 0;
+          const cplEl = document.getElementById('ml-cpl-val');
+          const crEl  = document.getElementById('ml-cr-val');
+          if (cplEl) cplEl.textContent = spend && totalLeads ? fmt(spend / totalLeads, curr) : '—';
+          if (crEl)  crEl.textContent  = totalLeads && clicks ? fmt(totalLeads / clicks * 100, '', 2) + '%' : '—';
+        };
+        const _mlSave = () => {
+          const o = {};
+          ['total','prospects','suppliers','job'].forEach(k => {
+            const v = document.getElementById(`ml-${k === 'total' ? 'total' : k}`)?.value;
+            if (v != null && v !== '') o[k] = v;
+          });
+          try { localStorage.setItem(_mlKey, JSON.stringify(o)); } catch(_) {}
+        };
+        ['ml-total','ml-prospects','ml-suppliers','ml-job'].forEach(id => {
+          document.getElementById(id)?.addEventListener('input', () => { _mlRecalc(); _mlSave(); });
+        });
+        _mlRecalc();
       }
 
       // ── Init drag-and-drop layout ──
