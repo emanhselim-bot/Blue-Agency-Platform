@@ -342,6 +342,34 @@
     .cp-node-del { background: none; border: none; cursor: pointer; opacity: 0; font-size: 11px; color: #9AA4B2; transition: opacity .15s; }
     .cp-node:hover .cp-node-del { opacity: .8; }
     .cp-node-del:hover { color: #DC2626; }
+    /* decision node + Yes/No branch */
+    .cp-decision { display: flex; align-items: center; gap: 10px; border: 2px dashed #C084FC; border-radius: 12px; background: #FBF5FF; padding: 10px 16px; min-width: 320px; max-width: 460px; }
+    .cp-decision .cp-node-name { color: #6B21A8; font-weight: 800; }
+    .cp-decision.yes { border-style: solid; border-color: #86EFAC; background: #F4FDF7; }
+    .cp-decision.yes .cp-node-name { color: #15803D; }
+    .cp-decision.no { border-style: solid; border-color: #FCD34D; background: #FFFCF2; }
+    .cp-decision.no .cp-node-name { color: #B45309; }
+    .cp-branch { display: flex; align-items: flex-start; justify-content: center; gap: 0; }
+    .cp-branch-side { display: flex; flex-direction: column; align-items: center; min-width: 165px; }
+    .cp-branch-line { width: 100%; height: 12px; border-top: 2px solid #C9D4E3; }
+    .cp-branch-side.left .cp-branch-line  { border-left: 2px solid #C9D4E3; border-top-left-radius: 8px; }
+    .cp-branch-side.right .cp-branch-line { border-right: 2px solid #C9D4E3; border-top-right-radius: 8px; }
+    .cp-branch-btn { border: 1.5px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 5px 16px; font-size: 11.5px; font-weight: 800; cursor: pointer; margin-top: 8px; letter-spacing: .5px; color: #6B7280; }
+    .cp-branch-btn.no:hover,  .cp-branch-btn.no.active  { background: #FEF3C7; border-color: #FCD34D; color: #B45309; }
+    .cp-branch-btn.yes:hover, .cp-branch-btn.yes.active { background: #DCFCE7; border-color: #86EFAC; color: #15803D; }
+    .cp-branch-note { font-size: 10.5px; color: #8A97A8; margin-top: 6px; text-align: center; max-width: 150px; line-height: 1.35; }
+    .cp-revcount { font-size: 10px; font-weight: 800; background: #FEF3C7; color: #B45309; border-radius: 10px; padding: 1px 8px; }
+    [data-theme="dark"] .cp-decision { background: #241833; border-color: #7E22CE; }
+    [data-theme="dark"] .cp-decision .cp-node-name { color: #E9D5FF; }
+    [data-theme="dark"] .cp-decision.yes { background: #10261A; border-color: #166534; }
+    [data-theme="dark"] .cp-decision.yes .cp-node-name { color: #86EFAC; }
+    [data-theme="dark"] .cp-decision.no { background: #2A2418; border-color: #78350F; }
+    [data-theme="dark"] .cp-decision.no .cp-node-name { color: #FCD34D; }
+    [data-theme="dark"] .cp-branch-line { border-color: #334155; }
+    [data-theme="dark"] .cp-branch-btn { background: #1E293B; border-color: #334155; color: #94A3B8; }
+    [data-theme="dark"] .cp-branch-note { color: #64748B; }
+    [data-theme="dark"] .cp-revcount { background: #422006; color: #FCD34D; }
+
     .cp-addnode { border: 1.5px dashed #C9D4E3; border-radius: 12px; background: transparent; color: #8A97A8; padding: 7px 18px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 200px; }
     .cp-addnode:hover { border-color: #0573F5; color: #0573F5; background: #F5F9FF; }
     .cp-flow-end { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #16A34A; border: 2px solid #86EFAC; background: #F4FDF7; border-radius: 20px; padding: 6px 22px; }
@@ -7637,10 +7665,10 @@
     const CP_MAPS = {
       'Monthly content calendar': [
         { stage: '🚀 Onboarding', items: ['New Client', 'Quotation Sent', 'Quotation Approved', 'Contract Signed', 'Partial Payment Received', 'WhatsApp/Slack Group Created', 'Kickoff Meeting', 'Assets & Access Received'] },
-        { stage: '🔍 Strategy Phase', items: ['Brand Analysis', 'Competitor Analysis', 'Content Strategy', 'Monthly Content Plan', '👤 Client Approval — Plan', '✏️ Plan Revisions (if needed)'] },
-        { stage: '✍️ Copywriting', items: ['Copywriting', '👤 Copy Approval', '✏️ Copy Edits (if needed)'] },
-        { stage: '🎨 Design', items: ['Design', '👤 Design Approval', '✏️ Design Edits (if needed)'] },
-        { stage: '📤 Delivery', items: ['Final Delivery', '👤 Final Client Review', '🔄 Final Edits (if needed)'] },
+        { stage: '🔍 Strategy Phase', items: ['Brand Analysis', 'Competitor Analysis', 'Content Strategy', 'Monthly Content Plan', '👤 Client Approval — Plan'] },
+        { stage: '✍️ Copywriting', items: ['Copywriting', '👤 Copy Approval'] },
+        { stage: '🎨 Design', items: ['Design', '👤 Design Approval'] },
+        { stage: '📤 Delivery', items: ['Final Delivery', '👤 Final Client Review'] },
         { stage: '🚀 Publishing', items: ['Scheduling', 'Publishing', 'Community Management'] },
         { stage: '📈 Reporting', items: ['Monthly Reporting', 'Next Month Planning'] },
       ],
@@ -7780,7 +7808,7 @@
       document.getElementById('cp-title').textContent = c.name || 'Client';
       const proc = _cpProc();
       const allItems = proc.flatMap(st => st.items || []);
-      const doneCount = allItems.filter(i => i.status === 'done').length;
+      const doneCount = allItems.filter(i => i.type === 'decision' ? i.decision === 'yes' : i.status === 'done').length;
       const pct = allItems.length ? Math.round(doneCount / allItems.length * 100) : 0;
 
       document.getElementById('cp-body').innerHTML = `
@@ -7881,11 +7909,11 @@
             });
             return groups.map(g => {
               const gItems = g.stages.flatMap(x => x.st.items || []);
-              const gDone = gItems.filter(i => i.status === 'done').length;
+              const gDone = gItems.filter(i => i.type === 'decision' ? i.decision === 'yes' : i.status === 'done').length;
               const gPct = gItems.length ? Math.round(gDone / gItems.length * 100) : 0;
               const flow = g.stages.map(({ st, si }) => {
                 const items = st.items || [];
-                const d = items.filter(i => i.status === 'done').length;
+                const d = items.filter(i => i.type === 'decision' ? i.decision === 'yes' : i.status === 'done').length;
                 const phase = `<div class="cp-phase">${escHtml(st.stage || 'Stage')}
                   <span class="cp-phase-actions">
                     <span style="font-size:10px;font-weight:700;opacity:.75">${d}/${items.length}</span>
@@ -7893,6 +7921,32 @@
                   </span></div>`;
                 const nodes = items.map((it, ii) => {
                   const stt = it.status || 'pending';
+                  if (it.type === 'decision') {
+                    const dec = it.decision || '';                       // '' | 'no' | 'yes'
+                    const revs = it.revisions || 0;
+                    return `<div style="display:flex;flex-direction:column;align-items:center">
+                      <div class="cp-decision ${dec}">
+                        <span style="font-size:15px">${dec === 'yes' ? '✅' : (dec === 'no' ? '✏️' : '👤')}</span>
+                        <span class="cp-node-name">${escHtml(it.name)}${it.name.trim().endsWith('?') ? '' : '?'}</span>
+                        ${revs ? `<span class="cp-revcount">${revs} revision${revs > 1 ? 's' : ''}</span>` : ''}
+                        <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
+                          onchange="cpSetItemDate(${si}, ${ii}, this.value)">
+                        <button class="cp-node-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
+                      </div>
+                      <div class="cp-branch">
+                        <div class="cp-branch-side left">
+                          <div class="cp-branch-line"></div>
+                          <button class="cp-branch-btn no ${dec === 'no' ? 'active' : ''}" onclick="cpDecide(${si},${ii},'no')">✗ NO</button>
+                          <div class="cp-branch-note">${escHtml(it.revise || 'Revise & resubmit')}</div>
+                        </div>
+                        <div class="cp-branch-side right">
+                          <div class="cp-branch-line"></div>
+                          <button class="cp-branch-btn yes ${dec === 'yes' ? 'active' : ''}" onclick="cpDecide(${si},${ii},'yes')">✓ YES</button>
+                          <div class="cp-branch-note">Continue to next step</div>
+                        </div>
+                      </div>
+                    </div>`;
+                  }
                   return `<div class="cp-node ${stt}">
                     <button class="cp-node-tick" title="Click to change status: ${CP_STATUS_LABEL[stt]}" onclick="cpCycleStatus(${si},${ii})">${stt === 'done' ? '✓' : (stt === 'in_progress' ? '•' : '')}</button>
                     <span class="cp-node-name">${escHtml(it.name)}</span>
@@ -7901,7 +7955,10 @@
                     <button class="cp-node-del" title="Remove step" onclick="cpRemoveItem(${si},${ii})">✕</button>
                   </div>`;
                 });
-                const addBtn = `<button class="cp-addnode" onclick="cpAddItem(${si})">＋ Add step</button>`;
+                const addBtn = `<div style="display:flex;gap:8px">
+                  <button class="cp-addnode" style="min-width:auto" onclick="cpAddItem(${si})">＋ Step</button>
+                  <button class="cp-addnode" style="min-width:auto" onclick="cpAddDecision(${si})">◇ Decision</button>
+                </div>`;
                 return [phase, ...nodes, addBtn].join(ARROW);
               }).join(ARROW);
               return `<div class="cp-mapgroup">
@@ -7922,6 +7979,27 @@
         </div>`;
     }
 
+    function cpDecide(si, ii, choice) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const it = proc[si].items[ii];
+      const prev = it.decision || '';
+      if (prev === choice) { it.decision = ''; }              // click again to reset
+      else {
+        it.decision = choice;
+        if (choice === 'no') it.revisions = (it.revisions || 0) + 1;
+      }
+      it.status = it.decision === 'yes' ? 'done' : (it.decision === 'no' ? 'in_progress' : 'pending');
+      _cpSaveProc(proc);
+    }
+    function cpAddDecision(si) {
+      const name = prompt('Approval / decision point (e.g. Client Approval, Copy Approval, Design Approval):');
+      if (!name?.trim()) return;
+      const revise = prompt('What happens if the answer is NO? (e.g. Revise plan, Edit copy, Design edits)', 'Revise & resubmit');
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      proc[si].items = [...(proc[si].items || []), { name: name.trim(), type: 'decision', decision: '', revisions: 0, revise: (revise || '').trim() || 'Revise & resubmit', status: 'pending', date: '' }];
+      _cpSaveProc(proc);
+    }
+
     function cpSetItemDate(si, ii, val) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       proc[si].items[ii].date = val || '';
@@ -7936,7 +8014,9 @@
       // copy structure, reset statuses and dates
       const copy = JSON.parse(JSON.stringify(src)).map(st => ({
         map: st.map || 'Custom stages', stage: st.stage,
-        items: (st.items || []).map(it => ({ name: it.name, status: 'pending', date: '' })),
+        items: (st.items || []).map(it => it.type === 'decision'
+          ? { name: it.name, type: 'decision', decision: '', revisions: 0, revise: it.revise, status: 'pending', date: '' }
+          : { name: it.name, status: 'pending', date: '' }),
       }));
       _cpSaveProc([..._cpProc(), ...copy]);
     }
@@ -7949,10 +8029,24 @@
       const already = existing.some(st => (st.map || '') === key);
       if (already && !confirm(`"${key}" is already loaded for ${_cpMonthLabel(_cpMonth)}. Add another copy?`)) return;
       const label = already ? `${key} (${existing.filter(st => (st.map || '').startsWith(key)).length ? '2' : '2'})` : key;
+      const REVISE_HINT = {
+        'Plan': 'Revise the plan', 'Copy': 'Edit the copy', 'Design': 'Design edits',
+        'Creative': 'Creative edits', 'Script': 'Rewrite the script', 'Concept': 'Refine concepts',
+        'Selection': 'Reselect images', 'Content': 'Revise content', 'Strategy': 'Revise strategy',
+      };
       const added = tpl.map(st => ({
         map: label,
         stage: st.stage,
-        items: st.items.map(n => ({ name: n, status: 'pending', date: '' })),
+        items: st.items.map(n => {
+          const clean = n.replace(/^👤\s*/, '');
+          // Anything that is an approval / review gate becomes a Yes/No decision node
+          if (/approval|review|\?$/i.test(clean)) {
+            const key = Object.keys(REVISE_HINT).find(k => new RegExp(k, 'i').test(clean));
+            return { name: clean.replace(/\s*—\s*/, ' — '), type: 'decision', decision: '', revisions: 0,
+                     revise: REVISE_HINT[key] || 'Revise & resubmit', status: 'pending', date: '' };
+          }
+          return { name: n, status: 'pending', date: '' };
+        }),
       }));
       _cpMapPickerOpen = false;
       _cpSaveProc([...existing, ...added]);
