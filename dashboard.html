@@ -1491,11 +1491,14 @@
       <input type="hidden" id="fm-id">
       <label>CLIENT NAME *</label><input class="hub-input" id="fm-client" placeholder="e.g. Urbanleaf">
       <label>DESCRIPTION</label><input class="hub-input" id="fm-desc" placeholder="e.g. August management fee">
-      <label>AMOUNT *</label>
+      <label>TOTAL AMOUNT *</label>
       <div style="display:flex;gap:8px">
-        <input class="hub-input" id="fm-amount" type="number" min="0" placeholder="0" style="flex:1">
+        <input class="hub-input" id="fm-amount" type="number" min="0" step="0.01" placeholder="0" style="flex:1" oninput="finUpdateRemaining()">
         <select class="hub-input" id="fm-currency" style="width:90px"><option>EGP</option><option>USD</option><option>SAR</option><option>AED</option></select>
       </div>
+      <label>AMOUNT PAID</label>
+      <input class="hub-input" id="fm-paid" type="number" min="0" step="0.01" placeholder="0" oninput="finUpdateRemaining()">
+      <div id="fm-remaining" style="font-size:12px;font-weight:700;margin-top:6px;color:#6B7280"></div>
       <label>STATUS</label>
       <select class="hub-input" id="fm-status"><option value="invoiced">Invoiced</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select>
       <label>DUE DATE</label><input class="hub-input" id="fm-due" type="date">
@@ -8038,37 +8041,57 @@
       return r.status;
     }
 
+    function _finPaid(r) { return Math.min(Number(r.amount_paid ?? (r.status === 'paid' ? r.amount : 0)) || 0, Number(r.amount) || 0); }
+    function _finRemaining(r) { return Math.max(0, (Number(r.amount) || 0) - _finPaid(r)); }
+
     function renderFinance() {
       const rows = _finRows;
-      const paid = rows.filter(r => r.status === 'paid');
-      const outstanding = rows.filter(r => r.status !== 'paid');
+      const paidRows      = rows.map(r => ({ currency: r.currency, amount: _finPaid(r) })).filter(r => r.amount > 0);
+      const remainingRows = rows.map(r => ({ currency: r.currency, amount: _finRemaining(r) })).filter(r => r.amount > 0);
       document.getElementById('fin-summary').innerHTML =
         '<div class="fin-sum-card"><div class="fin-sum-label">TOTAL INVOICED</div><div class="fin-sum-val">' + _sumByCur(rows) + '</div></div>' +
-        '<div class="fin-sum-card"><div class="fin-sum-label">COLLECTED</div><div class="fin-sum-val" style="color:#7CFCB1">' + _sumByCur(paid) + '</div></div>' +
-        '<div class="fin-sum-card"><div class="fin-sum-label">OUTSTANDING</div><div class="fin-sum-val" style="color:#FFB4B4">' + _sumByCur(outstanding) + '</div></div>';
+        '<div class="fin-sum-card"><div class="fin-sum-label">AMOUNT PAID</div><div class="fin-sum-val" style="color:#7CFCB1">' + _sumByCur(paidRows) + '</div></div>' +
+        '<div class="fin-sum-card"><div class="fin-sum-label">AMOUNT REST</div><div class="fin-sum-val" style="color:#FFB4B4">' + _sumByCur(remainingRows) + '</div></div>';
       const wrap = document.getElementById('fin-table-wrap');
       if (!rows.length) { wrap.innerHTML = '<div class="fin-empty">No payments yet. Click "＋ Add payment" to create the first one.</div>'; return; }
-      wrap.innerHTML = '<table class="fin-table"><thead><tr><th>Client</th><th>Description</th><th>Amount</th><th>Status</th><th>Due</th><th>Paid</th><th></th></tr></thead><tbody>' +
+      wrap.innerHTML = '<table class="fin-table"><thead><tr><th>Client</th><th>Description</th><th style="text-align:right">Total</th><th style="text-align:right">Paid</th><th style="text-align:right">Rest</th><th>Status</th><th>Due</th><th></th></tr></thead><tbody>' +
         rows.map(r => {
           const st = _finEffStatus(r);
+          const paid = _finPaid(r), rest = _finRemaining(r);
+          const partial = paid > 0 && rest > 0;
           return '<tr>' +
             '<td style="font-weight:700">' + _hubEsc(r.client_name) + '</td>' +
             '<td style="color:#6B7280">' + _hubEsc(r.description || '—') + '</td>' +
-            '<td style="font-weight:700">' + _fmtMoney(r.amount, r.currency) + '</td>' +
-            '<td><span class="fin-chip ' + st + '">' + st.toUpperCase() + '</span></td>' +
+            '<td style="font-weight:700;text-align:right">' + _fmtMoney(r.amount, r.currency) + '</td>' +
+            '<td style="text-align:right;color:#16A34A;font-weight:700">' + (paid > 0 ? _fmtMoney(paid, r.currency) : '—') + '</td>' +
+            '<td style="text-align:right;font-weight:700;color:' + (rest > 0 ? '#DC2626' : '#16A34A') + '">' + (rest > 0 ? _fmtMoney(rest, r.currency) : '✓ 0') + '</td>' +
+            '<td><span class="fin-chip ' + st + '">' + (partial ? 'PARTIAL' : st.toUpperCase()) + '</span></td>' +
             '<td>' + (r.due_date || '—') + '</td>' +
-            '<td>' + (r.paid_date || '—') + '</td>' +
             '<td style="white-space:nowrap;text-align:right">' +
-              (r.status !== 'paid' ? '<button class="fin-act-btn" onclick="markFinPaid(\'' + r.id + '\')" title="Mark as paid">✓ Paid</button>' : '') +
+              (rest > 0 ? '<button class="fin-act-btn" onclick="markFinPaid(\'' + r.id + '\')" title="Mark fully paid">✓ Paid</button>' : '') +
               '<button class="fin-act-btn" onclick="openFinModal(\'' + r.id + '\')" title="Edit">✎</button>' +
             '</td></tr>';
         }).join('') + '</tbody></table>';
     }
 
     async function markFinPaid(id) {
-      const { error } = await sb.from('finance_payments').update({ status: 'paid', paid_date: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() }).eq('id', id);
+      const row = _finRows.find(r => r.id === id);
+      const { error } = await sb.from('finance_payments').update({ status: 'paid', amount_paid: Number(row?.amount) || 0, paid_date: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() }).eq('id', id);
       if (error) { alert('Error: ' + error.message); return; }
       loadFinance();
+    }
+
+    function finUpdateRemaining() {
+      const total = Number(document.getElementById('fm-amount')?.value) || 0;
+      const paid  = Number(document.getElementById('fm-paid')?.value) || 0;
+      const cur   = document.getElementById('fm-currency')?.value || '';
+      const el = document.getElementById('fm-remaining');
+      if (!el) return;
+      const rest = total - paid;
+      if (!total) { el.textContent = ''; return; }
+      if (paid > total)   { el.textContent = '⚠ Paid is more than the total'; el.style.color = '#DC2626'; }
+      else if (rest <= 0) { el.textContent = '✓ Fully paid'; el.style.color = '#16A34A'; }
+      else                { el.textContent = 'Remaining: ' + _fmtMoney(rest, cur); el.style.color = '#DC2626'; }
     }
 
     function openFinModal(id) {
@@ -8078,11 +8101,13 @@
       document.getElementById('fm-client').value = r?.client_name || '';
       document.getElementById('fm-desc').value = r?.description || '';
       document.getElementById('fm-amount').value = r?.amount || '';
+      document.getElementById('fm-paid').value = r ? (_finPaid(r) || '') : '';
       document.getElementById('fm-currency').value = r?.currency || 'EGP';
       document.getElementById('fm-status').value = r?.status || 'invoiced';
       document.getElementById('fm-due').value = r?.due_date || '';
       document.getElementById('fm-delete').style.display = r ? '' : 'none';
       document.getElementById('fm-error').textContent = '';
+      finUpdateRemaining();
       document.getElementById('fin-modal').classList.remove('hidden');
     }
 
@@ -8093,11 +8118,16 @@
       const errEl = document.getElementById('fm-error');
       if (!client) { errEl.textContent = 'Client name is required.'; return; }
       if (!amount || amount <= 0) { errEl.textContent = 'Amount must be greater than 0.'; return; }
-      const status = document.getElementById('fm-status').value;
+      let paidAmt = Number(document.getElementById('fm-paid').value) || 0;
+      if (paidAmt < 0) paidAmt = 0;
+      if (paidAmt > amount) { errEl.textContent = 'Amount paid cannot exceed the total amount.'; return; }
+      let status = document.getElementById('fm-status').value;
+      if (paidAmt >= amount && amount > 0) status = 'paid';
       const row = {
         client_name: client,
         description: document.getElementById('fm-desc').value.trim() || null,
         amount,
+        amount_paid: paidAmt,
         currency: document.getElementById('fm-currency').value,
         status,
         due_date: document.getElementById('fm-due').value || null,
