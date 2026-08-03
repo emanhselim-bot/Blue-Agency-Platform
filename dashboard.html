@@ -411,6 +411,78 @@
     .cp-bar { height: 5px; background: #E9EDF5; border-radius: 4px; overflow: hidden; margin-top: 10px; }
     .cp-bar-fill { height: 100%; background: #16A34A; border-radius: 4px; transition: width .3s; }
 
+    /* ═══ CLIENT PIPELINE MODULE (independent) ═══ */
+    .cpm-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+    .cpm-tab { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.85); border-radius: 20px; padding: 6px 16px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+    .cpm-tab:hover { background: rgba(255,255,255,.24); }
+    .cpm-tab.active { background: #fff; color: #0A1CA3; border-color: #fff; }
+    .cpm-panel { background: rgba(255,255,255,.97); border-radius: 16px; padding: 22px 24px; box-shadow: 0 8px 30px rgba(0,0,0,.25); max-height: 74vh; overflow-y: auto; text-align: left; }
+    [data-theme="dark"] .cpm-panel { background: #1E293B; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+    .cpm-sechead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .cpm-sectitle { font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #6B7280; flex: 1; }
+    [data-theme="dark"] .cpm-sectitle { color: #94A3B8; }
+    .cpm-btn { background: #0573F5; color: #fff; border: none; padding: 7px 15px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .cpm-btn:hover { background: #083BBF; }
+    .cpm-btn.ghost { background: transparent; color: #0573F5; border: 1.5px solid #D6DEE9; }
+    .cpm-btn.ghost:hover { background: #EAF2FE; }
+    [data-theme="dark"] .cpm-btn.ghost { border-color: #334155; color: #93C5FD; }
+    [data-theme="dark"] .cpm-btn.ghost:hover { background: #16294A; }
+    .cpm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .cpm-table th { text-align: left; padding: 9px 12px; background: #F3F6FB; color: #6B7280; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+    .cpm-table td { padding: 9px 12px; border-top: 1px solid #EEF1F6; color: #111827; }
+    [data-theme="dark"] .cpm-table th { background: #0F172A; color: #94A3B8; }
+    [data-theme="dark"] .cpm-table td { border-top-color: #334155; color: #E2E8F0; }
+    .cpm-table tr.archived td { opacity: .45; }
+    .cpm-mini { background: none; border: 1px solid #D6DEE9; border-radius: 6px; padding: 3px 9px; font-size: 11px; cursor: pointer; margin-right: 5px; color: #4B5563; }
+    .cpm-mini:hover { background: #F3F6FB; }
+    [data-theme="dark"] .cpm-mini { border-color: #334155; color: #CBD5E1; }
+    [data-theme="dark"] .cpm-mini:hover { background: #334155; }
+    .cpm-role { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 10px; font-weight: 800; letter-spacing: .5px; }
+    .cpm-role.owner  { background: #F3E8FF; color: #7C3AED; }
+    .cpm-role.editor { background: #EAF2FE; color: #0557D9; }
+    .cpm-role.viewer { background: #F1F5F9; color: #64748B; }
+    [data-theme="dark"] .cpm-role.owner  { background: #3B0764; color: #D8B4FE; }
+    [data-theme="dark"] .cpm-role.editor { background: #16294A; color: #93C5FD; }
+    [data-theme="dark"] .cpm-role.viewer { background: #1E293B; color: #94A3B8; }
+    .cpm-empty { padding: 26px; text-align: center; color: #9AA4B2; font-size: 13px; }
+    .cpm-badge { font-size: 10px; font-weight: 800; letter-spacing: .5px; padding: 3px 10px; border-radius: 20px; background: rgba(255,255,255,.18); color: #fff; }
+    /* pipeline board */
+    .cpm-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start; }
+    .cpm-col { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); border-radius: 12px; padding: 10px; min-width: 235px; max-width: 235px; flex-shrink: 0; }
+    .cpm-col-head { color: #fff; font-size: 11.5px; font-weight: 800; margin-bottom: 8px; display: flex; gap: 6px; align-items: center; }
+    .cpm-col-n { background: rgba(255,255,255,.24); border-radius: 10px; padding: 0 7px; font-size: 10px; }
+    .cpm-task { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.16); border-left: 3px solid #C9D4E3; }
+    .cpm-task:hover { transform: translateY(-1px); }
+    .cpm-task.done { border-left-color: #16A34A; }
+    .cpm-task.in_progress { border-left-color: #F59E0B; }
+    .cpm-task.blocked { border-left-color: #EF4444; }
+    [data-theme="dark"] .cpm-task { background: #1E293B; }
+    .cpm-task-name { font-size: 12.5px; font-weight: 700; color: #111827; }
+    [data-theme="dark"] .cpm-task-name { color: #F1F5F9; }
+    .cpm-task-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 10px; color: #6B7280; align-items: center; }
+    .cpm-pill { background: #EAF2FE; color: #0557D9; border-radius: 10px; padding: 1px 8px; font-weight: 700; }
+    [data-theme="dark"] .cpm-pill { background: #16294A; color: #93C5FD; }
+    .cpm-pill.overdue { background: #FEE2E2; color: #DC2626; }
+    /* task drawer */
+    .cpm-drawer { position: fixed; top: 0; right: 0; width: 460px; max-width: 94vw; height: 100vh; background: #fff; z-index: 9600; box-shadow: -8px 0 40px rgba(0,0,0,.3); display: flex; flex-direction: column; }
+    [data-theme="dark"] .cpm-drawer { background: #1E293B; }
+    .cpm-drawer.hidden { display: none; }
+    .cpm-drawer-head { padding: 18px 20px 14px; border-bottom: 1px solid #E4E9F2; display: flex; align-items: center; gap: 10px; }
+    [data-theme="dark"] .cpm-drawer-head { border-bottom-color: #334155; }
+    .cpm-drawer-body { flex: 1; overflow-y: auto; padding: 18px 20px 30px; }
+    .cpm-field { margin-bottom: 14px; }
+    .cpm-field label { display: block; font-size: 10px; font-weight: 800; letter-spacing: .8px; color: #6B7280; margin-bottom: 5px; text-transform: uppercase; }
+    .cpm-input { width: 100%; padding: 8px 11px; border: 1.5px solid #D6DEE9; border-radius: 8px; font-size: 13px; box-sizing: border-box; font-family: inherit; background: #fff; color: #111827; }
+    [data-theme="dark"] .cpm-input { background: #0F172A; border-color: #334155; color: #F1F5F9; }
+    .cpm-input:focus { outline: none; border-color: #0573F5; }
+    .cpm-comment { border-top: 1px solid #EEF1F6; padding: 9px 0; font-size: 12.5px; }
+    [data-theme="dark"] .cpm-comment { border-top-color: #334155; }
+    .cpm-comment-meta { font-size: 10px; color: #9AA4B2; margin-bottom: 3px; }
+    .cpm-file { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 6px 0; border-top: 1px solid #EEF1F6; }
+    [data-theme="dark"] .cpm-file { border-top-color: #334155; }
+    .cpm-readonly-note { background: #FEF3C7; color: #B45309; border-radius: 8px; padding: 8px 12px; font-size: 11.5px; font-weight: 700; margin-bottom: 14px; }
+    [data-theme="dark"] .cpm-readonly-note { background: #422006; color: #FCD34D; }
+
     /* hub modal */
     .hub-modal { position: fixed; inset: 0; background: rgba(10,20,60,.55); z-index: 9500; display: flex; align-items: center; justify-content: center; }
     .hub-modal.hidden { display: none; }
@@ -1504,9 +1576,10 @@
         <div class="hub-mod-head">
           <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
           <h2>🤝 Clients Pipeline</h2>
-          <button class="hub-mod-btn" onclick="openPipeModal()">＋ Add client</button>
+          <span class="cpm-badge" id="cpm-rolebadge"></span>
         </div>
-        <div class="pipe-board" id="pipe-board"><div class="hub-loading">Loading…</div></div>
+        <div class="cpm-tabs" id="cpm-tabs"></div>
+        <div id="cpm-content"></div>
       </div>
       <div id="hub-client-view" style="display:none">
         <div class="hub-mod-head">
@@ -1581,6 +1654,18 @@
       </div>
       <div class="auth-error" id="fm-error"></div>
     </div>
+  </div>
+
+  <!-- CLIENT PIPELINE TASK DRAWER -->
+  <div class="cpm-drawer hidden" id="cpm-drawer">
+    <div class="cpm-drawer-head">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:800;color:var(--text-main)" id="cpm-drawer-title">Task</div>
+        <div style="font-size:11px;color:var(--text-muted)" id="cpm-drawer-sub"></div>
+      </div>
+      <button onclick="cpmCloseDrawer()" style="background:none;border:none;font-size:19px;cursor:pointer;color:var(--text-muted)">✕</button>
+    </div>
+    <div class="cpm-drawer-body" id="cpm-drawer-body"></div>
   </div>
 
   <!-- TEAM CONTROL PANEL -->
@@ -7642,6 +7727,466 @@
       if (error) { alert('Could not move card: ' + error.message); loadPipeline(); }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // CLIENT PIPELINE MODULE — fully independent from Media Buying
+    // Own settings, team, permissions, clients, services and data.
+    // ═══════════════════════════════════════════════════════════
+    const CPM_STAGES = [
+      'Quotation Sent','Quotation Approved','Contract Signed','Partial Payment Received',
+      'Group Created','Kickoff Meeting','Brand Analysis','Competitor Analysis','Content Strategy',
+      'Strategy Approval','Copywriting','Copy Approval','Copy Revisions','Design','Design Approval',
+      'Design Revisions','Final Client Review','Final Client Edits','Scheduling','Publishing','Monthly Report',
+    ];
+    const CPM_STATUS = ['pending','in_progress','done','blocked'];
+    const CPM_STATUS_LABEL = { pending:'Not started', in_progress:'In progress', done:'Done', blocked:'Blocked' };
+
+    let cpmRole = 'none';
+    let cpmTab = 'board';
+    let cpmData = { clients: [], services: [], members: [], titles: [], pipelines: [] };
+    let cpmPipelineId = null;
+    let cpmTasks = [];
+    let cpmTask = null;
+
+    const cpmCanEdit  = () => cpmRole === 'owner' || cpmRole === 'editor';
+    const cpmIsOwner  = () => cpmRole === 'owner';
+    const cpmEsc = (t) => escHtml(t);
+
+    async function cpmLoadRole() {
+      try {
+        const { data, error } = await sb.rpc('cp_role', { org: currentOrgId });
+        cpmRole = error ? 'none' : (data || 'none');
+      } catch { cpmRole = 'none'; }
+      const b = document.getElementById('cpm-rolebadge');
+      if (b) b.textContent = cpmRole === 'none' ? 'NO ACCESS' : cpmRole.toUpperCase();
+    }
+
+    async function cpmLoadSettings() {
+      const [cl, sv, me, ti] = await Promise.all([
+        sb.from('cp_clients').select('*').eq('organization_id', currentOrgId).order('name'),
+        sb.from('cp_services').select('*').eq('organization_id', currentOrgId).order('name'),
+        sb.from('cp_members').select('*').eq('organization_id', currentOrgId).order('full_name'),
+        sb.from('cp_job_titles').select('*').eq('organization_id', currentOrgId).order('name'),
+      ]);
+      cpmData.clients  = cl.data || [];
+      cpmData.services = sv.data || [];
+      cpmData.members  = me.data || [];
+      cpmData.titles   = ti.data || [];
+    }
+
+    async function cpmInit() {
+      await cpmLoadRole();
+      if (cpmRole === 'none') {
+        document.getElementById('cpm-tabs').innerHTML = '';
+        document.getElementById('cpm-content').innerHTML =
+          '<div class="cpm-panel"><div class="cpm-empty">You do not have access to the Client Pipeline. Ask an owner to add you under Pipeline Settings → Team.</div></div>';
+        return;
+      }
+      await cpmLoadSettings();
+      cpmRenderTabs();
+      cpmRenderTab();
+    }
+
+    function cpmRenderTabs() {
+      const tabs = [['board','📋 Pipelines']];
+      if (cpmIsOwner()) tabs.push(['clients','🏢 Clients'], ['services','🧩 Services'], ['team','👥 Team'], ['titles','🏷 Job Titles']);
+      document.getElementById('cpm-tabs').innerHTML = tabs
+        .map(([k, l]) => `<button class="cpm-tab ${cpmTab === k ? 'active' : ''}" onclick="cpmSetTab('${k}')">${l}</button>`).join('');
+    }
+    function cpmSetTab(t) { cpmTab = t; cpmRenderTabs(); cpmRenderTab(); }
+
+    function cpmRenderTab() {
+      if (cpmTab === 'board')    return cpmRenderBoardTab();
+      if (cpmTab === 'clients')  return cpmRenderList('clients');
+      if (cpmTab === 'services') return cpmRenderList('services');
+      if (cpmTab === 'titles')   return cpmRenderList('titles');
+      if (cpmTab === 'team')     return cpmRenderTeam();
+    }
+
+    // ── Settings: simple named lists (clients / services / job titles) ──
+    const CPM_LIST_META = {
+      clients:  { table: 'cp_clients',    title: 'Clients',    single: 'client',    arr: 'clients'  },
+      services: { table: 'cp_services',   title: 'Services',   single: 'service',   arr: 'services' },
+      titles:   { table: 'cp_job_titles', title: 'Job Titles', single: 'job title', arr: 'titles'   },
+    };
+
+    function cpmRenderList(kind) {
+      const m = CPM_LIST_META[kind];
+      const rows = cpmData[m.arr];
+      document.getElementById('cpm-content').innerHTML = `
+        <div class="cpm-panel">
+          <div class="cpm-sechead">
+            <span class="cpm-sectitle">${m.title} · ${rows.filter(r => !r.archived).length} active</span>
+            <button class="cpm-btn" onclick="cpmAddItem('${kind}')">＋ Add ${m.single}</button>
+          </div>
+          ${rows.length ? `<table class="cpm-table">
+            <thead><tr><th>Name</th>${kind === 'clients' ? '<th>Contact</th><th>Email</th><th>Phone</th>' : ''}<th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody>${rows.map(r => `<tr class="${r.archived ? 'archived' : ''}">
+              <td style="font-weight:700">${cpmEsc(r.name)}</td>
+              ${kind === 'clients' ? `<td>${cpmEsc(r.contact_person || '—')}</td><td>${cpmEsc(r.email || '—')}</td><td>${cpmEsc(r.phone || '—')}</td>` : ''}
+              <td>${r.archived ? '<span class="cpm-role viewer">ARCHIVED</span>' : '<span class="cpm-role editor">ACTIVE</span>'}</td>
+              <td style="text-align:right;white-space:nowrap">
+                <button class="cpm-mini" onclick="cpmEditItem('${kind}','${r.id}')">✎ Edit</button>
+                <button class="cpm-mini" onclick="cpmArchiveItem('${kind}','${r.id}',${!r.archived})">${r.archived ? '↩ Restore' : '📦 Archive'}</button>
+                <button class="cpm-mini" onclick="cpmDeleteItem('${kind}','${r.id}')">🗑</button>
+              </td></tr>`).join('')}</tbody></table>`
+          : `<div class="cpm-empty">No ${m.title.toLowerCase()} yet.</div>`}
+        </div>`;
+    }
+
+    async function cpmRefresh() { await cpmLoadSettings(); cpmRenderTab(); }
+
+    async function cpmAddItem(kind) {
+      const m = CPM_LIST_META[kind];
+      const name = prompt(`New ${m.single} name:`);
+      if (!name?.trim()) return;
+      const row = { organization_id: currentOrgId, name: name.trim() };
+      if (kind === 'clients') {
+        row.contact_person = prompt('Contact person (optional):') || null;
+        row.email = prompt('Email (optional):') || null;
+        row.phone = prompt('Phone (optional):') || null;
+      }
+      const { error } = await sb.from(m.table).insert(row);
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+    async function cpmEditItem(kind, id) {
+      const m = CPM_LIST_META[kind];
+      const r = cpmData[m.arr].find(x => x.id === id);
+      const name = prompt(`${m.single} name:`, r?.name || '');
+      if (name === null) return;
+      const patch = { name: name.trim(), updated_at: new Date().toISOString() };
+      if (kind === 'clients') {
+        patch.contact_person = prompt('Contact person:', r?.contact_person || '') || null;
+        patch.email = prompt('Email:', r?.email || '') || null;
+        patch.phone = prompt('Phone:', r?.phone || '') || null;
+      } else { delete patch.updated_at; }
+      const { error } = await sb.from(m.table).update(patch).eq('id', id);
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+    async function cpmArchiveItem(kind, id, archived) {
+      const { error } = await sb.from(CPM_LIST_META[kind].table).update({ archived }).eq('id', id);
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+    async function cpmDeleteItem(kind, id) {
+      if (!confirm('Delete permanently? Archiving is usually safer.')) return;
+      const { error } = await sb.from(CPM_LIST_META[kind].table).delete().eq('id', id);
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+
+    // ── Settings: Team ──
+    function cpmRenderTeam() {
+      const rows = cpmData.members;
+      document.getElementById('cpm-content').innerHTML = `
+        <div class="cpm-panel">
+          <div class="cpm-sechead">
+            <span class="cpm-sectitle">Team · ${rows.filter(r => !r.archived).length} active</span>
+            <button class="cpm-btn" onclick="cpmAddMember()">＋ Add member</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">
+            Access is matched by email. <strong>Owner</strong> manages settings and team · <strong>Editor</strong> works on pipelines · <strong>Viewer</strong> reads only.
+          </div>
+          ${rows.length ? `<table class="cpm-table">
+            <thead><tr><th>Name</th><th>Job title</th><th>Email</th><th>Role</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody>${rows.map(r => `<tr class="${r.archived ? 'archived' : ''}">
+              <td style="font-weight:700">${cpmEsc(r.full_name)}</td>
+              <td>${cpmEsc(r.job_title || '—')}</td>
+              <td style="color:var(--text-muted)">${cpmEsc(r.email)}</td>
+              <td><span class="cpm-role ${r.role}">${r.role.toUpperCase()}</span></td>
+              <td>${r.archived ? 'Archived' : 'Active'}</td>
+              <td style="text-align:right;white-space:nowrap">
+                <button class="cpm-mini" onclick="cpmEditMember('${r.id}')">✎ Edit</button>
+                <button class="cpm-mini" onclick="cpmArchiveMember('${r.id}',${!r.archived})">${r.archived ? '↩ Restore' : '📦 Archive'}</button>
+                <button class="cpm-mini" onclick="cpmDeleteMember('${r.id}')">🗑</button>
+              </td></tr>`).join('')}</tbody></table>`
+          : `<div class="cpm-empty">No team members yet. While this list is empty, any organisation member acts as Owner.</div>`}
+        </div>`;
+    }
+
+    function _cpmTitleList() { return cpmData.titles.filter(t => !t.archived).map(t => t.name); }
+
+    async function cpmAddMember() {
+      const full_name = prompt('Full name:');
+      if (!full_name?.trim()) return;
+      const email = prompt('Email (must match their login email):');
+      if (!email?.trim()) return;
+      const job_title = prompt('Job title:\n\nAvailable: ' + _cpmTitleList().join(', '));
+      const role = (prompt('Role — owner, editor or viewer:', 'editor') || 'editor').toLowerCase().trim();
+      if (!['owner','editor','viewer'].includes(role)) return alert('Role must be owner, editor or viewer.');
+      const { error } = await sb.from('cp_members').insert({
+        organization_id: currentOrgId, full_name: full_name.trim(), email: email.trim().toLowerCase(),
+        job_title: (job_title || '').trim() || null, role,
+      });
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+    async function cpmEditMember(id) {
+      const r = cpmData.members.find(x => x.id === id);
+      const full_name = prompt('Full name:', r.full_name);
+      if (full_name === null) return;
+      const job_title = prompt('Job title:\n\nAvailable: ' + _cpmTitleList().join(', '), r.job_title || '');
+      const email = prompt('Email:', r.email);
+      const role = (prompt('Role — owner, editor or viewer:', r.role) || r.role).toLowerCase().trim();
+      if (!['owner','editor','viewer'].includes(role)) return alert('Role must be owner, editor or viewer.');
+      const { error } = await sb.from('cp_members').update({
+        full_name: full_name.trim(), job_title: (job_title || '').trim() || null,
+        email: (email || r.email).trim().toLowerCase(), role, updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+    async function cpmArchiveMember(id, archived) {
+      const { error } = await sb.from('cp_members').update({ archived }).eq('id', id);
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+    async function cpmDeleteMember(id) {
+      if (!confirm('Remove this member from the Client Pipeline?')) return;
+      const { error } = await sb.from('cp_members').delete().eq('id', id);
+      if (error) return alert(error.message);
+      cpmRefresh();
+    }
+
+    // ── Pipelines board ──
+    async function cpmRenderBoardTab() {
+      const { data } = await sb.from('cp_pipelines')
+        .select('*, cp_clients(name), cp_services(name)')
+        .eq('organization_id', currentOrgId).eq('archived', false)
+        .order('created_at', { ascending: false });
+      cpmData.pipelines = data || [];
+      if (!cpmPipelineId && cpmData.pipelines.length) cpmPipelineId = cpmData.pipelines[0].id;
+      if (cpmPipelineId && !cpmData.pipelines.some(p => p.id === cpmPipelineId)) cpmPipelineId = cpmData.pipelines[0]?.id || null;
+
+      const sel = cpmData.pipelines.length
+        ? `<select class="cpm-input" style="width:auto;min-width:280px" onchange="cpmOpenPipeline(this.value)">
+            ${cpmData.pipelines.map(p => `<option value="${p.id}" ${p.id === cpmPipelineId ? 'selected' : ''}>
+              ${cpmEsc(p.cp_clients?.name || 'Client')}${p.cp_services?.name ? ' · ' + cpmEsc(p.cp_services.name) : ''}${p.period ? ' · ' + p.period : ''}
+            </option>`).join('')}
+          </select>` : '';
+
+      document.getElementById('cpm-content').innerHTML = `
+        <div class="cpm-panel" style="margin-bottom:14px;padding:14px 18px">
+          <div class="cpm-sechead" style="margin-bottom:0">
+            ${sel || '<span class="cpm-sectitle">No pipelines yet</span>'}
+            <span style="flex:1"></span>
+            ${cpmCanEdit() ? `<button class="cpm-btn" onclick="cpmNewPipeline()">＋ New pipeline</button>` : ''}
+            ${cpmCanEdit() && cpmPipelineId ? `<button class="cpm-btn ghost" onclick="cpmDeletePipeline()">🗑 Delete</button>` : ''}
+          </div>
+        </div>
+        <div id="cpm-boardwrap"></div>`;
+      if (cpmPipelineId) cpmLoadTasks(); else document.getElementById('cpm-boardwrap').innerHTML =
+        `<div class="cpm-panel"><div class="cpm-empty">Create your first pipeline — pick a client and service, and the ${CPM_STAGES.length} workflow stages are generated automatically.</div></div>`;
+    }
+
+    function cpmOpenPipeline(id) { cpmPipelineId = id; cpmRenderBoardTab(); }
+
+    async function cpmNewPipeline() {
+      const clients  = cpmData.clients.filter(c => !c.archived);
+      const services = cpmData.services.filter(s => !s.archived);
+      if (!clients.length)  return alert('Add a client first in Pipeline Settings → Clients.');
+      const cName = prompt('Client:\n\n' + clients.map((c, i) => `${i + 1}. ${c.name}`).join('\n') + '\n\nType the number:');
+      const client = clients[parseInt(cName) - 1];
+      if (!client) return;
+      const sName = services.length ? prompt('Service:\n\n' + services.map((x, i) => `${i + 1}. ${x.name}`).join('\n') + '\n\nType the number (or leave empty):') : '';
+      const service = services[parseInt(sName) - 1] || null;
+      const period = prompt('Period (YYYY-MM):', new Date().toISOString().slice(0, 7)) || null;
+
+      const { data: pipe, error } = await sb.from('cp_pipelines').insert({
+        organization_id: currentOrgId, client_id: client.id, service_id: service?.id || null,
+        period, created_by: currentUser?.id,
+      }).select().single();
+      if (error) return alert(error.message);
+
+      const tasks = CPM_STAGES.map((stage, i) => ({
+        pipeline_id: pipe.id, organization_id: currentOrgId, stage, sort_order: i, status: 'pending',
+      }));
+      const { error: tErr } = await sb.from('cp_tasks').insert(tasks);
+      if (tErr) alert('Pipeline created but stages failed: ' + tErr.message);
+      cpmPipelineId = pipe.id;
+      cpmRenderBoardTab();
+    }
+
+    async function cpmDeletePipeline() {
+      if (!confirm('Delete this pipeline and all its tasks?')) return;
+      const { error } = await sb.from('cp_pipelines').delete().eq('id', cpmPipelineId);
+      if (error) return alert(error.message);
+      cpmPipelineId = null;
+      cpmRenderBoardTab();
+    }
+
+    async function cpmLoadTasks() {
+      const { data } = await sb.from('cp_tasks').select('*').eq('pipeline_id', cpmPipelineId).order('sort_order');
+      cpmTasks = data || [];
+      cpmRenderBoard();
+    }
+
+    function _cpmMember(id) { return cpmData.members.find(m => m.id === id); }
+
+    function cpmRenderBoard() {
+      const today = new Date().toISOString().slice(0, 10);
+      const cols = CPM_STATUS.map(st => {
+        const items = cpmTasks.filter(t => (t.status || 'pending') === st);
+        return `<div class="cpm-col" ondragover="event.preventDefault()" ondrop="cpmDropTask(event,'${st}')">
+          <div class="cpm-col-head">${CPM_STATUS_LABEL[st]} <span class="cpm-col-n">${items.length}</span></div>
+          ${items.map(t => {
+            const m = _cpmMember(t.owner_id);
+            const overdue = t.due_date && t.due_date < today && t.status !== 'done';
+            return `<div class="cpm-task ${t.status}" draggable="${cpmCanEdit()}" ondragstart="event.dataTransfer.setData('text/plain','${t.id}')" onclick="cpmOpenTask('${t.id}')">
+              <div class="cpm-task-name">${cpmEsc(t.stage)}</div>
+              <div class="cpm-task-meta">
+                ${m ? `<span class="cpm-pill">👤 ${cpmEsc(m.full_name.split(' ')[0])}</span>` : ''}
+                ${t.due_date ? `<span class="cpm-pill ${overdue ? 'overdue' : ''}">📅 ${t.due_date.slice(5)}</span>` : ''}
+                ${t.notes ? '<span title="Has notes">📝</span>' : ''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }).join('');
+      document.getElementById('cpm-boardwrap').innerHTML = `<div class="cpm-board">${cols}</div>`;
+    }
+
+    async function cpmDropTask(ev, status) {
+      ev.preventDefault();
+      if (!cpmCanEdit()) return;
+      const id = ev.dataTransfer.getData('text/plain');
+      const t = cpmTasks.find(x => x.id === id);
+      if (!t || t.status === status) return;
+      t.status = status;
+      cpmRenderBoard();
+      const { error } = await sb.from('cp_tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) { alert(error.message); cpmLoadTasks(); }
+    }
+
+    // ── Task drawer: owner, due date, status, notes, attachments, comments ──
+    async function cpmOpenTask(id) {
+      cpmTask = cpmTasks.find(t => t.id === id);
+      if (!cpmTask) return;
+      document.getElementById('cpm-drawer').classList.remove('hidden');
+      document.getElementById('cpm-drawer-title').textContent = cpmTask.stage;
+      const p = cpmData.pipelines.find(x => x.id === cpmPipelineId);
+      document.getElementById('cpm-drawer-sub').textContent =
+        [p?.cp_clients?.name, p?.cp_services?.name, p?.period].filter(Boolean).join(' · ');
+      cpmRenderDrawer();
+      const [c, a] = await Promise.all([
+        sb.from('cp_comments').select('*').eq('task_id', id).order('created_at'),
+        sb.from('cp_attachments').select('*').eq('task_id', id).order('created_at'),
+      ]);
+      cpmTask._comments = c.data || [];
+      cpmTask._files = a.data || [];
+      cpmRenderDrawer();
+    }
+    function cpmCloseDrawer() { document.getElementById('cpm-drawer').classList.add('hidden'); cpmTask = null; }
+
+    function cpmRenderDrawer() {
+      const t = cpmTask; if (!t) return;
+      const ro = !cpmCanEdit();
+      const members = cpmData.members.filter(m => !m.archived);
+      document.getElementById('cpm-drawer-body').innerHTML = `
+        ${ro ? '<div class="cpm-readonly-note">👁 Viewer access — read only</div>' : ''}
+        <div class="cpm-field"><label>Task owner</label>
+          <select class="cpm-input" ${ro ? 'disabled' : ''} onchange="cpmSaveTask('owner_id', this.value || null)">
+            <option value="">— Unassigned —</option>
+            ${members.map(m => `<option value="${m.id}" ${m.id === t.owner_id ? 'selected' : ''}>${cpmEsc(m.full_name)}${m.job_title ? ' · ' + cpmEsc(m.job_title) : ''}</option>`).join('')}
+          </select>
+          ${members.length ? '' : '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Add team members in Pipeline Settings → Team.</div>'}
+        </div>
+        <div class="cpm-field"><label>Due date</label>
+          <input type="date" class="cpm-input" value="${t.due_date || ''}" ${ro ? 'disabled' : ''} onchange="cpmSaveTask('due_date', this.value || null)">
+        </div>
+        <div class="cpm-field"><label>Status</label>
+          <select class="cpm-input" ${ro ? 'disabled' : ''} onchange="cpmSaveTask('status', this.value)">
+            ${CPM_STATUS.map(st => `<option value="${st}" ${st === (t.status || 'pending') ? 'selected' : ''}>${CPM_STATUS_LABEL[st]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="cpm-field"><label>Notes</label>
+          <textarea class="cpm-input" rows="4" ${ro ? 'disabled' : ''} placeholder="Internal notes…" onchange="cpmSaveTask('notes', this.value)">${cpmEsc(t.notes || '')}</textarea>
+        </div>
+
+        <div class="cpm-field">
+          <label>Attachments</label>
+          ${ro ? '' : `<input type="file" id="cpm-file-input" class="cpm-input" style="padding:6px" onchange="cpmUploadFile(this)">`}
+          <div id="cpm-files">${(t._files || []).length
+            ? t._files.map(f => `<div class="cpm-file">
+                <span style="flex:1">📎 ${f.file_url ? `<a href="${cpmEsc(f.file_url)}" target="_blank" style="color:var(--blue-light)">${cpmEsc(f.file_name)}</a>` : cpmEsc(f.file_name)}</span>
+                ${ro ? '' : `<button class="cpm-mini" onclick="cpmDeleteFile('${f.id}')">🗑</button>`}
+              </div>`).join('')
+            : '<div style="font-size:11.5px;color:var(--text-muted);padding:6px 0">No attachments.</div>'}</div>
+        </div>
+
+        <div class="cpm-field">
+          <label>Comments</label>
+          <div>${(t._comments || []).length
+            ? t._comments.map(c => `<div class="cpm-comment">
+                <div class="cpm-comment-meta">${cpmEsc(c.author_name || 'Someone')} · ${new Date(c.created_at).toLocaleString('en', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</div>
+                <div>${cpmEsc(c.body)}</div>
+              </div>`).join('')
+            : '<div style="font-size:11.5px;color:var(--text-muted);padding:6px 0">No comments yet.</div>'}</div>
+          ${ro ? '' : `<div style="display:flex;gap:8px;margin-top:10px">
+            <input class="cpm-input" id="cpm-comment-input" placeholder="Write a comment…" onkeydown="if(event.key==='Enter')cpmAddComment()">
+            <button class="cpm-btn" onclick="cpmAddComment()">Send</button>
+          </div>`}
+        </div>`;
+    }
+
+    async function cpmSaveTask(field, value) {
+      if (!cpmCanEdit() || !cpmTask) return;
+      cpmTask[field] = value;
+      const { error } = await sb.from('cp_tasks').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', cpmTask.id);
+      if (error) return alert(error.message);
+      const idx = cpmTasks.findIndex(x => x.id === cpmTask.id);
+      if (idx >= 0) cpmTasks[idx][field] = value;
+      cpmRenderBoard();
+    }
+
+    async function cpmAddComment() {
+      const el = document.getElementById('cpm-comment-input');
+      const body = el?.value.trim();
+      if (!body) return;
+      const me = cpmData.members.find(m => (m.email || '').toLowerCase() === (currentUser?.email || '').toLowerCase());
+      const { error } = await sb.from('cp_comments').insert({
+        task_id: cpmTask.id, organization_id: currentOrgId,
+        author_name: me?.full_name || currentUser?.email || 'Someone',
+        user_id: currentUser?.id, body,
+      });
+      if (error) return alert(error.message);
+      el.value = '';
+      const { data } = await sb.from('cp_comments').select('*').eq('task_id', cpmTask.id).order('created_at');
+      cpmTask._comments = data || [];
+      cpmRenderDrawer();
+    }
+
+    async function cpmUploadFile(input) {
+      const file = input.files?.[0];
+      if (!file || !cpmTask) return;
+      const path = `${currentOrgId}/${cpmTask.id}/${Date.now()}-${file.name}`;
+      const { error: upErr } = await sb.storage.from('cp-attachments').upload(path, file, { upsert: false });
+      let url = null;
+      if (upErr) {
+        if (!confirm('File upload storage is not available yet — record the file name only?')) { input.value = ''; return; }
+      } else {
+        url = sb.storage.from('cp-attachments').getPublicUrl(path).data.publicUrl;
+      }
+      const { error } = await sb.from('cp_attachments').insert({
+        task_id: cpmTask.id, organization_id: currentOrgId,
+        file_name: file.name, file_path: upErr ? null : path, file_url: url, uploaded_by: currentUser?.id,
+      });
+      input.value = '';
+      if (error) return alert(error.message);
+      const { data } = await sb.from('cp_attachments').select('*').eq('task_id', cpmTask.id).order('created_at');
+      cpmTask._files = data || [];
+      cpmRenderDrawer();
+    }
+    async function cpmDeleteFile(id) {
+      const f = (cpmTask._files || []).find(x => x.id === id);
+      if (f?.file_path) { try { await sb.storage.from('cp-attachments').remove([f.file_path]); } catch {} }
+      const { error } = await sb.from('cp_attachments').delete().eq('id', id);
+      if (error) return alert(error.message);
+      cpmTask._files = (cpmTask._files || []).filter(x => x.id !== id);
+      cpmRenderDrawer();
+    }
+
     // ── CLIENT PROFILE (services + process/deliverables map) ──
     let _cpClient = null;
     const CP_STATUS = ['pending', 'in_progress', 'done'];
@@ -8315,7 +8860,7 @@
       const cv = document.getElementById('hub-client-view');
       if (cv) cv.style.display = v === 'client' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
-      if (v === 'pipeline') loadPipeline();
+      if (v === 'pipeline') cpmInit();
       if (v === 'finance')  loadFinance();
     }
     function showHomeHub() {
