@@ -321,6 +321,44 @@
     [data-theme="dark"] .cp-mapname { color: #BFDBFE; }
     [data-theme="dark"] .cp-mapprog { color: #93C5FD; }
 
+    /* ── FLOWCHART PROCESS MAP ── */
+    .cp-flow { display: flex; flex-direction: column; align-items: center; padding: 6px 0 14px; }
+    .cp-phase { border: 2px solid #0573F5; border-radius: 10px; padding: 9px 30px; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; color: #0A1CA3; background: #EAF2FE; text-align: center; min-width: 260px; }
+    .cp-phase .cp-phase-actions { display: inline-flex; gap: 6px; margin-left: 12px; vertical-align: middle; }
+    .cp-arrow { color: #A9C7F5; font-size: 13px; line-height: 1; text-align: center; padding: 3px 0; user-select: none; }
+    .cp-arrow span { display: block; }
+    .cp-node { display: flex; align-items: center; gap: 10px; border: 1.5px solid #D6DEE9; border-radius: 12px; background: #fff; padding: 9px 14px; min-width: 320px; max-width: 460px; transition: all .15s; }
+    .cp-node:hover { border-color: #0573F5; box-shadow: 0 2px 10px rgba(5,115,245,.12); }
+    .cp-node-tick { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #C9D4E3; background: #fff; cursor: pointer; flex-shrink: 0; font-size: 11px; line-height: 1; color: #fff; display: flex; align-items: center; justify-content: center; padding: 0; }
+    .cp-node-name { flex: 1; font-size: 13.5px; color: #111827; font-weight: 600; }
+    .cp-node.done { border-color: #86EFAC; background: #F4FDF7; }
+    .cp-node.done .cp-node-tick { background: #16A34A; border-color: #16A34A; }
+    .cp-node.done .cp-node-name { color: #6B8B78; text-decoration: line-through; }
+    .cp-node.in_progress { border-color: #FCD34D; background: #FFFCF2; }
+    .cp-node.in_progress .cp-node-tick { background: #F59E0B; border-color: #F59E0B; }
+    .cp-node-date { border: none; background: transparent; font-size: 11px; color: #6B7280; font-family: inherit; width: 108px; text-align: right; cursor: pointer; }
+    .cp-node-date:focus { outline: none; color: #0573F5; }
+    .cp-node-date.empty { color: #C3CAD6; }
+    .cp-node-del { background: none; border: none; cursor: pointer; opacity: 0; font-size: 11px; color: #9AA4B2; transition: opacity .15s; }
+    .cp-node:hover .cp-node-del { opacity: .8; }
+    .cp-node-del:hover { color: #DC2626; }
+    .cp-addnode { border: 1.5px dashed #C9D4E3; border-radius: 12px; background: transparent; color: #8A97A8; padding: 7px 18px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 200px; }
+    .cp-addnode:hover { border-color: #0573F5; color: #0573F5; background: #F5F9FF; }
+    .cp-flow-end { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #16A34A; border: 2px solid #86EFAC; background: #F4FDF7; border-radius: 20px; padding: 6px 22px; }
+    [data-theme="dark"] .cp-phase { background: #16294A; border-color: #2563EB; color: #BFDBFE; }
+    [data-theme="dark"] .cp-arrow { color: #3E5680; }
+    [data-theme="dark"] .cp-node { background: #1E293B; border-color: #334155; }
+    [data-theme="dark"] .cp-node-name { color: #E2E8F0; }
+    [data-theme="dark"] .cp-node-tick { background: #0F172A; border-color: #475569; }
+    [data-theme="dark"] .cp-node.done { background: #10261A; border-color: #166534; }
+    [data-theme="dark"] .cp-node.done .cp-node-name { color: #6B8B78; }
+    [data-theme="dark"] .cp-node.in_progress { background: #2A2418; border-color: #78350F; }
+    [data-theme="dark"] .cp-node-date { color: #94A3B8; }
+    [data-theme="dark"] .cp-node-date.empty { color: #475569; }
+    [data-theme="dark"] .cp-addnode { border-color: #334155; color: #64748B; }
+    [data-theme="dark"] .cp-addnode:hover { border-color: #2563EB; color: #93C5FD; background: #16294A; }
+    [data-theme="dark"] .cp-flow-end { background: #10261A; border-color: #166534; color: #86EFAC; }
+
     /* timeline */
     .cp-timeline { position: relative; padding-left: 34px; }
     .cp-timeline::before { content: ''; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(#0573F5, #A9C7F5); border-radius: 2px; }
@@ -7832,6 +7870,7 @@
           ${allItems.length ? `<div class="cp-bar" style="margin-bottom:16px"><div class="cp-bar-fill" style="width:${pct}%"></div></div>` : ''}
 
           ${proc.length ? (() => {
+            const ARROW = '<div class="cp-arrow"><span>│</span><span>▼</span></div>';
             // group stages by their source map so a client can run several maps at once
             const groups = [];
             proc.forEach((st, si) => {
@@ -7843,40 +7882,38 @@
             return groups.map(g => {
               const gItems = g.stages.flatMap(x => x.st.items || []);
               const gDone = gItems.filter(i => i.status === 'done').length;
+              const gPct = gItems.length ? Math.round(gDone / gItems.length * 100) : 0;
+              const flow = g.stages.map(({ st, si }) => {
+                const items = st.items || [];
+                const d = items.filter(i => i.status === 'done').length;
+                const phase = `<div class="cp-phase">${escHtml(st.stage || 'Stage')}
+                  <span class="cp-phase-actions">
+                    <span style="font-size:10px;font-weight:700;opacity:.75">${d}/${items.length}</span>
+                    <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
+                  </span></div>`;
+                const nodes = items.map((it, ii) => {
+                  const stt = it.status || 'pending';
+                  return `<div class="cp-node ${stt}">
+                    <button class="cp-node-tick" title="Click to change status: ${CP_STATUS_LABEL[stt]}" onclick="cpCycleStatus(${si},${ii})">${stt === 'done' ? '✓' : (stt === 'in_progress' ? '•' : '')}</button>
+                    <span class="cp-node-name">${escHtml(it.name)}</span>
+                    <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
+                      onchange="cpSetItemDate(${si}, ${ii}, this.value)">
+                    <button class="cp-node-del" title="Remove step" onclick="cpRemoveItem(${si},${ii})">✕</button>
+                  </div>`;
+                });
+                const addBtn = `<button class="cp-addnode" onclick="cpAddItem(${si})">＋ Add step</button>`;
+                return [phase, ...nodes, addBtn].join(ARROW);
+              }).join(ARROW);
               return `<div class="cp-mapgroup">
                 <div class="cp-maphead">
                   <span class="cp-mapname">🗺 ${escHtml(g.name)}</span>
-                  <span class="cp-mapprog">${gDone}/${gItems.length} · ${gItems.length ? Math.round(gDone / gItems.length * 100) : 0}%</span>
+                  <span class="cp-mapprog">${gDone}/${gItems.length} · ${gPct}%</span>
                   <button class="cp-del" title="Remove this map" onclick="cpRemoveMap('${g.name.replace(/'/g, "\\'")}')">🗑</button>
                 </div>
-                <div class="cp-timeline">
-                ${g.stages.map(({ st, si }, gi) => {
-              const items = st.items || [];
-              const d = items.filter(i => i.status === 'done').length;
-              const allDone = items.length > 0 && d === items.length;
-              const started = d > 0 || items.some(i => i.status === 'in_progress');
-              const cls = allDone ? 'done' : (started ? 'active' : '');
-              return `<div class="cp-tstage ${cls}">
-                <div class="cp-tdot">${allDone ? '✓' : gi + 1}</div>
-                <div class="cp-tcard">
-                  <div class="cp-stage-head">
-                    <span class="cp-stage-name">${escHtml(st.stage || 'Stage')}</span>
-                    <span class="cp-stage-prog">${d}/${items.length}</span>
-                    <button class="cp-btn ghost" onclick="cpAddItem(${si})">＋</button>
-                    <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
-                  </div>
-                  ${items.length ? items.map((it, ii) => `
-                    <div class="cp-item ${it.status === 'done' ? 'done' : ''}">
-                      <span class="cp-item-name">${escHtml(it.name)}</span>
-                      <input type="date" class="cp-date cp-item-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date for this step"
-                        onchange="cpSetItemDate(${si}, ${ii}, this.value)">
-                      <button class="cp-status ${it.status || 'pending'}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[it.status || 'pending']}</button>
-                      <button class="cp-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
-                    </div>`).join('')
-                  : '<div class="cp-empty">No deliverables in this stage yet.</div>'}
-                </div>
-              </div>`;
-                }).join('')}
+                <div class="cp-flow">
+                  ${flow}
+                  ${ARROW}
+                  <div class="cp-flow-end">${gPct === 100 ? '🎉 ALL DONE' : gPct + '% COMPLETE'}</div>
                 </div>
               </div>`;
             }).join('');
