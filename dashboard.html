@@ -348,6 +348,44 @@
     .cp-node-del { background: none; border: none; cursor: pointer; opacity: 0; font-size: 11px; color: #9AA4B2; transition: opacity .15s; }
     .cp-node:hover .cp-node-del { opacity: .8; }
     .cp-node-del:hover { color: #DC2626; }
+    /* map toolbar + views */
+    .cp-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #F7F9FC; border: 1px solid #E4E9F2; border-radius: 12px; padding: 9px 12px; margin-bottom: 14px; }
+    [data-theme="dark"] .cp-toolbar { background: #0F172A; border-color: #334155; }
+    .cp-seg { display: inline-flex; background: #E9EEF6; border-radius: 9px; padding: 2px; }
+    [data-theme="dark"] .cp-seg { background: #1E293B; }
+    .cp-seg button { border: none; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 11.5px; font-weight: 700; cursor: pointer; color: #64748B; }
+    .cp-seg button.active { background: #fff; color: #0A1CA3; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    [data-theme="dark"] .cp-seg button.active { background: #0573F5; color: #fff; }
+    .cp-filter { border: 1px solid #D6DEE9; background: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; color: #374151; font-family: inherit; }
+    [data-theme="dark"] .cp-filter { background: #1E293B; border-color: #334155; color: #E2E8F0; }
+    .cp-chipbtn { border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 700; cursor: pointer; color: #64748B; }
+    .cp-chipbtn.active { background: #0573F5; border-color: #0573F5; color: #fff; }
+    [data-theme="dark"] .cp-chipbtn { background: #1E293B; border-color: #334155; color: #94A3B8; }
+    /* summary strip */
+    .cp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .cp-stat { background: #fff; border: 1px solid #E4E9F2; border-radius: 10px; padding: 10px 13px; }
+    [data-theme="dark"] .cp-stat { background: #1E293B; border-color: #334155; }
+    .cp-stat-n { font-size: 19px; font-weight: 800; color: #0A1CA3; }
+    [data-theme="dark"] .cp-stat-n { color: #93C5FD; }
+    .cp-stat-l { font-size: 9.5px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; color: #94A3B8; margin-top: 2px; }
+    /* table view */
+    .cp-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .cp-tbl th { text-align: left; padding: 8px 11px; background: #F3F6FB; color: #64748B; font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; position: sticky; top: 0; }
+    [data-theme="dark"] .cp-tbl th { background: #0F172A; color: #94A3B8; }
+    .cp-tbl td { padding: 8px 11px; border-top: 1px solid #EEF1F6; color: #111827; }
+    [data-theme="dark"] .cp-tbl td { border-top-color: #334155; color: #E2E8F0; }
+    .cp-tbl tr.done td:nth-child(2) { text-decoration: line-through; color: #94A3B8; }
+    .cp-tbl-phase td { background: #F7F9FC; font-weight: 800; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: #64748B; }
+    [data-theme="dark"] .cp-tbl-phase td { background: #16203A; color: #94A3B8; }
+    /* compact list view */
+    .cp-compact-phase { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: #F3F6FB; border-radius: 8px; margin: 12px 0 8px; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: #475569; cursor: pointer; }
+    [data-theme="dark"] .cp-compact-phase { background: #16203A; color: #94A3B8; }
+    .cp-compact-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid #EEF1F6; font-size: 12.5px; }
+    [data-theme="dark"] .cp-compact-row { border-bottom-color: #334155; }
+    .cp-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: #CBD5E1; }
+    .cp-dot.done { background: #16A34A; } .cp-dot.in_progress { background: #F59E0B; }
+    .cp-hidden { display: none !important; }
+
     /* decision node + Yes/No branch */
     .cp-decision { display: flex; align-items: center; gap: 10px; border: 2px dashed #C084FC; border-radius: 12px; background: #FBF5FF; padding: 10px 16px; min-width: 320px; max-width: 460px; }
     .cp-decision .cp-node-name { color: #6B21A8; font-weight: 800; }
@@ -8554,9 +8592,11 @@
               })()}
             </div>` : ''}
 
-          ${allItems.length ? `<div class="cp-bar" style="margin-bottom:16px"><div class="cp-bar-fill" style="width:${pct}%"></div></div>` : ''}
+          ${proc.length ? _cpStatsHTML(proc) + _cpToolbarHTML(proc) : ''}
 
-          ${proc.length ? (() => {
+          ${proc.length && _cpView !== 'flow' ? _cpAltViewHTML(proc) : ''}
+
+          ${proc.length && _cpView === 'flow' ? (() => {
             const ARROW = '<div class="cp-arrow"><span>│</span><span>▼</span></div>';
             // group stages by their source map so a client can run several maps at once
             const groups = [];
@@ -8568,17 +8608,19 @@
             });
             return groups.map(g => {
               const gItems = g.stages.flatMap(x => x.st.items || []);
-              const gDone = gItems.filter(i => i.type === 'decision' ? i.decision === 'yes' : i.status === 'done').length;
+              const gDone = gItems.filter(i => _cpItemState(i) === 'done').length;
               const gPct = gItems.length ? Math.round(gDone / gItems.length * 100) : 0;
               const flow = g.stages.map(({ st, si }) => {
-                const items = st.items || [];
+                const items = (st.items || []).filter(_cpMatches);
+                if (_cpFiltersOn() && !items.length) return '';
                 const d = items.filter(i => i.type === 'decision' ? i.decision === 'yes' : i.status === 'done').length;
                 const phase = `<div class="cp-phase">${escHtml(st.stage || 'Stage')}
                   <span class="cp-phase-actions">
                     <span style="font-size:10px;font-weight:700;opacity:.75">${d}/${items.length}</span>
                     <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
                   </span></div>`;
-                const nodes = items.map((it, ii) => {
+                const nodes = items.map((it) => {
+                  const ii = (st.items || []).indexOf(it);
                   const stt = it.status || 'pending';
                   if (it.type === 'decision') {
                     const dec = it.decision || '';                       // '' | 'no' | 'yes'
@@ -8697,6 +8739,156 @@
           : { name: it.name, owner: it.owner || '', status: 'pending', date: '' }),
       }));
       _cpSaveProc([..._cpProc(), ...copy]);
+    }
+
+    // ── Map view options: view mode, filters, stats ──
+    let _cpView = localStorage.getItem('cp_view') || 'flow';   // flow | compact | table
+    let _cpFilterOwner = '';
+    let _cpFilterStatus = '';
+    let _cpOnlyOverdue = false;
+    let _cpCollapsed = {};
+
+    // Compact list + table views
+    function _cpAltViewHTML(proc) {
+      const today = new Date().toISOString().slice(0, 10);
+      const groups = [];
+      proc.forEach((st, si) => {
+        const key = st.map || 'Custom stages';
+        let g = groups.find(x => x.name === key);
+        if (!g) { g = { name: key, stages: [] }; groups.push(g); }
+        g.stages.push({ st, si });
+      });
+
+      if (_cpView === 'table') {
+        const rows = [];
+        groups.forEach(g => g.stages.forEach(({ st, si }) => {
+          const items = (st.items || []).filter(_cpMatches);
+          if (!items.length) return;
+          rows.push(`<tr class="cp-tbl-phase"><td colspan="5">${escHtml(g.name)} › ${escHtml(st.stage)}</td></tr>`);
+          items.forEach(it => {
+            const ii = (st.items || []).indexOf(it);
+            const stt = _cpItemState(it);
+            const over = it.date && it.date < today && stt !== 'done';
+            rows.push(`<tr class="${stt}">
+              <td style="width:26px"><span class="cp-dot ${stt}"></span></td>
+              <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</td>
+              <td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>
+              <td style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</td>
+              <td>${it.type === 'decision'
+                ? `<button class="cp-branch-btn ${it.decision === 'yes' ? 'yes active' : (it.decision === 'no' ? 'no active' : 'yes')}" style="margin:0" onclick="cpDecide(${si},${ii},'${it.decision === 'yes' ? 'yes' : 'yes'}')">${it.decision === 'yes' ? '✓ APPROVED' : (it.decision === 'no' ? '✗ REVISING' : 'PENDING')}</button>`
+                : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}</td>
+            </tr>`);
+          });
+        }));
+        return `<div class="table-wrapper" style="max-height:60vh;overflow:auto">
+          <table class="cp-tbl">
+            <thead><tr><th></th><th>Step</th><th>Owner</th><th>Date</th><th>Status</th></tr></thead>
+            <tbody>${rows.join('') || '<tr><td colspan="5" class="cp-empty">Nothing matches these filters.</td></tr>'}</tbody>
+          </table></div>`;
+      }
+
+      // compact list
+      return groups.map(g => {
+        const body = g.stages.map(({ st, si }) => {
+          const items = (st.items || []).filter(_cpMatches);
+          if (!items.length) return '';
+          const key = g.name + '|' + st.stage;
+          const d = (st.items || []).filter(i => _cpItemState(i) === 'done').length;
+          const open = !_cpCollapsed[key];
+          return `<div>
+            <div class="cp-compact-phase" onclick="cpToggleCollapse('${key.replace(/'/g, "\\'")}')">
+              <span>${open ? '▾' : '▸'}</span><span style="flex:1">${escHtml(st.stage)}</span>
+              <span style="font-weight:700">${d}/${(st.items || []).length}</span>
+            </div>
+            <div class="${open ? '' : 'cp-hidden'}">
+              ${items.map(it => {
+                const ii = (st.items || []).indexOf(it);
+                const stt = _cpItemState(it);
+                const over = it.date && it.date < today && stt !== 'done';
+                return `<div class="cp-compact-row">
+                  <span class="cp-dot ${stt}"></span>
+                  <span style="flex:1;${stt === 'done' ? 'text-decoration:line-through;color:#94A3B8' : ''}">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</span>
+                  <button class="cp-owner ${it.owner ? '' : 'empty'}" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
+                  <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" style="${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">
+                  ${it.type === 'decision'
+                    ? `<button class="cp-status ${stt}" onclick="cpDecide(${si},${ii},'yes')">${it.decision === 'yes' ? '✓ Approved' : (it.decision === 'no' ? '✗ Revising' : 'Pending')}</button>`
+                    : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}
+                </div>`;
+              }).join('')}
+            </div></div>`;
+        }).join('');
+        if (!body.trim()) return '';
+        const gItems = g.stages.flatMap(x => x.st.items || []);
+        const gDone = gItems.filter(i => _cpItemState(i) === 'done').length;
+        return `<div class="cp-mapgroup">
+          <div class="cp-maphead">
+            <span class="cp-mapname">🗺 ${escHtml(g.name)}</span>
+            <span class="cp-mapprog">${gDone}/${gItems.length}</span>
+            <button class="cp-del" onclick="cpRemoveMap('${g.name.replace(/'/g, "\\'")}')">🗑</button>
+          </div>${body}</div>`;
+      }).join('') || '<div class="cp-empty">Nothing matches these filters.</div>';
+    }
+
+    function cpSetView(v) { _cpView = v; localStorage.setItem('cp_view', v); renderClientProfile(); }
+    function cpSetFilter(k, v) {
+      if (k === 'owner') _cpFilterOwner = v;
+      if (k === 'status') _cpFilterStatus = v;
+      if (k === 'overdue') _cpOnlyOverdue = !_cpOnlyOverdue;
+      renderClientProfile();
+    }
+    function cpClearFilters() { _cpFilterOwner = ''; _cpFilterStatus = ''; _cpOnlyOverdue = false; renderClientProfile(); }
+    function cpToggleCollapse(key) { _cpCollapsed[key] = !_cpCollapsed[key]; renderClientProfile(); }
+
+    function _cpItemState(it) {
+      if (it.type === 'decision') return it.decision === 'yes' ? 'done' : (it.decision === 'no' ? 'in_progress' : 'pending');
+      return it.status || 'pending';
+    }
+    function _cpMatches(it) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (_cpFilterOwner && (it.owner || '') !== _cpFilterOwner) return false;
+      if (_cpFilterStatus && _cpItemState(it) !== _cpFilterStatus) return false;
+      if (_cpOnlyOverdue && !(it.date && it.date < today && _cpItemState(it) !== 'done')) return false;
+      return true;
+    }
+    function _cpFiltersOn() { return !!(_cpFilterOwner || _cpFilterStatus || _cpOnlyOverdue); }
+
+    function _cpToolbarHTML(proc) {
+      const owners = [...new Set(proc.flatMap(st => (st.items || []).map(i => i.owner).filter(Boolean)))];
+      const seg = (v, l) => `<button class="${_cpView === v ? 'active' : ''}" onclick="cpSetView('${v}')">${l}</button>`;
+      return `<div class="cp-toolbar">
+        <div class="cp-seg">${seg('flow', '⛓ Flow')}${seg('compact', '☰ List')}${seg('table', '▦ Table')}</div>
+        <span style="flex:1"></span>
+        <select class="cp-filter" onchange="cpSetFilter('owner', this.value)">
+          <option value="">All owners</option>
+          ${owners.map(o => `<option value="${escHtml(o)}" ${o === _cpFilterOwner ? 'selected' : ''}>${escHtml(o)}</option>`).join('')}
+        </select>
+        <select class="cp-filter" onchange="cpSetFilter('status', this.value)">
+          <option value="">All statuses</option>
+          <option value="pending"     ${_cpFilterStatus === 'pending' ? 'selected' : ''}>Not started</option>
+          <option value="in_progress" ${_cpFilterStatus === 'in_progress' ? 'selected' : ''}>In progress</option>
+          <option value="done"        ${_cpFilterStatus === 'done' ? 'selected' : ''}>Done</option>
+        </select>
+        <button class="cp-chipbtn ${_cpOnlyOverdue ? 'active' : ''}" onclick="cpSetFilter('overdue')">⚠ Overdue</button>
+        ${_cpFiltersOn() ? '<button class="cp-chipbtn" onclick="cpClearFilters()">✕ Clear</button>' : ''}
+        <button class="cp-chipbtn" onclick="window.print()">🖨 Print</button>
+      </div>`;
+    }
+
+    function _cpStatsHTML(proc) {
+      const items = proc.flatMap(st => st.items || []);
+      const today = new Date().toISOString().slice(0, 10);
+      const done = items.filter(i => _cpItemState(i) === 'done').length;
+      const prog = items.filter(i => _cpItemState(i) === 'in_progress').length;
+      const overdue = items.filter(i => i.date && i.date < today && _cpItemState(i) !== 'done').length;
+      const unassigned = items.filter(i => !i.owner).length;
+      const stat = (n, l, color) => `<div class="cp-stat"><div class="cp-stat-n" ${color ? `style="color:${color}"` : ''}>${n}</div><div class="cp-stat-l">${l}</div></div>`;
+      return `<div class="cp-stats">
+        ${stat(items.length, 'Total steps')}
+        ${stat(done, 'Completed', '#16A34A')}
+        ${stat(prog, 'In progress', '#F59E0B')}
+        ${stat(overdue, 'Overdue', overdue ? '#DC2626' : null)}
+        ${stat(unassigned, 'Unassigned')}
+      </div>`;
     }
 
     function cpToggleMapPicker() { _cpMapPickerOpen = !_cpMapPickerOpen; renderClientProfile(); }
