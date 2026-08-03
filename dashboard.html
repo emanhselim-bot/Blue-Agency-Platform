@@ -7865,6 +7865,8 @@
                   ${items.length ? items.map((it, ii) => `
                     <div class="cp-item ${it.status === 'done' ? 'done' : ''}">
                       <span class="cp-item-name">${escHtml(it.name)}</span>
+                      <input type="date" class="cp-date cp-item-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date for this step"
+                        onchange="cpSetItemDate(${si}, ${ii}, this.value)">
                       <button class="cp-status ${it.status || 'pending'}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[it.status || 'pending']}</button>
                       <button class="cp-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
                     </div>`).join('')
@@ -7880,6 +7882,11 @@
         </div>`;
     }
 
+    function cpSetItemDate(si, ii, val) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      proc[si].items[ii].date = val || '';
+      _cpSaveProc(proc);
+    }
     function cpSetMonth(m) { _cpMonth = m; _cpMapPickerOpen = false; renderClientProfile(); }
     function cpCopyPrevMonth() {
       const prev = _cpShiftMonth(_cpMonth, -1);
@@ -7889,7 +7896,7 @@
       // copy structure, reset statuses and dates
       const copy = JSON.parse(JSON.stringify(src)).map(st => ({
         map: st.map || 'Custom stages', stage: st.stage,
-        items: (st.items || []).map(it => ({ name: it.name, status: 'pending' })),
+        items: (st.items || []).map(it => ({ name: it.name, status: 'pending', date: '' })),
       }));
       _cpSaveProc([..._cpProc(), ...copy]);
     }
@@ -7905,7 +7912,7 @@
       const added = tpl.map(st => ({
         map: label,
         stage: st.stage,
-        items: st.items.map(n => ({ name: n, status: 'pending' })),
+        items: st.items.map(n => ({ name: n, status: 'pending', date: '' })),
       }));
       _cpMapPickerOpen = false;
       _cpSaveProc([...existing, ...added]);
