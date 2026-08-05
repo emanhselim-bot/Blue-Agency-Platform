@@ -8477,7 +8477,7 @@
       '📤 Delivery': ['Final Delivery','Final Client Review'],
       '🚀 Publishing': ['Scheduling','Publishing','Community Management'],
       '📈 Reporting': ['Monthly Reporting','Next Month Planning'],
-      '🎬 Creative Production': ['Creative Brief','Script Writing','Script Approval','Shooting / Production','Editing','Creative Approval'],
+      '🎬 Creative Production': ['Creative Brief','Script Writing','Script Approval','Mood Board','Mood Board Approval','Shooting / Production','Editing','Creative Approval'],
       '⚙️ Campaign Setup': ['Account & Pixel Access','Audience Building','Campaign Build','QA Before Launch','Launch'],
       '📈 Optimization': ['Daily Monitoring','A/B Testing','Weekly Optimization','Scaling Winners'],
       '🔍 SEO Audit': ['Technical SEO Audit','Keyword Research','Content Gap Analysis','Strategy Approval'],
@@ -8957,7 +8957,7 @@
       const steps = CP_STAGE_TEMPLATES[key];
       if (!steps) return;
       const REVISE_HINT = { 'Plan':'Revise the plan', 'Copy':'Edit the copy', 'Design':'Design edits',
-        'Creative':'Creative edits', 'Script':'Rewrite the script', 'Strategy':'Revise strategy' };
+        'Mood Board':'Rework the mood board', 'Creative':'Creative edits', 'Script':'Rewrite the script', 'Strategy':'Revise strategy' };
       const items = steps.map(n => {
         if (/approval|review/i.test(n)) {
           const hit = Object.keys(REVISE_HINT).find(k => new RegExp(k, 'i').test(n));
