@@ -8460,6 +8460,23 @@
       'Models': 'Photography',
       'Digital Consultation': 'Monthly report',
     };
+    // ── Individual stage templates (add just the stages a client needs) ──
+    const CP_STAGE_TEMPLATES = {
+      '🚀 Onboarding': ['New Client','Quotation Sent','Quotation Approved','Contract Signed','Partial Payment Received','WhatsApp/Slack Group Created','Kickoff Meeting','Assets & Access Received'],
+      '🔍 Strategy Phase': ['Brand Analysis','Competitor Analysis','Content Strategy','Monthly Content Plan','Client Approval — Plan'],
+      '✍️ Copywriting': ['Copywriting','Copy Approval'],
+      '🎨 Design': ['Design','Design Approval'],
+      '📤 Delivery': ['Final Delivery','Final Client Review'],
+      '🚀 Publishing': ['Scheduling','Publishing','Community Management'],
+      '📈 Reporting': ['Monthly Reporting','Next Month Planning'],
+      '🎬 Creative Production': ['Creative Brief','Script Writing','Script Approval','Shooting / Production','Editing','Creative Approval'],
+      '⚙️ Campaign Setup': ['Account & Pixel Access','Audience Building','Campaign Build','QA Before Launch','Launch'],
+      '📈 Optimization': ['Daily Monitoring','A/B Testing','Weekly Optimization','Scaling Winners'],
+      '🔍 SEO Audit': ['Technical SEO Audit','Keyword Research','Content Gap Analysis','Strategy Approval'],
+      '💻 Development': ['Wireframes','UI Design','Design Approval','Frontend Build','CMS Setup','QA & Launch'],
+    };
+    let _cpStagePickerOpen = false;
+
     let _cpMapPickerOpen = false;
     let _cpMonth = new Date().toISOString().slice(0, 7);   // YYYY-MM
     const CP_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -8555,8 +8572,16 @@
             <span class="cp-stage-prog">${doneCount}/${allItems.length} done · ${pct}%</span>
             <button class="cp-btn" onclick="cpToggleMapPicker()">${_cpMapPickerOpen ? '✓ Close' : '🗺 Load map'}</button>
             <button class="cp-btn ghost" onclick="cpCopyPrevMonth()" title="Copy last month's structure">⧉ Copy last month</button>
-            <button class="cp-btn ghost" onclick="cpAddStage()">＋ Stage</button>
+            <button class="cp-btn ghost" onclick="cpToggleStagePicker()">${_cpStagePickerOpen ? '✓ Close' : '＋ Add stage'}</button>
           </div>
+          ${_cpStagePickerOpen ? `
+            <div class="cp-picker" style="margin-bottom:14px">
+              <div style="font-size:11px;color:#6B7280;margin-bottom:9px">Add a ready-made stage to <strong>${_cpMonthLabel(_cpMonth)}</strong> — approval steps become Yes/No decisions automatically.</div>
+              <div>${Object.keys(CP_STAGE_TEMPLATES).map(k =>
+                `<button class="cp-btn ghost" style="margin:0 6px 6px 0" onclick="cpAddStageTemplate('${k.replace(/'/g, "\\'")}')">${escHtml(k)} <span style="opacity:.65;font-weight:600">· ${CP_STAGE_TEMPLATES[k].length}</span></button>`
+              ).join('')}</div>
+              <div class="cp-picker-foot"><button class="cp-btn" onclick="cpAddStage()">✏️ Custom empty stage</button></div>
+            </div>` : ''}
 
           <div class="cp-monthbar">
             <button class="cp-mnav" onclick="cpSetMonth(_cpShiftMonth(_cpMonth,-1))" title="Previous month">‹</button>
@@ -8889,6 +8914,29 @@
         ${stat(overdue, 'Overdue', overdue ? '#DC2626' : null)}
         ${stat(unassigned, 'Unassigned')}
       </div>`;
+    }
+
+    function cpToggleStagePicker() { _cpStagePickerOpen = !_cpStagePickerOpen; _cpMapPickerOpen = false; renderClientProfile(); }
+    function cpAddStageTemplate(key) {
+      const steps = CP_STAGE_TEMPLATES[key];
+      if (!steps) return;
+      const REVISE_HINT = { 'Plan':'Revise the plan', 'Copy':'Edit the copy', 'Design':'Design edits',
+        'Creative':'Creative edits', 'Script':'Rewrite the script', 'Strategy':'Revise strategy' };
+      const items = steps.map(n => {
+        if (/approval|review/i.test(n)) {
+          const hit = Object.keys(REVISE_HINT).find(k => new RegExp(k, 'i').test(n));
+          return { name: n, type: 'decision', decision: '', revisions: 0, revise: REVISE_HINT[hit] || 'Revise & resubmit', status: 'pending', date: '', owner: '' };
+        }
+        return { name: n, status: 'pending', date: '', owner: '' };
+      });
+      const existing = _cpProc();
+      let stageName = key;
+      if (existing.some(st => st.stage === stageName)) {
+        const n = existing.filter(st => (st.stage || '').startsWith(key)).length + 1;
+        stageName = `${key} ${n}`;
+      }
+      _cpStagePickerOpen = false;
+      _cpSaveProc([...existing, { map: 'Client stages', stage: stageName, items }]);
     }
 
     function cpToggleMapPicker() { _cpMapPickerOpen = !_cpMapPickerOpen; renderClientProfile(); }
