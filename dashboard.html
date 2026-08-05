@@ -8686,7 +8686,7 @@
                           ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Open</a>`
                           : `<button class="cp-link" title="Attach a Drive / file link" onclick="cpSetLink(${si},${ii})">🔗 link</button>`}
                         ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" title="Comments" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
-                        <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
+                        <input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
                           onchange="cpSetItemDate(${si}, ${ii}, this.value)">
                         <button class="cp-node-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
                       </div>
@@ -8713,7 +8713,7 @@
                       ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)} — right-click the ✎ to change" onclick="event.stopPropagation()">🔗 Open</a><button class="cp-node-del" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>`
                       : `<button class="cp-link" title="Attach a Drive / file link" onclick="cpSetLink(${si},${ii})">🔗 link</button>`}
                     ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" title="Comments" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
-                    <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
+                    <input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
                       onchange="cpSetItemDate(${si}, ${ii}, this.value)">
                     <button class="cp-node-del" title="Remove step" onclick="cpRemoveItem(${si},${ii})">✕</button>
                   </div>${_cpCmtOpen[si + '-' + ii] ? _cpCommentsHTML(si, ii, it) : ''}</div>`;
@@ -8848,8 +8848,18 @@
     }
 
     function cpSetItemDate(si, ii, val) {
+      let v = (val || '').trim();
+      if (v) {
+        const m = v.match(/^(\d{1,4})-(\d{2})-(\d{2})$/);
+        if (!m) { alert('That date could not be read. Please pick it from the calendar.'); renderClientProfile(); return; }
+        let year = parseInt(m[1], 10);
+        // typing a 2-digit year gives 0020 / 0026 — treat it as 2020 / 2026
+        if (year < 100) year += 2000;
+        if (year < 2000 || year > 2099) { alert('Please enter a year between 2000 and 2099.'); renderClientProfile(); return; }
+        v = String(year).padStart(4, '0') + '-' + m[2] + '-' + m[3];
+      }
       const proc = JSON.parse(JSON.stringify(_cpProc()));
-      proc[si].items[ii].date = val || '';
+      proc[si].items[ii].date = v;
       _cpSaveProc(proc);
     }
     function cpSetMonth(m) { _cpMonth = m; _cpMapPickerOpen = false; renderClientProfile(); }
@@ -8940,7 +8950,7 @@
                   <button class="cp-owner ${it.owner ? '' : 'empty'}" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                   ${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener">🔗</a>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
-                  <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" style="${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">
+                  <input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" style="${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">
                   ${it.type === 'decision'
                     ? `<button class="cp-status ${stt}" onclick="cpDecide(${si},${ii},'yes')">${it.decision === 'yes' ? '✓ Approved' : (it.decision === 'no' ? '✗ Revising' : 'Pending')}</button>`
                     : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}
