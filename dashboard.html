@@ -353,6 +353,8 @@
     [data-theme="dark"] .cp-link.has { background: #10261A; border-color: #166534; color: #86EFAC; }
 
     .cp-node-del { background: none; border: none; cursor: pointer; opacity: 0; font-size: 11px; color: #9AA4B2; transition: opacity .15s; }
+    .cp-decision .cp-node-del, .cp-compact-row .cp-node-del, .cp-tbl .cp-node-del { opacity: .6; }
+    .cp-decision .cp-node-del:hover, .cp-compact-row .cp-node-del:hover, .cp-tbl .cp-node-del:hover { opacity: 1; color: #0573F5; }
     .cp-node:hover .cp-node-del { opacity: .8; }
     .cp-node-del:hover { color: #DC2626; }
     /* map toolbar + views */
@@ -8683,7 +8685,7 @@
                         ${revs ? `<button class="cp-revcount" title="Click to change or clear the revision count" onclick="cpSetRevisions(${si},${ii})">${revs} revision${revs > 1 ? 's' : ''} ✕</button>` : ''}
                         <button class="cp-owner ${it.owner ? '' : 'empty'}" title="Owner — click to set" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                         ${it.link
-                          ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Open</a>`
+                          ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}" onclick="event.stopPropagation()">🔗 Open</a><button class="cp-node-del" style="opacity:.7" title="Edit or remove link" onclick="cpSetLink(${si},${ii})">✎</button>`
                           : `<button class="cp-link" title="Attach a Drive / file link" onclick="cpSetLink(${si},${ii})">🔗 link</button>`}
                         ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" title="Comments" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
                         <input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
@@ -8910,7 +8912,7 @@
               <td style="width:26px"><span class="cp-dot ${stt}"></span></td>
               <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</td>
               <td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>
-              <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener">🔗 Open</a>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}
+              <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗 Open</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}</td>
               <td style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</td>
               <td>${it.type === 'decision'
@@ -8948,7 +8950,7 @@
                   <span class="cp-dot ${stt}"></span>
                   <span style="flex:1;${stt === 'done' ? 'text-decoration:line-through;color:#94A3B8' : ''}">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</span>
                   <button class="cp-owner ${it.owner ? '' : 'empty'}" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
-                  ${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener">🔗</a>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗</button>`}
+                  ${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
                   <input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" style="${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">
                   ${it.type === 'decision'
