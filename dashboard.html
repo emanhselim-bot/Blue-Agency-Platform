@@ -422,6 +422,24 @@
     [data-theme="dark"] .cp-branch-note { color: #64748B; }
     [data-theme="dark"] .cp-revcount { background: #422006; color: #FCD34D; }
 
+    .cp-cmt-btn { border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer; color: #B6BFCC; font-family: inherit; }
+    .cp-cmt-btn.has { background: #EEF2FF; border-color: #C7D2FE; color: #4338CA; font-weight: 700; }
+    .cp-cmt-btn:hover { border-color: #0573F5; color: #0573F5; }
+    [data-theme="dark"] .cp-cmt-btn { background: #1E293B; border-color: #334155; color: #475569; }
+    [data-theme="dark"] .cp-cmt-btn.has { background: #1E1B4B; border-color: #4338CA; color: #C7D2FE; }
+    .cp-cmt-panel { width: 100%; max-width: 460px; border: 1px solid #E4E9F2; border-left: 3px solid #4338CA; border-radius: 0 10px 10px 0; background: #FAFBFE; padding: 10px 13px; margin-top: -2px; }
+    [data-theme="dark"] .cp-cmt-panel { background: #0F172A; border-color: #334155; border-left-color: #4338CA; }
+    .cp-cmt { border-top: 1px solid #EEF1F6; padding: 7px 0; font-size: 12.5px; color: #111827; }
+    .cp-cmt:first-child { border-top: none; }
+    [data-theme="dark"] .cp-cmt { border-top-color: #334155; color: #E2E8F0; }
+    .cp-cmt-meta { font-size: 10px; color: #9AA4B2; margin-bottom: 2px; display: flex; gap: 6px; align-items: center; }
+    .cp-cmt-del { background: none; border: none; cursor: pointer; opacity: .45; font-size: 10px; margin-left: auto; }
+    .cp-cmt-del:hover { opacity: 1; color: #DC2626; }
+    .cp-cmt-form { display: flex; gap: 6px; margin-top: 9px; }
+    .cp-cmt-form input { flex: 1; padding: 6px 10px; border: 1px solid #D6DEE9; border-radius: 7px; font-size: 12px; font-family: inherit; background: #fff; color: #111827; }
+    [data-theme="dark"] .cp-cmt-form input { background: #1E293B; border-color: #334155; color: #F1F5F9; }
+    .cp-cmt-form button { background: #4338CA; color: #fff; border: none; border-radius: 7px; padding: 6px 14px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+
     .cp-addnode { border: 1.5px dashed #C9D4E3; border-radius: 12px; background: transparent; color: #8A97A8; padding: 7px 18px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 200px; }
     .cp-addnode:hover { border-color: #0573F5; color: #0573F5; background: #F5F9FF; }
     .cp-flow-end { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #16A34A; border: 2px solid #86EFAC; background: #F4FDF7; border-radius: 20px; padding: 6px 22px; }
@@ -8667,10 +8685,12 @@
                         ${it.link
                           ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Open</a>`
                           : `<button class="cp-link" title="Attach a Drive / file link" onclick="cpSetLink(${si},${ii})">🔗 link</button>`}
+                        ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" title="Comments" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
                         <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
                           onchange="cpSetItemDate(${si}, ${ii}, this.value)">
                         <button class="cp-node-del" title="Remove" onclick="cpRemoveItem(${si},${ii})">✕</button>
                       </div>
+                      ${_cpCmtOpen[si + '-' + ii] ? _cpCommentsHTML(si, ii, it) : ''}
                       <div class="cp-branch">
                         <div class="cp-branch-side left">
                           <div class="cp-branch-line"></div>
@@ -8685,17 +8705,18 @@
                       </div>
                     </div>`;
                   }
-                  return `<div class="cp-node ${stt}">
+                  return `<div style="display:flex;flex-direction:column;align-items:center;width:100%"><div class="cp-node ${stt}">
                     <button class="cp-node-tick" title="Click to change status: ${CP_STATUS_LABEL[stt]}" onclick="cpCycleStatus(${si},${ii})">${stt === 'done' ? '✓' : (stt === 'in_progress' ? '•' : '')}</button>
                     <span class="cp-node-name">${escHtml(it.name)}</span>
                     <button class="cp-owner ${it.owner ? '' : 'empty'}" title="Task owner — click to set" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                     ${it.link
                       ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)} — right-click the ✎ to change" onclick="event.stopPropagation()">🔗 Open</a><button class="cp-node-del" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>`
                       : `<button class="cp-link" title="Attach a Drive / file link" onclick="cpSetLink(${si},${ii})">🔗 link</button>`}
+                    ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" title="Comments" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
                     <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" value="${it.date || ''}" title="Date"
                       onchange="cpSetItemDate(${si}, ${ii}, this.value)">
                     <button class="cp-node-del" title="Remove step" onclick="cpRemoveItem(${si},${ii})">✕</button>
-                  </div>`;
+                  </div>${_cpCmtOpen[si + '-' + ii] ? _cpCommentsHTML(si, ii, it) : ''}</div>`;
                 });
                 const addBtn = `<div style="display:flex;gap:8px">
                   <button class="cp-addnode" style="min-width:auto" onclick="cpAddItem(${si})">＋ Step</button>
@@ -8748,6 +8769,53 @@
         (st.items || []).forEach(it => { if (it.owner) set.add(it.owner); })));
       return [...set];
     }
+    // ── Step comments ──
+    let _cpCmtOpen = {};
+    function cpToggleComments(si, ii) {
+      const k = si + '-' + ii;
+      _cpCmtOpen[k] = !_cpCmtOpen[k];
+      renderClientProfile();
+      if (_cpCmtOpen[k]) setTimeout(() => document.getElementById('cp-cmt-input-' + k)?.focus(), 60);
+    }
+    function _cpMe() {
+      const m = (typeof cpmData !== 'undefined' ? cpmData.members : []).find(x => (x.email || '').toLowerCase() === (currentUser?.email || '').toLowerCase());
+      return m?.full_name || currentUser?.email || 'Someone';
+    }
+    function _cpCommentsHTML(si, ii, it) {
+      const k = si + '-' + ii;
+      const list = it.comments || [];
+      return `<div class="cp-cmt-panel">
+        ${list.length ? list.map((c, ci) => `<div class="cp-cmt">
+            <div class="cp-cmt-meta">
+              <strong style="color:#4338CA">${escHtml(c.by || 'Someone')}</strong>
+              <span>${c.at ? new Date(c.at).toLocaleString('en', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}</span>
+              <button class="cp-cmt-del" title="Delete comment" onclick="cpDeleteComment(${si},${ii},${ci})">🗑</button>
+            </div>
+            <div>${escHtml(c.text)}</div>
+          </div>`).join('')
+        : '<div style="font-size:11.5px;color:#9AA4B2">No comments on this step yet.</div>'}
+        <div class="cp-cmt-form">
+          <input id="cp-cmt-input-${k}" placeholder="Write a comment…" onkeydown="if(event.key==='Enter')cpAddComment(${si},${ii})">
+          <button onclick="cpAddComment(${si},${ii})">Post</button>
+        </div>
+      </div>`;
+    }
+    function cpAddComment(si, ii) {
+      const k = si + '-' + ii;
+      const el = document.getElementById('cp-cmt-input-' + k);
+      const text = el?.value.trim();
+      if (!text) return;
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const it = proc[si].items[ii];
+      it.comments = [...(it.comments || []), { by: _cpMe(), at: new Date().toISOString(), text }];
+      _cpSaveProc(proc);
+    }
+    function cpDeleteComment(si, ii, ci) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      (proc[si].items[ii].comments || []).splice(ci, 1);
+      _cpSaveProc(proc);
+    }
+
     function cpSetRevisions(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       const cur = proc[si].items[ii].revisions || 0;
@@ -8795,7 +8863,7 @@
         map: st.map || 'Custom stages', stage: st.stage,
         items: (st.items || []).map(it => it.type === 'decision'
           ? { name: it.name, type: 'decision', decision: '', revisions: 0, revise: it.revise, owner: it.owner || '', link: '', status: 'pending', date: '' }
-          : { name: it.name, owner: it.owner || '', link: '', status: 'pending', date: '' }),
+          : { name: it.name, owner: it.owner || '', link: '', comments: [], status: 'pending', date: '' }),
       }));
       _cpSaveProc([..._cpProc(), ...copy]);
     }
@@ -8832,7 +8900,8 @@
               <td style="width:26px"><span class="cp-dot ${stt}"></span></td>
               <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</td>
               <td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>
-              <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener">🔗 Open</a>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}</td>
+              <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener">🔗 Open</a>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}
+                  ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}</td>
               <td style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</td>
               <td>${it.type === 'decision'
                 ? `<button class="cp-branch-btn ${it.decision === 'yes' ? 'yes active' : (it.decision === 'no' ? 'no active' : 'yes')}" style="margin:0" onclick="cpDecide(${si},${ii},'${it.decision === 'yes' ? 'yes' : 'yes'}')">${it.decision === 'yes' ? '✓ APPROVED' : (it.decision === 'no' ? '✗ REVISING' : 'PENDING')}</button>`
@@ -8870,6 +8939,7 @@
                   <span style="flex:1;${stt === 'done' ? 'text-decoration:line-through;color:#94A3B8' : ''}">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</span>
                   <button class="cp-owner ${it.owner ? '' : 'empty'}" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                   ${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener">🔗</a>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗</button>`}
+                  ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
                   <input type="date" class="cp-node-date ${it.date ? '' : 'empty'}" style="${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">
                   ${it.type === 'decision'
                     ? `<button class="cp-status ${stt}" onclick="cpDecide(${si},${ii},'yes')">${it.decision === 'yes' ? '✓ Approved' : (it.decision === 'no' ? '✗ Revising' : 'Pending')}</button>`
