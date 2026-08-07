@@ -1928,6 +1928,24 @@
               <input type="text" class="connect-input" id="shopify-domain-input" placeholder="brand.myshopify.com">
               <button class="connect-btn" id="connect-shopify-btn">Connect</button>
             </div>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+              <div class="modal-section-title" style="margin-bottom:8px">Shopify app to use</div>
+              <select id="shopify-app-select" style="width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-main);font-size:13px;margin-bottom:8px">
+                <option value="">Default app (platform credentials)</option>
+              </select>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
+                Use a client-specific app when their store lives in a different Shopify account. Register it once, then pick it here before connecting.
+              </div>
+              <div id="shopify-app-form" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
+                <input id="sa-name" placeholder="App name (e.g. Blue Ad - Nano)" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-main);font-size:12px;margin-bottom:7px;box-sizing:border-box">
+                <input id="sa-client-id" placeholder="Client ID" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-main);font-size:12px;margin-bottom:7px;box-sizing:border-box">
+                <input id="sa-client-secret" type="password" placeholder="Client secret" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-main);font-size:12px;margin-bottom:8px;box-sizing:border-box">
+                <button class="connect-btn" onclick="saveShopifyApp()">Save app</button>
+                <button class="cmp-ghost" onclick="toggleShopifyAppForm(false)">Cancel</button>
+                <div id="sa-status" style="font-size:11px;margin-top:6px"></div>
+              </div>
+              <button class="cmp-ghost" id="sa-add-btn" onclick="toggleShopifyAppForm(true)">＋ Register a client app</button>
+            </div>
           </div>
 
           <!-- Partners access (direct token) -->
@@ -7442,6 +7460,49 @@
     }
 
     // Connect Shopify Store → trigger OAuth
+    // ── Shopify apps (one per client Shopify account) ──
+    function toggleShopifyAppForm(show) {
+      const f = document.getElementById('shopify-app-form');
+      const b = document.getElementById('sa-add-btn');
+      if (f) f.style.display = show ? 'block' : 'none';
+      if (b) b.style.display = show ? 'none' : 'inline-block';
+    }
+
+    async function loadShopifyApps() {
+      const sel = document.getElementById('shopify-app-select');
+      if (!sel || !currentOrgId) return;
+      const { data } = await sb.from('shopify_apps_safe')
+        .select('id, name, client_id').eq('organization_id', currentOrgId)
+        .eq('is_active', true).order('name');
+      const saved = sel.value;
+      sel.innerHTML = '<option value="">Default app (platform credentials)</option>' +
+        (data || []).map(a => `<option value="${a.id}">${escHtml(a.name)} · ${escHtml(String(a.client_id).slice(0, 8))}…</option>`).join('');
+      if (saved) sel.value = saved;
+    }
+
+    async function saveShopifyApp() {
+      const name = document.getElementById('sa-name').value.trim();
+      const clientId = document.getElementById('sa-client-id').value.trim();
+      const clientSecret = document.getElementById('sa-client-secret').value.trim();
+      const st = document.getElementById('sa-status');
+      if (!name || !clientId || !clientSecret) {
+        st.textContent = 'Fill in all three fields.'; st.style.color = '#F87171'; return;
+      }
+      const { data, error } = await sb.from('shopify_apps').insert({
+        organization_id: currentOrgId, name, client_id: clientId,
+        client_secret: clientSecret, created_by: currentUser?.id,
+      }).select('id').single();
+      if (error) { st.textContent = error.message; st.style.color = '#F87171'; return; }
+      st.textContent = '✓ App saved'; st.style.color = '#16A34A';
+      document.getElementById('sa-name').value = '';
+      document.getElementById('sa-client-id').value = '';
+      document.getElementById('sa-client-secret').value = '';
+      await loadShopifyApps();
+      const sel = document.getElementById('shopify-app-select');
+      if (sel && data?.id) sel.value = data.id;
+      setTimeout(() => toggleShopifyAppForm(false), 800);
+    }
+
     document.getElementById('connect-shopify-btn').addEventListener('click', async () => {
       const domain = document.getElementById('shopify-domain-input').value.trim();
       const status = document.getElementById('shopify-status');
@@ -7451,7 +7512,8 @@
       status.textContent = 'Redirecting to Shopify…';
       const jwt = await getJWT();
       // Navigate to initiate OAuth (same tab — Shopify redirects back when done)
-      window.location.href = `${SUPABASE_URL}/functions/v1/shopify-oauth?shop=${encodeURIComponent(domain)}&org_id=${currentOrgId}&t=${jwt}`;
+      const appId = document.getElementById('shopify-app-select')?.value || '';
+      window.location.href = `${SUPABASE_URL}/functions/v1/shopify-oauth?shop=${encodeURIComponent(domain)}&org_id=${currentOrgId}&t=${jwt}${appId ? '&app_id=' + appId : ''}`;
     });
 
     // Connect Shopify via Partners token (settings modal)
