@@ -1458,8 +1458,12 @@
           <div class="tmpl-option-body"><div class="tmpl-option-title">Awareness</div><div class="tmpl-option-desc">Reach, Impressions, Engagement</div></div>
         </div>
         <div class="tmpl-option" data-tmpl="messages"  onclick="_setTemplate('messages')">
-          <span class="tmpl-option-icon">💬</span>
-          <div class="tmpl-option-body"><div class="tmpl-option-title">Messages Only</div><div class="tmpl-option-desc">Spending + Messages, no website</div></div>
+          <span class="tmpl-option-icon">📦</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Messages · Product</div><div class="tmpl-option-desc">Messages, orders, pieces, revenue</div></div>
+        </div>
+        <div class="tmpl-option" data-tmpl="messages-service" onclick="_setTemplate('messages-service')">
+          <span class="tmpl-option-icon">🤝</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Messages · Service</div><div class="tmpl-option-desc">Messages, leads, deals + cost per each</div></div>
         </div>
         <div class="tmpl-option" data-tmpl="google-ads" onclick="_setTemplate('google-ads')">
           <span class="tmpl-option-icon">🔍</span>
@@ -2413,7 +2417,7 @@
       loadData();
     }
     function _updateTemplateBtnLabel(t) {
-      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'💬 Messages', 'google-ads':'🔍 Google Ads' };
+      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', 'google-ads':'🔍 Google Ads' };
       const btn = document.getElementById('template-btn');
       if (btn) btn.textContent = M[t] || '📋 Template';
     }
@@ -5346,6 +5350,10 @@
       const msgOrders   = parseInt(localStorage.getItem(_msgKey)   || '0') || 0;
       const msgRevenue  = parseFloat(localStorage.getItem(_revKey) || '0') || 0;
       const msgPieces   = parseInt(localStorage.getItem(_piecesKey) || '0') || 0;
+      const _leadsKey    = `msg-leads-${_periodKey}`;
+      const _dealsKey    = `msg-deals-${_periodKey}`;
+      const msgLeads     = parseInt(localStorage.getItem(_leadsKey) || '0') || 0;
+      const msgDeals     = parseInt(localStorage.getItem(_dealsKey) || '0') || 0;
       const _numMsgKey   = `num-messages-${_periodKey}`;
       const _cpmKey      = `cost-per-msg-${_periodKey}`;
       const _cpmManualKey = `cost-per-msg-manual-${_periodKey}`;
@@ -5496,6 +5504,59 @@
           </div>
         </div>`;
 
+      // ── Messages Analysis · SERVICE (messages → leads → deals) ──
+      const _msgInput = (id, val, ph = '0', step = '') => `<input id="${id}" type="number" min="0" ${step ? `step="${step}"` : ''} value="${val || ''}" placeholder="${ph}"
+        style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">`;
+
+      const _messagesServiceSection = `
+        <div class="kpi-section" data-section-id="messages-service">
+          <div class="section-label">Messages Analysis · Service <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          <div class="kpi-grid" data-grid-id="messages-service">
+            <div class="kpi-card c-orange" data-card-id="svc-number-of-messages">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💬</div>
+              <div class="kpi-label">Number of Messages</div>
+              ${_msgInput('kpi-svc-messages-input', _storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : ''), numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '0')}
+              <div class="kpi-sub">Manual entry</div>
+            </div>
+            <div class="kpi-card c-coral" data-card-id="svc-cost-per-message">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💸</div>
+              <div class="kpi-label">Cost per Message</div>
+              <div class="kpi-value" id="kpi-svc-cpm-val">—</div>
+              <div class="kpi-sub">Spend ÷ Messages</div>
+            </div>
+            <div class="kpi-card c-teal" data-card-id="svc-number-of-leads">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">📋</div>
+              <div class="kpi-label">Number of Leads</div>
+              ${_msgInput('kpi-svc-leads-input', msgLeads)}
+              <div class="kpi-sub">Manual entry</div>
+            </div>
+            <div class="kpi-card c-purple solid" data-card-id="svc-cost-per-lead">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">🎯</div>
+              <div class="kpi-label">Cost per Lead</div>
+              <div class="kpi-value" id="kpi-svc-cpl-val">—</div>
+              <div class="kpi-sub">Spend ÷ Leads</div>
+            </div>
+            <div class="kpi-card c-green" data-card-id="svc-deals">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">🤝</div>
+              <div class="kpi-label">Deals</div>
+              ${_msgInput('kpi-svc-deals-input', msgDeals)}
+              <div class="kpi-sub">Manual entry</div>
+            </div>
+            <div class="kpi-card c-navy solid" data-card-id="svc-cost-per-deal">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon">💰</div>
+              <div class="kpi-label">Cost per Deal</div>
+              <div class="kpi-value" id="kpi-svc-cpd-val">—</div>
+              <div class="kpi-sub">Spend ÷ Deals</div>
+            </div>
+          </div>
+        </div>`;
+
       document.getElementById('content').innerHTML = `
         <div class="kpi-sections-container" id="kpi-sections-container">
 
@@ -5522,6 +5583,10 @@
               ${_aw('c-sky solid',    '💸', 'Cost per Video View', _fc(parseNum(d['cost_per_action_type:video_view'])), '—', '—', 'Spend ÷ Video Views')}
             </div>
           </div>
+
+        ` : _curTmpl === 'messages-service' ? `
+          ${_spendingSection(false)}
+          ${_messagesServiceSection}
 
         ` : _curTmpl === 'messages' ? `
           ${_spendingSection(false)}
@@ -5720,6 +5785,39 @@
         let _curMsgRevenue = msgRevenue;
         let _curMsgPieces  = msgPieces;
 
+        // ── Messages · Service template: live equations ──
+        (() => {
+          const msgIn   = document.getElementById('kpi-svc-messages-input');
+          const leadsIn = document.getElementById('kpi-svc-leads-input');
+          const dealsIn = document.getElementById('kpi-svc-deals-input');
+          if (!msgIn && !leadsIn && !dealsIn) return;   // not on this template
+
+          const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+          const recalcSvc = () => {
+            const m = parseInt(msgIn?.value) || 0;
+            const l = parseInt(leadsIn?.value) || 0;
+            const d = parseInt(dealsIn?.value) || 0;
+            setVal('kpi-svc-cpm-val', m > 0 && spend > 0 ? fmt(spend / m, curr) : '—');
+            setVal('kpi-svc-cpl-val', l > 0 && spend > 0 ? fmt(spend / l, curr) : '—');
+            setVal('kpi-svc-cpd-val', d > 0 && spend > 0 ? fmt(spend / d, curr) : '—');
+            try { applyFlexTargets(); } catch(_) {}
+          };
+
+          msgIn?.addEventListener('input', () => {
+            localStorage.setItem(_numMsgKey, msgIn.value.trim() === '' ? '' : String(parseInt(msgIn.value) || 0));
+            recalcSvc();
+          });
+          leadsIn?.addEventListener('input', () => {
+            localStorage.setItem(_leadsKey, String(parseInt(leadsIn.value) || 0));
+            recalcSvc();
+          });
+          dealsIn?.addEventListener('input', () => {
+            localStorage.setItem(_dealsKey, String(parseInt(dealsIn.value) || 0));
+            recalcSvc();
+          });
+          recalcSvc();   // initial values on load
+        })();
+
         const ordersInput  = document.getElementById('kpi-msg-orders-input');
         const revenueInput = document.getElementById('kpi-msg-revenue-input');
         const piecesInput  = document.getElementById('kpi-msg-pieces-input');
@@ -5836,7 +5934,7 @@
 
       // ── Viewer role: lock all manual KPI inputs (read-only) ──
       if (currentRole === 'viewer') {
-        ['kpi-num-messages-input','kpi-cost-per-message-input','kpi-msg-orders-input','kpi-msg-pieces-input','kpi-msg-revenue-input','kpi-conv-rate-input'].forEach(id => {
+        ['kpi-num-messages-input','kpi-cost-per-message-input','kpi-msg-orders-input','kpi-msg-pieces-input','kpi-msg-revenue-input','kpi-conv-rate-input','kpi-svc-messages-input','kpi-svc-leads-input','kpi-svc-deals-input'].forEach(id => {
           const el = document.getElementById(id);
           if (el) {
             el.readOnly = true;
