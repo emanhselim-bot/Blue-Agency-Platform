@@ -843,6 +843,31 @@
     [data-theme="dark"] .bill-chip.refund { background: #422006; color: #FCD34D; }
     [data-theme="dark"] .bill-chip.adjustment { background: #3B0764; color: #D8B4FE; }
 
+    /* ── COMPARE PERIODS ── */
+    #compare-panel { display: none; padding: 0 24px 30px; }
+    #compare-panel.open { display: block; }
+    .cmp-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+    .cmp-title { font-size: 13px; font-weight: 800; color: var(--text-main); }
+    .cmp-sel { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-main); font-size: 12px; font-family: inherit; }
+    .cmp-run { background: var(--blue-light); color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .cmp-run:hover { background: var(--blue-dark); }
+    .cmp-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .cmp-ghost:hover { background: var(--bg); }
+    .cmp-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: auto; }
+    .cmp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .cmp-table th { text-align: right; padding: 11px 14px; background: var(--bg); color: var(--text-muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+    .cmp-table th:first-child, .cmp-table td:first-child { text-align: left; }
+    .cmp-table td { padding: 10px 14px; border-top: 1px solid var(--border); color: var(--text-main); text-align: right; white-space: nowrap; }
+    .cmp-table td:first-child { font-weight: 700; }
+    .cmp-best { color: #16A34A; font-weight: 800; }
+    .cmp-delta { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 10px; margin-left: 6px; }
+    .cmp-delta.up { background: #DCFCE7; color: #15803D; }
+    .cmp-delta.down { background: #FEE2E2; color: #DC2626; }
+    .cmp-delta.flat { background: var(--bg); color: var(--text-muted); }
+    [data-theme="dark"] .cmp-delta.up { background: #14532D; color: #86EFAC; }
+    [data-theme="dark"] .cmp-delta.down { background: #7F1D1D; color: #FCA5A5; }
+    .cmp-loading { padding: 30px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
     /* Targets button in controls bar */
     .targets-btn { padding: 5px 11px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
     .targets-btn:hover, .targets-btn.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
@@ -1444,6 +1469,7 @@
     </div>
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
+    <button class="targets-btn" id="compare-toggle-btn" onclick="toggleComparePanel()">⇄ Compare</button>
     <button class="layout-edit-btn" id="layout-undo-btn" onclick="undoLayout()" style="display:none" disabled title="Undo last layout change">↩ Undo</button>
     <button class="layout-edit-btn" id="layout-reset-btn" onclick="resetToDefaultLayout()" style="display:none" title="Reset all section/card arrangements to defaults">↺ Reset</button>
     <div class="tmpl-picker-wrap">
@@ -1516,6 +1542,21 @@
   <!-- MAIN CONTENT (unchanged) -->
   <div class="content" id="content">
     <div class="loading-state">Select an account above to load data.</div>
+  </div>
+
+  <!-- COMPARE PERIODS -->
+  <div id="compare-panel">
+    <div class="cmp-bar">
+      <span class="cmp-title">⇄ Compare periods</span>
+      <select class="cmp-sel" id="cmp-a"></select>
+      <span style="color:var(--text-muted)">vs</span>
+      <select class="cmp-sel" id="cmp-b"></select>
+      <span style="color:var(--text-muted)">vs</span>
+      <select class="cmp-sel" id="cmp-c"></select>
+      <button class="cmp-run" onclick="runCompare()">Compare</button>
+      <button class="cmp-ghost" onclick="toggleComparePanel(false)">✕ Close</button>
+    </div>
+    <div id="cmp-result"></div>
   </div>
 
   <!-- BILLING HISTORY SECTION -->
@@ -3318,6 +3359,120 @@
       applyFlexTargets();
       toggleTargetsPanel(false);
       if (period && sel.value) loadData();
+    }
+
+    // ═══ COMPARE PERIODS (2–3 date ranges side by side) ═══
+    const CMP_PERIODS = ['today','yesterday','last_7_days','last_30_days','this_month','last_month','this_quarter','last_quarter','this_year'];
+
+    function toggleComparePanel(open) {
+      const panel = document.getElementById('compare-panel');
+      const btn = document.getElementById('compare-toggle-btn');
+      const shouldOpen = open !== undefined ? open : !panel.classList.contains('open');
+      panel.classList.toggle('open', shouldOpen);
+      btn?.classList.toggle('active', shouldOpen);
+      if (shouldOpen) cmpFillSelects();
+    }
+
+    function cmpFillSelects() {
+      const opts = (sel, def, allowNone) =>
+        (allowNone ? '<option value="">— none —</option>' : '') +
+        CMP_PERIODS.map(p => `<option value="${p}" ${p === def ? 'selected' : ''}>${PERIOD_LABELS[p] || p}</option>`).join('');
+      const a = document.getElementById('cmp-a'), b = document.getElementById('cmp-b'), c = document.getElementById('cmp-c');
+      if (a && !a.options.length) a.innerHTML = opts(a, 'this_month', false);
+      if (b && !b.options.length) b.innerHTML = opts(b, 'last_month', false);
+      if (c && !c.options.length) c.innerHTML = opts(c, '', true);
+    }
+
+    // Fetch one period's headline metrics for the selected account
+    async function cmpFetch(account, period) {
+      if (account.type === 'google_ads') {
+        const d = await callEdgeFunction('google-ads-data', {
+          account_id: account.id, organization_id: currentOrgId, since: period, until: period,
+        });
+        const t = d?.totals || {};
+        return {
+          currency: '$',
+          spend: t.spend ?? 0, impressions: t.impressions ?? 0, clicks: t.clicks ?? 0,
+          ctr: t.ctr ?? null, cpc: t.cpc ?? null,
+          cpm: t.impressions ? (t.spend / t.impressions) * 1000 : null,
+          reach: null, results: t.conversions ?? null,
+          costPerResult: t.cost_per_conversion ?? null,
+        };
+      }
+      const d = await callEdgeFunction('meta-data', { account_db_id: account.id, period });
+      const e = d?.ad_entity || {};
+      const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+      const spend = num(e.amount_spent) ?? 0;
+      const results = num(e.page_messages) ?? num(e.results) ?? num(e.messages);
+      return {
+        currency: (account.currency || 'USD') + ' ',
+        spend,
+        impressions: num(e.impressions) ?? 0,
+        reach: num(e.reach),
+        clicks: num(e.clicks) ?? 0,
+        ctr: num(e.ctr), cpc: num(e.cpc), cpm: num(e.cpm),
+        results,
+        costPerResult: results && spend ? spend / results : num(e.cost_per_message),
+      };
+    }
+
+    async function runCompare() {
+      const account = accountMap[sel.value];
+      if (!account) { alert('Select an account first.'); return; }
+      const periods = [document.getElementById('cmp-a').value, document.getElementById('cmp-b').value, document.getElementById('cmp-c').value]
+        .filter(Boolean);
+      if (periods.length < 2) { alert('Pick at least two periods to compare.'); return; }
+
+      const out = document.getElementById('cmp-result');
+      out.innerHTML = '<div class="cmp-wrap"><div class="cmp-loading"><div class="spinner"></div>Fetching ' + periods.length + ' periods…</div></div>';
+
+      let data;
+      try {
+        data = await Promise.all(periods.map(p => cmpFetch(account, p)));
+      } catch (e) {
+        out.innerHTML = `<div class="cmp-wrap"><div class="cmp-loading">⚠️ ${escHtml(e.message || String(e))}</div></div>`;
+        return;
+      }
+
+      const cur = data[0]?.currency || '';
+      const fmtN = v => v == null || isNaN(v) ? '—' : Number(v).toLocaleString('en', { maximumFractionDigits: 0 });
+      const fmtM = v => v == null || isNaN(v) ? '—' : cur + Number(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const fmtP = v => v == null || isNaN(v) ? '—' : Number(v).toFixed(2) + '%';
+
+      // key: label, accessor, formatter, higherIsBetter
+      const ROWS = [
+        ['Spend',            d => d.spend,         fmtM, null],
+        ['Impressions',      d => d.impressions,   fmtN, true],
+        ['Reach',            d => d.reach,         fmtN, true],
+        ['Clicks',           d => d.clicks,        fmtN, true],
+        ['CTR',              d => d.ctr,           fmtP, true],
+        ['CPC',              d => d.cpc,           fmtM, false],
+        ['CPM',              d => d.cpm,           fmtM, false],
+        ['Results',          d => d.results,       fmtN, true],
+        ['Cost per Result',  d => d.costPerResult, fmtM, false],
+      ];
+
+      const delta = (base, val, higherIsBetter) => {
+        if (base == null || val == null || isNaN(base) || isNaN(val) || base === 0) return '';
+        const pct = ((val - base) / Math.abs(base)) * 100;
+        if (Math.abs(pct) < 0.05) return '<span class="cmp-delta flat">0%</span>';
+        const better = higherIsBetter === null ? null : (higherIsBetter ? pct > 0 : pct < 0);
+        const cls = better === null ? 'flat' : (better ? 'up' : 'down');
+        return `<span class="cmp-delta ${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
+      };
+
+      out.innerHTML = `<div class="cmp-wrap"><table class="cmp-table">
+        <thead><tr><th>Metric</th>${periods.map((p, i) =>
+          `<th>${escHtml(PERIOD_LABELS[p] || p)}${i === 0 ? ' <span style="opacity:.6">(base)</span>' : ''}</th>`).join('')}</tr></thead>
+        <tbody>${ROWS.map(([label, get, f, hib]) => {
+          const vals = data.map(get);
+          if (vals.every(v => v == null || isNaN(v))) return '';
+          const valid = vals.filter(v => v != null && !isNaN(v));
+          const best = hib === null ? null : (hib ? Math.max(...valid) : Math.min(...valid));
+          return `<tr><td>${label}</td>${vals.map((v, i) => `
+            <td class="${best != null && v === best && valid.length > 1 ? 'cmp-best' : ''}">${f(v)}${i > 0 ? delta(vals[0], v, hib) : ''}</td>`).join('')}</tr>`;
+        }).join('')}</tbody></table></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Green = best value across periods · % change is versus the first (base) period · ${escHtml(account.account_name || '')}</div>`;
     }
 
     const PERIOD_LABELS = {
