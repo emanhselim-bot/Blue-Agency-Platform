@@ -1785,12 +1785,14 @@
       </div>
       <label>STARTING DATE</label><input class="hub-input" id="pm-start" type="date">
       <label>MONTHLY DELIVERABLES <span id="pm-d-month" style="font-weight:600;opacity:.6"></span></label>
-      <div style="display:flex;gap:8px">
-        <div style="flex:1"><input class="hub-input" id="pm-d-videos" type="number" min="0" placeholder="0">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
+        <div><input class="hub-input" id="pm-d-videos" type="number" min="0" placeholder="0">
           <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">🎬 Videos</div></div>
-        <div style="flex:1"><input class="hub-input" id="pm-d-captions" type="number" min="0" placeholder="0">
+        <div><input class="hub-input" id="pm-d-captions" type="number" min="0" placeholder="0">
           <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">✍️ Captions</div></div>
-        <div style="flex:1"><input class="hub-input" id="pm-d-designs" type="number" min="0" placeholder="0">
+        <div><input class="hub-input" id="pm-d-scripts" type="number" min="0" placeholder="0">
+          <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">📝 Scripts</div></div>
+        <div><input class="hub-input" id="pm-d-designs" type="number" min="0" placeholder="0">
           <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">🎨 Designs</div></div>
       </div>
       <label>STAGE</label>
@@ -8940,7 +8942,7 @@
     function _cpDelivHTML(proc) {
       const plan = _cpDeliv();
       const units = Object.keys(plan).filter(u => Number(plan[u]) > 0);
-      const ICON = { videos: '🎬', video: '🎬', captions: '✍️', caption: '✍️', designs: '🎨', design: '🎨',
+      const ICON = { videos: '🎬', video: '🎬', captions: '✍️', caption: '✍️', designs: '🎨', design: '🎨', scripts: '📝', script: '📝',
                      reels: '🎞', posts: '📱', stories: '⭕', photos: '📸', articles: '📰', ads: '📣' };
       const chips = units.map(u => {
         const total = Number(plan[u]) || 0;
@@ -9678,6 +9680,7 @@
       const dv = (c?.deliverables_by_month && c.deliverables_by_month[dm]) || {};
       document.getElementById('pm-d-videos').value   = dv.videos   || '';
       document.getElementById('pm-d-captions').value = dv.captions || '';
+      document.getElementById('pm-d-scripts').value  = dv.scripts  || '';
       document.getElementById('pm-d-designs').value  = dv.designs  || '';
       document.getElementById('pm-d-month').textContent = '· ' + _cpMonthLabel(dm);
       document.getElementById('pm-delete').style.display = c ? '' : 'none';
@@ -9709,7 +9712,7 @@
       const existing = id ? (_pipeClients.find(x => x.id === id) || (_cpClient?.id === id ? _cpClient : null)) : null;
       const dMonth = _pipeDelivMonth(existing);
       const plan = { ...((existing?.deliverables_by_month || {})[dMonth] || {}) };
-      [['videos', 'pm-d-videos'], ['captions', 'pm-d-captions'], ['designs', 'pm-d-designs']].forEach(([k, el]) => {
+      [['videos', 'pm-d-videos'], ['captions', 'pm-d-captions'], ['scripts', 'pm-d-scripts'], ['designs', 'pm-d-designs']].forEach(([k, el]) => {
         const n = Math.max(0, parseInt(document.getElementById(el).value) || 0);
         if (n) plan[k] = n; else delete plan[k];
       });
