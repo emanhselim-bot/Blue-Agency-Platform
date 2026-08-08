@@ -7650,12 +7650,9 @@
       if (!confirm(`Disconnect ${shopDomain}?\n\nThis will stop syncing data. You can reconnect at any time.`)) return;
       const row = document.getElementById(`store-row-${storeId}`);
       if (row) row.style.opacity = '0.5';
-      // Mark as inactive in the DB. We don't hard-delete so historical data is preserved.
-      const { error } = await sb
-        .from('shopify_stores')
-        .update({ is_active: false, status: 'disconnected' })
-        .eq('id', storeId)
-        .eq('organization_id', currentOrgId);
+      // Mark as inactive via a server-side function. The table itself is not readable
+      // from the browser (it stores access tokens), so a direct update would fail.
+      const { error } = await sb.rpc('shopify_set_store_active', { store_id: storeId, active: false });
       if (error) {
         if (row) row.style.opacity = '1';
         document.getElementById('shopify-status').className = 'modal-status error';
