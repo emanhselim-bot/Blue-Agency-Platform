@@ -1843,6 +1843,8 @@
           <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">📝 Scripts</div></div>
         <div><input class="hub-input" id="pm-d-designs" type="number" min="0" placeholder="0">
           <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">🎨 Designs</div></div>
+        <div><input class="hub-input" id="pm-d-editing" type="number" min="0" placeholder="0">
+          <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">🎞 Editing</div></div>
       </div>
       <label>STAGE</label>
       <select class="hub-input" id="pm-stage">
@@ -8992,7 +8994,7 @@
     function _cpDelivHTML(proc) {
       const plan = _cpDeliv();
       const units = Object.keys(plan).filter(u => Number(plan[u]) > 0);
-      const ICON = { videos: '🎬', video: '🎬', captions: '✍️', caption: '✍️', designs: '🎨', design: '🎨', scripts: '📝', script: '📝',
+      const ICON = { videos: '🎬', video: '🎬', captions: '✍️', caption: '✍️', designs: '🎨', design: '🎨', scripts: '📝', script: '📝', editing: '🎞', edit: '🎞',
                      reels: '🎞', posts: '📱', stories: '⭕', photos: '📸', articles: '📰', ads: '📣' };
       const chips = units.map(u => {
         const total = Number(plan[u]) || 0;
@@ -9342,10 +9344,11 @@
     // name matches a deliverable type — so setting "3 videos" on the client fills
     // every video step with a 0/3 counter automatically.
     const CP_UNIT_HINTS = [
+      [/edit|post ?production|montage|colou?r ?grade/i, 'editing'],
       [/script|copy ?deck|storyboard/i,                 'scripts'],
       [/caption|copywrit|copy\b|post text/i,            'captions'],
       [/design|mood ?board|artwork|visual|thumbnail/i,  'designs'],
-      [/video|reel|edit|shoot|film|production|footage/i,'videos'],
+      [/video|reel|shoot|film|production|footage/i,     'videos'],
     ];
     function _cpUnitOf(it) {
       if (it.unit) return it.unit.toLowerCase();
@@ -9961,7 +9964,7 @@
 
     // ── modal deliverable draft, one entry per month ──
     let _pmDeliv = {}, _pmMonth = '';
-    const PM_FIELDS = [['videos', 'pm-d-videos'], ['captions', 'pm-d-captions'], ['scripts', 'pm-d-scripts'], ['designs', 'pm-d-designs']];
+    const PM_FIELDS = [['videos', 'pm-d-videos'], ['captions', 'pm-d-captions'], ['scripts', 'pm-d-scripts'], ['designs', 'pm-d-designs'], ['editing', 'pm-d-editing']];
 
     // 12 months centred on the client's month, plus any month that already has numbers
     function _pmRenderMonths() {
