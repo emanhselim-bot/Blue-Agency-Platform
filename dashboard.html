@@ -374,6 +374,28 @@
     .cp-chipbtn.active { background: #0573F5; border-color: #0573F5; color: #fff; }
     [data-theme="dark"] .cp-chipbtn { background: #1E293B; border-color: #334155; color: #94A3B8; }
     /* summary strip */
+    .cp-deliv-wrap { border: 1px solid #E5EAF1; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; background: #FAFBFD; }
+    .cp-deliv-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .cp-deliv-title { flex: 1; font-size: 11px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; color: #6B7280; }
+    .cp-deliv-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+    .cp-deliv { display: flex; align-items: center; gap: 10px; border: 1px solid #E5EAF1; border-radius: 12px; background: #fff; padding: 9px 12px; cursor: pointer; transition: all .15s; }
+    .cp-deliv:hover { border-color: #0573F5; box-shadow: 0 2px 10px rgba(5,115,245,.12); }
+    .cp-deliv.full { border-color: #86EFAC; background: #F4FDF7; }
+    .cp-deliv-ico { font-size: 17px; }
+    .cp-deliv-body { flex: 1; min-width: 0; }
+    .cp-deliv-name { display: block; font-size: 12px; font-weight: 700; color: #111827; text-transform: capitalize; }
+    .cp-deliv-bar { display: block; height: 4px; border-radius: 999px; background: #E9EEF5; margin-top: 5px; overflow: hidden; }
+    .cp-deliv-bar i { display: block; height: 100%; background: #0573F5; border-radius: 999px; transition: width .25s; }
+    .cp-deliv.full .cp-deliv-bar i { background: #16A34A; }
+    .cp-deliv-n { font-size: 16px; font-weight: 800; color: #111827; white-space: nowrap; }
+    .cp-deliv-n small { font-size: 11px; font-weight: 700; opacity: .55; }
+    .cp-deliv-empty { font-size: 12.5px; color: #6B7280; padding: 4px 2px; }
+    [data-theme="dark"] .cp-deliv-wrap { background: #131C2B; border-color: #24334A; }
+    [data-theme="dark"] .cp-deliv { background: #182337; border-color: #24334A; }
+    [data-theme="dark"] .cp-deliv.full { background: #10261A; border-color: #166534; }
+    [data-theme="dark"] .cp-deliv-name, [data-theme="dark"] .cp-deliv-n { color: #E8EEF7; }
+    [data-theme="dark"] .cp-deliv-bar { background: #24334A; }
+    [data-theme="dark"] .cp-deliv-title, [data-theme="dark"] .cp-deliv-empty { color: #94A3B8; }
     .cp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
     .cp-stat { background: #fff; border: 1px solid #E4E9F2; border-radius: 10px; padding: 10px 13px; }
     [data-theme="dark"] .cp-stat { background: #1E293B; border-color: #334155; }
@@ -8864,6 +8886,77 @@
       _cpSave({ process_by_month: byMonth, process: [] });
     }
 
+    // ── Monthly deliverable plan: how many videos / captions / designs this month ──
+    const CP_DEFAULT_DELIVERABLES = { videos: 0, captions: 0, designs: 0 };
+    function _cpAllDeliv() {
+      const d = _cpClient?.deliverables_by_month;
+      return (d && typeof d === 'object' && !Array.isArray(d)) ? d : {};
+    }
+    function _cpDeliv() {
+      const m = _cpAllDeliv()[_cpMonth];
+      return (m && typeof m === 'object') ? m : { ...CP_DEFAULT_DELIVERABLES };
+    }
+    function _cpSaveDeliv(obj) {
+      _cpSave({ deliverables_by_month: { ..._cpAllDeliv(), [_cpMonth]: obj } });
+    }
+    // how many of a given unit are actually marked done across every step this month
+    function _cpDelivDone(proc, unit) {
+      let n = 0;
+      proc.flatMap(st => st.items || []).forEach(i => {
+        const t = Number(i.total) || 0;
+        if (!t) return;
+        if ((i.unit || 'items').toLowerCase() !== unit) return;
+        n += Math.min(Number(i.doneCount) || 0, t);
+      });
+      return n;
+    }
+    function cpSetDeliv(unit) {
+      const cur = _cpDeliv();
+      const val = prompt(`How many ${unit} are planned for ${_cpMonthLabel(_cpMonth)}? (0 to remove)`, cur[unit] ?? 0);
+      if (val === null) return;
+      const n = Math.max(0, parseInt(val) || 0);
+      const next = { ...cur };
+      if (n) next[unit] = n; else delete next[unit];
+      _cpSaveDeliv(next);
+    }
+    function cpAddDeliv() {
+      const name = prompt('What deliverable? (videos, captions, designs, reels, posts, stories…)', '');
+      if (name === null) return;
+      const unit = name.trim().toLowerCase();
+      if (!unit) return;
+      const qty = prompt(`How many ${unit} this month?`, '0');
+      if (qty === null) return;
+      _cpSaveDeliv({ ..._cpDeliv(), [unit]: Math.max(0, parseInt(qty) || 0) });
+    }
+    function _cpDelivHTML(proc) {
+      const plan = _cpDeliv();
+      const units = Object.keys(plan).filter(u => Number(plan[u]) > 0);
+      const ICON = { videos: '🎬', video: '🎬', captions: '✍️', caption: '✍️', designs: '🎨', design: '🎨',
+                     reels: '🎞', posts: '📱', stories: '⭕', photos: '📸', articles: '📰', ads: '📣' };
+      const chips = units.map(u => {
+        const total = Number(plan[u]) || 0;
+        const done  = Math.min(_cpDelivDone(proc, u), total);
+        const pct   = total ? Math.round(done / total * 100) : 0;
+        return `<div class="cp-deliv ${done >= total ? 'full' : ''}" onclick="cpSetDeliv('${u.replace(/'/g, "\\'")}')" title="Click to change the plan for ${escHtml(u)}">
+          <span class="cp-deliv-ico">${ICON[u] || '📦'}</span>
+          <span class="cp-deliv-body">
+            <span class="cp-deliv-name">${escHtml(u)}</span>
+            <span class="cp-deliv-bar"><i style="width:${pct}%"></i></span>
+          </span>
+          <span class="cp-deliv-n">${done}<small>/${total}</small></span>
+        </div>`;
+      }).join('');
+      return `<div class="cp-deliv-wrap">
+        <div class="cp-deliv-head">
+          <span class="cp-deliv-title">Deliverables · ${_cpMonthLabel(_cpMonth)}</span>
+          <button class="cp-btn ghost" onclick="cpAddDeliv()">＋ Deliverable</button>
+        </div>
+        <div class="cp-deliv-row">
+          ${chips || `<div class="cp-deliv-empty">No monthly plan yet — click <strong>＋ Deliverable</strong> to set how many videos, captions or designs this client gets this month.</div>`}
+        </div>
+      </div>`;
+    }
+
     async function _cpSave(patch) {
       Object.assign(_cpClient, patch);
       renderClientProfile();
@@ -8974,6 +9067,8 @@
                   + `<div style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6B7280;margin-bottom:6px">ALL MAPS</div><div>${others.map(k => btn(k, false)).join('')}</div>`;
               })()}
             </div>` : ''}
+
+          ${_cpDelivHTML(proc)}
 
           ${proc.length ? _cpStatsHTML(proc) + _cpToolbarHTML(proc) : ''}
 
