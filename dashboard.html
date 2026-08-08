@@ -10067,7 +10067,10 @@
       document.getElementById('pipe-modal').classList.add('hidden');
       await loadPipeline();
       if (_cpClient && document.getElementById('hub-client-view')?.style.display !== 'none') {
-        _cpClient = _pipeClients.find(x => x.id === _cpClient.id) || _cpClient;
+        // merge the saved values straight in — the fresh row may not be in the list yet,
+        // and without this the open profile keeps the old deliverable numbers
+        const fresh = _pipeClients.find(x => x.id === _cpClient.id);
+        _cpClient = fresh ? { ...fresh } : { ..._cpClient, ...row };
         renderClientProfile();
       }
     }
