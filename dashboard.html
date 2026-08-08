@@ -9661,7 +9661,10 @@
     }
 
     function openPipeModal(id) {
-      const c = id ? _pipeClients.find(x => x.id === id) : null;
+      // fall back to the client currently open in the profile view — its row may not
+      // be in _pipeClients if the list hasn't reloaded since it was created
+      const c = id ? (_pipeClients.find(x => x.id === id) || (_cpClient?.id === id ? _cpClient : null)) : null;
+      if (id && !c) { alert('Could not load this client — refresh the page and try again.'); return; }
       document.getElementById('pipe-modal-title').textContent = c ? 'Edit client' : 'Add client';
       document.getElementById('pm-id').value = c?.id || '';
       document.getElementById('pm-name').value = c?.name || '';
@@ -9703,7 +9706,7 @@
         updated_at: new Date().toISOString()
       };
       // monthly deliverable plan (videos / captions / designs) for the client's month
-      const existing = id ? _pipeClients.find(x => x.id === id) : null;
+      const existing = id ? (_pipeClients.find(x => x.id === id) || (_cpClient?.id === id ? _cpClient : null)) : null;
       const dMonth = _pipeDelivMonth(existing);
       const plan = { ...((existing?.deliverables_by_month || {})[dMonth] || {}) };
       [['videos', 'pm-d-videos'], ['captions', 'pm-d-captions'], ['designs', 'pm-d-designs']].forEach(([k, el]) => {
