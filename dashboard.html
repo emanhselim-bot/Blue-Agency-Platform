@@ -9510,8 +9510,118 @@
         </select>
         <button class="cp-chipbtn ${_cpOnlyOverdue ? 'active' : ''}" onclick="cpSetFilter('overdue')">⚠ Overdue</button>
         ${_cpFiltersOn() ? '<button class="cp-chipbtn" onclick="cpClearFilters()">✕ Clear</button>' : ''}
+        <button class="cp-chipbtn" onclick="cpDownloadTimeline()">⬇ Download timeline</button>
         <button class="cp-chipbtn" onclick="window.print()">🖨 Print</button>
       </div>`;
+    }
+
+    // ── Branded timeline export ─────────────────────────────
+    // Opens a standalone, print-ready page (Blue Ad letterhead) the user can save as PDF.
+    function cpDownloadTimeline() {
+      const proc = _cpProc();
+      if (!proc.length) { alert('Nothing to export yet — add a stage or load a map first.'); return; }
+
+      const c = _cpClient || {};
+      const monthLbl = _cpMonthLabel(_cpMonth);
+      const items = proc.flatMap(st => st.items || []);
+      const done = items.filter(i => _cpItemState(i) === 'done').length;
+      const pct = items.length ? Math.round(done / items.length * 100) : 0;
+      const today = new Date().toISOString().slice(0, 10);
+
+      const plan = _cpDeliv();
+      const delivRows = Object.keys(plan).filter(u => Number(plan[u]) > 0).map(u => {
+        const total = Number(plan[u]) || 0;
+        const d = Math.min(_cpDelivDone(proc, u), total);
+        return `<span class="d"><b>${d}/${total}</b> ${escHtml(u)}</span>`;
+      }).join('');
+
+      const STATUS = { done: ['Done', '#16A34A'], in_progress: ['In progress', '#F59E0B'], pending: ['Not started', '#9CA3AF'] };
+
+      const stagesHTML = proc.map(st => {
+        const its = st.items || [];
+        const d = its.filter(i => _cpItemState(i) === 'done').length;
+        const rows = its.map(i => {
+          const state = _cpItemState(i);
+          const [lbl, col] = STATUS[state] || STATUS.pending;
+          const cnt = Number(i.total) ? `${Math.min(Number(i.doneCount) || 0, Number(i.total))}/${i.total} ${escHtml(i.unit || 'items')}` : '';
+          const late = i.date && i.date < today && state !== 'done';
+          return `<tr>
+            <td class="dot"><i style="background:${col}"></i></td>
+            <td class="nm">${escHtml(i.name)}${i.type === 'decision' ? ' <em>(decision)</em>' : ''}</td>
+            <td class="ct">${cnt}</td>
+            <td class="ow">${i.owner ? escHtml(i.owner) : '—'}</td>
+            <td class="dt ${late ? 'late' : ''}">${i.date ? i.date.split('-').reverse().join('/') : '—'}</td>
+            <td class="st" style="color:${col}">${lbl}</td>
+          </tr>`;
+        }).join('');
+        return `<section class="stage">
+          <div class="stage-h"><span>${escHtml(st.stage || 'Stage')}</span><b>${d}/${its.length}</b></div>
+          <table>
+            <thead><tr><th></th><th>Step</th><th>Deliverables</th><th>Owner</th><th>Date</th><th>Status</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" class="none">No steps</td></tr>'}</tbody>
+          </table>
+        </section>`;
+      }).join('');
+
+      const html = `<!doctype html><html><head><meta charset="utf-8">
+<title>${escHtml(c.name || 'Client')} — Timeline ${escHtml(monthLbl)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 34px 40px 50px; color: #111827; background: #fff; }
+  .head { display: flex; align-items: flex-start; gap: 16px; border-bottom: 3px solid #083BBF; padding-bottom: 16px; margin-bottom: 22px; }
+  .logo { display: flex; align-items: flex-end; gap: 4px; height: 40px; }
+  .logo i { display: block; width: 8px; border-radius: 2px; background: #083BBF; }
+  .logo i:nth-child(1) { height: 18px; background: #FCBA00; }
+  .logo i:nth-child(2) { height: 28px; }
+  .logo i:nth-child(3) { height: 40px; }
+  .logo i:nth-child(4) { height: 24px; }
+  .brand b { display: block; font-size: 21px; font-weight: 800; color: #083BBF; letter-spacing: -.3px; line-height: 1.1; }
+  .brand small { font-size: 8.5px; letter-spacing: 2.2px; color: #6B7280; font-weight: 700; }
+  .head .right { margin-left: auto; text-align: right; font-size: 11px; color: #6B7280; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -.4px; }
+  .sub { font-size: 12.5px; color: #6B7280; margin-bottom: 16px; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .kpis .k, .kpis .d { border: 1px solid #E5EAF1; border-radius: 9px; padding: 7px 13px; font-size: 12px; color: #374151; background: #FAFBFD; }
+  .kpis b { color: #083BBF; }
+  .stage { margin-bottom: 18px; page-break-inside: avoid; }
+  .stage-h { display: flex; align-items: center; background: #083BBF; color: #fff; border-radius: 8px 8px 0 0; padding: 8px 13px; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+  .stage-h b { margin-left: auto; font-size: 11px; opacity: .85; }
+  table { width: 100%; border-collapse: collapse; border: 1px solid #E5EAF1; border-top: 0; border-radius: 0 0 8px 8px; }
+  th { text-align: left; font-size: 9.5px; letter-spacing: .9px; text-transform: uppercase; color: #9CA3AF; padding: 7px 10px; border-bottom: 1px solid #EEF2F7; font-weight: 700; }
+  td { padding: 8px 10px; font-size: 12.5px; border-bottom: 1px solid #F3F6FA; vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.dot { width: 20px; } td.dot i { display: block; width: 9px; height: 9px; border-radius: 50%; }
+  td.nm { font-weight: 600; } td.nm em { color: #9CA3AF; font-weight: 500; font-size: 11px; }
+  td.ct, td.ow { color: #4B5563; font-size: 11.5px; }
+  td.dt { font-variant-numeric: tabular-nums; font-size: 11.5px; color: #4B5563; }
+  td.dt.late { color: #DC2626; font-weight: 700; }
+  td.st { font-size: 11px; font-weight: 700; text-align: right; }
+  td.none { color: #9CA3AF; font-size: 12px; }
+  .foot { margin-top: 26px; border-top: 1px solid #E5EAF1; padding-top: 10px; font-size: 10px; color: #9CA3AF; display: flex; }
+  .foot span:last-child { margin-left: auto; }
+  @media print { body { padding: 0 12px; } @page { margin: 14mm; } }
+</style></head><body>
+  <div class="head">
+    <div class="logo"><i></i><i></i><i></i><i></i></div>
+    <div class="brand"><b>Blue Ad</b><small>DIGITAL PERFORMANCE MARKETING AGENCY</small></div>
+    <div class="right">Timeline &amp; deliverables<br>${escHtml(monthLbl)}</div>
+  </div>
+  <h1>${escHtml(c.name || 'Client')}</h1>
+  <div class="sub">${c.contact ? escHtml(c.contact) + ' · ' : ''}${escHtml(monthLbl)}${(_cpSvc() || []).length ? ' · ' + escHtml(_cpSvc().join(', ')) : ''}</div>
+  <div class="kpis">
+    <span class="k"><b>${done}/${items.length}</b> steps complete</span>
+    <span class="k"><b>${pct}%</b> progress</span>
+    ${delivRows}
+  </div>
+  ${stagesHTML}
+  <div class="foot"><span>Generated ${new Date().toLocaleDateString('en-GB')} · Blue Ad</span><span>${escHtml(c.name || '')} — ${escHtml(monthLbl)}</span></div>
+  <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 350); };<\/script>
+</body></html>`;
+
+      const w = window.open('', '_blank');
+      if (!w) { alert('Please allow pop-ups for this site to download the timeline.'); return; }
+      w.document.write(html);
+      w.document.close();
     }
 
     function _cpStatsHTML(proc) {
