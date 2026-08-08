@@ -1826,7 +1826,12 @@
         <select class="hub-input" id="pm-currency" style="width:90px"><option>EGP</option><option>USD</option><option>SAR</option><option>AED</option></select>
       </div>
       <label>STARTING DATE</label><input class="hub-input" id="pm-start" type="date">
-      <label>MONTHLY DELIVERABLES <span id="pm-d-month" style="font-weight:600;opacity:.6"></span></label>
+      <label>MONTHLY DELIVERABLES</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <button type="button" class="cp-chipbtn" onclick="pmShiftMonth(-1)">‹</button>
+        <select class="hub-input" id="pm-d-month" style="flex:1" onchange="pmSwitchMonth()"></select>
+        <button type="button" class="cp-chipbtn" onclick="pmShiftMonth(1)">›</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
         <div><input class="hub-input" id="pm-d-videos" type="number" min="0" placeholder="0">
           <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">🎬 Videos</div></div>
@@ -9926,6 +9931,52 @@
       _cpSaveProc(proc);
     }
 
+    // ── modal deliverable draft, one entry per month ──
+    let _pmDeliv = {}, _pmMonth = '';
+    const PM_FIELDS = [['videos', 'pm-d-videos'], ['captions', 'pm-d-captions'], ['scripts', 'pm-d-scripts'], ['designs', 'pm-d-designs']];
+
+    // 12 months centred on the client's month, plus any month that already has numbers
+    function _pmRenderMonths() {
+      const base = new Date(_pmMonth + '-01T00:00:00');
+      const keys = new Set(Object.keys(_pmDeliv));
+      for (let i = -3; i <= 8; i++) {
+        const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
+        keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      keys.add(_pmMonth);
+      const sel = document.getElementById('pm-d-month');
+      sel.innerHTML = [...keys].sort().map(k => {
+        const n = Object.values(_pmDeliv[k] || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+        return `<option value="${k}" ${k === _pmMonth ? 'selected' : ''}>${_cpMonthLabel(k)}${n ? ' · ' + n : ''}</option>`;
+      }).join('');
+    }
+    function _pmLoadMonth() {
+      const plan = _pmDeliv[_pmMonth] || {};
+      PM_FIELDS.forEach(([k, el]) => { document.getElementById(el).value = plan[k] || ''; });
+    }
+    function _pmStashMonth() {
+      const plan = { ...(_pmDeliv[_pmMonth] || {}) };
+      PM_FIELDS.forEach(([k, el]) => {
+        const n = Math.max(0, parseInt(document.getElementById(el).value) || 0);
+        if (n) plan[k] = n; else delete plan[k];
+      });
+      if (Object.keys(plan).length) _pmDeliv[_pmMonth] = plan; else delete _pmDeliv[_pmMonth];
+    }
+    function pmSwitchMonth() {
+      _pmStashMonth();
+      _pmMonth = document.getElementById('pm-d-month').value;
+      _pmRenderMonths();
+      _pmLoadMonth();
+    }
+    function pmShiftMonth(step) {
+      _pmStashMonth();
+      const d = new Date(_pmMonth + '-01T00:00:00');
+      d.setMonth(d.getMonth() + step);
+      _pmMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      _pmRenderMonths();
+      _pmLoadMonth();
+    }
+
     // which month the modal's deliverable numbers belong to
     function _pipeDelivMonth(c) {
       const sd = document.getElementById('pm-start')?.value || c?.start_date || '';
@@ -9946,19 +9997,19 @@
       document.getElementById('pm-start').value = c?.start_date || '';
       document.getElementById('pm-stage').value = c?.stage || 'lead';
       document.getElementById('pm-notes').value = c?.notes || '';
-      const dm = _pipeDelivMonth(c);
-      const dv = (c?.deliverables_by_month && c.deliverables_by_month[dm]) || {};
-      document.getElementById('pm-d-videos').value   = dv.videos   || '';
-      document.getElementById('pm-d-captions').value = dv.captions || '';
-      document.getElementById('pm-d-scripts').value  = dv.scripts  || '';
-      document.getElementById('pm-d-designs').value  = dv.designs  || '';
-      document.getElementById('pm-d-month').textContent = '· ' + _cpMonthLabel(dm);
+      _pmDeliv = JSON.parse(JSON.stringify(c?.deliverables_by_month || {}));
+      _pmMonth = _pipeDelivMonth(c);
+      _pmRenderMonths();
+      _pmLoadMonth();
       document.getElementById('pm-delete').style.display = c ? '' : 'none';
       document.getElementById('pm-error').textContent = '';
       const nameEl = document.getElementById('pm-name');
       nameEl.oninput = () => { document.getElementById('pm-error').textContent = ''; };
       document.getElementById('pm-start').onchange = () => {
-        document.getElementById('pm-d-month').textContent = '· ' + _cpMonthLabel(_pipeDelivMonth(c));
+        _pmStashMonth();
+        _pmMonth = _pipeDelivMonth(c);
+        _pmRenderMonths();
+        _pmLoadMonth();
       };
       document.getElementById('pipe-modal').classList.remove('hidden');
     }
@@ -9978,15 +10029,9 @@
         notes: document.getElementById('pm-notes').value.trim() || null,
         updated_at: new Date().toISOString()
       };
-      // monthly deliverable plan (videos / captions / designs) for the client's month
-      const existing = id ? (_pipeClients.find(x => x.id === id) || (_cpClient?.id === id ? _cpClient : null)) : null;
-      const dMonth = _pipeDelivMonth(existing);
-      const plan = { ...((existing?.deliverables_by_month || {})[dMonth] || {}) };
-      [['videos', 'pm-d-videos'], ['captions', 'pm-d-captions'], ['scripts', 'pm-d-scripts'], ['designs', 'pm-d-designs']].forEach(([k, el]) => {
-        const n = Math.max(0, parseInt(document.getElementById(el).value) || 0);
-        if (n) plan[k] = n; else delete plan[k];
-      });
-      row.deliverables_by_month = { ...(existing?.deliverables_by_month || {}), [dMonth]: plan };
+      // monthly deliverable plan — capture whatever month is on screen, then save every month
+      _pmStashMonth();
+      row.deliverables_by_month = _pmDeliv;
       let error;
       if (id) ({ error } = await sb.from('pipeline_clients').update(row).eq('id', id));
       else ({ error } = await sb.from('pipeline_clients').insert({ ...row, organization_id: currentOrgId, created_by: currentUser?.id }));
