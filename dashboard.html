@@ -333,6 +333,8 @@
     .cp-node { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1.5px solid #D6DEE9; border-radius: 12px; background: #fff; padding: 9px 14px; min-width: 340px; max-width: 640px; width: 100%; transition: all .15s; }
     .cp-node:hover { border-color: #0573F5; box-shadow: 0 2px 10px rgba(5,115,245,.12); }
     .cp-node-tick { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #C9D4E3; background: #fff; cursor: pointer; flex-shrink: 0; font-size: 11px; line-height: 1; color: #fff; display: flex; align-items: center; justify-content: center; padding: 0; }
+    .cp-count, .cp-count .n { flex-shrink: 0; white-space: nowrap; }
+    .cp-owner { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
     .cp-node-name { flex: 1 1 140px; min-width: 120px; font-size: 13.5px; color: #111827; font-weight: 600; }
     .cp-node.done { border-color: #86EFAC; background: #F4FDF7; }
     .cp-node.done .cp-node-tick { background: #16A34A; border-color: #16A34A; }
@@ -8959,14 +8961,15 @@
     }
     // how many of a given unit are actually marked done across every step this month
     function _cpDelivDone(proc, unit) {
-      let n = 0;
+      // steps that inherit the plan all track the SAME items (e.g. the same 3 videos
+      // through script → design → edit), so report the furthest step, not the sum.
+      let inherited = 0, explicit = 0;
       proc.flatMap(st => st.items || []).forEach(i => {
-        const t = Number(i.total) || 0;
-        if (!t) return;
-        if ((i.unit || 'items').toLowerCase() !== unit) return;
-        n += Math.min(Number(i.doneCount) || 0, t);
+        if (_cpUnitOf(i) !== unit) return;
+        const done = _cpDoneOf(i);
+        if (Number(i.total)) explicit += done; else inherited = Math.max(inherited, done);
       });
-      return n;
+      return explicit + inherited;
     }
     function cpSetDeliv(unit) {
       const cur = _cpDeliv();
@@ -9160,11 +9163,11 @@
                 // deliverable totals for this stage, grouped by unit (videos / captions / designs …)
                 const stageUnits = {};
                 items.forEach(i => {
-                  const t = Number(i.total) || 0;
+                  const t = _cpTotalOf(i);
                   if (!t) return;
-                  const u = (i.unit || 'items').toLowerCase();
+                  const u = _cpUnitOf(i) || 'items';
                   stageUnits[u] ||= { done: 0, total: 0 };
-                  stageUnits[u].done += Math.min(Number(i.doneCount) || 0, t);
+                  stageUnits[u].done += _cpDoneOf(i);
                   stageUnits[u].total += t;
                 });
                 const unitChips = Object.entries(stageUnits).map(([u, v]) =>
@@ -9335,25 +9338,50 @@
     }
 
     // ── Per-step item counter (e.g. number of videos) ──
+    // A step inherits its target from the month's deliverable plan when the step
+    // name matches a deliverable type — so setting "3 videos" on the client fills
+    // every video step with a 0/3 counter automatically.
+    const CP_UNIT_HINTS = [
+      [/script|copy ?deck|storyboard/i,                 'scripts'],
+      [/caption|copywrit|copy\b|post text/i,            'captions'],
+      [/design|mood ?board|artwork|visual|thumbnail/i,  'designs'],
+      [/video|reel|edit|shoot|film|production|footage/i,'videos'],
+    ];
+    function _cpUnitOf(it) {
+      if (it.unit) return it.unit.toLowerCase();
+      const plan = _cpDeliv();
+      const hit = CP_UNIT_HINTS.find(([re, u]) => re.test(it.name || '') && Number(plan[u]) > 0);
+      return hit ? hit[1] : '';
+    }
+    function _cpTotalOf(it) {
+      if (Number(it.total)) return Number(it.total);
+      const u = _cpUnitOf(it);
+      return u ? (Number(_cpDeliv()[u]) || 0) : 0;
+    }
+    function _cpDoneOf(it) {
+      return Math.min(Number(it.doneCount) || 0, _cpTotalOf(it));
+    }
+
     function _cpCountHTML(si, ii, it) {
-      const total = Number(it.total) || 0;
+      const total = _cpTotalOf(it);
       if (!total) return `<button class="cp-countadd" title="Set how many items this step covers" onclick="cpSetTotal(${si},${ii})"># count</button>`;
-      const done = Math.min(Number(it.doneCount) || 0, total);
-      const unit = it.unit || 'items';
-      return `<span class="cp-count ${done >= total ? 'full' : ''}" title="${done} of ${total} ${escHtml(unit)} done">
+      const done = _cpDoneOf(it);
+      const unit = _cpUnitOf(it) || 'items';
+      const auto = !Number(it.total);
+      return `<span class="cp-count ${done >= total ? 'full' : ''}" title="${done} of ${total} ${escHtml(unit)} done${auto ? ' — from this month\u2019s plan' : ''}">
         <button title="One less done" onclick="cpBumpCount(${si},${ii},-1)">−</button>
-        <span class="n" onclick="cpSetTotal(${si},${ii})">${done}/${total}</span>
+        <span class="n" onclick="cpSetTotal(${si},${ii})">${done}/${total} ${escHtml(unit)}</span>
         <button title="Mark one done" onclick="cpBumpCount(${si},${ii},1)">+</button>
       </span>`;
     }
     function cpSetTotal(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       const it = proc[si].items[ii];
-      const val = prompt('How many items does this step cover? (0 to remove the counter)', it.total || '');
+      const val = prompt('How many items does this step cover? (0 to remove the counter)', _cpTotalOf(it) || '');
       if (val === null) return;
       const n = Math.max(0, parseInt(val) || 0);
       if (n) {
-        const unit = prompt('What are they? (videos, captions, designs, reels, posts…)', it.unit || 'videos');
+        const unit = prompt('What are they? (videos, captions, designs, reels, posts…)', _cpUnitOf(it) || 'videos');
         if (unit !== null) it.unit = (unit.trim() || 'items').toLowerCase();
       }
       it.total = n;
@@ -9365,14 +9393,14 @@
     function cpBumpCount(si, ii, delta) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       const it = proc[si].items[ii];
-      const total = Number(it.total) || 0;
+      const total = _cpTotalOf(it);
       if (!total) return;
       it.doneCount = Math.max(0, Math.min(total, (Number(it.doneCount) || 0) + delta));
       _cpApplyCountStatus(it);
       _cpSaveProc(proc);
     }
     function _cpApplyCountStatus(it) {
-      const total = Number(it.total) || 0;
+      const total = _cpTotalOf(it);
       if (!total || it.type === 'decision') return;
       const done = Number(it.doneCount) || 0;
       it.status = done >= total ? 'done' : (done > 0 ? 'in_progress' : 'pending');
@@ -9708,7 +9736,7 @@
         const rows = its.map(i => {
           const state = _cpItemState(i);
           const [lbl, col] = STATUS[state] || STATUS.pending;
-          const cnt = Number(i.total) ? `${Math.min(Number(i.doneCount) || 0, Number(i.total))}/${i.total} ${escHtml(i.unit || 'items')}` : '';
+          const cnt = _cpTotalOf(i) ? `${_cpDoneOf(i)}/${_cpTotalOf(i)} ${escHtml(_cpUnitOf(i) || 'items')}` : '';
           const late = i.date && i.date < today && state !== 'done';
           return `<tr>
             <td class="dot"><i style="background:${col}"></i></td>
@@ -9801,11 +9829,11 @@
       // Deliverable counters grouped by unit (videos / captions / designs …)
       const byUnit = {};
       items.forEach(i => {
-        const total = Number(i.total) || 0;
+        const total = _cpTotalOf(i);
         if (!total) return;
-        const unit = (i.unit || 'items').toLowerCase();
+        const unit = _cpUnitOf(i) || 'items';
         byUnit[unit] ||= { done: 0, total: 0 };
-        byUnit[unit].done += Math.min(Number(i.doneCount) || 0, total);
+        byUnit[unit].done += _cpDoneOf(i);
         byUnit[unit].total += total;
       });
       const unitCards = Object.entries(byUnit).map(([unit, v]) => {
