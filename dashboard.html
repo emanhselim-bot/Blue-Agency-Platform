@@ -323,29 +323,30 @@
 
     /* ── FLOWCHART PROCESS MAP ── */
     .cp-flow { display: flex; flex-direction: column; align-items: center; padding: 6px 0 14px; }
+    .cp-flow > div, .cp-flow .cp-node, .cp-flow .cp-decision { max-width: 640px; }
     .cp-phase { border: 2px solid #0573F5; border-radius: 10px; padding: 9px 30px; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; color: #0A1CA3; background: #EAF2FE; text-align: center; min-width: 260px; }
     .cp-phase .cp-phase-actions { display: inline-flex; gap: 6px; margin-left: 12px; vertical-align: middle; }
     .cp-arrow { color: #A9C7F5; font-size: 13px; line-height: 1; text-align: center; padding: 3px 0; user-select: none; }
     .cp-arrow span { display: block; }
-    .cp-node { display: flex; align-items: center; gap: 10px; border: 1.5px solid #D6DEE9; border-radius: 12px; background: #fff; padding: 9px 14px; min-width: 320px; max-width: 460px; transition: all .15s; }
+    .cp-node { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1.5px solid #D6DEE9; border-radius: 12px; background: #fff; padding: 9px 14px; min-width: 340px; max-width: 640px; width: 100%; transition: all .15s; }
     .cp-node:hover { border-color: #0573F5; box-shadow: 0 2px 10px rgba(5,115,245,.12); }
     .cp-node-tick { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #C9D4E3; background: #fff; cursor: pointer; flex-shrink: 0; font-size: 11px; line-height: 1; color: #fff; display: flex; align-items: center; justify-content: center; padding: 0; }
-    .cp-node-name { flex: 1; font-size: 13.5px; color: #111827; font-weight: 600; }
+    .cp-node-name { flex: 1 1 140px; min-width: 120px; font-size: 13.5px; color: #111827; font-weight: 600; }
     .cp-node.done { border-color: #86EFAC; background: #F4FDF7; }
     .cp-node.done .cp-node-tick { background: #16A34A; border-color: #16A34A; }
     .cp-node.done .cp-node-name { color: #6B8B78; text-decoration: line-through; }
     .cp-node.in_progress { border-color: #FCD34D; background: #FFFCF2; }
     .cp-node.in_progress .cp-node-tick { background: #F59E0B; border-color: #F59E0B; }
-    .cp-node-date { border: none; background: transparent; font-size: 11px; color: #6B7280; font-family: inherit; width: 108px; text-align: right; cursor: pointer; }
+    .cp-node-date { flex-shrink: 0; border: none; background: transparent; font-size: 11px; color: #6B7280; font-family: inherit; width: 108px; text-align: right; cursor: pointer; }
     .cp-node-date:focus { outline: none; color: #0573F5; }
     .cp-node-date.empty { color: #C3CAD6; }
-    .cp-owner { border: 1px solid #D6DEE9; border-radius: 20px; padding: 2px 9px; font-size: 10.5px; font-weight: 700; color: #0557D9; background: #EAF2FE; cursor: pointer; white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+    .cp-owner { flex-shrink: 0; border: 1px solid #D6DEE9; border-radius: 20px; padding: 2px 9px; font-size: 10.5px; font-weight: 700; color: #0557D9; background: #EAF2FE; cursor: pointer; white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
     .cp-owner:hover { border-color: #0573F5; }
     .cp-owner.empty { background: transparent; color: #B6BFCC; border-style: dashed; font-weight: 600; }
     [data-theme="dark"] .cp-owner { background: #16294A; border-color: #1E3A8A; color: #93C5FD; }
     [data-theme="dark"] .cp-owner.empty { background: transparent; color: #475569; border-color: #334155; }
 
-    .cp-link { border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; color: #B6BFCC; }
+    .cp-link { flex-shrink: 0; border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; color: #B6BFCC; }
     .cp-link.has { background: #EAF7EE; border-color: #A7E3BC; color: #15803D; font-weight: 700; }
     .cp-link:hover { border-color: #0573F5; color: #0573F5; }
     .cp-link.has:hover { border-color: #16A34A; color: #15803D; }
@@ -396,7 +397,7 @@
     .cp-hidden { display: none !important; }
 
     /* decision node + Yes/No branch */
-    .cp-decision { display: flex; align-items: center; gap: 10px; border: 2px dashed #C084FC; border-radius: 12px; background: #FBF5FF; padding: 10px 16px; min-width: 320px; max-width: 460px; }
+    .cp-decision { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 2px dashed #C084FC; border-radius: 12px; background: #FBF5FF; padding: 10px 16px; min-width: 340px; max-width: 640px; width: 100%; }
     .cp-decision .cp-node-name { color: #6B21A8; font-weight: 800; }
     .cp-decision.yes { border-style: solid; border-color: #86EFAC; background: #F4FDF7; }
     .cp-decision.yes .cp-node-name { color: #15803D; }
@@ -424,7 +425,7 @@
     [data-theme="dark"] .cp-branch-note { color: #64748B; }
     [data-theme="dark"] .cp-revcount { background: #422006; color: #FCD34D; }
 
-    .cp-count { display: inline-flex; align-items: center; gap: 0; border: 1px solid #D6DEE9; border-radius: 20px; overflow: hidden; background: #fff; }
+    .cp-count { display: inline-flex; align-items: center; gap: 0; flex-shrink: 0; white-space: nowrap; border: 1px solid #D6DEE9; border-radius: 20px; overflow: hidden; background: #fff; }
     .cp-count button { border: none; background: transparent; cursor: pointer; font-size: 12px; font-weight: 800; color: #64748B; padding: 2px 7px; line-height: 1; }
     .cp-count button:hover { background: #EAF2FE; color: #0573F5; }
     .cp-count .n { font-size: 11px; font-weight: 800; color: #0557D9; padding: 2px 6px; cursor: pointer; white-space: nowrap; min-width: 34px; text-align: center; }
