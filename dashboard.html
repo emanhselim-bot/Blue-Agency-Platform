@@ -322,11 +322,17 @@
     [data-theme="dark"] .cp-mapprog { color: #93C5FD; }
 
     /* ── FLOWCHART PROCESS MAP ── */
-    .cp-phase-unit { font-size: 10px; font-weight: 800; letter-spacing: .3px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.18); color: #fff; white-space: nowrap; }
+    .cp-phase-top { display: flex; align-items: center; gap: 10px; width: 100%; }
+    .cp-phase-name { flex: 1; }
+    .cp-phase-steps { font-size: 10px; font-weight: 700; opacity: .8; white-space: nowrap; }
+    .cp-phase-units { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 100%; margin-top: 8px; }
+    .cp-phase-unit { font-size: 10px; font-weight: 800; letter-spacing: .3px; padding: 3px 10px; border-radius: 999px; background: rgba(10,28,163,.12); color: #0A1CA3; white-space: nowrap; }
+    [data-theme="dark"] .cp-phase-unit { background: rgba(255,255,255,.16); color: #DBEAFE; }
+    [data-theme="dark"] .cp-phase-unit.full { background: #16A34A; color: #fff; }
     .cp-phase-unit.full { background: #16A34A; }
     .cp-flow { display: flex; flex-direction: column; align-items: center; padding: 6px 0 14px; }
     .cp-flow > div, .cp-flow .cp-node, .cp-flow .cp-decision { max-width: 640px; }
-    .cp-phase { border: 2px solid #0573F5; border-radius: 10px; padding: 9px 30px; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; color: #0A1CA3; background: #EAF2FE; text-align: center; min-width: 260px; }
+    .cp-phase { display: flex; flex-direction: column; align-items: center; border: 2px solid #0573F5; border-radius: 10px; padding: 10px 18px; font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #0A1CA3; background: #EAF2FE; text-align: center; min-width: 340px; max-width: 640px; width: 100%; }
     .cp-phase .cp-phase-actions { display: inline-flex; gap: 6px; margin-left: 12px; vertical-align: middle; }
     .cp-arrow { color: #A9C7F5; font-size: 13px; line-height: 1; text-align: center; padding: 3px 0; user-select: none; }
     .cp-arrow span { display: block; }
@@ -9156,15 +9162,19 @@
                 const d = items.filter(i => i.type === 'decision' ? i.decision === 'yes' : i.status === 'done').length;
                 // deliverable totals for this stage, grouped by unit (videos / captions / designs …)
                 const stageUnits = _cpAggUnits(items);
-                const unitChips = Object.entries(stageUnits).map(([u, v]) =>
-                  `<span class="cp-phase-unit ${v.done >= v.total ? 'full' : ''}" title="${v.done} of ${v.total} ${escHtml(u)} done">${v.done}/${v.total} ${escHtml(u)}</span>`
-                ).join('');
-                const phase = `<div class="cp-phase">${escHtml(st.stage || 'Stage')}
-                  <span class="cp-phase-actions">
-                    ${unitChips}
-                    <span style="font-size:10px;font-weight:700;opacity:.75" title="Steps completed">${d}/${items.length} steps</span>
+                const unitChips = Object.entries(stageUnits)
+                  .sort((a, b) => a[0].localeCompare(b[0]))
+                  .map(([u, v]) =>
+                    `<span class="cp-phase-unit ${v.done >= v.total ? 'full' : ''}" title="${v.done} of ${v.total} ${escHtml(u)} done">${v.done}/${v.total} ${escHtml(u)}</span>`
+                  ).join('');
+                const phase = `<div class="cp-phase">
+                  <div class="cp-phase-top">
+                    <span class="cp-phase-name">${escHtml(st.stage || 'Stage')}</span>
+                    <span class="cp-phase-steps" title="Steps completed">${d}/${items.length} steps</span>
                     <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
-                  </span></div>`;
+                  </div>
+                  ${unitChips ? `<div class="cp-phase-units">${unitChips}</div>` : ''}
+                </div>`;
                 const nodes = items.map((it) => {
                   const ii = (st.items || []).indexOf(it);
                   const stt = it.status || 'pending';
@@ -9334,8 +9344,17 @@
       [/design|mood ?board|artwork|visual|thumbnail/i,  'designs'],
       [/video|reel|shoot|film|production|footage/i,     'videos'],
     ];
+    // "Mood Board", "moodboard", "mood boards" → one canonical unit
+    function _cpNormUnit(u) {
+      let k = String(u || '').toLowerCase().trim().replace(/[\s_-]+/g, '');
+      const ALIAS = { moodboard: 'mood boards', moodboards: 'mood boards', board: 'mood boards',
+        script: 'scripts', caption: 'captions', design: 'designs', video: 'videos', reel: 'reels',
+        edit: 'editing', edits: 'editing', approval: 'approvals', post: 'posts', story: 'stories', item: 'items' };
+      if (ALIAS[k]) return ALIAS[k];
+      return String(u || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    }
     function _cpUnitOf(it) {
-      if (it.unit) return it.unit.toLowerCase();
+      if (it.unit) return _cpNormUnit(it.unit);
       const plan = _cpDeliv();
       const hit = CP_UNIT_HINTS.find(([re, u]) => re.test(it.name || '') && Number(plan[u]) > 0);
       return hit ? hit[1] : '';
@@ -9357,11 +9376,12 @@
         const total = _cpTotalOf(i);
         if (!total) return;
         const u = _cpUnitOf(i) || 'items';
-        out[u] ||= { done: 0, total: 0, _inhDone: 0, _inhTotal: 0 };
-        if (Number(i.total)) { out[u].done += _cpDoneOf(i); out[u].total += total; }
-        else { out[u]._inhDone = Math.max(out[u]._inhDone, _cpDoneOf(i)); out[u]._inhTotal = total; }
+        out[u] ||= { done: 0, total: 0 };
+        // steps sharing a unit follow the SAME batch through the workflow
+        // (20 scripts → 20 mood boards → 20 edits), so report the furthest, not the sum
+        out[u].total = Math.max(out[u].total, total);
+        out[u].done  = Math.max(out[u].done,  _cpDoneOf(i));
       });
-      Object.values(out).forEach(v => { v.done += v._inhDone; v.total += v._inhTotal; delete v._inhDone; delete v._inhTotal; });
       return out;
     }
 
