@@ -374,6 +374,24 @@
     .cp-chipbtn.active { background: #0573F5; border-color: #0573F5; color: #fff; }
     [data-theme="dark"] .cp-chipbtn { background: #1E293B; border-color: #334155; color: #94A3B8; }
     /* summary strip */
+    .cp-sharebar { display: flex; align-items: center; gap: 10px; background: #083BBF; color: #fff; border-radius: 12px; padding: 11px 16px; margin-bottom: 18px; font-size: 13px; }
+    .cp-sharebar-logo { display: inline-flex; align-items: flex-end; gap: 3px; height: 22px; }
+    .cp-sharebar-logo i { display: block; width: 5px; border-radius: 2px; background: #fff; }
+    .cp-sharebar-logo i:nth-child(1) { height: 10px; background: #FCBA00; }
+    .cp-sharebar-logo i:nth-child(2) { height: 16px; }
+    .cp-sharebar-logo i:nth-child(3) { height: 22px; }
+    .cp-sharebar-logo i:nth-child(4) { height: 13px; }
+    .cp-sharebar-mode { margin-left: auto; font-size: 11px; font-weight: 800; letter-spacing: .6px; background: rgba(255,255,255,.18); padding: 4px 10px; border-radius: 999px; }
+    /* view-only shared link: hide every editing affordance */
+    body.cp-readonly .cp-node-del, body.cp-readonly .cp-addnode, body.cp-readonly .cp-del,
+    body.cp-readonly .cp-countadd, body.cp-readonly .cp-count button, body.cp-readonly .cp-node-tick,
+    body.cp-readonly .cp-owner.empty, body.cp-readonly .cp-link:not(.has), body.cp-readonly .cp-phase-actions .cp-del,
+    body.cp-readonly #cp-month-bar .cp-btn, body.cp-readonly .cp-deliv-head button,
+    body.cp-readonly .cp-branch-btn, body.cp-readonly .cp-sec-head button { display: none !important; }
+    body.cp-readonly .cp-owner-only, body.cp-readonly .hub-mod-back { display: none !important; }
+    body.cp-readonly .cp-node-date { pointer-events: none; }
+    body.cp-readonly .cp-deliv { cursor: default; }
+    body.cp-readonly .cp-deliv:hover { border-color: #E5EAF1; box-shadow: none; }
     .cp-deliv-wrap { border: 1px solid #E5EAF1; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; background: #FAFBFD; }
     .cp-deliv-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
     .cp-deliv-title { flex: 1; font-size: 11px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; color: #6B7280; }
@@ -1768,6 +1786,30 @@
         <div class="fin-summary" id="fin-summary"></div>
         <div class="fin-table-wrap" id="fin-table-wrap"><div class="fin-empty">Loading…</div></div>
       </div>
+    </div>
+  </div>
+
+  <!-- TIMELINE SHARE MODAL -->
+  <div class="hub-modal hidden" id="cp-share-modal">
+    <div class="hub-modal-box">
+      <h3>Share timeline</h3>
+      <p style="font-size:12.5px;opacity:.7;margin:-4px 0 14px">Send the client a link to this timeline. No account needed.</p>
+      <label>ACCESS</label>
+      <select class="hub-input" id="cps-mode">
+        <option value="view">👁 View only — they can see progress, dates and deliverables</option>
+        <option value="edit">✎ Can edit — they can tick steps, set counts and change dates</option>
+      </select>
+      <label>LABEL (OPTIONAL)</label>
+      <input class="hub-input" id="cps-label" placeholder="e.g. Rana — client review">
+      <div style="margin:12px 0">
+        <button class="primary" style="width:100%" onclick="cpCreateShare()">＋ Create link</button>
+      </div>
+      <label>EXISTING LINKS</label>
+      <div id="cps-list" style="max-height:240px;overflow:auto"></div>
+      <div class="hub-modal-actions">
+        <button class="ghost" onclick="document.getElementById('cp-share-modal').classList.add('hidden')">Close</button>
+      </div>
+      <div class="auth-error" id="cps-error"></div>
     </div>
   </div>
 
@@ -8971,6 +9013,13 @@
     async function _cpSave(patch) {
       Object.assign(_cpClient, patch);
       renderClientProfile();
+      // shared link: write through the share RPC instead of the table
+      if (_cpShareToken) {
+        if (_cpShareMode !== 'edit') return;
+        const { data, error } = await sb.rpc('cp_share_update', { p_token: _cpShareToken, p_patch: patch });
+        if (error || data === false) alert('Could not save: ' + (error?.message || 'this link is view-only'));
+        return;
+      }
       const { error } = await sb.from('pipeline_clients')
         .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', _cpClient.id);
@@ -8998,7 +9047,7 @@
               Stage: <strong>${escHtml((PIPE_STAGES.find(p => p[0] === c.stage) || ['', c.stage])[1])}</strong>
             </div>
           </div>
-          <button class="cp-btn ghost" onclick="openPipeModal('${c.id}')">✎ Edit details</button>
+          <button class="cp-btn ghost cp-owner-only" onclick="openPipeModal('${c.id}')">✎ Edit details</button>
         </div>
 
         <div class="cp-sec">
@@ -9510,9 +9559,120 @@
         </select>
         <button class="cp-chipbtn ${_cpOnlyOverdue ? 'active' : ''}" onclick="cpSetFilter('overdue')">⚠ Overdue</button>
         ${_cpFiltersOn() ? '<button class="cp-chipbtn" onclick="cpClearFilters()">✕ Clear</button>' : ''}
+        <button class="cp-chipbtn cp-owner-only" onclick="cpOpenShare()">🔗 Share</button>
         <button class="cp-chipbtn" onclick="cpDownloadTimeline()">⬇ Download timeline</button>
         <button class="cp-chipbtn" onclick="window.print()">🖨 Print</button>
       </div>`;
+    }
+
+    // ── Timeline share links ────────────────────────────────
+    let _cpShareRows = [];
+
+    function _cpShareUrl(token) {
+      return location.origin + location.pathname + '?timeline=' + token;
+    }
+
+    async function cpOpenShare() {
+      if (!_cpClient) return;
+      document.getElementById('cps-error').textContent = '';
+      document.getElementById('cps-label').value = '';
+      document.getElementById('cp-share-modal').classList.remove('hidden');
+      await cpLoadShares();
+    }
+
+    async function cpLoadShares() {
+      const box = document.getElementById('cps-list');
+      box.innerHTML = '<div style="font-size:12px;opacity:.6;padding:6px 2px">Loading…</div>';
+      const { data, error } = await sb.from('cp_timeline_shares')
+        .select('id, token, mode, label, revoked, created_at, last_viewed_at')
+        .eq('client_id', _cpClient.id).eq('revoked', false)
+        .order('created_at', { ascending: false });
+      if (error) { box.innerHTML = ''; document.getElementById('cps-error').textContent = error.message; return; }
+      _cpShareRows = data || [];
+      if (!_cpShareRows.length) {
+        box.innerHTML = '<div style="font-size:12.5px;opacity:.6;padding:6px 2px">No links yet.</div>';
+        return;
+      }
+      box.innerHTML = _cpShareRows.map(r => `
+        <div style="border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:9px 11px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:${r.mode === 'edit' ? '#F59E0B' : '#0573F5'};color:#fff">
+              ${r.mode === 'edit' ? '✎ CAN EDIT' : '👁 VIEW ONLY'}</span>
+            <span style="font-size:12px;opacity:.8;flex:1">${escHtml(r.label || '—')}</span>
+            <button class="cp-chipbtn" onclick="cpRevokeShare('${r.id}')" title="Revoke this link">✕</button>
+          </div>
+          <div style="display:flex;gap:6px">
+            <input class="hub-input" readonly value="${_cpShareUrl(r.token)}" style="flex:1;font-size:11px" onclick="this.select()">
+            <button class="cp-chipbtn" onclick="cpCopyShare('${r.token}', this)">Copy</button>
+          </div>
+          <div style="font-size:10.5px;opacity:.55;margin-top:5px">
+            Created ${new Date(r.created_at).toLocaleDateString('en-GB')}${r.last_viewed_at ? ' · last opened ' + new Date(r.last_viewed_at).toLocaleDateString('en-GB') : ' · not opened yet'}
+          </div>
+        </div>`).join('');
+    }
+
+    async function cpCreateShare() {
+      const mode = document.getElementById('cps-mode').value;
+      const label = document.getElementById('cps-label').value.trim() || null;
+      const { error } = await sb.from('cp_timeline_shares').insert({
+        client_id: _cpClient.id, organization_id: currentOrgId,
+        mode, label, created_by: currentUser?.id,
+      });
+      if (error) { document.getElementById('cps-error').textContent = error.message; return; }
+      document.getElementById('cps-label').value = '';
+      await cpLoadShares();
+    }
+
+    async function cpRevokeShare(id) {
+      if (!confirm('Revoke this link? Anyone holding it will lose access.')) return;
+      const { error } = await sb.from('cp_timeline_shares').update({ revoked: true }).eq('id', id);
+      if (error) { document.getElementById('cps-error').textContent = error.message; return; }
+      await cpLoadShares();
+    }
+
+    function cpCopyShare(token, btn) {
+      navigator.clipboard.writeText(_cpShareUrl(token)).then(() => {
+        const old = btn.textContent; btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.textContent = old; }, 1600);
+      });
+    }
+
+    // ── Public (shared) timeline viewer ─────────────────────
+    let _cpShareToken = null, _cpShareMode = null;
+
+    async function cpBootSharedTimeline(token) {
+      document.getElementById('auth-overlay')?.classList.add('hidden');
+      document.querySelector('.header')?.style.setProperty('display', 'none');
+      document.getElementById('content')?.style.setProperty('display', 'none');
+
+      const hub = document.getElementById('home-hub');
+      hub.classList.remove('hidden');
+      document.getElementById('hub-cards-view').style.display = 'none';
+      document.getElementById('hub-pipeline-view').style.display = 'none';
+      document.getElementById('hub-finance-view').style.display = 'none';
+      document.getElementById('hub-client-view').style.display = '';
+      document.querySelector('#home-hub .hub-inner')?.classList.add('wide');
+
+      const { data, error } = await sb.rpc('cp_share_get', { p_token: token });
+      if (error || !data) {
+        document.getElementById('hub-client-view').innerHTML =
+          '<div class="cp-empty" style="margin:40px auto;max-width:520px;text-align:center">This timeline link is no longer valid. Please ask for a new one.</div>';
+        return;
+      }
+
+      _cpShareToken = token;
+      _cpShareMode = data.mode;
+      _cpClient = data.client;
+      _cpMonth = new Date().toISOString().slice(0, 7);
+      renderClientProfile();
+
+      if (_cpShareMode !== 'edit') document.body.classList.add('cp-readonly');
+      const bar = document.createElement('div');
+      bar.className = 'cp-sharebar';
+      bar.innerHTML = `<span class="cp-sharebar-logo"><i></i><i></i><i></i><i></i></span>
+        <span><b>Blue Ad</b> · ${escHtml(_cpClient.name || '')} timeline</span>
+        <span class="cp-sharebar-mode">${_cpShareMode === 'edit' ? '✎ You can update progress' : '👁 View only'}</span>`;
+      document.getElementById('hub-client-view').prepend(bar);
     }
 
     // ── Branded timeline export ─────────────────────────────
@@ -10053,8 +10213,14 @@
       }
     });
 
-    // Initialize session (handles page reload with existing session)
-    Auth.getSession();
+    // Shared timeline link (?timeline=TOKEN) — public, no sign-in required
+    const _shareToken = new URLSearchParams(location.search).get('timeline');
+    if (_shareToken) {
+      cpBootSharedTimeline(_shareToken);
+    } else {
+      // Initialize session (handles page reload with existing session)
+      Auth.getSession();
+    }
 
     // ─────────────────────────────────────────────────────────────
     // ASK CLAUDE SIDEBAR
