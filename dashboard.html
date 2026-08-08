@@ -8963,15 +8963,7 @@
     }
     // how many of a given unit are actually marked done across every step this month
     function _cpDelivDone(proc, unit) {
-      // steps that inherit the plan all track the SAME items (e.g. the same 3 videos
-      // through script → design → edit), so report the furthest step, not the sum.
-      let inherited = 0, explicit = 0;
-      proc.flatMap(st => st.items || []).forEach(i => {
-        if (_cpUnitOf(i) !== unit) return;
-        const done = _cpDoneOf(i);
-        if (Number(i.total)) explicit += done; else inherited = Math.max(inherited, done);
-      });
-      return explicit + inherited;
+      return (_cpAggUnits(proc.flatMap(st => st.items || []))[unit] || {}).done || 0;
     }
     function cpSetDeliv(unit) {
       const cur = _cpDeliv();
@@ -9163,15 +9155,7 @@
                 if (_cpFiltersOn() && !items.length) return '';
                 const d = items.filter(i => i.type === 'decision' ? i.decision === 'yes' : i.status === 'done').length;
                 // deliverable totals for this stage, grouped by unit (videos / captions / designs …)
-                const stageUnits = {};
-                items.forEach(i => {
-                  const t = _cpTotalOf(i);
-                  if (!t) return;
-                  const u = _cpUnitOf(i) || 'items';
-                  stageUnits[u] ||= { done: 0, total: 0 };
-                  stageUnits[u].done += _cpDoneOf(i);
-                  stageUnits[u].total += t;
-                });
+                const stageUnits = _cpAggUnits(items);
                 const unitChips = Object.entries(stageUnits).map(([u, v]) =>
                   `<span class="cp-phase-unit ${v.done >= v.total ? 'full' : ''}" title="${v.done} of ${v.total} ${escHtml(u)} done">${v.done}/${v.total} ${escHtml(u)}</span>`
                 ).join('');
@@ -9363,6 +9347,22 @@
     }
     function _cpDoneOf(it) {
       return Math.min(Number(it.doneCount) || 0, _cpTotalOf(it));
+    }
+    // Roll a list of steps up per unit. Steps that inherit the monthly plan all follow
+    // the same batch (the same 20 videos through script → shoot → edit), so they count
+    // once — the furthest step wins. Steps with their own total are added on top.
+    function _cpAggUnits(list) {
+      const out = {};
+      list.forEach(i => {
+        const total = _cpTotalOf(i);
+        if (!total) return;
+        const u = _cpUnitOf(i) || 'items';
+        out[u] ||= { done: 0, total: 0, _inhDone: 0, _inhTotal: 0 };
+        if (Number(i.total)) { out[u].done += _cpDoneOf(i); out[u].total += total; }
+        else { out[u]._inhDone = Math.max(out[u]._inhDone, _cpDoneOf(i)); out[u]._inhTotal = total; }
+      });
+      Object.values(out).forEach(v => { v.done += v._inhDone; v.total += v._inhTotal; delete v._inhDone; delete v._inhTotal; });
+      return out;
     }
 
     function _cpCountHTML(si, ii, it) {
@@ -9830,15 +9830,7 @@
       const stat = (n, l, color) => `<div class="cp-stat"><div class="cp-stat-n" ${color ? `style="color:${color}"` : ''}>${n}</div><div class="cp-stat-l">${l}</div></div>`;
 
       // Deliverable counters grouped by unit (videos / captions / designs …)
-      const byUnit = {};
-      items.forEach(i => {
-        const total = _cpTotalOf(i);
-        if (!total) return;
-        const unit = _cpUnitOf(i) || 'items';
-        byUnit[unit] ||= { done: 0, total: 0 };
-        byUnit[unit].done += _cpDoneOf(i);
-        byUnit[unit].total += total;
-      });
+      const byUnit = _cpAggUnits(items);
       const unitCards = Object.entries(byUnit).map(([unit, v]) => {
         const pct = v.total ? Math.round(v.done / v.total * 100) : 0;
         const col = v.done >= v.total ? '#16A34A' : (v.done ? '#F59E0B' : null);
