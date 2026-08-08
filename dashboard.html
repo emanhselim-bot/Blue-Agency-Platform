@@ -9163,18 +9163,23 @@
       const total = Number(it.total) || 0;
       if (!total) return `<button class="cp-countadd" title="Set how many items this step covers" onclick="cpSetTotal(${si},${ii})"># count</button>`;
       const done = Math.min(Number(it.doneCount) || 0, total);
-      return `<span class="cp-count ${done >= total ? 'full' : ''}">
+      const unit = it.unit || 'items';
+      return `<span class="cp-count ${done >= total ? 'full' : ''}" title="${done} of ${total} ${escHtml(unit)} done">
         <button title="One less done" onclick="cpBumpCount(${si},${ii},-1)">−</button>
-        <span class="n" title="Click to change the total" onclick="cpSetTotal(${si},${ii})">${done}/${total}</span>
+        <span class="n" onclick="cpSetTotal(${si},${ii})">${done}/${total}</span>
         <button title="Mark one done" onclick="cpBumpCount(${si},${ii},1)">+</button>
       </span>`;
     }
     function cpSetTotal(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       const it = proc[si].items[ii];
-      const val = prompt('How many items does this step cover? (e.g. number of videos — 0 to remove the counter)', it.total || '');
+      const val = prompt('How many items does this step cover? (0 to remove the counter)', it.total || '');
       if (val === null) return;
       const n = Math.max(0, parseInt(val) || 0);
+      if (n) {
+        const unit = prompt('What are they? (videos, captions, designs, reels, posts…)', it.unit || 'videos');
+        if (unit !== null) it.unit = (unit.trim() || 'items').toLowerCase();
+      }
       it.total = n;
       if (!n) { delete it.doneCount; }
       else it.doneCount = Math.min(Number(it.doneCount) || 0, n);
@@ -9395,13 +9400,35 @@
       const overdue = items.filter(i => i.date && i.date < today && _cpItemState(i) !== 'done').length;
       const unassigned = items.filter(i => !i.owner).length;
       const stat = (n, l, color) => `<div class="cp-stat"><div class="cp-stat-n" ${color ? `style="color:${color}"` : ''}>${n}</div><div class="cp-stat-l">${l}</div></div>`;
+
+      // Deliverable counters grouped by unit (videos / captions / designs …)
+      const byUnit = {};
+      items.forEach(i => {
+        const total = Number(i.total) || 0;
+        if (!total) return;
+        const unit = (i.unit || 'items').toLowerCase();
+        byUnit[unit] ||= { done: 0, total: 0 };
+        byUnit[unit].done += Math.min(Number(i.doneCount) || 0, total);
+        byUnit[unit].total += total;
+      });
+      const unitCards = Object.entries(byUnit).map(([unit, v]) => {
+        const pct = v.total ? Math.round(v.done / v.total * 100) : 0;
+        const col = v.done >= v.total ? '#16A34A' : (v.done ? '#F59E0B' : null);
+        return `<div class="cp-stat">
+          <div class="cp-stat-n" ${col ? `style="color:${col}"` : ''}>${v.done}<span style="font-size:13px;opacity:.6">/${v.total}</span></div>
+          <div class="cp-stat-l">${escHtml(unit)} done</div>
+          <div class="cp-bar" style="margin-top:6px;height:4px"><div class="cp-bar-fill" style="width:${pct}%;background:${v.done >= v.total ? '#16A34A' : '#0573F5'}"></div></div>
+        </div>`;
+      }).join('');
+
       return `<div class="cp-stats">
         ${stat(items.length, 'Total steps')}
         ${stat(done, 'Completed', '#16A34A')}
         ${stat(prog, 'In progress', '#F59E0B')}
         ${stat(overdue, 'Overdue', overdue ? '#DC2626' : null)}
         ${stat(unassigned, 'Unassigned')}
-      </div>`;
+      </div>
+      ${unitCards ? `<div class="cp-stats" style="margin-top:-6px">${unitCards}</div>` : ''}`;
     }
 
     function cpToggleStagePicker() { _cpStagePickerOpen = !_cpStagePickerOpen; _cpMapPickerOpen = false; renderClientProfile(); }
