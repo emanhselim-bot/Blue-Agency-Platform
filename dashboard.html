@@ -424,6 +424,21 @@
     [data-theme="dark"] .cp-branch-note { color: #64748B; }
     [data-theme="dark"] .cp-revcount { background: #422006; color: #FCD34D; }
 
+    .cp-count { display: inline-flex; align-items: center; gap: 0; border: 1px solid #D6DEE9; border-radius: 20px; overflow: hidden; background: #fff; }
+    .cp-count button { border: none; background: transparent; cursor: pointer; font-size: 12px; font-weight: 800; color: #64748B; padding: 2px 7px; line-height: 1; }
+    .cp-count button:hover { background: #EAF2FE; color: #0573F5; }
+    .cp-count .n { font-size: 11px; font-weight: 800; color: #0557D9; padding: 2px 6px; cursor: pointer; white-space: nowrap; min-width: 34px; text-align: center; }
+    .cp-count.full { background: #EAF7EE; border-color: #A7E3BC; }
+    .cp-count.full .n { color: #15803D; }
+    .cp-countadd { border: 1px dashed #C9D4E3; background: transparent; border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer; color: #B6BFCC; font-family: inherit; }
+    .cp-countadd:hover { border-color: #0573F5; color: #0573F5; }
+    [data-theme="dark"] .cp-count { background: #1E293B; border-color: #334155; }
+    [data-theme="dark"] .cp-count button { color: #94A3B8; }
+    [data-theme="dark"] .cp-count .n { color: #93C5FD; }
+    [data-theme="dark"] .cp-count.full { background: #10261A; border-color: #166534; }
+    [data-theme="dark"] .cp-count.full .n { color: #86EFAC; }
+    [data-theme="dark"] .cp-countadd { border-color: #334155; color: #475569; }
+
     .cp-cmt-btn { border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer; color: #B6BFCC; font-family: inherit; }
     .cp-cmt-btn.has { background: #EEF2FF; border-color: #C7D2FE; color: #4338CA; font-weight: 700; }
     .cp-cmt-btn:hover { border-color: #0573F5; color: #0573F5; }
@@ -8995,6 +9010,7 @@
                         <span style="font-size:15px">${dec === 'yes' ? '✅' : (dec === 'no' ? '✏️' : '👤')}</span>
                         <span class="cp-node-name">${escHtml(it.name)}${it.name.trim().endsWith('?') ? '' : '?'}</span>
                         ${revs ? `<button class="cp-revcount" title="Click to change or clear the revision count" onclick="cpSetRevisions(${si},${ii})">${revs} revision${revs > 1 ? 's' : ''} ✕</button>` : ''}
+                        ${_cpCountHTML(si, ii, it)}
                         <button class="cp-owner ${it.owner ? '' : 'empty'}" title="Owner — click to set" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                         ${it.link
                           ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}" onclick="event.stopPropagation()">🔗 Open</a><button class="cp-node-del" style="opacity:.7" title="Edit or remove link" onclick="cpSetLink(${si},${ii})">✎</button>`
@@ -9022,6 +9038,7 @@
                   return `<div style="display:flex;flex-direction:column;align-items:center;width:100%"><div class="cp-node ${stt}">
                     <button class="cp-node-tick" title="Click to change status: ${CP_STATUS_LABEL[stt]}" onclick="cpCycleStatus(${si},${ii})">${stt === 'done' ? '✓' : (stt === 'in_progress' ? '•' : '')}</button>
                     <span class="cp-node-name">${escHtml(it.name)}</span>
+                    ${_cpCountHTML(si, ii, it)}
                     <button class="cp-owner ${it.owner ? '' : 'empty'}" title="Task owner — click to set" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                     ${it.link
                       ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)} — right-click the ✎ to change" onclick="event.stopPropagation()">🔗 Open</a><button class="cp-node-del" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>`
@@ -9140,6 +9157,45 @@
       _cpSaveProc(proc);
     }
 
+    // ── Per-step item counter (e.g. number of videos) ──
+    function _cpCountHTML(si, ii, it) {
+      const total = Number(it.total) || 0;
+      if (!total) return `<button class="cp-countadd" title="Set how many items this step covers" onclick="cpSetTotal(${si},${ii})"># count</button>`;
+      const done = Math.min(Number(it.doneCount) || 0, total);
+      return `<span class="cp-count ${done >= total ? 'full' : ''}">
+        <button title="One less done" onclick="cpBumpCount(${si},${ii},-1)">−</button>
+        <span class="n" title="Click to change the total" onclick="cpSetTotal(${si},${ii})">${done}/${total}</span>
+        <button title="Mark one done" onclick="cpBumpCount(${si},${ii},1)">+</button>
+      </span>`;
+    }
+    function cpSetTotal(si, ii) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const it = proc[si].items[ii];
+      const val = prompt('How many items does this step cover? (e.g. number of videos — 0 to remove the counter)', it.total || '');
+      if (val === null) return;
+      const n = Math.max(0, parseInt(val) || 0);
+      it.total = n;
+      if (!n) { delete it.doneCount; }
+      else it.doneCount = Math.min(Number(it.doneCount) || 0, n);
+      _cpApplyCountStatus(it);
+      _cpSaveProc(proc);
+    }
+    function cpBumpCount(si, ii, delta) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const it = proc[si].items[ii];
+      const total = Number(it.total) || 0;
+      if (!total) return;
+      it.doneCount = Math.max(0, Math.min(total, (Number(it.doneCount) || 0) + delta));
+      _cpApplyCountStatus(it);
+      _cpSaveProc(proc);
+    }
+    function _cpApplyCountStatus(it) {
+      const total = Number(it.total) || 0;
+      if (!total || it.type === 'decision') return;
+      const done = Number(it.doneCount) || 0;
+      it.status = done >= total ? 'done' : (done > 0 ? 'in_progress' : 'pending');
+    }
+
     function cpSetLink(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       const cur = proc[si].items[ii].link || '';
@@ -9222,7 +9278,7 @@
             const over = it.date && it.date < today && stt !== 'done';
             rows.push(`<tr class="${stt}">
               <td style="width:26px"><span class="cp-dot ${stt}"></span></td>
-              <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</td>
+              <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}${Number(it.total) ? ` <span style="font-weight:800;color:${(Number(it.doneCount)||0) >= Number(it.total) ? '#16A34A' : '#0557D9'}">${Number(it.doneCount)||0}/${Number(it.total)}</span>` : ''}</td>
               <td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>
               <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗 Open</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}</td>
@@ -9261,6 +9317,7 @@
                 return `<div class="cp-compact-row">
                   <span class="cp-dot ${stt}"></span>
                   <span style="flex:1;${stt === 'done' ? 'text-decoration:line-through;color:#94A3B8' : ''}">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</span>
+                  ${_cpCountHTML(si, ii, it)}
                   <button class="cp-owner ${it.owner ? '' : 'empty'}" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                   ${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
