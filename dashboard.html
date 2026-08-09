@@ -1893,7 +1893,6 @@
       <select class="hub-input" id="pm-type">
         <option value="social">📱 Social Media</option>
         <option value="media">📈 Media Buying</option>
-        <option value="both">⚡ Social Media + Media Buying</option>
       </select>
       <label>STAGE</label>
       <select class="hub-input" id="pm-stage">
@@ -8559,7 +8558,7 @@
 
       document.getElementById('cpm-content').innerHTML = `
         <div class="cpm-typebar">
-          ${tab('all', 'All clients')}${tab('social', '📱 Social Media')}${tab('media', '📈 Media Buying')}${tab('both', '⚡ Both')}
+          ${tab('all', 'All clients')}${tab('social', '📱 Social Media')}${tab('media', '📈 Media Buying')}
         </div>
         <div class="cpm-clients">
           ${clients.map(card).join('')}
