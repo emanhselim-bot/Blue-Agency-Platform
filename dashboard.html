@@ -448,6 +448,8 @@
     body.cp-shared #auth-overlay, body.cp-shared .cp-owner-only { display: none !important; }
     body.cp-shared .hub-inner { max-width: 1200px; }
     body.cp-readonly .cp-node-date { pointer-events: none; }
+    body.cp-readonly .cp-cmt-form { display: none; }
+    body.cp-cancomment .cp-cmt-form { display: flex; }
     body.cp-readonly .cp-deliv { cursor: default; }
     body.cp-readonly .cp-deliv:hover { border-color: #E5EAF1; box-shadow: none; }
     .cp-deliv-wrap { border: 1px solid #E5EAF1; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; background: #FAFBFD; }
@@ -1855,7 +1857,7 @@
       <label>ACCESS</label>
       <select class="hub-input" id="cps-mode">
         <option value="view">👁 View only — they can see progress, dates and deliverables</option>
-        <option value="edit">✎ Can edit — they can tick steps, set counts and change dates</option>
+        <option value="edit">💬 View + comment — they can see everything and leave comments</option>
       </select>
       <label>LABEL (OPTIONAL)</label>
       <input class="hub-input" id="cps-label" placeholder="e.g. Rana — client review">
@@ -9151,13 +9153,8 @@
     async function _cpSave(patch) {
       Object.assign(_cpClient, patch);
       renderClientProfile();
-      // shared link: write through the share RPC instead of the table
-      if (_cpShareToken) {
-        if (_cpShareMode !== 'edit') return;
-        const { data, error } = await sb.rpc('cp_share_update', { p_token: _cpShareToken, p_patch: patch });
-        if (error || data === false) alert('Could not save: ' + (error?.message || 'this link is view-only'));
-        return;
-      }
+      // shared link: comments are the only thing a public link can change
+      if (_cpShareToken) return;
       const { error } = await sb.from('pipeline_clients')
         .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', _cpClient.id);
@@ -9531,6 +9528,7 @@
       if (_cpCmtOpen[k]) setTimeout(() => document.getElementById('cp-cmt-input-' + k)?.focus(), 60);
     }
     function _cpMe() {
+      if (_cpShareToken) return (localStorage.getItem('cp_share_name') || 'Client');
       const m = (typeof cpmData !== 'undefined' ? cpmData.members : []).find(x => (x.email || '').toLowerCase() === (currentUser?.email || '').toLowerCase());
       return m?.full_name || currentUser?.email || 'Someone';
     }
@@ -9542,7 +9540,7 @@
             <div class="cp-cmt-meta">
               <strong style="color:#4338CA">${escHtml(c.by || 'Someone')}</strong>
               <span>${c.at ? new Date(c.at).toLocaleString('en', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}</span>
-              <button class="cp-cmt-del" title="Delete comment" onclick="cpDeleteComment(${si},${ii},${ci})">🗑</button>
+              ${_cpShareToken ? '' : `<button class="cp-cmt-del" title="Delete comment" onclick="cpDeleteComment(${si},${ii},${ci})">🗑</button>`}
             </div>
             <div>${escHtml(c.text)}</div>
           </div>`).join('')
@@ -9553,11 +9551,33 @@
         </div>
       </div>`;
     }
-    function cpAddComment(si, ii) {
+    async function cpAddComment(si, ii) {
       const k = si + '-' + ii;
       const el = document.getElementById('cp-cmt-input-' + k);
       const text = el?.value.trim();
       if (!text) return;
+
+      if (_cpShareToken) {
+        if (_cpShareMode !== 'edit') return;
+        const by = (localStorage.getItem('cp_share_name') || '').trim()
+          || (prompt('Your name (shown with the comment)') || '').trim();
+        if (!by) return;
+        localStorage.setItem('cp_share_name', by);
+        const btn = el.nextElementSibling; if (btn) { btn.disabled = true; btn.textContent = '…'; }
+        const { data, error } = await sb.rpc('cp_share_comment', {
+          p_token: _cpShareToken, p_month: _cpMonth, p_stage: si, p_item: ii, p_by: by, p_text: text,
+        });
+        if (error || data === false) { alert('Could not post that comment.'); if (btn) { btn.disabled = false; btn.textContent = 'Post'; } return; }
+        // reflect it locally
+        const local = JSON.parse(JSON.stringify(_cpProc()));
+        local[si].items[ii].comments = [...(local[si].items[ii].comments || []), { by, at: new Date().toISOString(), text, ext: true }];
+        const byMonth = { ..._cpAllMonths(), [_cpMonth]: local };
+        _cpClient.process_by_month = byMonth;
+        el.value = '';
+        renderClientProfile();
+        return;
+      }
+
       const proc = JSON.parse(JSON.stringify(_cpProc()));
       const it = proc[si].items[ii];
       it.comments = [...(it.comments || []), { by: _cpMe(), at: new Date().toISOString(), text }];
@@ -9909,7 +9929,7 @@
         <div style="border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:9px 11px;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
             <span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:${r.mode === 'edit' ? '#F59E0B' : '#0573F5'};color:#fff">
-              ${r.mode === 'edit' ? '✎ CAN EDIT' : '👁 VIEW ONLY'}</span>
+              ${r.mode === 'edit' ? '💬 CAN COMMENT' : '👁 VIEW ONLY'}</span>
             <span style="font-size:12px;opacity:.8;flex:1">${escHtml(r.label || '—')}</span>
             <button class="cp-chipbtn" onclick="cpRevokeShare('${r.id}')" title="Revoke this link">✕</button>
           </div>
@@ -9984,12 +10004,13 @@
       _cpMonth = new Date().toISOString().slice(0, 7);
       renderClientProfile();
 
-      if (_cpShareMode !== 'edit') document.body.classList.add('cp-readonly');
+      document.body.classList.add('cp-readonly');
+      if (_cpShareMode === 'edit') document.body.classList.add('cp-cancomment');
       const bar = document.createElement('div');
       bar.className = 'cp-sharebar';
       bar.innerHTML = `<span class="cp-sharebar-logo"><i></i><i></i><i></i><i></i></span>
         <span><b>Blue Ad</b> · ${escHtml(_cpClient.name || '')} timeline</span>
-        <span class="cp-sharebar-mode">${_cpShareMode === 'edit' ? '✎ You can update progress' : '👁 View only'}</span>`;
+        <span class="cp-sharebar-mode">${_cpShareMode === 'edit' ? '💬 You can leave comments' : '👁 View only'}</span>`;
       document.getElementById('hub-client-view').prepend(bar);
     }
 
