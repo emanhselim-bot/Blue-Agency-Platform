@@ -8997,6 +8997,9 @@
         { stage: '📊 Reporting', items: ['Performance Tracking', 'Campaign Report', 'Learnings & Next Steps'] },
         { stage: '🗓 Scheduling & Posting', items: ['Posting Calendar Built', '👤 Calendar Approval', 'Scheduled on Platforms', 'Published', 'Post-live Check'] },
       ],
+      'Branding': [
+        { stage: '🎨 Branding', items: ['Logo', '👤 Logo Approval', 'Brand Manual — Colours', 'Brand Manual — Graphic Elements', 'Brand Manual — Typography', 'Brand Manual — Photography Style', 'Brand Manual — Applications', '👤 Brand Manual Approval', 'Logo Assets', '👤 Logo Assets Approval', 'Print Outs Mockup', '👤 Print Outs Approval'] },
+      ],
       'Monthly report': [
         { stage: '🗣 Briefing Meeting', items: ['Briefing Meeting Scheduled', 'Briefing Meeting Held', 'Client Objectives Captured', '👤 Brief Approval', 'Sent to the Team'] },
         { stage: '📊 Data Collection', items: ['Pull Ads Data', 'Pull Analytics Data', 'Pull Social Data', 'Collect Client Inputs'] },
@@ -9022,6 +9025,9 @@
       'Equipment Renting': 'Media Production',
       'Models': 'Photography',
       'Digital Consultation': 'Monthly report',
+      'Branding': 'Branding',
+      'Brand Identity': 'Branding',
+      'Logo Design': 'Branding',
     };
     // ── Individual stage templates (add just the stages a client needs) ──
     const CP_STAGE_TEMPLATES = {
@@ -9037,6 +9043,7 @@
       '📈 Optimization': ['Daily Monitoring','A/B Testing','Weekly Optimization','Scaling Winners'],
       '🔍 SEO Audit': ['Technical SEO Audit','Keyword Research','Content Gap Analysis','Strategy Approval'],
       '💻 Development': ['Wireframes','UI Design','Design Approval','Frontend Build','CMS Setup','QA & Launch'],
+      '🎨 Branding': ['Logo','Logo Approval','Brand Manual — Colours','Brand Manual — Graphic Elements','Brand Manual — Typography','Brand Manual — Photography Style','Brand Manual — Applications','Brand Manual Approval','Logo Assets','Logo Assets Approval','Print Outs Mockup','Print Outs Approval'],
       '🗣 Briefing Meeting': ['Briefing Meeting Scheduled','Briefing Meeting Held','Client Objectives Captured','Brief Approval','Sent to the Team'],
       '🗓 Scheduling & Posting': ['Posting Calendar Built','Calendar Approval','Scheduled on Platforms','Published','Post-live Check'],
     };
@@ -10119,7 +10126,8 @@
       const steps = CP_STAGE_TEMPLATES[key];
       if (!steps) return;
       const REVISE_HINT = { 'Plan':'Revise the plan', 'Copy':'Edit the copy', 'Design':'Design edits',
-        'Mood Board':'Rework the mood board', 'Creative':'Creative edits', 'Script':'Rewrite the script', 'Strategy':'Revise strategy' };
+        'Mood Board':'Rework the mood board', 'Creative':'Creative edits', 'Script':'Rewrite the script', 'Strategy':'Revise strategy',
+        'Logo Assets':'Fix the assets', 'Brand Manual':'Brand manual edits', 'Print Outs':'Mockup edits', 'Logo':'Logo edits' };
       const items = steps.map(n => {
         if (/approval|review/i.test(n)) {
           const hit = Object.keys(REVISE_HINT).find(k => new RegExp(k, 'i').test(n));
@@ -10148,6 +10156,7 @@
       const REVISE_HINT = {
         'Plan': 'Revise the plan', 'Copy': 'Edit the copy', 'Design': 'Design edits',
         'Creative': 'Creative edits', 'Script': 'Rewrite the script', 'Concept': 'Refine concepts',
+        'Logo Assets': 'Fix the assets', 'Brand Manual': 'Brand manual edits', 'Print Outs': 'Mockup edits', 'Logo': 'Logo edits',
         'Selection': 'Reselect images', 'Content': 'Revise content', 'Strategy': 'Revise strategy',
       };
       const added = tpl.map(st => ({
