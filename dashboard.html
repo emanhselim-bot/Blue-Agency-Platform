@@ -322,6 +322,13 @@
     [data-theme="dark"] .cp-mapprog { color: #93C5FD; }
 
     /* ── FLOWCHART PROCESS MAP ── */
+    .cpm-typebar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .cpm-typetab { border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all .15s; }
+    .cpm-typetab span { opacity: .6; font-size: 11px; margin-left: 4px; }
+    .cpm-typetab:hover { background: rgba(255,255,255,.16); }
+    .cpm-typetab.active { background: #fff; color: #0A1CA3; border-color: #fff; }
+    .cpm-typetab.active span { opacity: .55; }
+    .cpm-ccard-type { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: #fff; border-radius: 999px; padding: 3px 9px; margin-bottom: 8px; }
     .cp-datesbtn { flex-shrink: 0; white-space: nowrap; font-size: 10.5px; font-weight: 700; border: 1px dashed #C9D4E3; background: transparent; color: #6B7280; border-radius: 999px; padding: 4px 9px; cursor: pointer; transition: all .15s; }
     .cp-datesbtn:hover { border-style: solid; border-color: #0573F5; color: #0573F5; }
     .cp-datesbtn.on { border-style: solid; border-color: #0573F5; background: #EAF2FE; color: #0573F5; }
@@ -1876,6 +1883,12 @@
         <div><input class="hub-input" id="pm-d-editing" type="number" min="0" placeholder="0">
           <div style="font-size:11px;opacity:.65;margin:4px 0 0 2px">🎞 Editing</div></div>
       </div>
+      <label>CLIENT TYPE</label>
+      <select class="hub-input" id="pm-type">
+        <option value="social">📱 Social Media</option>
+        <option value="media">📈 Media Buying</option>
+        <option value="both">⚡ Social Media + Media Buying</option>
+      </select>
       <label>STAGE</label>
       <select class="hub-input" id="pm-stage">
         <option value="lead">🔍 Lead</option><option value="contacted">📞 Contacted</option>
@@ -8501,10 +8514,23 @@
       const { data: legacy } = await sb.from('pipeline_clients').select('*').eq('organization_id', currentOrgId);
       cpmData.legacy = legacy || [];
 
-      const clients = cpmData.clients.filter(c => !c.archived);
+      const CT = { social: ['📱', 'Social Media', '#7C3AED'], media: ['📈', 'Media Buying', '#0573F5'], both: ['⚡', 'Social + Media', '#F59E0B'] };
+      const typeOf = c => {
+        const lg = (cpmData.legacy || []).find(l => l.id === c.legacy_id || l.name?.toLowerCase() === c.name.toLowerCase());
+        return lg?.client_type || 'social';
+      };
+      let clients = cpmData.clients.filter(c => !c.archived);
+      const counts = { all: clients.length, social: 0, media: 0, both: 0 };
+      clients.forEach(c => { counts[typeOf(c)] = (counts[typeOf(c)] || 0) + 1; });
+      if (_cpmTypeFilter !== 'all') clients = clients.filter(c => typeOf(c) === _cpmTypeFilter || typeOf(c) === 'both');
+      const tab = (k, label) => `<button class="cpm-typetab ${_cpmTypeFilter === k ? 'active' : ''}" onclick="cpmSetType('${k}')">${label} <span>${counts[k] || 0}</span></button>`;
       document.getElementById('cpm-content').innerHTML = `
+        <div class="cpm-typebar">
+          ${tab('all', 'All clients')}${tab('social', '📱 Social Media')}${tab('media', '📈 Media Buying')}${tab('both', '⚡ Both')}
+        </div>
         <div class="cpm-clients">
           ${clients.map(c => {
+            const [tIco, tLbl, tCol] = CT[typeOf(c)] || CT.social;
             const lg = (cpmData.legacy || []).find(l => l.id === c.legacy_id || l.name?.toLowerCase() === c.name.toLowerCase());
             const svc = Array.isArray(lg?.services) ? lg.services : [];
             const myPipes = cpmData.pipelines.filter(p => p.client_id === c.id);
@@ -8513,6 +8539,7 @@
             const pct = all.length ? Math.round(done / all.length * 100) : 0;
             const months = Object.keys(lg?.process_by_month || {}).length;
             return `<div class="cpm-ccard" onclick="cpmOpenClient('${c.id}')">
+              <div class="cpm-ccard-type" style="background:${tCol}">${tIco} ${tLbl}</div>
               <div class="cpm-ccard-name">${cpmEsc(c.name)}</div>
               <div class="cpm-ccard-sub">${cpmEsc(c.contact_person || c.phone || c.email || 'No contact')}</div>
               <div class="cpm-ccard-tags">${svc.slice(0, 3).map(x => `<span class="cpm-ccard-tag">${cpmEsc(x)}</span>`).join('')}${svc.length > 3 ? `<span class="cpm-ccard-tag">+${svc.length - 3}</span>` : ''}</div>
@@ -8566,6 +8593,13 @@
         document.getElementById('cpm-sub').innerHTML = '<div id="cpm-boardarea"></div>';
         cpmRenderPipelinesForClient();
       }
+    }
+
+    let _cpmTypeFilter = localStorage.getItem('cpm_type_filter') || 'all';
+    function cpmSetType(k) {
+      _cpmTypeFilter = k;
+      localStorage.setItem('cpm_type_filter', k);
+      cpmRenderPipelines();
     }
 
     async function cpmRenderPipelinesForClient() {
@@ -10151,6 +10185,7 @@
       document.getElementById('pm-currency').value = c?.currency || 'EGP';
       document.getElementById('pm-start').value = c?.start_date || '';
       document.getElementById('pm-stage').value = c?.stage || 'lead';
+      document.getElementById('pm-type').value = c?.client_type || 'social';
       document.getElementById('pm-notes').value = c?.notes || '';
       _pmDeliv = JSON.parse(JSON.stringify(c?.deliverables_by_month || {}));
       _pmMonth = _pipeDelivMonth(c);
@@ -10181,6 +10216,7 @@
         currency: document.getElementById('pm-currency').value,
         start_date: document.getElementById('pm-start').value || null,
         stage: document.getElementById('pm-stage').value,
+        client_type: document.getElementById('pm-type').value,
         notes: document.getElementById('pm-notes').value.trim() || null,
         updated_at: new Date().toISOString()
       };
