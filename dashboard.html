@@ -359,6 +359,14 @@
     [data-theme="dark"] .cp-unitlabel { color: #C7D3E3; }
     [data-theme="dark"] .cp-unitlabel:hover, [data-theme="dark"] .cp-unitlabel:focus { background: #182337; border-color: #33415B; }
     [data-theme="dark"] .cp-unitdue { background: #182337; border-color: #33415B; color: #C7D3E3; }
+    .cp-phase[draggable="true"] { cursor: grab; }
+    .cp-phase.dragover { border-style: dashed; box-shadow: 0 0 0 3px rgba(5,115,245,.25); }
+    .cp-phase-move { display: inline-flex; gap: 2px; flex-shrink: 0; }
+    .cp-phase-move button { border: none; background: rgba(10,28,163,.10); color: inherit; border-radius: 6px; width: 20px; height: 20px; font-size: 11px; line-height: 1; cursor: pointer; padding: 0; }
+    .cp-phase-move button:hover { background: rgba(10,28,163,.22); }
+    [data-theme="dark"] .cp-phase-move button { background: rgba(255,255,255,.14); }
+    [data-theme="dark"] .cp-phase-move button:hover { background: rgba(255,255,255,.26); }
+    body.cp-readonly .cp-phase-move { display: none !important; }
     .cp-phase-top { display: flex; align-items: center; gap: 10px; width: 100%; }
     .cp-phase-name { flex: 1; }
     .cp-phase-steps { font-size: 10px; font-weight: 700; opacity: .8; white-space: nowrap; }
@@ -9275,10 +9283,17 @@
                   .map(([u, v]) =>
                     `<span class="cp-phase-unit ${v.done >= v.total ? 'full' : ''}" title="${v.done} of ${v.total} ${escHtml(u)} done">${v.done}/${v.total} ${escHtml(u)}</span>`
                   ).join('');
-                const phase = `<div class="cp-phase">
+                const phase = `<div class="cp-phase" draggable="true"
+                  ondragstart="cpStageDragStart(event,${si})" ondragover="cpStageDragOver(event)"
+                  ondragleave="event.currentTarget.classList.remove('dragover')" ondrop="cpStageDrop(event,${si})"
+                  title="Drag to reorder this stage">
                   <div class="cp-phase-top">
                     <span class="cp-phase-name">${escHtml(st.stage || 'Stage')}</span>
                     <span class="cp-phase-steps" title="Steps completed">${d}/${items.length} steps</span>
+                    <span class="cp-phase-move">
+                      <button title="Move stage up" onclick="cpMoveStage(${si},-1)">↑</button>
+                      <button title="Move stage down" onclick="cpMoveStage(${si},1)">↓</button>
+                    </span>
                     <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
                   </div>
                   ${unitChips ? `<div class="cp-phase-units">${unitChips}</div>` : ''}
@@ -9388,6 +9403,37 @@
     // ── Step comments ──
     let _cpCmtOpen = {};
     let _cpUnitsOpen = {};
+
+    // ── reorder stages ──
+    function cpMoveStage(si, dir) {
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const to = si + dir;
+      if (to < 0 || to >= proc.length) return;
+      const [row] = proc.splice(si, 1);
+      proc.splice(to, 0, row);
+      _cpSaveProc(proc);
+    }
+    let _cpDragStage = null;
+    function cpStageDragStart(e, si) {
+      _cpDragStage = si;
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(si)); } catch (_) {}
+    }
+    function cpStageDragOver(e) {
+      if (_cpDragStage === null) return;
+      e.preventDefault();
+      e.currentTarget.classList.add('dragover');
+    }
+    function cpStageDrop(e, si) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('dragover');
+      if (_cpDragStage === null || _cpDragStage === si) return;
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const [row] = proc.splice(_cpDragStage, 1);
+      proc.splice(si, 0, row);
+      _cpDragStage = null;
+      _cpSaveProc(proc);
+    }
 
     function cpToggleUnits(si, ii) {
       const k = si + '-' + ii;
