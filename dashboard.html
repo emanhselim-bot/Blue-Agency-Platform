@@ -9341,11 +9341,11 @@
                 return [phase, ...nodes, addBtn].join(ARROW);
               }).join(ARROW);
               return `<div class="cp-mapgroup">
-                <div class="cp-maphead">
+                ${groups.length > 1 ? `<div class="cp-maphead">
                   <span class="cp-mapname">🗺 ${escHtml(g.name)}</span>
                   <span class="cp-mapprog">${gDone}/${gItems.length} · ${gPct}%</span>
                   <button class="cp-del" title="Remove this map" onclick="cpRemoveMap('${g.name.replace(/'/g, "\\'")}')">🗑</button>
-                </div>
+                </div>` : ''}
                 <div class="cp-flow">
                   ${flow}
                   ${ARROW}
