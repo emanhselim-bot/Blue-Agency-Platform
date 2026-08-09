@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta id="theme-color-meta" name="theme-color" content="#0573F5">
   <title>Blue Ad · Performance Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -29,13 +30,14 @@
     }
     [data-theme="dark"] {
       color-scheme: dark;
-      --bg:          #0F172A;
-      --surface:     #1E293B;
-      --text-main:   #F1F5F9;
-      --text-muted:  #94A3B8;
-      --border:      #334155;
-      --table-hover: #1E293B;
-      --chart-bg:    #1E293B;
+      --bg:          #000000;
+      --surface:     #0E0E10;
+      --surface-2:   #17171A;
+      --text-main:   #F5F5F7;
+      --text-muted:  #9A9AA2;
+      --border:      #26262B;
+      --table-hover: #17171A;
+      --chart-bg:    #0E0E10;
     }
     [data-theme="dark"] body { background: var(--bg); color: var(--text-main); }
     [data-theme="dark"] .modal { background: var(--surface); }
@@ -1789,6 +1791,60 @@
       .cp-stat-n { font-size: 18px; }
     }
 
+
+    /* ═══════════════════════════════════════════════════
+       TRUE BLACK THEME — hub, pipeline, map, finance
+       ═══════════════════════════════════════════════════ */
+    [data-theme="dark"] .home-hub { background: radial-gradient(120% 90% at 50% 0%, #121216 0%, #000 60%); }
+    [data-theme="dark"] .hub-card { background: #0E0E10; border: 1px solid #26262B; box-shadow: none; }
+    [data-theme="dark"] .hub-card:hover { border-color: #3A3A42; background: #141418; }
+    [data-theme="dark"] .hub-card-title { color: #F5F5F7; }
+    [data-theme="dark"] .hub-card-desc { color: #9A9AA2; }
+    [data-theme="dark"] .hub-inner, [data-theme="dark"] .cp-wrap { color: #F5F5F7; }
+    [data-theme="dark"] .hub-input, [data-theme="dark"] .cpm-input {
+      background: #17171A; border-color: #2E2E34; color: #F5F5F7; }
+    [data-theme="dark"] .hub-modal-box, [data-theme="dark"] .cpm-drawer,
+    [data-theme="dark"] .cpm-panel, [data-theme="dark"] .cp-picker { background: #0E0E10; border-color: #26262B; }
+    [data-theme="dark"] .cpm-ccard { background: #0E0E10; border-color: #26262B; }
+    [data-theme="dark"] .cpm-ccard:hover { border-color: #3A3A42; background: #141418; }
+    [data-theme="dark"] .cpm-addcard { border-color: #2E2E34; color: #9A9AA2; }
+    [data-theme="dark"] .cp-node { background: #0E0E10; border-color: #26262B; }
+    [data-theme="dark"] .cp-node:hover { border-color: #3A3A42; }
+    [data-theme="dark"] .cp-decision { background: #141018; border-color: #4C2E6B; }
+    [data-theme="dark"] .cp-node-name { color: #F5F5F7; }
+    [data-theme="dark"] .cp-phase { background: #10131C; border-color: #1E3A8A; color: #BFDBFE; }
+    [data-theme="dark"] .cp-stat, [data-theme="dark"] .cp-deliv, [data-theme="dark"] .cp-deliv-wrap,
+    [data-theme="dark"] .cp-units, [data-theme="dark"] .cp-monthbar, [data-theme="dark"] .cp-toolbar {
+      background: #0E0E10; border-color: #26262B; }
+    [data-theme="dark"] .cp-stat-n, [data-theme="dark"] .cp-deliv-name, [data-theme="dark"] .cp-deliv-n,
+    [data-theme="dark"] .cp-unitname { color: #F5F5F7; }
+    [data-theme="dark"] .cp-owner { background: #10203A; border-color: #1E3A5F; color: #93C5FD; }
+    [data-theme="dark"] .cp-link, [data-theme="dark"] .cp-cmt-btn, [data-theme="dark"] .cp-countadd,
+    [data-theme="dark"] .cp-branch-btn, [data-theme="dark"] .cp-btn, [data-theme="dark"] .cp-chipbtn,
+    [data-theme="dark"] .cp-filter, [data-theme="dark"] .cp-unitdue, [data-theme="dark"] .cp-unitcheck {
+      background: #17171A; border-color: #2E2E34; color: #C9C9D1; }
+    [data-theme="dark"] .cp-node-date, [data-theme="dark"] .cp-meta, [data-theme="dark"] .cp-stat-l,
+    [data-theme="dark"] .cp-sec-title, [data-theme="dark"] .cp-empty { color: #9A9AA2; }
+    [data-theme="dark"] .cp-cmt-panel, [data-theme="dark"] .cp-cmt { background: #17171A; border-color: #2E2E34; color: #E4E4EA; }
+    [data-theme="dark"] .fin-sum-card, [data-theme="dark"] .bill-fund-card,
+    [data-theme="dark"] .pipe-col, [data-theme="dark"] .pipe-card, [data-theme="dark"] .cmp-wrap {
+      background: #0E0E10; border-color: #26262B; }
+    [data-theme="dark"] .fin-table th, [data-theme="dark"] .bill-table th,
+    [data-theme="dark"] .cpm-table th, [data-theme="dark"] .cmp-table th { background: #17171A; color: #9A9AA2; }
+    [data-theme="dark"] .cp-arrow { color: #3A3A42; }
+    [data-theme="dark"] .cp-flow-end { background: #06180E; border-color: #14532D; color: #86EFAC; }
+
+    /* floating light / dark switch — every screen, phone and desktop */
+    .theme-fab { position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom));
+      z-index: 10000; width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(255,255,255,.28);
+      background: rgba(0,0,0,.55); color: #fff; font-size: 17px; line-height: 1; cursor: pointer;
+      backdrop-filter: blur(8px); box-shadow: 0 6px 20px rgba(0,0,0,.28); transition: transform .15s, background .15s; }
+    .theme-fab:hover { transform: scale(1.06); background: rgba(0,0,0,.72); }
+    .theme-fab:active { transform: scale(.96); }
+    [data-theme="dark"] .theme-fab { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); }
+    @media (max-width: 820px) { .theme-fab { width: 46px; height: 46px; font-size: 18px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); } }
+    @media print { .theme-fab { display: none; } }
+
   </style>
 </head>
 <body>
@@ -2726,11 +2782,37 @@
   </div>
 
   <script>
-    // ── Dark mode ────────────────────────────────────────────────
+    // ── Theme: one black, one white ──────────────────────────────
     (function () {
       const saved = localStorage.getItem('theme');
-      if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      const dark = saved ? saved === 'dark'
+        : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (dark) document.documentElement.setAttribute('data-theme', 'dark');
     })();
+
+    function blueIsDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+    function blueSetTheme(dark) {
+      if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+      else document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', dark ? 'dark' : 'light');
+      const hdr = document.getElementById('darkmode-btn');
+      if (hdr) hdr.textContent = dark ? '☀️ Light' : '🌙 Dark';
+      const fab = document.getElementById('theme-fab');
+      if (fab) { fab.textContent = dark ? '☀️' : '🌙'; fab.title = dark ? 'Switch to white' : 'Switch to black'; }
+      const meta = document.getElementById('theme-color-meta');
+      if (meta) meta.setAttribute('content', dark ? '#000000' : '#0573F5');
+    }
+    function blueToggleTheme() { blueSetTheme(!blueIsDark()); }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const b = document.createElement('button');
+      b.id = 'theme-fab';
+      b.className = 'theme-fab';
+      b.setAttribute('aria-label', 'Switch between black and white');
+      b.onclick = blueToggleTheme;
+      document.body.appendChild(b);
+      blueSetTheme(blueIsDark());
+    });
 
     // ── Shopify OAuth callback relay ─────────────────────────────
     // Shopify redirects back to this Railway URL after OAuth.
@@ -7248,22 +7330,8 @@
 
     // ─────────────────────────────────────────────────────────────
     // DARK MODE TOGGLE
-    document.getElementById('darkmode-btn').addEventListener('click', () => {
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      if (isDark) {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-        document.getElementById('darkmode-btn').textContent = '🌙 Dark';
-      } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-        document.getElementById('darkmode-btn').textContent = '☀️ Light';
-      }
-    });
-    // Init button icon on load
-    if (document.documentElement.getAttribute('data-theme') === 'dark') {
-      document.getElementById('darkmode-btn').textContent = '☀️ Light';
-    }
+    document.getElementById('darkmode-btn').addEventListener('click', blueToggleTheme);
+    blueSetTheme(blueIsDark());
 
     // SETTINGS MODAL
     // ─────────────────────────────────────────────────────────────
