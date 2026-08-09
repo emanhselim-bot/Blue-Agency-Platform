@@ -322,8 +322,11 @@
     [data-theme="dark"] .cp-mapprog { color: #93C5FD; }
 
     /* ── FLOWCHART PROCESS MAP ── */
-    .cp-count-exp { font-size: 10px !important; padding: 0 4px !important; opacity: .7; }
-    .cp-count-exp.on { opacity: 1; }
+    .cp-datesbtn { flex-shrink: 0; white-space: nowrap; font-size: 10.5px; font-weight: 700; border: 1px dashed #C9D4E3; background: transparent; color: #6B7280; border-radius: 999px; padding: 4px 9px; cursor: pointer; transition: all .15s; }
+    .cp-datesbtn:hover { border-style: solid; border-color: #0573F5; color: #0573F5; }
+    .cp-datesbtn.on { border-style: solid; border-color: #0573F5; background: #EAF2FE; color: #0573F5; }
+    [data-theme="dark"] .cp-datesbtn { border-color: #33415B; color: #94A3B8; }
+    [data-theme="dark"] .cp-datesbtn.on { background: #16294A; border-color: #2563EB; color: #BFDBFE; }
     .cp-units { width: 100%; max-width: 640px; border: 1px solid #E5EAF1; border-radius: 12px; background: #FAFBFD; padding: 8px 10px; margin: 6px 0 2px; }
     .cp-units-head { display: flex; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; color: #6B7280; padding: 2px 2px 8px; }
     .cp-unitrow { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-top: 1px solid #EEF2F7; }
@@ -9495,8 +9498,8 @@
         <button title="One less done" onclick="cpBumpCount(${si},${ii},-1)">−</button>
         <span class="n" onclick="cpSetTotal(${si},${ii})">${done}/${total} ${escHtml(unit)}</span>
         <button title="Mark one done" onclick="cpBumpCount(${si},${ii},1)">+</button>
-        <button class="cp-count-exp ${open ? 'on' : ''}" title="Due date for each ${escHtml(unit)}" onclick="cpToggleUnits(${si},${ii})">${open ? '▴' : '▾'}</button>
-      </span>`;
+      </span>
+      <button class="cp-datesbtn ${open ? 'on' : ''}" title="Due date for each ${escHtml(unit)}" onclick="cpToggleUnits(${si},${ii})">📅 dates ${open ? '▴' : '▾'}</button>`;
     }
     function cpSetTotal(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
