@@ -10518,6 +10518,8 @@
     }
 
     Auth.onAuthStateChange((event, session) => {
+      // a shared timeline link owns the page — never let the auth flow redraw it
+      if (new URLSearchParams(location.search).get('timeline')) return;
       const overlay = document.getElementById('auth-overlay');
       if (session?.user) {
         currentUser = session.user;
