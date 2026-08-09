@@ -1726,6 +1726,7 @@
     .cp-phase-name { cursor: pointer; }
     .cp-phase.folded { opacity: .82; border-style: dashed; }
     .cp-phase.folded:hover { opacity: 1; }
+    body.cp-noowner .cp-owner, body.cp-noowner .cp-tbl th.ow, body.cp-noowner .cp-tbl td.ow { display: none !important; }
   </style>
 </head>
 <body>
@@ -9388,7 +9389,11 @@
       if (idx >= 0) Object.assign(_pipeClients[idx], patch);
     }
 
+    // Viewers (and view-only share links) never see task owners
+    const cpHidesOwners = () => cpmRole === 'viewer' || (_cpShareToken && _cpShareMode !== 'edit');
+
     function renderClientProfile() {
+      document.body.classList.toggle('cp-noowner', cpHidesOwners());
       const c = _cpClient;
       document.getElementById('cp-title').textContent = c.name || 'Client';
       const proc = _cpProc();
@@ -10033,7 +10038,7 @@
             rows.push(`<tr class="${stt}">
               <td style="width:26px"><span class="cp-dot ${stt}"></span></td>
               <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}${Number(it.total) ? ` <span style="font-weight:800;color:${(Number(it.doneCount)||0) >= Number(it.total) ? '#16A34A' : '#0557D9'}">${Number(it.doneCount)||0}/${Number(it.total)}</span>` : ''}</td>
-              <td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>
+              ${cpHidesOwners() ? '' : `<td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>`}
               <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗 Open</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}</td>
               <td style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</td>
@@ -10045,7 +10050,7 @@
         }));
         return `<div class="table-wrapper" style="max-height:60vh;overflow:auto">
           <table class="cp-tbl">
-            <thead><tr><th></th><th>Step</th><th>Owner</th><th>Link</th><th>Date</th><th>Status</th></tr></thead>
+            <thead><tr><th></th><th>Step</th>${cpHidesOwners() ? '' : '<th>Owner</th>'}<th>Link</th><th>Date</th><th>Status</th></tr></thead>
             <tbody>${rows.join('') || '<tr><td colspan="6" class="cp-empty">Nothing matches these filters.</td></tr>'}</tbody>
           </table></div>`;
       }
@@ -10119,17 +10124,17 @@
     function _cpFiltersOn() { return !!(_cpFilterOwner || _cpFilterStatus || _cpOnlyOverdue); }
 
     function _cpToolbarHTML(proc) {
-      const owners = [...new Set(proc.flatMap(st => (st.items || []).map(i => i.owner).filter(Boolean)))];
+      const owners = cpHidesOwners() ? [] : [...new Set(proc.flatMap(st => (st.items || []).map(i => i.owner).filter(Boolean)))];
       const seg = (v, l) => `<button class="${_cpView === v ? 'active' : ''}" onclick="cpSetView('${v}')">${l}</button>`;
       return `<div class="cp-toolbar">
         <div class="cp-seg">${seg('flow', '⛓ Flow')}${seg('compact', '☰ List')}${seg('table', '▦ Table')}</div>
         ${_cpView === 'flow' ? `<button class="cp-chipbtn" title="Collapse every stage" onclick="cpFoldAll(true)">▸ Collapse all</button>
         <button class="cp-chipbtn" title="Expand every stage" onclick="cpFoldAll(false)">▾ Expand all</button>` : ''}
         <span style="flex:1"></span>
-        <select class="cp-filter" onchange="cpSetFilter('owner', this.value)">
+        ${cpHidesOwners() ? '' : `<select class="cp-filter" onchange="cpSetFilter('owner', this.value)">
           <option value="">All owners</option>
           ${owners.map(o => `<option value="${escHtml(o)}" ${o === _cpFilterOwner ? 'selected' : ''}>${escHtml(o)}</option>`).join('')}
-        </select>
+        </select>`}
         <select class="cp-filter" onchange="cpSetFilter('status', this.value)">
           <option value="">All statuses</option>
           <option value="pending"     ${_cpFilterStatus === 'pending' ? 'selected' : ''}>Not started</option>
@@ -10295,7 +10300,7 @@
             <td class="dot"><i style="background:${col}"></i></td>
             <td class="nm">${escHtml(i.name)}${i.type === 'decision' ? ' <em>(decision)</em>' : ''}</td>
             <td class="ct">${cnt}</td>
-            <td class="ow">${i.owner ? escHtml(i.owner) : '—'}</td>
+            ${cpHidesOwners() ? '' : `<td class="ow">${i.owner ? escHtml(i.owner) : '—'}</td>`}
             <td class="dt ${late ? 'late' : ''}">${i.date ? i.date.split('-').reverse().join('/') : '—'}</td>
             <td class="st" style="color:${col}">${lbl}</td>
           </tr>`;
@@ -10303,8 +10308,8 @@
         return `<section class="stage">
           <div class="stage-h"><span>${escHtml(st.stage || 'Stage')}</span><b>${d}/${its.length}</b></div>
           <table>
-            <thead><tr><th></th><th>Step</th><th>Deliverables</th><th>Owner</th><th>Date</th><th>Status</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="none">No steps</td></tr>'}</tbody>
+            <thead><tr><th></th><th>Step</th><th>Deliverables</th>${cpHidesOwners() ? '' : '<th>Owner</th>'}<th>Date</th><th>Status</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="${cpHidesOwners() ? 5 : 6}" class="none">No steps</td></tr>`}</tbody>
           </table>
         </section>`;
       }).join('');
@@ -10377,6 +10382,7 @@
       const prog = items.filter(i => _cpItemState(i) === 'in_progress').length;
       const overdue = items.filter(i => i.date && i.date < today && _cpItemState(i) !== 'done').length;
       const unassigned = items.filter(i => !i.owner).length;
+      const hideOwners = cpHidesOwners();
       const stat = (n, l, color) => `<div class="cp-stat"><div class="cp-stat-n" ${color ? `style="color:${color}"` : ''}>${n}</div><div class="cp-stat-l">${l}</div></div>`;
 
       // Deliverable counters grouped by unit (videos / captions / designs …)
@@ -10397,7 +10403,7 @@
         ${stat(done, 'Completed', '#16A34A')}
         ${stat(prog, 'In progress', '#F59E0B')}
         ${stat(overdue, 'Overdue', overdue ? '#DC2626' : null)}
-        ${stat(unassigned, 'Unassigned')}
+        ${hideOwners ? '' : stat(unassigned, 'Unassigned')}
       </div>
       ${unitCards ? `<div class="cp-stats" style="margin-top:-6px">${unitCards}</div>` : ''}`;
     }
