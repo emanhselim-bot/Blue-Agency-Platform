@@ -328,6 +328,11 @@
     .cpm-churned-head span { opacity: .6; margin-left: 4px; }
     .cpm-ccard.churned { opacity: .58; }
     .cpm-ccard.churned:hover { opacity: 1; }
+    .cp-stat { position: relative; }
+    .cp-stat-del, .cp-deliv-del { border: none; background: transparent; color: #9AA4B2; font-size: 11px; cursor: pointer; padding: 2px 4px; border-radius: 6px; line-height: 1; opacity: 0; transition: opacity .15s, background .15s; }
+    .cp-stat-del { position: absolute; top: 6px; right: 6px; }
+    .cp-stat:hover .cp-stat-del, .cp-deliv:hover .cp-deliv-del { opacity: 1; }
+    .cp-stat-del:hover, .cp-deliv-del:hover { background: rgba(220,38,38,.14); color: #DC2626; }
     .cpm-typebar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
     .cpm-typetab { border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all .15s; }
     .cpm-typetab span { opacity: .6; font-size: 11px; margin-left: 4px; }
@@ -9103,6 +9108,27 @@
     function _cpDelivDone(proc, unit) {
       return (_cpAggUnits(proc.flatMap(st => st.items || []))[unit] || {}).done || 0;
     }
+    // drop a deliverable type from this month: clears the plan and every step counter using it
+    function cpRemoveDeliverable(unit) {
+      const u = _cpNormUnit(unit);
+      if (!confirm(`Remove “${unit}” from ${_cpMonthLabel(_cpMonth)}?\n\nThis clears the monthly plan and the counters on every step tracking ${unit}. Steps and dates stay.`)) return;
+
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      proc.forEach(st => (st.items || []).forEach(it => {
+        if (_cpUnitOf(it) !== u) return;
+        delete it.total; delete it.unit; delete it.doneCount; delete it.units;
+        if (it.type !== 'decision' && it.status !== 'done') it.status = it.status || 'pending';
+      }));
+      const plan = { ..._cpDeliv() };
+      Object.keys(plan).forEach(k => { if (_cpNormUnit(k) === u) delete plan[k]; });
+
+      _cpSave({
+        process_by_month: { ..._cpAllMonths(), [_cpMonth]: proc },
+        process: [],
+        deliverables_by_month: { ..._cpAllDeliv(), [_cpMonth]: plan },
+      });
+    }
+
     function cpSetDeliv(unit) {
       const cur = _cpDeliv();
       const val = prompt(`How many ${unit} are planned for ${_cpMonthLabel(_cpMonth)}? (0 to remove)`, cur[unit] ?? 0);
@@ -9137,6 +9163,7 @@
             <span class="cp-deliv-bar"><i style="width:${pct}%"></i></span>
           </span>
           <span class="cp-deliv-n">${done}<small>/${total}</small></span>
+          <button class="cp-deliv-del cp-owner-only" title="Remove ${escHtml(u)}" onclick="event.stopPropagation();cpRemoveDeliverable('${u.replace(/'/g, "\\'")}')">✕</button>
         </div>`;
       }).join('');
       return `<div class="cp-deliv-wrap">
@@ -10138,6 +10165,7 @@
         const pct = v.total ? Math.round(v.done / v.total * 100) : 0;
         const col = v.done >= v.total ? '#16A34A' : (v.done ? '#F59E0B' : null);
         return `<div class="cp-stat">
+          <button class="cp-stat-del cp-owner-only" title="Remove ${escHtml(unit)} from this month" onclick="cpRemoveDeliverable('${unit.replace(/'/g, "\\'")}')">✕</button>
           <div class="cp-stat-n" ${col ? `style="color:${col}"` : ''}>${v.done}<span style="font-size:13px;opacity:.6">/${v.total}</span></div>
           <div class="cp-stat-l">${escHtml(unit)} done</div>
           <div class="cp-bar" style="margin-top:6px;height:4px"><div class="cp-bar-fill" style="width:${pct}%;background:${v.done >= v.total ? '#16A34A' : '#0573F5'}"></div></div>
