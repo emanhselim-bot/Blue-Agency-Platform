@@ -1528,6 +1528,146 @@
     .btn-revoke-invite { background: none; border: 1px solid #ef4444; color: #ef4444;
       padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; }
     .btn-revoke-invite:hover { background: #fef2f2; }
+
+    /* ═══════════════════════════════════════════════════
+       MOBILE — hub, pipeline, client map, finance, billing
+       ═══════════════════════════════════════════════════ */
+    @media (max-width: 820px) {
+      /* comfortable tap targets everywhere */
+      .cp-btn, .cp-chipbtn, .cpm-btn, .hub-mod-btn, .fin-act-btn, .bill-add-btn { min-height: 34px; }
+      input, select, textarea { font-size: 16px; }          /* stops iOS zoom-on-focus */
+
+      /* ── Home hub ── */
+      .home-hub { padding: 0; align-items: flex-start; -webkit-overflow-scrolling: touch; }
+      .hub-inner { padding: 18px 12px 32px; max-width: 100%; }
+      .hub-logo { height: 30px; margin-bottom: 10px; }
+      .hub-logo span { width: 7px; }
+      .hub-title { font-size: 26px; letter-spacing: 5px; }
+      .hub-sub { font-size: 9px; letter-spacing: 1.6px; }
+      .hub-cards { grid-template-columns: 1fr; gap: 12px; }
+      .hub-card { padding: 18px 16px; }
+      .hub-card-icon { font-size: 28px; }
+      .hub-card-title { font-size: 16px; }
+      .hub-card-desc { font-size: 12px; }
+      .hub-mod-head { flex-wrap: wrap; gap: 8px; }
+      .hub-mod-head h2 { font-size: 18px; }
+      .hub-signout, .hub-back-btn { font-size: 11px; }
+
+      /* ── Modals: full-height sheets ── */
+      .hub-modal { align-items: flex-end; padding: 0; }
+      .hub-modal-box { max-width: 100%; width: 100%; max-height: 92vh; overflow-y: auto;
+        border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+      .hub-modal-actions { position: sticky; bottom: 0; background: inherit; padding-top: 10px; flex-wrap: wrap; gap: 8px; }
+      .hub-modal-actions button { flex: 1 1 auto; min-height: 42px; }
+
+      /* ── Clients pipeline module ── */
+      .cpm-tabs, .cpm-subtabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+      .cpm-tabs::-webkit-scrollbar, .cpm-subtabs::-webkit-scrollbar, .cpm-typebar::-webkit-scrollbar { display: none; }
+      .cpm-tab, .cpm-subtab { flex-shrink: 0; font-size: 12px; padding: 8px 12px; }
+      .cpm-typebar { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+      .cpm-typetab { flex-shrink: 0; font-size: 11.5px; padding: 7px 12px; }
+      .cpm-clients { grid-template-columns: 1fr !important; gap: 10px; }
+      .cpm-ccard { padding: 14px; }
+      .cpm-board { grid-template-columns: 1fr !important; }
+      .cpm-panel { padding: 14px 12px; }
+      .cpm-drawer { width: 100% !important; max-width: 100%; border-radius: 18px 18px 0 0; top: auto; bottom: 0; height: 88vh; }
+      .cpm-table, .fin-table, .bill-table, .cp-tbl, .cmp-table { font-size: 11.5px; }
+      .cpm-table th, .cpm-table td, .fin-table th, .fin-table td,
+      .bill-table th, .bill-table td, .cp-tbl th, .cp-tbl td { padding: 7px 8px; }
+
+      /* wide tables scroll instead of squashing */
+      .cpm-panel, .fin-table-wrap, .bill-table-wrap, .cmp-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .cpm-table, .fin-table, .bill-table, .cmp-table { min-width: 560px; }
+
+      /* ── Client profile / process map ── */
+      .cp-wrap { padding: 14px 12px 24px; }
+      .cp-head { flex-wrap: wrap; gap: 8px; }
+      .cp-name { font-size: 20px; }
+      .cp-sec { margin-top: 18px; }
+      .cp-sec-head { flex-wrap: wrap; gap: 8px; }
+      .cp-sec-head button { flex: 1 1 auto; }
+      .cp-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .cp-stat { padding: 10px 12px; }
+      .cp-stat-n { font-size: 18px; }
+      .cp-stat-l { font-size: 9px; }
+      .cp-stat-del { opacity: 1; }                            /* no hover on touch */
+      .cp-deliv-row { grid-template-columns: 1fr; }
+      .cp-deliv-del { opacity: 1; }
+      .cp-monthbar { flex-wrap: wrap; gap: 8px; padding: 10px; }
+      .cp-mchips { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+      .cp-mchips::-webkit-scrollbar { display: none; }
+      .cp-mchip { flex-shrink: 0; }
+      .cp-toolbar { flex-wrap: wrap; gap: 8px; }
+      .cp-toolbar .cp-seg { order: -1; width: 100%; }
+      .cp-seg { display: flex; }
+      .cp-seg button { flex: 1; }
+      .cp-filter { flex: 1 1 140px; min-width: 0; }
+      .cp-picker-grid { grid-template-columns: 1fr !important; }
+
+      /* flow nodes stack their controls */
+      .cp-flow { padding: 4px 0 10px; }
+      .cp-flow > div, .cp-flow .cp-node, .cp-flow .cp-decision, .cp-phase, .cp-units { max-width: 100%; }
+      .cp-node, .cp-decision { min-width: 0; width: 100%; padding: 10px 12px; gap: 6px; }
+      .cp-node-name { flex: 1 1 100%; min-width: 0; font-size: 13px; }
+      .cp-owner { max-width: none; }
+      .cp-node-date { width: auto; }
+      .cp-phase { min-width: 0; padding: 10px 12px; font-size: 11px; letter-spacing: 1.2px; }
+      .cp-phase-units { gap: 5px; }
+      .cp-phase-unit { font-size: 9.5px; padding: 3px 8px; }
+      .cp-branch-side { min-width: 0; }
+      .cp-branch-note { font-size: 9.5px; }
+
+      /* per-deliverable due dates */
+      .cp-units { padding: 8px; }
+      .cp-unitrow { flex-wrap: wrap; gap: 6px; }
+      .cp-unitname { min-width: 0; }
+      .cp-unitlabel { flex: 1 1 100%; order: 3; border-color: #D6DEE9; }
+      .cp-unitdue { margin-left: auto; }
+
+      /* comments */
+      .cp-cmt-form { flex-wrap: wrap; gap: 6px; }
+      .cp-cmt-form input { flex: 1 1 100%; }
+      .cp-cmt-form button { width: 100%; min-height: 38px; }
+
+      /* shared timeline banner */
+      .cp-sharebar { flex-wrap: wrap; gap: 6px; font-size: 12px; padding: 10px 12px; }
+      .cp-sharebar-mode { margin-left: 0; }
+
+      /* ── Finance & billing ── */
+      .fin-summary { grid-template-columns: 1fr !important; }
+      .bill-funds { grid-template-columns: 1fr !important; }
+      .bill-header { flex-wrap: wrap; gap: 8px; }
+      .bill-resize-hint { display: none; }
+      .bill-table-wrap { resize: none !important; height: auto !important; max-height: 60vh; }
+
+      /* ── Sales pipeline board ── */
+      .pipe-board { grid-template-columns: 1fr !important; }
+      .pipe-col { min-height: 0; }
+
+      /* ── Compare periods ── */
+      .cmp-sel { flex-wrap: wrap; gap: 8px; }
+      .cmp-sel select { flex: 1 1 45%; min-width: 0; }
+      .cmp-run { width: 100%; }
+    }
+
+    @media (max-width: 480px) {
+      .hub-title { font-size: 22px; letter-spacing: 4px; }
+      .hub-inner { padding: 14px 10px 28px; }
+      .cp-wrap { padding: 12px 10px 20px; }
+      .cp-stats { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .cp-node, .cp-decision { padding: 9px 10px; }
+      .cp-node-name { font-size: 12.5px; }
+      .cp-count, .cp-owner, .cp-link, .cp-cmt-btn, .cp-datesbtn { font-size: 10px; }
+      .cp-phase { font-size: 10px; letter-spacing: 1px; padding: 9px 10px; }
+      .cpm-ccard-name { font-size: 15px; }
+      .cp-unitdue, .cp-node-date { font-size: 10.5px; }
+    }
+
+    /* landscape phones: keep sheets usable */
+    @media (max-height: 520px) and (max-width: 900px) {
+      .hub-modal-box, .cpm-drawer { max-height: 96vh; height: 96vh; }
+    }
+
   </style>
 </head>
 <body>
