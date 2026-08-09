@@ -442,6 +442,11 @@
     body.cp-readonly #cp-month-bar .cp-btn, body.cp-readonly .cp-deliv-head button,
     body.cp-readonly .cp-branch-btn, body.cp-readonly .cp-sec-head button { display: none !important; }
     body.cp-readonly .cp-owner-only, body.cp-readonly .hub-mod-back { display: none !important; }
+    /* shared link: strip everything except this one client's timeline */
+    body.cp-shared .header, body.cp-shared #content, body.cp-shared .hub-mod-head,
+    body.cp-shared #hub-cards-view, body.cp-shared #hub-pipeline-view, body.cp-shared #hub-finance-view,
+    body.cp-shared #auth-overlay, body.cp-shared .cp-owner-only { display: none !important; }
+    body.cp-shared .hub-inner { max-width: 1200px; }
     body.cp-readonly .cp-node-date { pointer-events: none; }
     body.cp-readonly .cp-deliv { cursor: default; }
     body.cp-readonly .cp-deliv:hover { border-color: #E5EAF1; box-shadow: none; }
@@ -9969,6 +9974,12 @@
 
       _cpShareToken = token;
       _cpShareMode = data.mode;
+      document.body.classList.add('cp-shared');
+      // no way back into the dashboard from a shared link
+      window.hubShowView = () => {};
+      window.hubOpen = () => {};
+      window.cpmOpenClient = () => {};
+      window.openPipeModal = () => {};
       _cpClient = data.client;
       _cpMonth = new Date().toISOString().slice(0, 7);
       renderClientProfile();
