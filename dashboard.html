@@ -9143,7 +9143,7 @@
           <button class="cp-btn ghost" onclick="cpAddDeliv()">＋ Deliverable</button>
         </div>
         <div class="cp-deliv-row">
-          ${chips || `<div class="cp-deliv-empty">No monthly plan yet — click <strong>＋ Deliverable</strong> to set how many videos, captions or designs this client gets this month.</div>`}
+          ${chips || (_cpShareToken ? `<div class="cp-deliv-empty">No deliverables planned for this month yet.</div>` : `<div class="cp-deliv-empty">No monthly plan yet — click <strong>＋ Deliverable</strong> to set how many videos, captions or designs this client gets this month.</div>`)}
         </div>
       </div>`;
     }
@@ -9191,7 +9191,7 @@
         <div class="cp-sec">
           <div class="cp-sec-head">
             <span class="cp-sec-title">Services we deliver</span>
-            <span class="cp-stage-prog">${_cpSvc().length} selected</span>
+            <span class="cp-stage-prog">${_cpShareToken ? '' : _cpSvc().length + ' selected'}</span>
             <button class="cp-btn" onclick="cpTogglePicker()">${_cpPickerOpen ? '✓ Done' : '＋ Select services'}</button>
           </div>
           ${_cpPickerOpen ? `
@@ -9211,7 +9211,7 @@
           <div class="cp-services">
             ${_cpSvc().length
               ? _cpSvc().map((sv, i) => `<span class="cp-chip">${escHtml(sv)}<button onclick="cpRemoveService(${i})" title="Remove">✕</button></span>`).join('')
-              : '<div class="cp-empty">No services yet — click “Select services” to choose what we deliver for this client.</div>'}
+              : (_cpShareToken ? '<div class="cp-empty">No services listed yet.</div>' : '<div class="cp-empty">No services yet — click “Select services” to choose what we deliver for this client.</div>')}
           </div>
         </div>
 
@@ -9382,7 +9382,7 @@
               </div>`;
             }).join('');
           })()
-          : `<div class="cp-empty">No process for <strong>${_cpMonthLabel(_cpMonth)}</strong> yet — click <strong>🗺 Load map</strong> to add a workflow, or <strong>⧉ Copy last month</strong> to reuse the previous month's plan.</div>`}
+          : (_cpShareToken ? `<div class="cp-empty">Nothing planned for <strong>${_cpMonthLabel(_cpMonth)}</strong> yet.</div>` : `<div class="cp-empty">No process for <strong>${_cpMonthLabel(_cpMonth)}</strong> yet — click <strong>🗺 Load map</strong> to add a workflow, or <strong>⧉ Copy last month</strong> to reuse the previous month's plan.</div>`)}
         </div>`;
     }
 
