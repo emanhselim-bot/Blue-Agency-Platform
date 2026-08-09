@@ -1033,8 +1033,10 @@
       .header-btn { padding: 4px 9px; font-size: 10px; }
       #auto-refresh-label { display: none; }
 
-      /* Agency nav */
-      .agency-nav { padding: 0 10px; }
+      /* Agency nav — scrolls sideways instead of stretching the page */
+      .agency-nav { padding: 0 10px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .agency-nav::-webkit-scrollbar { display: none; }
+      .agency-tab, .add-agency-tab { flex-shrink: 0; white-space: nowrap; }
       .agency-tab { font-size: 11px; padding: 10px 12px; }
 
       /* Controls bar */
