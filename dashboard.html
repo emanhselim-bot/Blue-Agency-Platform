@@ -6,7 +6,8 @@
   <meta id="theme-color-meta" name="theme-color" content="#0573F5">
   <title>Blue Ad · Performance Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
   <style>
@@ -19,6 +20,7 @@
       --teal:        #179BB4;
       --gold:        #FCBA00;
       --orange:      #FA8500;
+      --sand:        #E8D9A6;
       --coral:       #FF5759;
       --bg:          #F0F2F6;
       --surface:     #FFFFFF;
@@ -73,7 +75,7 @@
     [data-theme="dark"] .ai-msg.assistant { background: var(--bg); }
     [data-theme="dark"] select { background: var(--bg); color: var(--text-main); border-color: var(--border); }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Open Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text-main); min-height: 100vh; }
+    body { font-family: 'Open Sans', 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-main); min-height: 100vh; }
 
     /* ── TOP HEADER ── */
     .header { background: linear-gradient(135deg, #0573F5 0%, #083BBF 55%, #0A1CA3 100%); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
@@ -1896,6 +1898,46 @@
     [data-theme="dark"] .hub-title { color: #F5F5F7; }
     .hub-card-title { color: var(--brand-ink); }
     [data-theme="dark"] .hub-card-title { color: var(--brand-ink); }
+
+
+    /* ═══════════════════════════════════════════════════
+       BRAND IDENTITY — Blue Brand Guidelines 2024
+       Type   : Open Sans (Latin) · Cairo (Arabic)
+       Primary: #0573F5 #0557D9 #083BBF #0A1CA3
+       Second : #179BB4 #FCBA00 #FA8500 #E8D9A6 #FF5759
+       ═══════════════════════════════════════════════════ */
+    body, button, input, select, textarea, .cp-wrap, .hub-inner {
+      font-family: 'Open Sans', 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    :lang(ar), [dir="rtl"] { font-family: 'Cairo', 'Open Sans', sans-serif; }
+
+    /* brand tokens used across every module */
+    :root {
+      --brand-ink:    #0A1CA3;
+      --brand-accent: #0573F5;
+      --brand-mid:    #0557D9;
+      --brand-deep:   #083BBF;
+    }
+    [data-theme="dark"] { --brand-ink: #7FB4FF; --brand-accent: #4E9BFF; --brand-mid: #3B82F6; --brand-deep: #1D4ED8; }
+
+    /* headings use the brand weights */
+    .hub-title { font-weight: 800; }
+    .hub-mod-head h2, .cp-name, .hub-modal-box h3, .cpm-ccard-name { font-weight: 700; }
+    .cp-sec-title, .cpm-sectitle, .section-label, .cp-deliv-title, .bill-title, .cmp-title,
+    .cp-stat-l, .fin-sum-label, .bill-fund-label { font-weight: 600; letter-spacing: 1.4px; }
+
+    /* on-brand chips: no off-palette purple */
+    .cp-decision { border-color: var(--teal); background: rgba(23,155,180,.07); }
+    [data-theme="dark"] .cp-decision { background: rgba(23,155,180,.10); border-color: #17708A; }
+    .cp-branch-btn.no:hover, .cp-branch-btn.no.active { background: rgba(252,186,0,.16); border-color: var(--gold); color: #8A6500; }
+    [data-theme="dark"] .cp-branch-btn.no:hover, [data-theme="dark"] .cp-branch-btn.no.active { color: var(--gold); }
+    .cpm-typetab.active, .cp-mchip.active { background: #fff; color: var(--brand-ink); }
+    .cpm-ccard-tag { background: rgba(5,115,245,.10); color: var(--brand-mid); }
+    .cp-owner { background: rgba(5,115,245,.10); border-color: rgba(5,115,245,.28); color: var(--brand-mid); }
+    .cp-phase { border-color: var(--brand-accent); background: rgba(5,115,245,.07); color: var(--brand-ink); }
+    .cp-deliv-bar i, .cpm-ccard-fill, .cp-bar-fill { background: var(--brand-accent); }
+    .cp-sharebar { background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-deep) 60%, var(--brand-ink) 100%); }
+    .home-hub { background: linear-gradient(135deg, #0573F5 0%, #0557D9 35%, #083BBF 70%, #0A1CA3 100%); }
+    .theme-fab { border-color: rgba(255,255,255,.35); }
 
   </style>
 </head>
@@ -8920,7 +8962,7 @@
       const { data: legacy } = await sb.from('pipeline_clients').select('*').eq('organization_id', currentOrgId);
       cpmData.legacy = legacy || [];
 
-      const CT = { social: ['📱', 'Social Media', '#7C3AED'], media: ['📈', 'Media Buying', '#0573F5'], both: ['⚡', 'Social + Media', '#F59E0B'] };
+      const CT = { social: ['📱', 'Social Media', '#179BB4'], media: ['📈', 'Media Buying', '#083BBF'], both: ['⚡', 'Social + Media', '#FCBA00'] };
       const typeOf = c => {
         const lg = (cpmData.legacy || []).find(l => l.id === c.legacy_id || l.name?.toLowerCase() === c.name.toLowerCase());
         return lg?.client_type || 'social';
