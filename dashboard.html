@@ -1721,6 +1721,11 @@
       .cp-node-del, .cp-phase-move, .cp-phase .cp-del { opacity: 1 !important; }
     }
 
+    .cp-fold { border: none; background: transparent; color: inherit; font-size: 11px; cursor: pointer; padding: 0 2px; flex-shrink: 0; opacity: .75; }
+    .cp-fold:hover { opacity: 1; }
+    .cp-phase-name { cursor: pointer; }
+    .cp-phase.folded { opacity: .82; border-style: dashed; }
+    .cp-phase.folded:hover { opacity: 1; }
   </style>
 </head>
 <body>
@@ -9513,12 +9518,14 @@
                   .map(([u, v]) =>
                     `<span class="cp-phase-unit ${v.done >= v.total ? 'full' : ''}" title="${v.done} of ${v.total} ${escHtml(u)} done">${v.done}/${v.total} ${escHtml(u)}</span>`
                   ).join('');
-                const phase = `<div class="cp-phase" draggable="true"
+                const folded = _cpFolded(st);
+                const phase = `<div class="cp-phase ${folded ? 'folded' : ''}" draggable="true"
                   ondragstart="cpStageDragStart(event,${si})" ondragover="cpStageDragOver(event)"
                   ondragleave="event.currentTarget.classList.remove('dragover')" ondrop="cpStageDrop(event,${si})"
-                  title="Drag to reorder this stage">
+                  title="${folded ? 'Click to expand' : 'Click to collapse'} · drag to reorder">
                   <div class="cp-phase-top">
-                    <span class="cp-phase-name">${escHtml(st.stage || 'Stage')}</span>
+                    <button class="cp-fold" title="${folded ? 'Expand' : 'Collapse'}" onclick="event.stopPropagation();cpToggleFold(${si})">${folded ? '▸' : '▾'}</button>
+                    <span class="cp-phase-name" onclick="cpToggleFold(${si})">${escHtml(st.stage || 'Stage')}</span>
                     <span class="cp-phase-steps" title="Steps completed">${d}/${items.length} steps</span>
                     <span class="cp-phase-move">
                       <button title="Move stage up" onclick="cpMoveStage(${si},-1)">↑</button>
@@ -9526,7 +9533,7 @@
                     </span>
                     <button class="cp-del" title="Delete stage" onclick="cpRemoveStage(${si})">🗑</button>
                   </div>
-                  ${unitChips ? `<div class="cp-phase-units">${unitChips}</div>` : ''}
+                  ${folded ? '' : (unitChips ? `<div class="cp-phase-units">${unitChips}</div>` : '')}
                 </div>`;
                 const nodes = items.map((it) => {
                   const ii = (st.items || []).indexOf(it);
@@ -9583,6 +9590,7 @@
                   <button class="cp-addnode" style="min-width:auto" onclick="cpAddItem(${si})">＋ Step</button>
                   <button class="cp-addnode" style="min-width:auto" onclick="cpAddDecision(${si})">◇ Decision</button>
                 </div>`;
+                if (_cpFolded(st)) return phase;
                 return [phase, ...nodes, addBtn].join(ARROW);
               }).join(ARROW);
               return `<div class="cp-mapgroup">
@@ -9633,6 +9641,23 @@
     // ── Step comments ──
     let _cpCmtOpen = {};
     let _cpUnitsOpen = {};
+
+    // ── collapse / expand stages (everyone: owner, editor, viewer and shared links) ──
+    function _cpFoldKey(st) {
+      return `cpfold:${_cpClient?.id || 'x'}:${_cpMonth}:${st.stage || ''}`;
+    }
+    function _cpFolded(st) { return localStorage.getItem(_cpFoldKey(st)) === '1'; }
+    function cpToggleFold(si) {
+      const st = _cpProc()[si];
+      if (!st) return;
+      const k = _cpFoldKey(st);
+      localStorage.setItem(k, _cpFolded(st) ? '0' : '1');
+      renderClientProfile();
+    }
+    function cpFoldAll(collapse) {
+      _cpProc().forEach(st => localStorage.setItem(_cpFoldKey(st), collapse ? '1' : '0'));
+      renderClientProfile();
+    }
 
     // ── reorder stages ──
     function cpMoveStage(si, dir) {
@@ -10098,6 +10123,8 @@
       const seg = (v, l) => `<button class="${_cpView === v ? 'active' : ''}" onclick="cpSetView('${v}')">${l}</button>`;
       return `<div class="cp-toolbar">
         <div class="cp-seg">${seg('flow', '⛓ Flow')}${seg('compact', '☰ List')}${seg('table', '▦ Table')}</div>
+        ${_cpView === 'flow' ? `<button class="cp-chipbtn" title="Collapse every stage" onclick="cpFoldAll(true)">▸ Collapse all</button>
+        <button class="cp-chipbtn" title="Expand every stage" onclick="cpFoldAll(false)">▾ Expand all</button>` : ''}
         <span style="flex:1"></span>
         <select class="cp-filter" onchange="cpSetFilter('owner', this.value)">
           <option value="">All owners</option>
