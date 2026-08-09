@@ -322,6 +322,12 @@
     [data-theme="dark"] .cp-mapprog { color: #93C5FD; }
 
     /* ── FLOWCHART PROCESS MAP ── */
+    .cpm-churned-head { margin: 22px 0 10px; }
+    .cpm-churned-head button { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 999px; padding: 7px 16px; font-size: 12.5px; font-weight: 800; letter-spacing: .5px; cursor: pointer; }
+    .cpm-churned-head button:hover { background: rgba(255,255,255,.16); }
+    .cpm-churned-head span { opacity: .6; margin-left: 4px; }
+    .cpm-ccard.churned { opacity: .58; }
+    .cpm-ccard.churned:hover { opacity: 1; }
     .cpm-typebar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
     .cpm-typetab { border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all .15s; }
     .cpm-typetab span { opacity: .6; font-size: 11px; margin-left: 4px; }
@@ -8524,12 +8530,15 @@
       clients.forEach(c => { counts[typeOf(c)] = (counts[typeOf(c)] || 0) + 1; });
       if (_cpmTypeFilter !== 'all') clients = clients.filter(c => typeOf(c) === _cpmTypeFilter || typeOf(c) === 'both');
       const tab = (k, label) => `<button class="cpm-typetab ${_cpmTypeFilter === k ? 'active' : ''}" onclick="cpmSetType('${k}')">${label} <span>${counts[k] || 0}</span></button>`;
-      document.getElementById('cpm-content').innerHTML = `
-        <div class="cpm-typebar">
-          ${tab('all', 'All clients')}${tab('social', '📱 Social Media')}${tab('media', '📈 Media Buying')}${tab('both', '⚡ Both')}
-        </div>
-        <div class="cpm-clients">
-          ${clients.map(c => {
+
+      const stageOf = c => {
+        const lg = (cpmData.legacy || []).find(l => l.id === c.legacy_id || l.name?.toLowerCase() === c.name.toLowerCase());
+        return lg?.stage || 'lead';
+      };
+      const churned = clients.filter(c => stageOf(c) === 'churned');
+      clients = clients.filter(c => stageOf(c) !== 'churned');
+
+      const card = c => {
             const [tIco, tLbl, tCol] = CT[typeOf(c)] || CT.social;
             const lg = (cpmData.legacy || []).find(l => l.id === c.legacy_id || l.name?.toLowerCase() === c.name.toLowerCase());
             const svc = Array.isArray(lg?.services) ? lg.services : [];
@@ -8538,7 +8547,7 @@
             const done = all.filter(t => t.status === 'done').length;
             const pct = all.length ? Math.round(done / all.length * 100) : 0;
             const months = Object.keys(lg?.process_by_month || {}).length;
-            return `<div class="cpm-ccard" onclick="cpmOpenClient('${c.id}')">
+            return `<div class="cpm-ccard ${stageOf(c) === 'churned' ? 'churned' : ''}" onclick="cpmOpenClient('${c.id}')">
               <div class="cpm-ccard-type" style="background:${tCol}">${tIco} ${tLbl}</div>
               <div class="cpm-ccard-name">${cpmEsc(c.name)}</div>
               <div class="cpm-ccard-sub">${cpmEsc(c.contact_person || c.phone || c.email || 'No contact')}</div>
@@ -8546,10 +8555,23 @@
               <div class="cpm-ccard-bar"><div class="cpm-ccard-fill" style="width:${pct}%"></div></div>
               <div class="cpm-ccard-stat"><span>${myPipes.length} pipeline${myPipes.length === 1 ? '' : 's'}${months ? ' · ' + months + ' month map' + (months === 1 ? '' : 's') : ''}</span><span>${pct}%</span></div>
             </div>`;
-          }).join('')}
+      };
+
+      document.getElementById('cpm-content').innerHTML = `
+        <div class="cpm-typebar">
+          ${tab('all', 'All clients')}${tab('social', '📱 Social Media')}${tab('media', '📈 Media Buying')}${tab('both', '⚡ Both')}
+        </div>
+        <div class="cpm-clients">
+          ${clients.map(card).join('')}
           ${cpmIsOwner() ? `<button class="cpm-addcard" onclick="cpmAddItem('clients')">＋ Add client</button>` : ''}
         </div>
-        ${clients.length ? '' : '<div class="cpm-panel" style="margin-top:14px"><div class="cpm-empty">No clients yet — add one to get started.</div></div>'}`;
+        ${churned.length ? `
+          <div class="cpm-churned-head">
+            <button onclick="cpmToggleChurned()">${_cpmChurnedOpen ? '▾' : '▸'} 💤 Churned <span>${churned.length}</span></button>
+          </div>
+          ${_cpmChurnedOpen ? `<div class="cpm-clients churned-grid">${churned.map(card).join('')}</div>` : ''}
+        ` : ''}
+        ${clients.length || churned.length ? '' : '<div class="cpm-panel" style="margin-top:14px"><div class="cpm-empty">No clients yet — add one to get started.</div></div>'}`;
     }
 
     async function cpmOpenClient(id) {
@@ -8596,6 +8618,12 @@
     }
 
     let _cpmTypeFilter = localStorage.getItem('cpm_type_filter') || 'all';
+    let _cpmChurnedOpen = localStorage.getItem('cpm_churned_open') === '1';
+    function cpmToggleChurned() {
+      _cpmChurnedOpen = !_cpmChurnedOpen;
+      localStorage.setItem('cpm_churned_open', _cpmChurnedOpen ? '1' : '0');
+      cpmRenderClientCards();
+    }
     function cpmSetType(k) {
       _cpmTypeFilter = k;
       localStorage.setItem('cpm_type_filter', k);
