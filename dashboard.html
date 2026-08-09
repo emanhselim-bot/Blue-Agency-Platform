@@ -1934,6 +1934,46 @@
     .home-hub { background: #083BBF; }
     .theme-fab { border-color: rgba(255,255,255,.35); }
 
+
+    /* ═══════════════════════════════════════════════════
+       BRAND GOLD #FCBA00 — the blue/gold pairing from the manual
+       ═══════════════════════════════════════════════════ */
+    :root { --brand-gold: #FCBA00; --brand-gold-ink: #6B4E00; }
+    [data-theme="dark"] { --brand-gold-ink: #FCBA00; }
+
+    /* active states across the app sit in gold on blue */
+    .cpm-tab.active, .cpm-subtab.active, .cpm-typetab.active,
+    .cp-mchip.active, .cp-seg button.active, .period-btn.active, .agency-tab.active {
+      background: var(--brand-gold) !important; color: #26210A !important; border-color: var(--brand-gold) !important; }
+    .cp-seg button.active, .period-btn.active { box-shadow: none; }
+    [data-theme="dark"] .cpm-tab.active, [data-theme="dark"] .cpm-subtab.active,
+    [data-theme="dark"] .cpm-typetab.active, [data-theme="dark"] .cp-mchip.active,
+    [data-theme="dark"] .cp-seg button.active, [data-theme="dark"] .period-btn.active,
+    [data-theme="dark"] .agency-tab.active { color: #1A1500 !important; }
+
+    /* status + emphasis accents */
+    .hub-card-badge { background: rgba(252,186,0,.18); color: var(--brand-gold-ink); border: 1px solid rgba(252,186,0,.45); }
+    [data-theme="dark"] .hub-card-badge { background: rgba(252,186,0,.16); color: var(--brand-gold); }
+    .cpm-badge { background: var(--brand-gold); color: #26210A; }
+    .cp-phase { border-left: 4px solid var(--brand-gold); }
+    .cp-stat-n { color: var(--brand-ink); }
+    .cp-stat.gold .cp-stat-n { color: var(--brand-gold-ink); }
+
+    /* progress: blue track filling to gold at the finish */
+    .cp-deliv.full .cp-deliv-bar i, .cpm-ccard-fill { background: var(--brand-gold); }
+    .cp-count.full, .cp-phase-unit.full { background: var(--brand-gold); color: #26210A; }
+    [data-theme="dark"] .cp-count.full, [data-theme="dark"] .cp-phase-unit.full { color: #1A1500; }
+
+    /* focus rings + the theme switch pick up gold */
+    .hub-input:focus, .cpm-input:focus, .cp-filter:focus, .cp-unitdue:focus, .cp-unitlabel:focus {
+      outline: none; border-color: var(--brand-gold); box-shadow: 0 0 0 3px rgba(252,186,0,.22); }
+    .theme-fab { border-color: rgba(252,186,0,.55); color: var(--brand-gold); }
+    .theme-fab:hover { border-color: var(--brand-gold); }
+
+    /* the logo's gold bar already matches — keep the accent consistent */
+    .hub-logo span:nth-child(1), .brand-logo span:nth-child(1), .auth-logo span:nth-child(1),
+    .cp-sharebar-logo i:nth-child(1) { background: var(--brand-gold) !important; }
+
   </style>
 </head>
 <body>
