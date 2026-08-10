@@ -4644,6 +4644,7 @@
         return;
       }
 
+      hideOnboarding();          // they already belong somewhere — no setup wizard
       orgSel.innerHTML = '';
       memberships.forEach(m => {
         const org = m.organizations;
