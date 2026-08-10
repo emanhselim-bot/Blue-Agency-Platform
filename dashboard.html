@@ -1995,6 +1995,11 @@
     .cp-toolbar-save { font-weight: 800; }
     .cp-toolbar-save:disabled { opacity: .5; cursor: default; }
     .cp-toolbar-save.dirty { background: var(--brand-gold) !important; border-color: var(--brand-gold) !important; color: #26210A !important; animation: cpPulse 1.8s infinite; }
+    .cpm-scope { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 20px; font-size: 9px; font-weight: 800; letter-spacing: .5px; }
+    .cpm-scope.social { background: rgba(23,155,180,.16); color: #0E6E80; }
+    .cpm-scope.media  { background: rgba(8,59,191,.14); color: #083BBF; }
+    [data-theme="dark"] .cpm-scope.social { background: rgba(23,155,180,.22); color: #7FE3F2; }
+    [data-theme="dark"] .cpm-scope.media  { background: rgba(93,150,255,.20); color: #A9C7FF; }
   </style>
 </head>
 <body>
@@ -8808,6 +8813,13 @@
     let cpmTask = null;
 
     const cpmCanEdit  = () => cpmRole === 'owner' || cpmRole === 'editor';
+    // which client types this user may work on: all | social | media
+    function cpmMyScope() {
+      const me = (cpmData?.members || []).find(
+        m => (m.email || '').toLowerCase() === (currentUser?.email || '').toLowerCase() && !m.archived);
+      return me?.client_scope || 'all';
+    }
+    const cpmInScope = (type) => { const sc = cpmMyScope(); return sc === 'all' || sc === (type || 'social'); };
     const cpmIsOwner  = () => cpmRole === 'owner';
     const cpmEsc = (t) => escHtml(t);
 
@@ -8954,7 +8966,9 @@
               <td style="font-weight:700">${cpmEsc(r.full_name)}</td>
               <td>${cpmEsc(r.job_title || '—')}</td>
               <td style="color:var(--text-muted)">${cpmEsc(r.email)}</td>
-              <td><span class="cpm-role ${r.role}">${r.role.toUpperCase()}</span></td>
+              <td><span class="cpm-role ${r.role}">${r.role.toUpperCase()}</span>
+                ${(r.client_scope && r.client_scope !== 'all')
+                  ? `<span class="cpm-scope ${r.client_scope}">${r.client_scope === 'social' ? '📱 SOCIAL ONLY' : '📈 MEDIA ONLY'}</span>` : ''}</td>
               <td>${r.archived ? 'Archived' : 'Active'}</td>
               <td style="text-align:right;white-space:nowrap">
                 <button class="cpm-mini" onclick="cpmEditMember('${r.id}')">✎ Edit</button>
@@ -8975,9 +8989,11 @@
       const job_title = prompt('Job title:\n\nAvailable: ' + _cpmTitleList().join(', '));
       const role = (prompt('Role — owner, editor or viewer:', 'editor') || 'editor').toLowerCase().trim();
       if (!['owner','editor','viewer'].includes(role)) return alert('Role must be owner, editor or viewer.');
+      const scope = (prompt('Which clients? — all, social or media:\n\n  all    = every client\n  social = Social Media clients only\n  media  = Media Buying clients only', 'all') || 'all').toLowerCase().trim();
+      if (!['all','social','media'].includes(scope)) return alert('Scope must be all, social or media.');
       const { error } = await sb.from('cp_members').insert({
         organization_id: currentOrgId, full_name: full_name.trim(), email: email.trim().toLowerCase(),
-        job_title: (job_title || '').trim() || null, role,
+        job_title: (job_title || '').trim() || null, role, client_scope: scope,
       });
       if (error) return alert(error.message);
       cpmRefresh();
@@ -8990,9 +9006,12 @@
       const email = prompt('Email:', r.email);
       const role = (prompt('Role — owner, editor or viewer:', r.role) || r.role).toLowerCase().trim();
       if (!['owner','editor','viewer'].includes(role)) return alert('Role must be owner, editor or viewer.');
+      const scope = (prompt('Which clients? — all, social or media:\n\n  all    = every client\n  social = Social Media clients only\n  media  = Media Buying clients only', r.client_scope || 'all') || 'all').toLowerCase().trim();
+      if (!['all','social','media'].includes(scope)) return alert('Scope must be all, social or media.');
       const { error } = await sb.from('cp_members').update({
         full_name: full_name.trim(), job_title: (job_title || '').trim() || null,
-        email: (email || r.email).trim().toLowerCase(), role, updated_at: new Date().toISOString(),
+        email: (email || r.email).trim().toLowerCase(), role, client_scope: scope,
+        updated_at: new Date().toISOString(),
       }).eq('id', id);
       if (error) return alert(error.message);
       cpmRefresh();
@@ -9036,7 +9055,7 @@
         const lg = (cpmData.legacy || []).find(l => l.id === c.legacy_id || l.name?.toLowerCase() === c.name.toLowerCase());
         return lg?.client_type || 'social';
       };
-      let clients = cpmData.clients.filter(c => !c.archived);
+      let clients = cpmData.clients.filter(c => !c.archived && cpmInScope(typeOf(c)));
       const counts = { all: clients.length, social: 0, media: 0, both: 0 };
       clients.forEach(c => { counts[typeOf(c)] = (counts[typeOf(c)] || 0) + 1; });
       if (_cpmTypeFilter !== 'all') clients = clients.filter(c => typeOf(c) === _cpmTypeFilter || typeOf(c) === 'both');
@@ -9070,7 +9089,7 @@
 
       document.getElementById('cpm-content').innerHTML = `
         <div class="cpm-typebar">
-          ${tab('all', 'All clients')}${tab('social', '📱 Social Media')}${tab('media', '📈 Media Buying')}
+          ${cpmMyScope() === 'all' ? tab('all', 'All clients') + tab('social', '📱 Social Media') + tab('media', '📈 Media Buying') : ''}
         </div>
         <div class="cpm-clients">
           ${clients.map(card).join('')}
@@ -9086,6 +9105,14 @@
     }
 
     async function cpmOpenClient(id) {
+      {
+        const c = (cpmData.clients || []).find(x => x.id === id);
+        const lg = c && (cpmData.legacy || []).find(l => l.id === c.legacy_id || l.name?.toLowerCase() === c.name.toLowerCase());
+        if (c && !cpmInScope(lg?.client_type || 'social')) {
+          alert('You only have access to ' + (cpmMyScope() === 'social' ? 'Social Media' : 'Media Buying') + ' clients.');
+          return;
+        }
+      }
       cpmClientId = id;
       cpmPipelineId = null;
       // load the legacy profile (services + monthly process maps) for this client
