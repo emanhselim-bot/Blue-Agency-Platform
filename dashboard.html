@@ -8971,6 +8971,7 @@
                   ? `<span class="cpm-scope ${r.client_scope}">${r.client_scope === 'social' ? '📱 SOCIAL ONLY' : '📈 MEDIA ONLY'}</span>` : ''}</td>
               <td>${r.archived ? 'Archived' : 'Active'}</td>
               <td style="text-align:right;white-space:nowrap">
+                <button class="cpm-mini" onclick="cpmMemberLogin('${r.id}')" title="Create their login / reset their password">🔑 Login</button>
                 <button class="cpm-mini" onclick="cpmEditMember('${r.id}')">✎ Edit</button>
                 <button class="cpm-mini" onclick="cpmArchiveMember('${r.id}',${!r.archived})">${r.archived ? '↩ Restore' : '📦 Archive'}</button>
                 <button class="cpm-mini" onclick="cpmDeleteMember('${r.id}')">🗑</button>
@@ -8996,8 +8997,42 @@
         job_title: (job_title || '').trim() || null, role, client_scope: scope,
       });
       if (error) return alert(error.message);
+      await cpmCreateLogin(email.trim().toLowerCase(), full_name.trim(), role);
       cpmRefresh();
     }
+
+    // Creates (or updates) the actual sign-in account and adds them to the workspace.
+    // Without this a pipeline member has no login and lands on “Create your organisation”.
+    async function cpmCreateLogin(email, name, pipelineRole) {
+      if (!confirm(`Create a login for ${email} now?\n\nThey need this to sign in — a pipeline role on its own does not grant access.`)) return;
+      const password = prompt('Set a temporary password for them (min 8 characters).\n\nShare it with them privately and ask them to change it after the first sign-in.');
+      if (!password) return;
+      if (password.length < 8) { alert('Password must be at least 8 characters.'); return; }
+      const orgRole = pipelineRole === 'owner' ? 'admin' : (pipelineRole === 'editor' ? 'editor' : 'viewer');
+      const { data: { session } } = await sb.auth.getSession();
+      try {
+        const res = await fetch(`${sb.supabaseUrl}/functions/v1/manage-users`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create', email, name, password, role: orgRole }),
+        });
+        const j = await res.json();
+        if (!res.ok) { alert('Could not create the login: ' + (j.error || res.status)); return; }
+        alert(j.existing
+          ? `${email} already had an account — password reset and workspace access granted.`
+          : `Login created for ${email}. They can sign in now.`);
+      } catch (e) {
+        alert('Could not create the login: ' + e.message);
+      }
+    }
+
+    // ✚ login button on a member who cannot sign in yet
+    async function cpmMemberLogin(id) {
+      const r = cpmData.members.find(x => x.id === id);
+      if (!r) return;
+      await cpmCreateLogin(r.email, r.full_name, r.role);
+    }
+
     async function cpmEditMember(id) {
       const r = cpmData.members.find(x => x.id === id);
       const full_name = prompt('Full name:', r.full_name);
