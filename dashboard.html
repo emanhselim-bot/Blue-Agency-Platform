@@ -2155,6 +2155,16 @@
       .pf-actions { margin-left: 0; width: 100%; }
       .pf-actions .cp-chipbtn { flex: 1; }
     }
+    /* template picker was see-through over the KPI cards */
+    .tmpl-picker { background: var(--surface) !important; border: 1px solid var(--border) !important;
+      box-shadow: 0 18px 50px rgba(0,0,0,.45) !important; z-index: 400 !important; padding: 6px !important; }
+    [data-theme="dark"] .tmpl-picker { background: #1B3289 !important; border-color: #2C4499 !important; }
+    .tmpl-option { color: var(--text-main); }
+    [data-theme="dark"] .tmpl-option { color: #EDF2FF; }
+    [data-theme="dark"] .tmpl-option-desc { color: #A9B9E8; }
+    [data-theme="dark"] .tmpl-option:hover { background: rgba(255,255,255,.10); }
+    [data-theme="dark"] .tmpl-option.active { background: rgba(252,186,0,.18); color: #FCBA00; }
+    [data-theme="dark"] .tmpl-option.active .tmpl-option-desc { color: rgba(252,186,0,.75); }
   </style>
 </head>
 <body>
