@@ -2063,6 +2063,22 @@
     [data-theme="dark"] .cp-picker, [data-theme="dark"] .cp-opt { background: #1B3289; }
     [data-theme="dark"] .cp-opt:hover { background: #22399A; }
 
+
+    /* card sub-text and stats: readable on navy, spaced apart */
+    .cpm-ccard-stat { gap: 10px; }
+    .cpm-ccard-pct { font-weight: 700; }
+    [data-theme="dark"] .cpm-ccard-sub, [data-theme="dark"] .cpm-ccard-stat,
+    [data-theme="dark"] .cpm-ccard-pct, [data-theme="dark"] .cp-meta,
+    [data-theme="dark"] .cp-empty, [data-theme="dark"] .cpm-empty,
+    [data-theme="dark"] .cp-deliv-empty, [data-theme="dark"] .hub-card-desc,
+    [data-theme="dark"] .cpm-mini, [data-theme="dark"] .cp-node-date,
+    [data-theme="dark"] .cp-savebar-txt, [data-theme="dark"] .cpm-readonly-note,
+    [data-theme="dark"] .cp-hist-sum, [data-theme="dark"] .cp-hist-when,
+    [data-theme="dark"] .cpm-newuser-foot span, [data-theme="dark"] .cpm-newuser-grid label {
+      color: #C6D2F2; }
+    [data-theme="dark"] .cpm-ccard-tag { background: rgba(255,255,255,.14); color: #DCE7FF; }
+    [data-theme="dark"] { --text-muted: #C6D2F2; }
+
   </style>
 </head>
 <body>
@@ -9301,7 +9317,7 @@
               <div class="cpm-ccard-sub">${cpmEsc(c.contact_person || c.phone || c.email || 'No contact')}</div>
               <div class="cpm-ccard-tags">${svc.slice(0, 3).map(x => `<span class="cpm-ccard-tag">${cpmEsc(x)}</span>`).join('')}${svc.length > 3 ? `<span class="cpm-ccard-tag">+${svc.length - 3}</span>` : ''}</div>
               <div class="cpm-ccard-bar"><div class="cpm-ccard-fill" style="width:${pct}%"></div></div>
-              <div class="cpm-ccard-stat"><span>${myPipes.length} pipeline${myPipes.length === 1 ? '' : 's'}${months ? ' · ' + months + ' month map' + (months === 1 ? '' : 's') : ''}</span><span>${pct}%</span></div>
+              <div class="cpm-ccard-stat"><span>${myPipes.length} pipeline${myPipes.length === 1 ? '' : 's'}${months ? ' · ' + months + ' month map' + (months === 1 ? '' : 's') : ''}</span><span class="cpm-ccard-pct">${pct}%</span></div>
             </div>`;
       };
 
