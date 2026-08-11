@@ -9820,6 +9820,11 @@
         { stage: '✂️ Video Editing', items: ['Rough Cut', '👤 Rough Cut Approval', 'Colour Grading', 'Sound & Music', 'Final Cut', '👤 Final Approval'] },
         { stage: '🗓 Scheduling & Posting', items: ['Posting Calendar Built', '👤 Calendar Approval', 'Scheduled on Platforms', 'Published', 'Post-live Check'] },
       ],
+      'UGC / Lifestyle Video': [
+        { stage: '🗣 Briefing Meeting', items: ['Briefing Meeting Scheduled', 'Briefing Meeting Held', '👤 Brief Approval', 'Sent to the Team'] },
+        { stage: '🤳 UGC / Lifestyle Video', items: ['Brief', 'Script', '👤 Script Approval', 'Shooting', 'Editing', '👤 Final Approval'] },
+        { stage: '🗓 Scheduling & Posting', items: ['Posting Calendar Built', '👤 Calendar Approval', 'Scheduled on Platforms', 'Published', 'Post-live Check'] },
+      ],
       'Video Editing': [
         { stage: '🗣 Briefing Meeting', items: ['Briefing Meeting Scheduled', 'Briefing Meeting Held', '👤 Brief Approval', 'Sent to the Team'] },
         { stage: '✂️ Video Editing', items: ['Rough Cut', '👤 Rough Cut Approval', 'Colour Grading', 'Sound & Music', 'Final Cut', '👤 Final Approval'] },
@@ -9844,13 +9849,13 @@
       'Content writing': 'Monthly content calendar',
       'Scheduling and Posting': 'Monthly content calendar',
       'Designing': 'Monthly content calendar',
-      'Lifestyle video': 'Media Production',
       'Video Editing': 'Video Editing',
+      'UGC Video': 'UGC / Lifestyle Video',
+      'Lifestyle video': 'UGC / Lifestyle Video',
+      'AI Reels': 'UGC / Lifestyle Video',
       'Reel Creation': 'Video Editing',
       'Motion Graphics': 'Video Editing',
       'Script writing': 'Media Production',
-      'AI Reels': 'Media Production',
-      'UGC Video': 'Media Production',
       'Voice over': 'Media Production',
       'Studio renting': 'Photography',
       'Equipment Renting': 'Media Production',
@@ -9874,6 +9879,7 @@
       '📈 Optimization': ['Daily Monitoring','A/B Testing','Weekly Optimization','Scaling Winners'],
       '🔍 SEO Audit': ['Technical SEO Audit','Keyword Research','Content Gap Analysis','Strategy Approval'],
       '💻 Development': ['Wireframes','UI Design','Design Approval','Frontend Build','CMS Setup','QA & Launch'],
+      '🤳 UGC / Lifestyle Video': ['Brief','Script','Script Approval','Shooting','Editing','Final Approval'],
       '✂️ Video Editing': ['Rough Cut','Rough Cut Approval','Colour Grading','Sound & Music','Final Cut','Final Approval'],
       '🎨 Branding': ['Logo','Logo Approval','Brand Manual — Colours','Brand Manual — Graphic Elements','Brand Manual — Typography','Brand Manual — Photography Style','Brand Manual — Applications','Brand Manual Approval','Logo Assets','Logo Assets Approval','Print Outs Mockup','Print Outs Approval'],
       '🗣 Briefing Meeting': ['Briefing Meeting Scheduled','Briefing Meeting Held','Brief Approval','Sent to the Team'],
@@ -11171,7 +11177,7 @@
       const REVISE_HINT = { 'Plan':'Revise the plan', 'Copy':'Edit the copy', 'Design':'Design edits',
         'Mood Board':'Rework the mood board', 'Creative':'Creative edits', 'Script':'Rewrite the script', 'Strategy':'Revise strategy',
         'Logo Assets':'Fix the assets', 'Brand Manual':'Brand manual edits', 'Print Outs':'Mockup edits', 'Logo':'Logo edits',
-        'Rough Cut':'Re-edit the cut', 'Final':'Final edits' };
+        'Rough Cut':'Re-edit the cut', 'Final':'Final edits', 'Shooting':'Reshoot', 'Editing':'Re-edit' };
       const items = steps.map(n => {
         if (/approval|review/i.test(n)) {
           const hit = Object.keys(REVISE_HINT).find(k => new RegExp(k, 'i').test(n));
@@ -11201,7 +11207,7 @@
         'Plan': 'Revise the plan', 'Copy': 'Edit the copy', 'Design': 'Design edits',
         'Creative': 'Creative edits', 'Script': 'Rewrite the script', 'Concept': 'Refine concepts',
         'Logo Assets': 'Fix the assets', 'Brand Manual': 'Brand manual edits', 'Print Outs': 'Mockup edits', 'Logo': 'Logo edits',
-        'Rough Cut': 'Re-edit the cut', 'Final': 'Final edits',
+        'Rough Cut': 'Re-edit the cut', 'Final': 'Final edits', 'Shooting': 'Reshoot', 'Editing': 'Re-edit',
         'Selection': 'Reselect images', 'Content': 'Revise content', 'Strategy': 'Revise strategy',
       };
       const added = tpl.map(st => ({
