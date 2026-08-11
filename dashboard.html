@@ -4424,14 +4424,17 @@
 
       nav.innerHTML = agencies.map(a => {
         const count = countForAgency(a.id);
-        const isActive = currentAgencyId === a.id;
-        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
+        const isActive = !_pfMode && currentAgencyId === a.id;
+        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="leaveProfitTab();setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
           ${a.icon ? `<span class="agency-tab-icon">${a.icon}</span>` : ''}
           <span class="agency-tab-name">${escHtml(a.name)}</span>
           ${count > 0 ? `<span class="agency-tab-count">${count}</span>` : ''}
         </button>`;
       }).join('') +
-      `<div class="agency-nav-spacer"></div>
+      `<button class="agency-tab${_pfMode ? ' active' : ''}" onclick="openProfitTab()" title="Unit economics — will this budget make money?">
+         <span class="agency-tab-icon">💰</span><span class="agency-tab-name">Profitability</span>
+       </button>
+       <div class="agency-nav-spacer"></div>
        <button class="add-agency-tab" onclick="promptAddAgency()">
          <span class="add-agency-tab-plus">+</span> Add Agency
        </button>`;
@@ -6172,7 +6175,8 @@
       const account = accountMap[accountDbId];
       if (!account) return;
 
-      if (localStorage.getItem(_tmplKey()) === 'profit') return renderProfitability(account);
+      if (_pfMode) return renderProfitability(account);
+      if (localStorage.getItem(_tmplKey()) === 'profit') { _pfMode = true; renderAgencyNav(); return renderProfitability(account); }
 
       // Route to platform-specific dashboards
       if (account.type === 'google_ads') return loadGoogleAdsDashboard(account);
@@ -7319,7 +7323,19 @@
       _pfCurrency = (account?.currency || 'EGP') + ' ';
       _pfRender();
     }
-    let _pfAccountName = '', _pfCurrency = 'EGP ';
+    let _pfAccountName = '', _pfCurrency = 'EGP ', _pfMode = false;
+
+    function openProfitTab() {
+      _pfMode = true;
+      renderAgencyNav();
+      const acc = accountMap[sel?.value] || {};
+      renderProfitability(acc);
+    }
+    function leaveProfitTab() {
+      if (!_pfMode) return;
+      _pfMode = false;
+      renderAgencyNav();
+    }
 
     function _pfMoney(n) {
       return _pfCurrency + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
