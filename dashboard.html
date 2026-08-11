@@ -2127,6 +2127,8 @@
     [data-theme="dark"] .cp-cmt-btn:not(.has), [data-theme="dark"] .cp-datesbtn { color: #B7C6EE; }
     [data-theme="dark"] .cpm-addcard, [data-theme="dark"] .cpm-mini { color: #DCE7FF; }
 
+    .cp-stat-edit { right: 26px; }
+    .cp-deliv-del { flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -9933,6 +9935,51 @@
     function _cpDelivDone(proc, unit) {
       return (_cpAggUnits(proc.flatMap(st => st.items || []))[unit] || {}).done || 0;
     }
+    // rename a deliverable and/or change how many are planned
+    function cpEditDeliverable(unit) {
+      const u = _cpNormUnit(unit);
+      const plan = _cpDeliv();
+      const key = Object.keys(plan).find(k => _cpNormUnit(k) === u) || u;
+      const cur = Number(plan[key]) || 0;
+
+      const name = prompt('Deliverable name', key);
+      if (name === null) return;
+      const newUnit = _cpNormUnit(name.trim() || key);
+      if (!newUnit) return;
+
+      const qty = prompt(`How many ${newUnit} in ${_cpMonthLabel(_cpMonth)}?`, cur);
+      if (qty === null) return;
+      const n = Math.max(0, parseInt(qty) || 0);
+      if (!n) return cpRemoveDeliverable(unit);
+
+      // move the plan entry
+      const next = { ...plan };
+      delete next[key];
+      next[newUnit] = n;
+
+      // carry every step that was tracking the old name
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      if (newUnit !== u) {
+        proc.forEach(st => (st.items || []).forEach(it => {
+          if (_cpUnitOf(it) === u) {
+            if (it.unit) it.unit = newUnit;                       // explicit units follow the rename
+            if (Number(it.total)) it.total = Math.min(Number(it.total), n) || n;
+            if (Number(it.doneCount)) it.doneCount = Math.min(Number(it.doneCount), n);
+          }
+        }));
+      } else {
+        proc.forEach(st => (st.items || []).forEach(it => {
+          if (_cpUnitOf(it) === u && Number(it.doneCount) > n) it.doneCount = n;
+        }));
+      }
+
+      _cpSave({
+        process_by_month: { ..._cpAllMonths(), [_cpMonth]: proc },
+        process: [],
+        deliverables_by_month: { ..._cpAllDeliv(), [_cpMonth]: next },
+      });
+    }
+
     // drop a deliverable type from this month: clears the plan and every step counter using it
     function cpRemoveDeliverable(unit) {
       const u = _cpNormUnit(unit);
@@ -9988,6 +10035,7 @@
             <span class="cp-deliv-bar"><i style="width:${pct}%"></i></span>
           </span>
           <span class="cp-deliv-n">${done}<small>/${total}</small></span>
+          <button class="cp-deliv-del cp-owner-only" title="Rename or change the number" onclick="event.stopPropagation();cpEditDeliverable('${u.replace(/'/g, "\\'")}')">✎</button>
           <button class="cp-deliv-del cp-owner-only" title="Remove ${escHtml(u)}" onclick="event.stopPropagation();cpRemoveDeliverable('${u.replace(/'/g, "\\'")}')">✕</button>
         </div>`;
       }).join('');
@@ -11153,6 +11201,7 @@
         const pct = v.total ? Math.round(v.done / v.total * 100) : 0;
         const col = v.done >= v.total ? '#16A34A' : (v.done ? '#F59E0B' : null);
         return `<div class="cp-stat">
+          <button class="cp-stat-del cp-stat-edit cp-owner-only" title="Rename or change the number" onclick="cpEditDeliverable('${unit.replace(/'/g, "\\'")}')">✎</button>
           <button class="cp-stat-del cp-owner-only" title="Remove ${escHtml(unit)} from this month" onclick="cpRemoveDeliverable('${unit.replace(/'/g, "\\'")}')">✕</button>
           <div class="cp-stat-n" ${col ? `style="color:${col}"` : ''}>${v.done}<span style="font-size:13px;opacity:.6">/${v.total}</span></div>
           <div class="cp-stat-l">${escHtml(unit)} done</div>
