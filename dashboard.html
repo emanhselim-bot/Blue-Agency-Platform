@@ -32,14 +32,14 @@
     }
     [data-theme="dark"] {
       color-scheme: dark;
-      --bg:          #050D2B;   /* deep brand navy */
-      --surface:     #0B1740;
-      --surface-2:   #122152;
-      --text-main:   #EAF0FF;
-      --text-muted:  #93A4CF;
-      --border:      #1E2E63;
-      --table-hover: #122152;
-      --chart-bg:    #0B1740;
+      --bg:          #172B7A;   /* brand navy — sampled from the brand deck */
+      --surface:     #1B3289;
+      --surface-2:   #223A96;
+      --text-main:   #EDF2FF;
+      --text-muted:  #A9B9E8;
+      --border:      #2C4499;
+      --table-hover: #223A96;
+      --chart-bg:    #1B3289;
     }
     [data-theme="dark"] body { background: var(--bg); color: var(--text-main); }
     [data-theme="dark"] .modal { background: var(--surface); }
@@ -1795,41 +1795,49 @@
 
 
     /* ═══════════════════════════════════════════════════
-       DARK NAVY THEME — brand navy, never flat black
+       DARK NAVY THEME — brand navy #172B7A everywhere
        ═══════════════════════════════════════════════════ */
-    [data-theme="dark"] .home-hub { background: #050D2B; }
-    [data-theme="dark"] .hub-card { background: #0B1740; border: 1px solid #1E2E63; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
-    [data-theme="dark"] .hub-card:hover { border-color: #2B4390; background: #0F1C4E; }
-    [data-theme="dark"] .hub-card-desc { color: #93A4CF; }
-    [data-theme="dark"] .hub-inner, [data-theme="dark"] .cp-wrap { color: #EAF0FF; }
+    [data-theme="dark"] body { background: #172B7A; }
+    [data-theme="dark"] .home-hub { background: #172B7A; }
+    [data-theme="dark"] .content, [data-theme="dark"] .hub-inner, [data-theme="dark"] .cp-wrap { color: #EDF2FF; }
+    [data-theme="dark"] .hub-card { background: #1B3289; border: 1px solid #2C4499; box-shadow: 0 8px 30px rgba(0,0,0,.28); }
+    [data-theme="dark"] .hub-card:hover { border-color: #4562BE; background: #22399A; }
+    [data-theme="dark"] .hub-card-desc { color: #A9B9E8; }
     [data-theme="dark"] .hub-input, [data-theme="dark"] .cpm-input {
-      background: #122152; border-color: #2B4390; color: #EAF0FF; }
+      background: #223A96; border-color: #3A54AE; color: #EDF2FF; }
     [data-theme="dark"] .hub-modal-box, [data-theme="dark"] .cpm-drawer,
-    [data-theme="dark"] .cpm-panel, [data-theme="dark"] .cp-picker { background: #0B1740; border-color: #1E2E63; }
-    [data-theme="dark"] .cpm-ccard { background: #0B1740; border-color: #1E2E63; }
-    [data-theme="dark"] .cpm-ccard:hover { border-color: #2B4390; background: #0F1C4E; }
-    [data-theme="dark"] .cpm-addcard { border-color: #2B4390; color: #93A4CF; }
-    [data-theme="dark"] .cp-node { background: #0B1740; border-color: #1E2E63; }
-    [data-theme="dark"] .cp-node:hover { border-color: #2B4390; }
-    [data-theme="dark"] .cp-node-name { color: #EAF0FF; }
-    [data-theme="dark"] .cp-phase { background: rgba(5,115,245,.14); border-color: #2563EB; color: #BFDBFE; }
+    [data-theme="dark"] .cpm-panel, [data-theme="dark"] .cp-picker { background: #1B3289; border-color: #2C4499; }
+    [data-theme="dark"] .cpm-ccard { background: #1B3289; border-color: #2C4499; }
+    [data-theme="dark"] .cpm-ccard:hover { border-color: #4562BE; background: #22399A; }
+    [data-theme="dark"] .cpm-addcard { border-color: #3A54AE; color: #A9B9E8; }
+    [data-theme="dark"] .cp-node { background: #1B3289; border-color: #2C4499; }
+    [data-theme="dark"] .cp-node:hover { border-color: #4562BE; }
+    [data-theme="dark"] .cp-node-name { color: #EDF2FF; }
+    [data-theme="dark"] .cp-phase { background: rgba(255,255,255,.08); border-color: #5B9CF6; color: #CFE0FF; }
     [data-theme="dark"] .cp-stat, [data-theme="dark"] .cp-deliv, [data-theme="dark"] .cp-deliv-wrap,
     [data-theme="dark"] .cp-units, [data-theme="dark"] .cp-monthbar, [data-theme="dark"] .cp-toolbar {
-      background: #0B1740; border-color: #1E2E63; }
-    [data-theme="dark"] .cp-deliv-name, [data-theme="dark"] .cp-unitname { color: #EAF0FF; }
+      background: #1B3289; border-color: #2C4499; }
+    [data-theme="dark"] .cp-deliv-name, [data-theme="dark"] .cp-unitname { color: #EDF2FF; }
     [data-theme="dark"] .cp-link, [data-theme="dark"] .cp-cmt-btn, [data-theme="dark"] .cp-countadd,
     [data-theme="dark"] .cp-branch-btn, [data-theme="dark"] .cp-btn, [data-theme="dark"] .cp-chipbtn,
     [data-theme="dark"] .cp-filter, [data-theme="dark"] .cp-unitdue, [data-theme="dark"] .cp-unitcheck {
-      background: #122152; border-color: #2B4390; color: #C3D0F0; }
-    [data-theme="dark"] .cp-node-date, [data-theme="dark"] .cp-meta, [data-theme="dark"] .cp-empty { color: #93A4CF; }
-    [data-theme="dark"] .cp-cmt-panel, [data-theme="dark"] .cp-cmt { background: #122152; border-color: #2B4390; color: #DCE5FA; }
+      background: #223A96; border-color: #3A54AE; color: #D5DEF8; }
+    [data-theme="dark"] .cp-node-date, [data-theme="dark"] .cp-meta, [data-theme="dark"] .cp-empty { color: #A9B9E8; }
+    [data-theme="dark"] .cp-cmt-panel, [data-theme="dark"] .cp-cmt { background: #223A96; border-color: #3A54AE; color: #E4EAFB; }
     [data-theme="dark"] .fin-sum-card, [data-theme="dark"] .bill-fund-card,
-    [data-theme="dark"] .pipe-col, [data-theme="dark"] .pipe-card, [data-theme="dark"] .cmp-wrap {
-      background: #0B1740; border-color: #1E2E63; }
+    [data-theme="dark"] .pipe-col, [data-theme="dark"] .pipe-card, [data-theme="dark"] .cmp-wrap,
+    [data-theme="dark"] .kpi-card, [data-theme="dark"] .section, [data-theme="dark"] .metric-card {
+      background: #1B3289; border-color: #2C4499; }
     [data-theme="dark"] .fin-table th, [data-theme="dark"] .bill-table th,
-    [data-theme="dark"] .cpm-table th, [data-theme="dark"] .cmp-table th { background: #122152; }
-    [data-theme="dark"] .cp-arrow { color: #2B4390; }
-    [data-theme="dark"] .cp-flow-end { background: rgba(22,163,74,.14); border-color: #15803D; color: #86EFAC; }
+    [data-theme="dark"] .cpm-table th, [data-theme="dark"] .cmp-table th,
+    [data-theme="dark"] .data-table th { background: #223A96; }
+    [data-theme="dark"] .cp-arrow { color: #5B72C4; }
+    [data-theme="dark"] .cp-flow-end { background: rgba(22,163,74,.18); border-color: #22C55E; color: #A7F3C4; }
+    [data-theme="dark"] .modal, [data-theme="dark"] .modal-header, [data-theme="dark"] .modal-body,
+    [data-theme="dark"] .settings-tabs { background: #1B3289; }
+    [data-theme="dark"] .settings-sidebar { background: #152667; border-right-color: #2C4499; }
+    [data-theme="dark"] .header { background: #142263; }
+    [data-theme="dark"] .agency-nav, [data-theme="dark"] .controls-bar { background: #17296F; border-color: #2C4499; }
 
     /* floating light / dark switch — every screen, phone and desktop */
     .theme-fab { position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom));
@@ -2980,7 +2988,7 @@
       const fab = document.getElementById('theme-fab');
       if (fab) { fab.textContent = dark ? '☀️' : '🌙'; fab.title = dark ? 'Switch to white' : 'Switch to black'; }
       const meta = document.getElementById('theme-color-meta');
-      if (meta) meta.setAttribute('content', dark ? '#050D2B' : '#0573F5');
+      if (meta) meta.setAttribute('content', dark ? '#172B7A' : '#0573F5');
     }
     function blueToggleTheme() { blueSetTheme(!blueIsDark()); }
 
