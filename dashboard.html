@@ -2020,6 +2020,49 @@
     .cpm-mods { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
     .cpm-mods label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-main); }
     .cpm-mods input { width: 15px; height: 15px; accent-color: var(--brand-accent); }
+
+    /* ═══════════════════════════════════════════════════
+       DARK MODE READABILITY — nothing dark on dark navy
+       (gold/white pills keep their dark ink on purpose)
+       ═══════════════════════════════════════════════════ */
+    [data-theme="dark"] .cp-node-name, [data-theme="dark"] .cp-item-name,
+    [data-theme="dark"] .cp-stage-name, [data-theme="dark"] .cp-unitname,
+    [data-theme="dark"] .cp-deliv-name, [data-theme="dark"] .cp-deliv-n,
+    [data-theme="dark"] .cp-opt, [data-theme="dark"] .cp-cmt,
+    [data-theme="dark"] .cp-tbl td, [data-theme="dark"] .cpm-table td,
+    [data-theme="dark"] .fin-table td, [data-theme="dark"] .bill-table td,
+    [data-theme="dark"] .cmp-table td, [data-theme="dark"] .cpm-task-name,
+    [data-theme="dark"] .pipe-card-name, [data-theme="dark"] .hub-section h2 {
+      color: #EDF2FF; }
+
+    [data-theme="dark"] .cp-filter, [data-theme="dark"] .cp-unitdue,
+    [data-theme="dark"] .cp-unitlabel, [data-theme="dark"] .cpm-input,
+    [data-theme="dark"] .hub-input, [data-theme="dark"] .cp-cmt-form input,
+    [data-theme="dark"] .onboarding-input, [data-theme="dark"] .connect-input,
+    [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+      color: #EDF2FF; }
+    [data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: #8FA2D8; }
+    [data-theme="dark"] select option { background: #1B3289; color: #EDF2FF; }
+
+    /* headings + brand ink on navy */
+    [data-theme="dark"] .cp-name, [data-theme="dark"] .cp-mapname, [data-theme="dark"] .cp-mlabel,
+    [data-theme="dark"] .cp-mnav, [data-theme="dark"] .cp-mchip.has, [data-theme="dark"] .hub-mod-btn,
+    [data-theme="dark"] .hub-modal-box h3, [data-theme="dark"] .modal-header h3,
+    [data-theme="dark"] .cp-stat-n, [data-theme="dark"] .hub-card-title {
+      color: #BFD4FF; }
+    [data-theme="dark"] .cp-phase, [data-theme="dark"] .cp-phase-unit { color: #DCE7FF; }
+    [data-theme="dark"] .cpm-ccard-name, [data-theme="dark"] .cp-name { color: var(--brand-gold) !important; }
+    [data-theme="dark"] .fin-table th, [data-theme="dark"] .cpm-table th,
+    [data-theme="dark"] .bill-table th, [data-theme="dark"] .cmp-table th,
+    [data-theme="dark"] .data-table th, [data-theme="dark"] .cp-tbl th { color: #A9B9E8; }
+    [data-theme="dark"] .cp-sec-title, [data-theme="dark"] .cpm-sectitle,
+    [data-theme="dark"] .section-label, [data-theme="dark"] .cp-deliv-title { color: #8FB4FF; }
+
+    /* comment bubbles + pickers */
+    [data-theme="dark"] .cp-cmt-meta strong { color: #A9C7FF !important; }
+    [data-theme="dark"] .cp-picker, [data-theme="dark"] .cp-opt { background: #1B3289; }
+    [data-theme="dark"] .cp-opt:hover { background: #22399A; }
+
   </style>
 </head>
 <body>
