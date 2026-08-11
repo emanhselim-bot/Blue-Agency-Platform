@@ -2165,6 +2165,28 @@
     [data-theme="dark"] .tmpl-option:hover { background: rgba(255,255,255,.10); }
     [data-theme="dark"] .tmpl-option.active { background: rgba(252,186,0,.18); color: #FCBA00; }
     [data-theme="dark"] .tmpl-option.active .tmpl-option-desc { color: rgba(252,186,0,.75); }
+    .pf-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 6px; }
+    .pf-products { min-width: 1080px; }
+    .pf-products .pf-sub-head th { background: var(--brand-mid); font-size: 9.5px; letter-spacing: .6px; padding: 7px 8px; text-align: right; }
+    .pf-products .pf-sub-head th:first-child { text-align: left; }
+    .pf-products td { padding: 5px 8px; }
+    .pf-c { text-align: right; font-variant-numeric: tabular-nums; }
+    .pf-c.out { font-weight: 700; color: var(--brand-ink); }
+    .pf-c.out.pos { color: #15803D; }
+    .pf-c.out.neg { color: #B91C1C; }
+    [data-theme="dark"] .pf-c.out.pos { color: #86EFAC; }
+    [data-theme="dark"] .pf-c.out.neg { color: #FCA5A5; }
+    .pf-c.warn { color: #B45309; font-weight: 800; }
+    .pf-c input { width: 84px; text-align: right; padding: 4px 7px; border: 1.5px solid var(--border); border-radius: 7px;
+      background: var(--bg); color: var(--text-main); font-family: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pf-c input.pf-name { width: 130px; text-align: left; font-weight: 700; }
+    .pf-c input:focus { outline: none; border-color: var(--brand-gold); box-shadow: 0 0 0 2px rgba(252,186,0,.25); }
+    .pf-products tfoot td { background: rgba(5,115,245,.08); font-weight: 800; border-top: 2px solid var(--border); }
+    [data-theme="dark"] .pf-products tfoot td { background: rgba(255,255,255,.07); }
+    .pf-x { border: none; background: transparent; color: #9AA4B2; cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 6px; }
+    .pf-x:hover { background: rgba(220,38,38,.14); color: #DC2626; }
+    .pf-warn { font-size: 12px; color: #B45309; margin: 4px 0 14px; text-align: center; }
+    [data-theme="dark"] .pf-warn { color: #FCBA00; }
   </style>
 </head>
 <body>
@@ -7281,48 +7303,94 @@
 
 
     // ═══════════════════════════════════════════════════════════
-    // PROFITABILITY — unit economics for a media-buying budget
+    // PROFITABILITY — unit economics, one row per product
     // ═══════════════════════════════════════════════════════════
-    const PF_FIELDS = [
-      ['product_cost',  'Product cost (e.g. a t-shirt)',            200,   'money'],
-      ['selling_price', 'Selling price',                             600,   'money'],
-      ['shipping',      'Average shipping cost per order',           40,    'money'],
-      ['video_cost',    'Average video cost (UGC / AI …)',           900,   'money'],
-      ['cpp_pct',       'Cost per purchase as % of selling price',   15,    'pct'],
-      ['delivery_pct',  'Delivery rate',                             75,    'pct'],
-      ['dead_pct',      'Dead stock rate',                           10,    'pct'],
-      ['budget',        'Ad budget available for the first month',   20000, 'money'],
-      ['videos',        'Videos / UGC produced per month',           8,     'num'],
-      ['tools',         'Shopify subscription + plugins + upselling',3700,  'money'],
-      ['ad_tax_pct',    'Ads tax (added on ad spend)',               14,    'pct'],
+    const PF_PRODUCT_COLS = [
+      ['name',          'Product',                    'text'],
+      ['product_cost',  'Cost',                       'money'],
+      ['selling_price', 'Price',                      'money'],
+      ['shipping',      'Shipping',                   'money'],
+      ['cpp_pct',       'CPP %',                      'pct'],
+      ['delivery_pct',  'Delivery %',                 'pct'],
+      ['dead_pct',      'Dead stock %',               'pct'],
+      ['alloc_pct',     'Budget share %',             'pct'],
     ];
+    const PF_SHARED = [
+      ['budget',     'Total ad budget for the month',              20000, 'money'],
+      ['video_cost', 'Average video cost (UGC / AI …)',            900,   'money'],
+      ['videos',     'Videos / UGC produced per month',            8,     'num'],
+      ['tools',      'Shopify subscription + plugins + upselling', 3700,  'money'],
+      ['ad_tax_pct', 'Ads tax (added on ad spend)',                14,    'pct'],
+    ];
+    const PF_NEW_PRODUCT = () => ({ name: 'New product', product_cost: 200, selling_price: 600,
+      shipping: 40, cpp_pct: 15, delivery_pct: 75, dead_pct: 10, alloc_pct: 0 });
+
     function _pfKey() { return `pf-${currentOrgId||'x'}-${(sel && sel.value)||'x'}`; }
     function _pfLoad() {
-      let saved = {};
-      try { saved = JSON.parse(localStorage.getItem(_pfKey()) || '{}'); } catch {}
-      const v = {};
-      PF_FIELDS.forEach(([k, , d]) => { v[k] = saved[k] !== undefined ? Number(saved[k]) : d; });
-      return v;
+      let d = {};
+      try { d = JSON.parse(localStorage.getItem(_pfKey()) || '{}'); } catch {}
+      const shared = {};
+      PF_SHARED.forEach(([k, , def]) => { shared[k] = d[k] !== undefined ? Number(d[k]) : def; });
+      let products = Array.isArray(d.products) ? d.products : null;
+      if (!products || !products.length) {
+        // first run, or an older single-product scenario
+        products = [{ ...PF_NEW_PRODUCT(), name: 'Product 1', alloc_pct: 100,
+          product_cost:  d.product_cost  !== undefined ? Number(d.product_cost)  : 200,
+          selling_price: d.selling_price !== undefined ? Number(d.selling_price) : 600,
+          shipping:      d.shipping      !== undefined ? Number(d.shipping)      : 40,
+          cpp_pct:       d.cpp_pct       !== undefined ? Number(d.cpp_pct)       : 15,
+          delivery_pct:  d.delivery_pct  !== undefined ? Number(d.delivery_pct)  : 75,
+          dead_pct:      d.dead_pct      !== undefined ? Number(d.dead_pct)      : 10 }];
+      }
+      return { ...shared, products };
     }
     function _pfSave(v) { localStorage.setItem(_pfKey(), JSON.stringify(v)); }
 
-    function _pfCalc(v) {
-      const cpp        = v.selling_price * (v.cpp_pct / 100);
-      const orders     = cpp > 0 ? v.budget / cpp : 0;
-      const delivered  = orders * (v.delivery_pct / 100);
-      const revenue    = delivered * v.selling_price;
-      const cogs       = delivered * v.product_cost;
-      const shipping   = orders * v.shipping;
-      const deadStock  = orders * v.product_cost * (v.dead_pct / 100);
-      const content    = v.videos * v.video_cost;
-      const adTax      = v.budget * (v.ad_tax_pct / 100);
-      const costs      = v.budget + cogs + shipping + deadStock + content + v.tools + adTax;
-      const profit     = revenue - costs;
-      const margin     = revenue > 0 ? (profit / revenue) * 100 : 0;
-      const breakEven  = v.selling_price > 0 ? costs / v.selling_price : 0;
-      const roas       = v.budget > 0 ? revenue / v.budget : 0;
-      return { cpp, orders, delivered, revenue, cogs, shipping, deadStock, content, adTax, costs, profit, margin, breakEven, roas };
+    // per-product economics for its slice of the budget
+    function _pfCalcProduct(pr, shared, allocShare) {
+      const budget    = shared.budget * allocShare;
+      const cpp       = pr.selling_price * (pr.cpp_pct / 100);
+      const orders    = cpp > 0 ? budget / cpp : 0;
+      const delivered = orders * (pr.delivery_pct / 100);
+      const revenue   = delivered * pr.selling_price;
+      const cogs      = delivered * pr.product_cost;
+      const shipping  = orders * pr.shipping;
+      const deadStock = orders * pr.product_cost * (pr.dead_pct / 100);
+      const direct    = budget + cogs + shipping + deadStock;
+      return { budget, cpp, orders, delivered, revenue, cogs, shipping, deadStock, direct,
+               contribution: revenue - direct };
     }
+
+    function _pfCalc(v) {
+      const totalAlloc = v.products.reduce((n, p) => n + (Number(p.alloc_pct) || 0), 0);
+      const rows = v.products.map(pr => {
+        const share = totalAlloc > 0 ? (Number(pr.alloc_pct) || 0) / totalAlloc : 1 / v.products.length;
+        return { pr, ...  _pfCalcProduct(pr, v, share) };
+      });
+      const sum = k => rows.reduce((n, r) => n + r[k], 0);
+      const content = v.videos * v.video_cost;
+      const adTax   = v.budget * (v.ad_tax_pct / 100);
+      const revenue = sum('revenue');
+      const costs   = sum('direct') + content + v.tools + adTax;
+      const profit  = revenue - costs;
+      return {
+        rows, totalAlloc, content, adTax, revenue, costs, profit,
+        orders: sum('orders'), delivered: sum('delivered'),
+        cogs: sum('cogs'), shipping: sum('shipping'), deadStock: sum('deadStock'),
+        margin: revenue > 0 ? (profit / revenue) * 100 : 0,
+        roas:   v.budget > 0 ? revenue / v.budget : 0,
+        blendedPrice: sum('delivered') > 0 ? revenue / sum('delivered') : 0,
+      };
+    }
+
+    let _pfAccountName = '', _pfCurrency = 'EGP ', _pfMode = false, _pfReadonly = false;
+
+    function openProfitTab() {
+      _pfMode = true;
+      renderAgencyNav();
+      renderProfitability(accountMap[sel?.value] || {});
+    }
+    function leaveProfitTab() { if (_pfMode) { _pfMode = false; renderAgencyNav(); } }
 
     function renderProfitability(account) {
       const btn = document.getElementById('refresh-btn');
@@ -7333,95 +7401,153 @@
       _pfCurrency = (account?.currency || 'EGP') + ' ';
       _pfRender();
     }
-    let _pfAccountName = '', _pfCurrency = 'EGP ', _pfMode = false;
-
-    function openProfitTab() {
-      _pfMode = true;
-      renderAgencyNav();
-      const acc = accountMap[sel?.value] || {};
-      renderProfitability(acc);
-    }
-    function leaveProfitTab() {
-      if (!_pfMode) return;
-      _pfMode = false;
-      renderAgencyNav();
-    }
 
     function _pfMoney(n) {
       return _pfCurrency + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
+    function _pfNum(n) { return (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
 
     function _pfRender() {
       const v = _pfLoad(), r = _pfCalc(v);
-      const inp = ([k, label, , kind]) => `<tr>
+      const ro = _pfReadonly;
+
+      const cell = (i, key, kind) => ro
+        ? `<td class="pf-c">${kind === 'money' ? _pfMoney(v.products[i][key]) : (kind === 'pct' ? v.products[i][key] + '%' : escHtml(String(v.products[i][key])))}</td>`
+        : `<td class="pf-c"><input class="${kind === 'text' ? 'pf-name' : ''}" type="${kind === 'text' ? 'text' : 'number'}" ${kind === 'text' ? '' : 'step="any" min="0"'}
+             value="${escHtml(String(v.products[i][key]))}" oninput="pfSetProduct(${i}, '${key}', this.value)"></td>`;
+
+      const productRows = v.products.map((pr, i) => {
+        const row = r.rows[i];
+        return `<tr>
+          ${PF_PRODUCT_COLS.map(([k, , kind]) => cell(i, k, kind)).join('')}
+          <td class="pf-c out">${_pfMoney(row.budget)}</td>
+          <td class="pf-c out">${_pfNum(row.orders)}</td>
+          <td class="pf-c out">${_pfNum(row.delivered)}</td>
+          <td class="pf-c out">${_pfMoney(row.revenue)}</td>
+          <td class="pf-c out ${row.contribution >= 0 ? 'pos' : 'neg'}">${_pfMoney(row.contribution)}</td>
+          ${ro ? '' : `<td class="pf-c"><button class="pf-x" title="Remove" onclick="pfRemoveProduct(${i})">✕</button></td>`}
+        </tr>`;
+      }).join('');
+
+      const sharedRow = ([k, label, , kind]) => `<tr>
         <td class="pf-label">${label}${kind === 'pct' ? ' (%)' : ''}</td>
-        <td class="pf-val"><input type="number" step="any" min="0" id="pf-${k}" value="${v[k]}" oninput="pfChange('${k}', this.value)"></td>
+        <td class="pf-val">${ro
+          ? `<span class="out">${kind === 'pct' ? v[k] + '%' : (kind === 'num' ? v[k] : _pfMoney(v[k]))}</span>`
+          : `<input type="number" step="any" min="0" value="${v[k]}" oninput="pfSetShared('${k}', this.value)">`}</td>
       </tr>`;
-      const row = (label, val, cls = '') => `<tr class="${cls}"><td class="pf-label">${label}</td><td class="pf-val out">${val}</td></tr>`;
+      const outRow = (label, val, cls = '') => `<tr class="${cls}"><td class="pf-label">${label}</td><td class="pf-val out">${val}</td></tr>`;
 
       document.getElementById('content').innerHTML = `
-        <div class="pf-wrap" id="pf-wrap">
+        <div class="pf-wrap">
           <div class="pf-head">
             <div>
               <div class="pf-title">Profitability</div>
-              <div class="pf-sub">${escHtml(_pfAccountName)} — change any input and every figure recalculates.</div>
+              <div class="pf-sub">${escHtml(_pfAccountName)} — one row per product. Every figure recalculates as you type.</div>
             </div>
-            <div class="pf-actions">
+            ${ro ? '' : `<div class="pf-actions">
+              <button class="cp-chipbtn" onclick="pfAddProduct()">＋ Product</button>
               <button class="cp-chipbtn" onclick="pfShare()">🔗 Share</button>
               <button class="cp-chipbtn" onclick="pfDownload()">⬇ Download</button>
               <button class="cp-chipbtn" onclick="pfReset()">↺ Reset</button>
-            </div>
+            </div>`}
           </div>
 
+          <div class="pf-scroll">
+            <table class="pf-table pf-products">
+              <thead>
+                <tr><th colspan="${PF_PRODUCT_COLS.length}">Products — your assumptions</th>
+                    <th colspan="${ro ? 5 : 6}">Results for each product</th></tr>
+                <tr class="pf-sub-head">
+                  ${PF_PRODUCT_COLS.map(([, l]) => `<th>${l}</th>`).join('')}
+                  <th>Budget</th><th>Orders</th><th>Delivered</th><th>Sales</th><th>Contribution</th>${ro ? '' : '<th></th>'}
+                </tr>
+              </thead>
+              <tbody>${productRows}</tbody>
+              <tfoot><tr>
+                <td colspan="7" class="pf-label">Total</td>
+                <td class="pf-c ${Math.round(r.totalAlloc) === 100 ? '' : 'warn'}">${_pfNum(r.totalAlloc)}%</td>
+                <td class="pf-c out">${_pfMoney(v.budget)}</td>
+                <td class="pf-c out">${_pfNum(r.orders)}</td>
+                <td class="pf-c out">${_pfNum(r.delivered)}</td>
+                <td class="pf-c out">${_pfMoney(r.revenue)}</td>
+                <td class="pf-c out">${_pfMoney(r.rows.reduce((n, x) => n + x.contribution, 0))}</td>
+                ${ro ? '' : '<td></td>'}
+              </tr></tfoot>
+            </table>
+          </div>
+          ${Math.round(r.totalAlloc) === 100 ? '' : `<div class="pf-warn">Budget shares add up to ${_pfNum(r.totalAlloc)}% — the budget is split in that proportion. Set them to total 100% for a clean split.</div>`}
+
           <table class="pf-table">
-            <thead><tr><th colspan="2">Inputs — change these to match your product</th></tr></thead>
+            <thead><tr><th colspan="2">Shared costs</th></tr></thead>
             <tbody>
-              ${PF_FIELDS.slice(0, 7).map(inp).join('')}
-              ${row('Cost per purchase (CPP)', _pfMoney(r.cpp))}
+              ${PF_SHARED.map(sharedRow).join('')}
+              ${outRow('Video / UGC production cost', _pfMoney(r.content))}
+              ${outRow('Ads tax', _pfMoney(r.adTax))}
+              ${outRow('Cost of goods sold', _pfMoney(r.cogs))}
+              ${outRow('Shipping for all orders', _pfMoney(r.shipping))}
+              ${outRow('Total dead stock cost', _pfMoney(r.deadStock))}
+              ${outRow('Total costs', _pfMoney(r.costs), 'pf-total')}
             </tbody>
 
-            <thead><tr><th colspan="2">Costs</th></tr></thead>
+            <thead><tr><th colspan="2">Expected result</th></tr></thead>
             <tbody>
-              ${inp(PF_FIELDS[7])}
-              ${row('Cost of goods sold', _pfMoney(r.cogs))}
-              ${row('Shipping for all orders', _pfMoney(r.shipping))}
-              ${row('Total dead stock cost', _pfMoney(r.deadStock))}
-              ${inp(PF_FIELDS[8])}
-              ${row('Video / UGC production cost', _pfMoney(r.content))}
-              ${inp(PF_FIELDS[9])}
-              ${inp(PF_FIELDS[10])}
-              ${row('Ads tax', _pfMoney(r.adTax))}
-              ${row('Total costs', _pfMoney(r.costs), 'pf-total')}
-            </tbody>
-
-            <thead><tr><th colspan="2">Expected sales</th></tr></thead>
-            <tbody>
-              ${row('Expected number of purchases', r.orders.toFixed(2))}
-              ${row('Purchases after returns', r.delivered.toFixed(2))}
-              ${row('Total sales at the delivery rate', _pfMoney(r.revenue))}
-              ${row('Break-even orders', r.breakEven.toFixed(2))}
-              ${row('ROAS', r.roas.toFixed(2) + '×')}
-              ${row('Profit before overheads and income tax', _pfMoney(r.profit), r.profit >= 0 ? 'pf-good' : 'pf-bad')}
-              ${row('Margin before overheads and income tax', r.margin.toFixed(2) + '%', r.profit >= 0 ? 'pf-good' : 'pf-bad')}
+              ${outRow('Expected number of purchases', _pfNum(r.orders))}
+              ${outRow('Purchases after returns', _pfNum(r.delivered))}
+              ${outRow('Blended selling price', _pfMoney(r.blendedPrice))}
+              ${outRow('Total sales at the delivery rate', _pfMoney(r.revenue))}
+              ${outRow('ROAS', r.roas.toFixed(2) + '×')}
+              ${outRow('Profit before overheads and income tax', _pfMoney(r.profit), r.profit >= 0 ? 'pf-good' : 'pf-bad')}
+              ${outRow('Margin before overheads and income tax', r.margin.toFixed(2) + '%', r.profit >= 0 ? 'pf-good' : 'pf-bad')}
             </tbody>
           </table>
 
           <div class="pf-note">${r.profit >= 0
-            ? `At this budget the project clears <strong>${_pfMoney(r.profit)}</strong> before overheads — a ${r.margin.toFixed(1)}% margin.`
-            : `At this budget the project loses <strong>${_pfMoney(Math.abs(r.profit))}</strong>. Raise the price, cut the cost per purchase, or improve the delivery rate.`}</div>
+            ? `At this budget the plan clears <strong>${_pfMoney(r.profit)}</strong> before overheads — a ${r.margin.toFixed(1)}% margin.`
+            : `At this budget the plan loses <strong>${_pfMoney(Math.abs(r.profit))}</strong>. Shift budget toward the products with the strongest contribution, raise prices, or improve the delivery rate.`}</div>
         </div>`;
     }
 
-    function pfChange(key, value) {
+    function _pfKeepFocus(fn) {
+      const a = document.activeElement, id = a?.dataset?.pfid, pos = a?.selectionStart;
+      fn();
+      if (id) {
+        const el = document.querySelector(`[data-pfid="${id}"]`);
+        if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} }
+      }
+    }
+    function pfSetProduct(i, key, value) {
+      const v = _pfLoad();
+      v.products[i][key] = key === 'name' ? value : Math.max(0, Number(value) || 0);
+      _pfSave(v);
+      const act = document.activeElement, sp = act?.selectionStart, idx = [...document.querySelectorAll('.pf-products input')].indexOf(act);
+      _pfRender();
+      const inputs = [...document.querySelectorAll('.pf-products input')];
+      if (idx >= 0 && inputs[idx]) { inputs[idx].focus(); try { inputs[idx].setSelectionRange(sp, sp); } catch {} }
+    }
+    function pfSetShared(key, value) {
       const v = _pfLoad();
       v[key] = Math.max(0, Number(value) || 0);
       _pfSave(v);
-      const active = document.activeElement?.id;
+      const act = document.activeElement, sp = act?.selectionStart;
+      const all = [...document.querySelectorAll('.pf-table input')], idx = all.indexOf(act);
       _pfRender();
-      if (active) { const el = document.getElementById(active); if (el) { el.focus(); el.setSelectionRange?.(el.value.length, el.value.length); } }
+      const after = [...document.querySelectorAll('.pf-table input')];
+      if (idx >= 0 && after[idx]) { after[idx].focus(); try { after[idx].setSelectionRange(sp, sp); } catch {} }
+    }
+    function pfAddProduct() {
+      const v = _pfLoad();
+      v.products.push({ ...PF_NEW_PRODUCT(), name: 'Product ' + (v.products.length + 1) });
+      _pfSave(v); _pfRender();
+    }
+    function pfRemoveProduct(i) {
+      const v = _pfLoad();
+      if (v.products.length === 1) return alert('Keep at least one product.');
+      if (!confirm(`Remove ${v.products[i].name}?`)) return;
+      v.products.splice(i, 1);
+      _pfSave(v); _pfRender();
     }
     function pfReset() {
-      if (!confirm('Reset every input back to the defaults?')) return;
+      if (!confirm('Reset every product and cost back to the defaults?')) return;
       localStorage.removeItem(_pfKey());
       _pfRender();
     }
@@ -7429,40 +7555,51 @@
     function _pfExportHTML() {
       const v = _pfLoad(), r = _pfCalc(v);
       const line = (l, val, cls = '') => `<tr class="${cls}"><td>${l}</td><td>${val}</td></tr>`;
+      const prodRows = v.products.map((pr, i) => {
+        const row = r.rows[i];
+        return `<tr>
+          <td style="text-align:left;font-weight:700">${escHtml(pr.name)}</td>
+          <td>${_pfMoney(pr.product_cost)}</td><td>${_pfMoney(pr.selling_price)}</td>
+          <td>${pr.cpp_pct}%</td><td>${pr.delivery_pct}%</td><td>${pr.alloc_pct}%</td>
+          <td>${_pfMoney(row.budget)}</td><td>${_pfNum(row.orders)}</td>
+          <td>${_pfMoney(row.revenue)}</td>
+          <td style="color:${row.contribution >= 0 ? '#15803D' : '#B91C1C'};font-weight:700">${_pfMoney(row.contribution)}</td>
+        </tr>`;
+      }).join('');
       return `<!doctype html><html><head><meta charset="utf-8"><title>${escHtml(_pfAccountName)} — Profitability</title>
 <style>
- body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;padding:34px 40px 50px;color:#111827}
- .head{display:flex;align-items:flex-start;gap:16px;border-bottom:3px solid #083BBF;padding-bottom:16px;margin-bottom:22px}
- .logo{display:flex;align-items:flex-end;gap:4px;height:40px}
+ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;padding:30px 34px 44px;color:#111827}
+ .head{display:flex;align-items:flex-start;gap:16px;border-bottom:3px solid #083BBF;padding-bottom:14px;margin-bottom:20px}
+ .logo{display:flex;align-items:flex-end;gap:4px;height:38px}
  .logo i{display:block;width:8px;border-radius:2px;background:#083BBF}
- .logo i:nth-child(1){height:18px;background:#FCBA00}.logo i:nth-child(2){height:28px}
- .logo i:nth-child(3){height:40px}.logo i:nth-child(4){height:24px}
- .brand b{display:block;font-size:21px;font-weight:800;color:#083BBF;line-height:1.1}
+ .logo i:nth-child(1){height:17px;background:#FCBA00}.logo i:nth-child(2){height:26px}
+ .logo i:nth-child(3){height:38px}.logo i:nth-child(4){height:23px}
+ .brand b{display:block;font-size:20px;font-weight:800;color:#083BBF;line-height:1.1}
  .brand small{font-size:8.5px;letter-spacing:2.2px;color:#6B7280;font-weight:700}
- h1{font-size:23px;margin:0 0 4px}.sub{font-size:12.5px;color:#6B7280;margin-bottom:18px}
- table{width:100%;border-collapse:collapse;border:1px solid #E5EAF1;border-radius:8px;overflow:hidden}
- th{background:#083BBF;color:#fff;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:9px 12px}
- td{padding:8px 12px;font-size:12.5px;border-bottom:1px solid #F3F6FA}
- td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+ h1{font-size:22px;margin:0 0 4px}.sub{font-size:12px;color:#6B7280;margin-bottom:16px}
+ table{width:100%;border-collapse:collapse;border:1px solid #E5EAF1;margin-bottom:18px}
+ th{background:#083BBF;color:#fff;text-align:right;font-size:10px;letter-spacing:.6px;text-transform:uppercase;padding:7px 9px}
+ th:first-child{text-align:left}
+ td{padding:7px 9px;font-size:11.5px;border-bottom:1px solid #F3F6FA;text-align:right;font-variant-numeric:tabular-nums}
+ td:first-child{text-align:left}
  tr.total td{background:#FEF2F2;font-weight:800}
  tr.good td{background:#F0FDF4;font-weight:800;color:#15803D}
  tr.bad td{background:#FEF2F2;font-weight:800;color:#B91C1C}
- .foot{margin-top:24px;border-top:1px solid #E5EAF1;padding-top:10px;font-size:10px;color:#9CA3AF}
- @media print{body{padding:0 12px}@page{margin:14mm}}
+ .foot{margin-top:20px;border-top:1px solid #E5EAF1;padding-top:9px;font-size:10px;color:#9CA3AF}
+ @media print{body{padding:0 10px}@page{margin:12mm;size:landscape}}
 </style></head><body>
  <div class="head"><div class="logo"><i></i><i></i><i></i><i></i></div>
   <div class="brand"><b>Blue Ad</b><small>DIGITAL PERFORMANCE MARKETING AGENCY</small></div></div>
  <h1>${escHtml(_pfAccountName)} — Profitability</h1>
  <div class="sub">Generated ${new Date().toLocaleDateString('en-GB')}</div>
  <table>
-  <thead><tr><th>Inputs</th><th style="text-align:right">Value</th></tr></thead>
+  <thead><tr><th>Product</th><th>Cost</th><th>Price</th><th>CPP %</th><th>Delivery %</th><th>Budget share</th><th>Budget</th><th>Orders</th><th>Sales</th><th>Contribution</th></tr></thead>
+  <tbody>${prodRows}</tbody>
+ </table>
+ <table>
+  <thead><tr><th>Shared costs</th><th>Amount</th></tr></thead>
   <tbody>
-   ${PF_FIELDS.slice(0,7).map(([k,l,,kind]) => line(l, kind === 'pct' ? v[k] + '%' : _pfMoney(v[k]))).join('')}
-   ${line('Cost per purchase (CPP)', _pfMoney(r.cpp))}
-  </tbody>
-  <thead><tr><th>Costs</th><th style="text-align:right">Amount</th></tr></thead>
-  <tbody>
-   ${line('Ad budget for the first month', _pfMoney(v.budget))}
+   ${line('Total ad budget', _pfMoney(v.budget))}
    ${line('Cost of goods sold', _pfMoney(r.cogs))}
    ${line('Shipping for all orders', _pfMoney(r.shipping))}
    ${line('Total dead stock cost', _pfMoney(r.deadStock))}
@@ -7471,12 +7608,11 @@
    ${line('Ads tax ' + v.ad_tax_pct + '%', _pfMoney(r.adTax))}
    ${line('Total costs', _pfMoney(r.costs), 'total')}
   </tbody>
-  <thead><tr><th>Expected sales</th><th style="text-align:right">Value</th></tr></thead>
+  <thead><tr><th>Expected result</th><th>Value</th></tr></thead>
   <tbody>
-   ${line('Expected number of purchases', r.orders.toFixed(2))}
-   ${line('Purchases after returns', r.delivered.toFixed(2))}
+   ${line('Expected number of purchases', _pfNum(r.orders))}
+   ${line('Purchases after returns', _pfNum(r.delivered))}
    ${line('Total sales at the delivery rate', _pfMoney(r.revenue))}
-   ${line('Break-even orders', r.breakEven.toFixed(2))}
    ${line('ROAS', r.roas.toFixed(2) + '×')}
    ${line('Profit before overheads and income tax', _pfMoney(r.profit), r.profit >= 0 ? 'good' : 'bad')}
    ${line('Margin', r.margin.toFixed(2) + '%', r.profit >= 0 ? 'good' : 'bad')}
@@ -7495,9 +7631,10 @@
 
     function pfShare() {
       const v = _pfLoad();
-      const url = location.origin + location.pathname + '?profit=' + encodeURIComponent(btoa(JSON.stringify({ n: _pfAccountName, c: _pfCurrency, v })));
+      const url = location.origin + location.pathname + '?profit=' +
+        encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify({ n: _pfAccountName, c: _pfCurrency, v })))));
       navigator.clipboard.writeText(url).then(
-        () => alert('Link copied.\n\nAnyone with it sees this exact scenario — no account needed.'),
+        () => alert('Link copied.\n\nAnyone with it sees this exact scenario, read-only — no account needed.'),
         () => prompt('Copy this link:', url));
     }
 
@@ -7505,18 +7642,19 @@
     (function () {
       const q = new URLSearchParams(location.search).get('profit');
       if (!q) return;
-      try {
-        const d = JSON.parse(atob(decodeURIComponent(q)));
-        window.addEventListener('DOMContentLoaded', () => {
+      window.addEventListener('DOMContentLoaded', () => {
+        try {
+          const d = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(q)))));
           document.getElementById('auth-overlay')?.classList.add('hidden');
           document.getElementById('home-hub')?.classList.add('hidden');
           document.querySelector('.header')?.style.setProperty('display', 'none');
-          _pfAccountName = d.n || 'Scenario'; _pfCurrency = d.c || 'EGP ';
+          document.querySelector('.agency-nav')?.style.setProperty('display', 'none');
+          document.querySelector('.controls-bar')?.style.setProperty('display', 'none');
+          _pfAccountName = d.n || 'Scenario'; _pfCurrency = d.c || 'EGP '; _pfReadonly = true;
           localStorage.setItem(_pfKey(), JSON.stringify(d.v || {}));
           _pfRender();
-          document.querySelector('.pf-actions')?.remove();
-        });
-      } catch {}
+        } catch (e) { console.error('bad profit link', e); }
+      });
     })();
 
     // ─────────────────────────────────────────────────────────────
