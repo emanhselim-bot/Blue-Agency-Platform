@@ -2187,6 +2187,39 @@
     .pf-x:hover { background: rgba(220,38,38,.14); color: #DC2626; }
     .pf-warn { font-size: 12px; color: #B45309; margin: 4px 0 14px; text-align: center; }
     [data-theme="dark"] .pf-warn { color: #FCBA00; }
+    .al-wrap { max-width: 1200px; margin: 0 auto; }
+    .al-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    .al-input { flex: 1; min-width: 200px; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px;
+      background: var(--surface); color: var(--text-main); font-family: inherit; font-size: 13px; }
+    .al-input.al-sm { flex: 0 0 auto; min-width: 140px; }
+    .al-input:focus { outline: none; border-color: var(--brand-gold); box-shadow: 0 0 0 3px rgba(252,186,0,.22); }
+    .al-empty, .al-error { border: 1px solid var(--border); border-radius: 12px; padding: 18px; font-size: 13px;
+      line-height: 1.6; color: var(--text-muted); background: var(--surface); text-align: center; }
+    .al-error strong { display: block; color: var(--text-main); margin-bottom: 6px; }
+    .al-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .al-sum { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface); text-align: center; }
+    .al-sum-n { font-size: 24px; font-weight: 800; color: var(--brand-ink); }
+    .al-sum-l { font-size: 12.5px; font-weight: 700; margin-top: 2px; }
+    .al-sum-s { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .al-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .al-card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 14px; }
+    .al-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .al-page { font-weight: 800; font-size: 13.5px; color: var(--brand-ink); flex: 1; }
+    .al-badge { font-size: 9px; font-weight: 800; letter-spacing: .6px; padding: 2px 8px; border-radius: 999px;
+      background: rgba(148,163,184,.25); color: var(--text-muted); }
+    .al-badge.live { background: #16A34A; color: #fff; }
+    .al-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .al-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+    .al-copy { font-size: 12.5px; line-height: 1.55; max-height: 96px; overflow: auto; }
+    .al-copy.muted { color: var(--text-muted); font-style: italic; }
+    .al-insight { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 9px; }
+    .al-insight-h { font-size: 9.5px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; color: var(--brand-accent); margin-bottom: 6px; }
+    .al-insight ul { margin: 0; padding-left: 17px; }
+    .al-insight li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
+    .al-ai-box { margin-top: 8px; background: rgba(5,115,245,.07); border-radius: 9px; padding: 9px 11px; font-size: 12px; line-height: 1.55; }
+    [data-theme="dark"] .al-ai-box { background: rgba(255,255,255,.08); }
+    .al-links { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+    @media (max-width: 820px) { .al-grid { grid-template-columns: 1fr; } .al-input.al-sm { flex: 1 1 45%; min-width: 0; } }
   </style>
 </head>
 <body>
@@ -4456,8 +4489,8 @@
 
       nav.innerHTML = agencies.map(a => {
         const count = countForAgency(a.id);
-        const isActive = !_pfMode && currentAgencyId === a.id;
-        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="leaveProfitTab();setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
+        const isActive = !_pfMode && !_alMode && currentAgencyId === a.id;
+        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="leaveProfitTab();leaveAdsLibrary();setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
           ${a.icon ? `<span class="agency-tab-icon">${a.icon}</span>` : ''}
           <span class="agency-tab-name">${escHtml(a.name)}</span>
           ${count > 0 ? `<span class="agency-tab-count">${count}</span>` : ''}
@@ -4465,6 +4498,9 @@
       }).join('') +
       `<button class="agency-tab${_pfMode ? ' active' : ''}" onclick="openProfitTab()" title="Unit economics — will this budget make money?">
          <span class="agency-tab-icon">💰</span><span class="agency-tab-name">Profitability</span>
+       </button>
+       <button class="agency-tab${_alMode ? ' active' : ''}" onclick="openAdsLibraryTab()" title="Competitor ads from Meta's Ad Library">
+         <span class="agency-tab-icon">🔎</span><span class="agency-tab-name">Ads Library</span>
        </button>
        <div class="agency-nav-spacer"></div>
        <button class="add-agency-tab" onclick="promptAddAgency()">
@@ -7386,7 +7422,7 @@
     let _pfAccountName = '', _pfCurrency = 'EGP ', _pfMode = false, _pfReadonly = false;
 
     function openProfitTab() {
-      _pfMode = true;
+      _pfMode = true; _alMode = false;
       renderAgencyNav();
       renderProfitability(accountMap[sel?.value] || {});
     }
@@ -7656,6 +7692,203 @@
         } catch (e) { console.error('bad profit link', e); }
       });
     })();
+
+
+    // ═══════════════════════════════════════════════════════════
+    // ADS LIBRARY — competitor research from Meta's public archive
+    // ═══════════════════════════════════════════════════════════
+    let _alMode = false, _alResults = null, _alQuery = { terms: '', country: 'EG', status: 'ACTIVE', media: 'ALL' };
+
+    function openAdsLibraryTab() {
+      _alMode = true; _pfMode = false;
+      renderAgencyNav();
+      _alRender();
+    }
+    function leaveAdsLibrary() { if (_alMode) { _alMode = false; renderAgencyNav(); } }
+
+    const AL_COUNTRIES = [['EG','Egypt'],['SA','Saudi Arabia'],['AE','UAE'],['KW','Kuwait'],['QA','Qatar'],
+      ['US','United States'],['GB','United Kingdom'],['DE','Germany'],['FR','France'],['ES','Spain'],['IT','Italy'],['NL','Netherlands']];
+
+    function _alRender(state) {
+      const q = _alQuery;
+      const body = state === 'loading'
+        ? '<div class="loading-state"><div class="spinner"></div>Searching the Ad Library…</div>'
+        : (_alResults ? _alResultsHTML() : `<div class="al-empty">Search a competitor's brand name to pull the ads they're running right now.</div>`);
+
+      document.getElementById('content').innerHTML = `
+        <div class="al-wrap">
+          <div class="pf-head">
+            <div>
+              <div class="pf-title">Ads Library</div>
+              <div class="pf-sub">Competitor ads straight from Meta's public archive, with an analysis under each one.</div>
+            </div>
+            ${_alResults ? `<div class="pf-actions">
+              <button class="cp-chipbtn" onclick="alAnalyseAll()">✨ Analyse all</button>
+              <button class="cp-chipbtn" onclick="alDownload()">⬇ Download</button>
+            </div>` : ''}
+          </div>
+
+          <div class="al-bar">
+            <input class="al-input" id="al-terms" placeholder="Brand name, or page IDs separated by commas" value="${escHtml(q.terms)}"
+                   onkeydown="if(event.key==='Enter')alSearch()">
+            <select class="al-input al-sm" id="al-country">
+              ${AL_COUNTRIES.map(([c, n]) => `<option value="${c}" ${c === q.country ? 'selected' : ''}>${n}</option>`).join('')}
+            </select>
+            <select class="al-input al-sm" id="al-status">
+              <option value="ACTIVE" ${q.status === 'ACTIVE' ? 'selected' : ''}>Running now</option>
+              <option value="ALL" ${q.status === 'ALL' ? 'selected' : ''}>All time</option>
+            </select>
+            <select class="al-input al-sm" id="al-media">
+              <option value="ALL"   ${q.media === 'ALL' ? 'selected' : ''}>Any format</option>
+              <option value="VIDEO" ${q.media === 'VIDEO' ? 'selected' : ''}>Video</option>
+              <option value="IMAGE" ${q.media === 'IMAGE' ? 'selected' : ''}>Image</option>
+            </select>
+            <button class="refresh-btn" onclick="alSearch()">Search</button>
+          </div>
+
+          <div id="al-body">${body}</div>
+        </div>`;
+    }
+
+    async function alSearch() {
+      _alQuery = {
+        terms:   document.getElementById('al-terms').value.trim(),
+        country: document.getElementById('al-country').value,
+        status:  document.getElementById('al-status').value,
+        media:   document.getElementById('al-media').value,
+      };
+      if (!_alQuery.terms) return alert('Type a brand name first.');
+      _alResults = null;
+      _alRender('loading');
+
+      const isIds = /^[0-9,\s]+$/.test(_alQuery.terms);
+      const res = await callEdgeFunction('meta-ads-library', {
+        organization_id: currentOrgId,
+        [isIds ? 'page_ids' : 'search_terms']: _alQuery.terms,
+        country: _alQuery.country, status: _alQuery.status, media_type: _alQuery.media, limit: 30,
+      });
+
+      if (res.error) {
+        _alRender();
+        document.getElementById('al-body').innerHTML =
+          `<div class="al-error"><strong>${escHtml(res.error)}</strong>${res.hint ? `<div>${escHtml(res.hint)}</div>` : ''}</div>`;
+        return;
+      }
+      _alResults = res.ads || [];
+      _alRender();
+    }
+
+    function _alInsight(ad) {
+      const bits = [];
+      if (ad.days_running) bits.push(ad.still_running
+        ? `Running <strong>${ad.days_running} day${ad.days_running === 1 ? '' : 's'}</strong> and still live — a long run usually means it is working.`
+        : `Ran for <strong>${ad.days_running} day${ad.days_running === 1 ? '' : 's'}</strong> then stopped.`);
+      if (ad.variants > 1) bits.push(`<strong>${ad.variants} copy variants</strong> in one ad — they are split-testing the message.`);
+      const copy = (ad.bodies[0] || '').trim();
+      if (copy) {
+        const words = copy.split(/\s+/).length;
+        bits.push(`Primary text is <strong>${words} word${words === 1 ? '' : 's'}</strong>${words <= 20 ? ' — short and hook-led' : (words > 60 ? ' — long-form, likely education or storytelling' : '')}.`);
+        if (/%|\boff\b|sale|discount|خصم|عرض/i.test(copy)) bits.push('Leads on a <strong>discount or offer</strong>.');
+        if (/free|shipping|مجان|توصيل/i.test(copy)) bits.push('Uses <strong>free shipping or a freebie</strong> as the lever.');
+        if (/\?|؟/.test(copy)) bits.push('Opens with a <strong>question hook</strong>.');
+        if (/now|today|limited|hurry|الآن|محدود/i.test(copy)) bits.push('Pushes <strong>urgency</strong>.');
+      }
+      if (ad.platforms?.length) bits.push(`Placed on <strong>${ad.platforms.join(', ')}</strong>.`);
+      return bits;
+    }
+
+    function _alResultsHTML() {
+      if (!_alResults.length) {
+        return `<div class="al-error"><strong>No ads found for “${escHtml(_alQuery.terms)}” in ${escHtml(_alQuery.country)}.</strong>
+          <div>Try the brand's exact page name, switch the country, or set the status to All time.
+          Outside the EU, Meta's API only returns political and social-issue ads — for shopping brands use page IDs, or check the Ad Library site directly.</div></div>`;
+      }
+      const byPage = {};
+      _alResults.forEach(a => { (byPage[a.page_name || 'Unknown'] ||= []).push(a); });
+
+      const summary = Object.entries(byPage).map(([page, ads]) => {
+        const live = ads.filter(a => a.still_running).length;
+        const avg = Math.round(ads.reduce((n, a) => n + (a.days_running || 0), 0) / ads.length);
+        return `<div class="al-sum"><div class="al-sum-n">${ads.length}</div>
+          <div class="al-sum-l">${escHtml(page)}</div>
+          <div class="al-sum-s">${live} live · ${avg} days average run</div></div>`;
+      }).join('');
+
+      const cards = _alResults.map((ad, i) => `
+        <div class="al-card">
+          <div class="al-card-head">
+            <span class="al-page">${escHtml(ad.page_name || 'Unknown page')}</span>
+            <span class="al-badge ${ad.still_running ? 'live' : ''}">${ad.still_running ? 'LIVE' : 'ENDED'}</span>
+          </div>
+          <div class="al-meta">${ad.started ? new Date(ad.started).toLocaleDateString('en-GB') : '—'}
+            ${ad.days_running ? ` · ${ad.days_running} days` : ''}${ad.variants > 1 ? ` · ${ad.variants} variants` : ''}</div>
+          ${ad.titles[0] ? `<div class="al-title">${escHtml(ad.titles[0])}</div>` : ''}
+          ${ad.bodies[0] ? `<div class="al-copy">${escHtml(ad.bodies[0])}</div>` : '<div class="al-copy muted">No text captured</div>'}
+          <div class="al-insight">
+            <div class="al-insight-h">What this tells us</div>
+            <ul>${_alInsight(ad).map(b => `<li>${b}</li>`).join('') || '<li>Not enough detail returned for this ad.</li>'}</ul>
+            <div id="al-ai-${i}" class="al-ai"></div>
+            <div class="al-links">
+              ${ad.snapshot_url ? `<a class="cp-chipbtn" href="${escHtml(ad.snapshot_url)}" target="_blank" rel="noopener">↗ See the ad</a>` : ''}
+              <button class="cp-chipbtn" onclick="alAnalyse(${i})">✨ Ask Claude</button>
+            </div>
+          </div>
+        </div>`).join('');
+
+      return `<div class="al-summary">${summary}</div><div class="al-grid">${cards}</div>`;
+    }
+
+    async function alAnalyse(i) {
+      const ad = _alResults[i], box = document.getElementById('al-ai-' + i);
+      if (!ad || !box) return;
+      box.innerHTML = '<em>Thinking…</em>';
+      const res = await callEdgeFunction('ai-chat', {
+        message: `You are a senior media buyer reviewing a competitor's Meta ad. In 3 short bullets, say what the strategy is, why it is likely working, and one thing we could do better. Be specific and practical.
+
+Brand: ${ad.page_name}
+Running: ${ad.days_running || '?'} days${ad.still_running ? ' (still live)' : ' (stopped)'}
+Headline: ${ad.titles[0] || '—'}
+Primary text: ${(ad.bodies[0] || '—').slice(0, 900)}
+Placements: ${(ad.platforms || []).join(', ') || '—'}`,
+        context: {},
+      });
+      const txt = res.reply || res.message || res.error || 'No response.';
+      box.innerHTML = `<div class="al-ai-box">${escHtml(txt).replace(/\n/g, '<br>')}</div>`;
+    }
+
+    async function alAnalyseAll() {
+      for (let i = 0; i < Math.min(_alResults.length, 6); i++) await alAnalyse(i);
+    }
+
+    function alDownload() {
+      const rows = _alResults.map(ad => `<tr>
+        <td>${escHtml(ad.page_name || '')}</td>
+        <td>${ad.started ? new Date(ad.started).toLocaleDateString('en-GB') : ''}</td>
+        <td>${ad.days_running || ''}</td>
+        <td>${ad.still_running ? 'Live' : 'Ended'}</td>
+        <td style="text-align:left">${escHtml(ad.titles[0] || '')}</td>
+        <td style="text-align:left">${escHtml((ad.bodies[0] || '').slice(0, 400))}</td>
+      </tr>`).join('');
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Competitor ads — ${escHtml(_alQuery.terms)}</title>
+<style>body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:0;padding:30px 34px}
+ .head{display:flex;gap:14px;border-bottom:3px solid #083BBF;padding-bottom:14px;margin-bottom:18px}
+ .logo{display:flex;align-items:flex-end;gap:4px;height:38px}.logo i{display:block;width:8px;border-radius:2px;background:#083BBF}
+ .logo i:nth-child(1){height:17px;background:#FCBA00}.logo i:nth-child(2){height:26px}.logo i:nth-child(3){height:38px}.logo i:nth-child(4){height:23px}
+ b.br{display:block;font-size:20px;color:#083BBF}small{font-size:8.5px;letter-spacing:2.2px;color:#6B7280;font-weight:700}
+ table{width:100%;border-collapse:collapse;border:1px solid #E5EAF1}
+ th{background:#083BBF;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.6px;padding:7px 9px;text-align:left}
+ td{padding:7px 9px;font-size:11.5px;border-bottom:1px solid #F3F6FA;text-align:center;vertical-align:top}
+ @media print{@page{margin:12mm;size:landscape}}</style></head><body>
+ <div class="head"><div class="logo"><i></i><i></i><i></i><i></i></div><div><b class="br">Blue Ad</b><small>DIGITAL PERFORMANCE MARKETING AGENCY</small></div></div>
+ <h1 style="font-size:21px;margin:0 0 4px">Competitor ads — ${escHtml(_alQuery.terms)}</h1>
+ <div style="font-size:12px;color:#6B7280;margin-bottom:16px">${escHtml(_alQuery.country)} · ${_alResults.length} ads · ${new Date().toLocaleDateString('en-GB')}</div>
+ <table><thead><tr><th>Page</th><th>Started</th><th>Days</th><th>Status</th><th>Headline</th><th>Primary text</th></tr></thead><tbody>${rows}</tbody></table>
+ <script>window.onload=function(){setTimeout(function(){window.print();},350);};<\/script></body></html>`;
+      const w = window.open('', '_blank');
+      if (!w) return alert('Please allow pop-ups to download this.');
+      w.document.write(html); w.document.close();
+    }
+
 
     // ─────────────────────────────────────────────────────────────
     // TEAM CONTROL PANEL
