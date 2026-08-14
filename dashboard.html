@@ -9002,7 +9002,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     document.getElementById('save-clarity-btn').addEventListener('click', async () => {
       const name     = document.getElementById('clarity-project-name').value.trim();
       const token    = document.getElementById('clarity-token-input').value.trim();
-      const storeId  = document.getElementById('clarity-shopify-link').value || null;
+      const linkVal  = document.getElementById('clarity-shopify-link').value || '';
+      const storeId   = linkVal.startsWith('shop:') ? linkVal.slice(5) : null;
+      const trackerId = linkVal.startsWith('site:') ? linkVal.slice(5) : null;
       const status   = document.getElementById('clarity-status');
       if (!name)  { status.textContent = 'Enter a project name.'; status.className = 'modal-status error'; return; }
       if (!token) { status.textContent = 'Enter a Clarity API token.'; status.className = 'modal-status error'; return; }
@@ -9013,6 +9015,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           project_name:    name,
           api_token:       token,
           shopify_store_id: storeId,
+          site_tracker_id:  trackerId,
           connected_by:    (await sb.auth.getUser()).data.user?.id,
         });
         if (error) throw error;
@@ -9246,7 +9249,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // Load Clarity projects
       const { data: clarityProjects } = await sb
         .from('clarity_projects')
-        .select('id, project_name, clarity_project_id, shopify_store_id, connected_at')
+        .select('id, project_name, clarity_project_id, shopify_store_id, site_tracker_id, connected_at')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true)
         .order('connected_at');
@@ -9254,11 +9257,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const clarityList = document.getElementById('clarity-account-list');
       if (clarityProjects?.length) {
         const storeMap = Object.fromEntries((stores||[]).map(s => [s.id, s.shop_name||s.shop_domain]));
+        const { data: trkRows } = await sb.from('site_trackers')
+          .select('id, name').eq('organization_id', currentOrgId);
+        const trackerMap = Object.fromEntries((trkRows||[]).map(t => [t.id, t.name]));
         clarityList.innerHTML = clarityProjects.map(p => `
           <div class="store-item" data-clarity-project-id="${escHtml(p.id)}">
             <div>
               <div class="store-domain">${escHtml(p.project_name)}</div>
-              <div class="store-meta">${p.shopify_store_id ? '🛍 ' + escHtml(storeMap[p.shopify_store_id]||p.shopify_store_id) : 'No Shopify link'} · Added ${new Date(p.connected_at).toLocaleDateString()}</div>
+              <div class="store-meta">${
+                  p.shopify_store_id ? '🛍 ' + escHtml(storeMap[p.shopify_store_id] || p.shopify_store_id)
+                : p.site_tracker_id  ? '🌐 ' + escHtml(trackerMap[p.site_tracker_id] || 'Tracked website')
+                : 'No website link'} · Added ${new Date(p.connected_at).toLocaleDateString()}</div>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <span class="badge-active">Active</span>
@@ -9272,8 +9281,16 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // Populate clarity shopify dropdown in the add-project form
       const clarityStoreSel = document.getElementById('clarity-shopify-link');
       if (clarityStoreSel) {
-        clarityStoreSel.innerHTML = `<option value="">No Shopify link</option>` +
-          (stores||[]).map(s => `<option value="${s.id}">${escHtml(s.shop_name||s.shop_domain)}</option>`).join('');
+        const { data: trackers } = await sb.from('site_trackers')
+          .select('id, name').eq('organization_id', currentOrgId).eq('is_active', true).order('name');
+        clarityStoreSel.innerHTML =
+          `<option value="">No website link</option>` +
+          ((stores||[]).length ? `<optgroup label="Shopify stores">` +
+            (stores||[]).map(s => `<option value="shop:${s.id}">${escHtml(s.shop_name||s.shop_domain)}</option>`).join('') +
+            `</optgroup>` : '') +
+          ((trackers||[]).length ? `<optgroup label="Tracked websites">` +
+            (trackers||[]).map(t => `<option value="site:${t.id}">${escHtml(t.name)}</option>`).join('') +
+            `</optgroup>` : '');
       }
 
       // Populate quick-link selects
