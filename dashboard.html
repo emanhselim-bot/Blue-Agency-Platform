@@ -5096,7 +5096,7 @@
       // Show all connected active accounts (accounts appear as soon as access is granted)
       const { data: accounts } = await sb
         .from('meta_ad_accounts_safe')  // safe view, no tokens
-        .select('id, meta_account_id, account_name, currency, shopify_store_id, campaigns_last_synced_at')
+        .select('id, meta_account_id, account_name, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id, campaigns_last_synced_at')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true)
         .order('account_name');
