@@ -6602,7 +6602,7 @@
         : 'Shopify Analytics';
       const shopifySubLabel = !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
-        : '<span class="shopify-badge">● Shopify</span>';
+        : `<span class="shopify-badge">● Shopify${uniqueStoreIds.length > 1 ? ` · ${uniqueStoreIds.length} stores` : ''}</span>`;
       const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
       const sfmtSub = text => !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
@@ -7344,8 +7344,30 @@
       const aggregatedDailyData = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date));
 
       // Unique Shopify stores across all linked accounts
-      const uniqueStoreIds = [...new Set(allAccounts.map(a => a.shopify_store_id).filter(Boolean))];
+      // Two ad accounts for one client normally share a single Shopify store and a
+      // single Clarity project — count each source once, never per ad account.
+      const uniqueStoreIds   = [...new Set(allAccounts.map(a => a.shopify_store_id).filter(Boolean))];
+      const uniqueClarityIds = [...new Set(allAccounts.map(a => a.clarity_project_id).filter(Boolean))];
       const shopifyEnabled = uniqueStoreIds.length > 0;
+
+      // Clarity: one call per distinct project, then add the sessions together
+      let totSessions = null, claritySourceCount = 0;
+      try {
+        const days = clarityNumDays(currentPeriod);
+        const clarityRes = uniqueClarityIds.length
+          ? await Promise.allSettled(uniqueClarityIds.map(pid =>
+              callEdgeFunction('clarity-data', { numOfDays: days, orgId: currentOrgId, clarityProjectId: pid })))
+          : [await Promise.resolve({ status: 'fulfilled',
+              value: await callEdgeFunction('clarity-data', { numOfDays: days, orgId: currentOrgId }) })];
+        for (const r of clarityRes) {
+          const v = r.status === 'fulfilled' ? r.value : null;
+          const sess = v?.sessions ?? v?.totals?.sessions ?? v?.summary?.sessions;
+          if (sess != null && !isNaN(parseNum(sess))) {
+            totSessions = (totSessions || 0) + parseNum(sess);
+            claritySourceCount++;
+          }
+        }
+      } catch {}
 
       let totRevenue = null, totOrders = null, totPieces = null;
       if (shopifyEnabled) {
@@ -7418,6 +7440,8 @@
           ${kpi('c-gold',   '💵', 'Revenue',             sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
           ${kpi('c-green',  '🎯', 'Impressions',         fmt(totImpressions,'',0), `Reach: ${fmt(totReach,'',0)}`)}
+          ${totSessions !== null ? kpi('c-purple', '👁', 'Website Sessions', fmt(totSessions,'',0),
+              `● Clarity · ${claritySourceCount} project${claritySourceCount === 1 ? '' : 's'}`) : ''}
         </div>
 
         <div class="section-label">Campaign Breakdown · All Accounts</div>
