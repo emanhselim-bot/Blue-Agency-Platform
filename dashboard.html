@@ -8983,13 +8983,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 </td>
                 <td style="padding:10px 8px">
                   <select class="connect-input" style="font-size:12px;padding:4px 8px"
-                    onchange="stageLinkedAccount(${JSON.stringify(a.id)}, 'shopify_store_id', this.value)">
+                    onchange="stageLinkedAccount('${escHtml(a.id)}', 'shopify_store_id', this.value)">
                     ${storeOpts.replace(`value="${escHtml(a.shopify_store_id||'')}"`,`value="${escHtml(a.shopify_store_id||'')}" selected`)}
                   </select>
                 </td>
                 <td style="padding:10px 8px">
                   <select class="connect-input" style="font-size:12px;padding:4px 8px"
-                    onchange="stageLinkedAccount(${JSON.stringify(a.id)}, 'clarity_project_id', this.value)">
+                    onchange="stageLinkedAccount('${escHtml(a.id)}', 'clarity_project_id', this.value)">
                     ${clarityOpts.replace(`value="${escHtml(a.clarity_project_id||'')}"`,`value="${escHtml(a.clarity_project_id||'')}" selected`)}
                   </select>
                 </td>
