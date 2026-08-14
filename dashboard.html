@@ -2233,6 +2233,9 @@
     .cmb-saved { display: flex; align-items: center; gap: 8px; font-size: 12.5px; border: 1px solid var(--border); border-radius: 9px; padding: 7px 10px; margin-top: 6px; }
     .cmb-saved span { flex: 1; font-weight: 700; }
     .cmb-saved em { font-style: normal; font-size: 11px; opacity: .6; }
+    tr.link-dirty { background: rgba(252,186,0,.12); }
+    tr.link-dirty td:first-child { box-shadow: inset 3px 0 0 var(--brand-gold); }
+    #linked-save-btn:disabled { opacity: .45; cursor: default; }
   </style>
 </head>
 <body>
@@ -8870,6 +8873,46 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     // ── Linked Accounts: save Meta→Shopify + Meta→Clarity links ─────────────
+    // Staged link edits: { [metaAccountId]: { shopify_store_id?, clarity_project_id? } }
+    let _linkPending = {};
+
+    function stageLinkedAccount(metaAccountId, field, value) {
+      (_linkPending[metaAccountId] ||= {})[field] = value || null;
+      const row = document.getElementById('linked-row-' + metaAccountId);
+      if (row) row.classList.add('link-dirty');
+      const btn = document.getElementById('linked-save-btn');
+      if (btn) {
+        const n = Object.keys(_linkPending).length;
+        btn.disabled = false;
+        btn.textContent = `Save ${n} change${n === 1 ? '' : 's'}`;
+      }
+    }
+
+    async function saveLinkedAccounts() {
+      const status = document.getElementById('linked-status');
+      const ids = Object.keys(_linkPending);
+      if (!ids.length) return;
+      const btn = document.getElementById('linked-save-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      try {
+        for (const id of ids) {
+          const { error } = await sb.from('meta_ad_accounts')
+            .update(_linkPending[id]).eq('id', id).eq('organization_id', currentOrgId);
+          if (error) throw error;
+        }
+        _linkPending = {};
+        status.className = 'modal-status success';
+        status.textContent = `✓ Saved ${ids.length} link${ids.length === 1 ? '' : 's'}.`;
+        await loadLinkedAccountsTab();          // re-read so the page shows what is stored
+        await loadAccounts();                   // refresh the dashboard's account map
+        setTimeout(() => { status.textContent = ''; status.className = 'modal-status'; }, 3000);
+      } catch (e) {
+        status.className = 'modal-status error';
+        status.textContent = '✗ ' + (e.message || 'Failed to save links');
+        if (btn) { btn.disabled = false; btn.textContent = 'Save changes'; }
+      }
+    }
+
     async function saveLinkedAccount(metaAccountId, shopifyStoreId, clarityProjectId) {
       const status = document.getElementById('linked-status');
       try {
@@ -8916,7 +8959,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const clarityOpts = `<option value="">— No Clarity —</option>` +
         (clarityProjs||[]).map(p => `<option value="${escHtml(p.id)}">${escHtml(p.project_name)}</option>`).join('');
 
+      _linkPending = {};
       container.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-size:12px;color:var(--text-muted);flex:1">
+            Pick a Shopify store and Clarity project for each ad account, then save.</span>
+          <button class="cpm-btn" id="linked-save-btn" disabled onclick="saveLinkedAccounts()">Save changes</button>
+        </div>
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
             <tr style="color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-size:11px;border-bottom:1px solid var(--border)">
@@ -8934,13 +8983,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 </td>
                 <td style="padding:10px 8px">
                   <select class="connect-input" style="font-size:12px;padding:4px 8px"
-                    onchange="saveLinkedAccount(${JSON.stringify(a.id)}, this.value, undefined)">
+                    onchange="stageLinkedAccount(${JSON.stringify(a.id)}, 'shopify_store_id', this.value)">
                     ${storeOpts.replace(`value="${escHtml(a.shopify_store_id||'')}"`,`value="${escHtml(a.shopify_store_id||'')}" selected`)}
                   </select>
                 </td>
                 <td style="padding:10px 8px">
                   <select class="connect-input" style="font-size:12px;padding:4px 8px"
-                    onchange="saveLinkedAccount(${JSON.stringify(a.id)}, undefined, this.value)">
+                    onchange="stageLinkedAccount(${JSON.stringify(a.id)}, 'clarity_project_id', this.value)">
                     ${clarityOpts.replace(`value="${escHtml(a.clarity_project_id||'')}"`,`value="${escHtml(a.clarity_project_id||'')}" selected`)}
                   </select>
                 </td>
