@@ -6397,7 +6397,14 @@
 
       // ── Meta values ──
       const spend          = parseNum(d.amount_spent);
-      const accountBalance  = d.account_balance != null ? parseFloat(d.account_balance) : null;
+      // Meta's `balance` is unbilled spend (what you owe), NOT the money available.
+      // For prepaid accounts the real fund sits in the funding source string,
+      // e.g. "Available balance (EGP4,508.19)". Prefer that when present.
+      const _owed = d.account_balance != null ? parseFloat(d.account_balance) : null;
+      const _prepaidMatch = /available balance[^0-9]*([\d.,]+)/i.exec(String(d.funding_source || ''));
+      const prepaidFund = _prepaidMatch ? parseFloat(_prepaidMatch[1].replace(/,/g, '')) : null;
+      const accountBalance  = prepaidFund !== null ? prepaidFund : _owed;
+      const amountOwed      = _owed;
       const spendCap        = d.spend_cap != null ? parseFloat(d.spend_cap) : null;
       const dailyBudget     = d.daily_budget != null ? parseFloat(d.daily_budget) : null;
       const estimatedDays   = (accountBalance !== null && dailyBudget !== null && dailyBudget > 0)
@@ -6519,7 +6526,9 @@
             ${kpi('c-green', '💳', 'Ad Account Fund',
               accountBalance !== null ? fmt(accountBalance, curr) : '—',
               accountBalance !== null
-                ? (spendCap !== null ? `● Balance · Cap: ${fmt(spendCap, curr)}` : '● Current balance')
+                ? (prepaidFund !== null
+                    ? `● Available balance${amountOwed ? ` · Owed: ${fmt(amountOwed, curr)}` : ''}`
+                    : (spendCap !== null ? `● Unbilled spend · Cap: ${fmt(spendCap, curr)}` : '● Unbilled spend'))
                 : 'Meta Ads'
             )}
             ${kpi('c-sky', '📅', 'Daily Budget',
@@ -6684,7 +6693,9 @@
               ${kpi('c-green', '💳', 'Ad Account Fund',
                 accountBalance !== null ? fmt(accountBalance, curr) : '—',
                 accountBalance !== null
-                  ? (spendCap !== null ? `● Balance · Cap: ${fmt(spendCap, curr)}` : '● Current balance')
+                  ? (prepaidFund !== null
+                      ? `● Available balance${amountOwed ? ` · Owed: ${fmt(amountOwed, curr)}` : ''}`
+                      : (spendCap !== null ? `● Unbilled spend · Cap: ${fmt(spendCap, curr)}` : '● Unbilled spend'))
                   : 'Meta Ads'
               )}
               ${kpi('c-sky', '📅', 'Daily Budget',
@@ -9442,7 +9453,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const fmt = (v) => v == null ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' ' + cur;
       document.getElementById('bill-funds').innerHTML =
         '<div class="bill-fund-card"><div class="bill-fund-label">FUNDING SOURCE</div><div class="bill-fund-val" style="font-size:16px">' + escHtml(d.funding_source || '—') + '</div><div class="bill-fund-sub">Payment method on Meta</div></div>' +
-        '<div class="bill-fund-card"><div class="bill-fund-label">CURRENT BALANCE</div><div class="bill-fund-val">' + fmt(d.account_balance) + '</div><div class="bill-fund-sub">Unbilled spend / prepaid funds</div></div>' +
+        '<div class="bill-fund-card"><div class="bill-fund-label">UNBILLED SPEND</div><div class="bill-fund-val">' + fmt(d.account_balance) + '</div><div class="bill-fund-sub">Owed to Meta, not money available</div></div>' +
         '<div class="bill-fund-card"><div class="bill-fund-label">LIFETIME SPENT</div><div class="bill-fund-val">' + fmt(d.lifetime_spent) + '</div><div class="bill-fund-sub">Total ever spent on this account</div></div>' +
         '<div class="bill-fund-card"><div class="bill-fund-label">SPEND CAP</div><div class="bill-fund-val">' + fmt(d.spend_cap) + '</div><div class="bill-fund-sub">' + (d.spend_cap ? 'Account spending limit' : 'No limit set') + '</div></div>';
       document.getElementById('billing-section').style.display = 'block';
