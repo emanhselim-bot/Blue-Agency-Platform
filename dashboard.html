@@ -8759,8 +8759,19 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         if (!accounts.length) {
           rowsEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">No ad accounts connected yet.</div>';
         } else {
-          rowsEl.innerHTML = accounts.map(acc => {
-            const assigned = localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`) || '';
+          // Group the rows by the agency each account belongs to, so every agency's
+          // accounts sit together instead of one long alphabetical list.
+          const agencyOf = acc => localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`) || '';
+          const byAgency = new Map();
+          agencies.forEach(a => byAgency.set(a.id, []));
+          byAgency.set('', []);                                   // unassigned bucket
+          accounts.forEach(acc => {
+            const id = agencyOf(acc);
+            (byAgency.get(byAgency.has(id) ? id : '') || []).push(acc);
+          });
+
+          const row = acc => {
+            const assigned = agencyOf(acc);
             const allOpt = `<option value="" ${!assigned ? 'selected' : ''}>All Agencies (unassigned)</option>`;
             const opts = agencies.map(a => `<option value="${a.id}" ${assigned===a.id?'selected':''}>${a.icon||'📊'} ${escHtml(a.name)}</option>`).join('');
             return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
@@ -8770,7 +8781,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 ${allOpt}${opts}
               </select>
             </div>`;
-          }).join('');
+          };
+
+          const section = (title, icon, list) => !list.length ? '' : `
+            <div style="margin-top:14px">
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;
+                          background:rgba(252,186,0,.14);margin-bottom:4px">
+                <span style="font-size:14px">${icon}</span>
+                <span style="flex:1;font-size:11px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--brand-gold)">${escHtml(title)}</span>
+                <span style="font-size:11px;color:var(--text-muted)">${list.length}</span>
+              </div>
+              ${list.map(row).join('')}
+            </div>`;
+
+          rowsEl.innerHTML =
+            agencies.map(a => section(a.name, a.icon || '📊', byAgency.get(a.id) || [])).join('') +
+            section('All agencies (unassigned)', '🌐', byAgency.get('') || []);
         }
       }
     }
