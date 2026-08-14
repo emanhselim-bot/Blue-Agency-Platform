@@ -6327,7 +6327,34 @@
       _loadDataActive = true;
       try { await _loadDataInner(); } finally { _loadDataActive = false; }
     }
+    let _webSource = null;   // 'Website' | 'GA4' when the numbers do not come from Shopify
+
+    function _webRangeStart() {
+      const d = new Date(), f = x => x.toISOString().slice(0, 10);
+      const back = n => { const y = new Date(); y.setDate(y.getDate() - n); return f(y); };
+      switch (currentPeriod) {
+        case 'today':        return f(d);
+        case 'yesterday':    return back(1);
+        case 'last_7_days':  return back(6);
+        case 'last_30_days': return back(29);
+        case 'this_month':   return f(new Date(d.getFullYear(), d.getMonth(), 1));
+        case 'last_month':   return f(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+        case 'this_quarter': return f(new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1));
+        case 'this_year':    return `${d.getFullYear()}-01-01`;
+        case 'custom':       return customFrom || f(d);
+        default:             return f(d);
+      }
+    }
+    function _webRangeEnd() {
+      const d = new Date(), f = x => x.toISOString().slice(0, 10);
+      if (currentPeriod === 'yesterday') { const y = new Date(); y.setDate(y.getDate() - 1); return f(y); }
+      if (currentPeriod === 'last_month') return f(new Date(d.getFullYear(), d.getMonth(), 0));
+      if (currentPeriod === 'custom') return customTo || f(d);
+      return f(d);
+    }
+
     async function _loadDataInner() {
+      _webSource = null;
       const accountDbId = sel.value;
       if (!accountDbId) return;
       if (accountDbId === '__all__') return loadAllAccounts();
@@ -6435,6 +6462,29 @@
         if (!isNaN(rawSessions)) sessions = rawSessions;      // keep 0 as valid
         if (!isNaN(rawCR))       conversionRate = rawCR * 100; // keep 0 as valid
       }
+      // No Shopify store? fall back to the website tracker, then GA4.
+      if (!shopifyEnabled) {
+        const since = _webRangeStart(), until = _webRangeEnd();
+        try {
+          if (account.site_tracker_id) {
+            const w = await callEdgeFunction('site-data', { tracker_id: account.site_tracker_id, since, until });
+            if (!w.error) {
+              shopifyOrders = w.orders; revenue = w.revenue; pieces = w.pieces;
+              sessions = w.sessions; conversionRate = w.conversion_rate * 100;
+              _webSource = 'Website';
+            }
+          } else if (account.ga4_property_id) {
+            const g = await callEdgeFunction('ga4-site-data', {
+              organization_id: currentOrgId, property_id: account.ga4_property_id, since, until });
+            if (!g.error) {
+              shopifyOrders = g.orders; revenue = g.revenue; pieces = g.pieces;
+              sessions = g.sessions; conversionRate = g.conversion_rate * 100;
+              _webSource = 'GA4';
+            }
+          }
+        } catch {}
+      }
+
       const returnsRows = getShopifyRows('refunds');
       if (returnsRows?.[0]) returns = parseInt(returnsRows[0][0]);
 
@@ -6589,7 +6639,9 @@
       const crSubLabel = (shopifyEnabled && analyticsError)
         ? `<span title="${analyticsError.replace(/"/g,'&quot;')}" style="font-size:10px;color:var(--text-muted);font-weight:600;cursor:help">Analytics N/A ⓘ</span>`
         : 'Shopify Analytics';
-      const shopifySubLabel = !shopifyEnabled
+      const shopifySubLabel = _webSource
+        ? `<span class="shopify-badge">● ${_webSource}</span>`
+        : !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : '<span class="shopify-badge">● Shopify</span>';
       const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
@@ -9070,7 +9122,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       const [{ data: metaAccs }, { data: stores }, { data: clarityProjs }] = await Promise.all([
         sb.from('meta_ad_accounts_safe')
-          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id, site_tracker_id')
+          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id')
           .eq('organization_id', currentOrgId).eq('is_active', true),
         sb.from('shopify_stores_safe')
           .select('id, shop_name, shop_domain')
@@ -9109,6 +9161,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <th style="text-align:left;padding:6px 8px 8px">Shopify Store</th>
               <th style="text-align:left;padding:6px 8px 8px">Clarity Project</th>
               <th style="text-align:left;padding:6px 8px 8px">Website Tracker</th>
+              <th style="text-align:left;padding:6px 8px 8px">GA4 Property ID</th>
             </tr>
           </thead>
           <tbody>
@@ -9135,6 +9188,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                     onchange="stageLinkedAccount('${escHtml(a.id)}', 'site_tracker_id', this.value)">
                     ${trackerOpts.replace(`value="${escHtml(a.site_tracker_id||'')}"`,`value="${escHtml(a.site_tracker_id||'')}" selected`)}
                   </select>
+                </td>
+                <td style="padding:10px 8px">
+                  <input class="connect-input" style="font-size:12px;padding:4px 8px;width:130px"
+                    placeholder="e.g. 493812345" value="${escHtml(a.ga4_property_id || '')}"
+                    onchange="stageLinkedAccount('${escHtml(a.id)}', 'ga4_property_id', this.value.trim())">
                 </td>
               </tr>`).join('')}
           </tbody>
