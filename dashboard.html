@@ -2759,6 +2759,7 @@
           <button class="settings-nav-item"        id="snav-google-ads" onclick="setSettingsTab('google-ads')"> <span class="settings-nav-icon">🔍</span> Google Ads</button>
           <button class="settings-nav-item"        id="snav-tiktok-ads" onclick="setSettingsTab('tiktok-ads')"> <span class="settings-nav-icon">🎵</span> TikTok Ads</button>
           <div class="settings-nav-section">Configuration</div>
+          <button class="settings-nav-item"        id="snav-website"   onclick="setSettingsTab('website')">  <span class="settings-nav-icon">🌐</span> Website Tracking</button>
           <button class="settings-nav-item"        id="snav-linked"    onclick="setSettingsTab('linked')">   <span class="settings-nav-icon">🔗</span> Linked Accounts</button>
           <button class="settings-nav-item"        id="snav-link"      onclick="setSettingsTab('link')">     <span class="settings-nav-icon">⛓</span> Quick Link</button>
           <button class="settings-nav-item"        id="snav-agencies"  onclick="setSettingsTab('agencies')"> <span class="settings-nav-icon">🏢</span> Agency Workspaces</button>
@@ -2975,6 +2976,25 @@
           </div>
         </div>
         </div><!-- /spanel-tiktok-ads -->
+
+        <!-- ── TAB: Website Tracking ── -->
+        <div class="settings-panel" id="spanel-website">
+        <div class="modal-section">
+          <div class="modal-section-title">Website Tracking</div>
+          <p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:14px">
+            For clients who are not on Shopify. Create a tracker, paste the snippet into the
+            website's &lt;head&gt;, and the dashboard gets sessions, orders and revenue the same way
+            it does from Shopify. Then link the tracker to an ad account under Linked Accounts.</p>
+
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <input type="text" class="connect-input" id="tracker-name" placeholder="Client / site name…" style="flex:1">
+            <input type="text" class="connect-input" id="tracker-domain" placeholder="example.com" style="flex:1">
+            <button class="connect-btn" onclick="createSiteTracker()">+ Create</button>
+          </div>
+          <div class="modal-status" id="tracker-status"></div>
+          <div id="tracker-list"></div>
+        </div>
+        </div><!-- /spanel-website -->
 
         <!-- ── TAB: Linked Accounts ── -->
         <div class="settings-panel" id="spanel-linked">
@@ -8446,7 +8466,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     });
 
     function setSettingsTab(name) {
-      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','linked','link','agencies','dashboard'].forEach(t => {
+      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','website','linked','link','agencies','dashboard'].forEach(t => {
         const nav = document.getElementById('snav-'   + t);
         const pan = document.getElementById('spanel-' + t);
         if (nav) nav.classList.toggle('active', t === name);
@@ -8455,10 +8475,95 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (name === 'teams')      loadSettingsTeam();
       if (name === 'clients')    loadClientAccounts();
       if (name === 'linked')     loadLinkedAccountsTab();
+      if (name === 'website')    loadSiteTrackers();
       if (name === 'google-ads') loadGoogleAdsList();
       if (name === 'tiktok-ads') loadTikTokAdsList();
       if (name === 'agencies')   renderAgencySettings();
       if (name === 'dashboard')  renderDashboardCustomPanel();
+    }
+
+    // ── Website tracking (non-Shopify clients) ──────────────────────────────
+    function _trackerSnippet(key) {
+      return `<!-- Blue Ad tracking -->
+<script>
+(function(w,d){
+  var K='${key}', U='${SUPABASE_URL}/functions/v1/site-track', A='${SUPABASE_ANON}';
+  function sid(){try{var s=localStorage.getItem('_ba_sid');if(!s){s=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('_ba_sid',s);}return s;}catch(e){return 'anon';}}
+  function q(n){try{return new URLSearchParams(location.search).get(n)||undefined;}catch(e){}}
+  w.blueAd=function(ev,p){
+    p=p||{};
+    var body={k:K,e:ev,sid:sid(),path:location.pathname,ref:d.referrer,
+      utm_source:q('utm_source'),utm_medium:q('utm_medium'),utm_campaign:q('utm_campaign'),
+      order_id:p.orderId,value:p.value,currency:p.currency,quantity:p.quantity,meta:p.meta};
+    try{
+      var s=JSON.stringify(body);
+      fetch(U,{method:'POST',headers:{'Content-Type':'application/json','apikey':A,'Authorization':'Bearer '+A},body:s,keepalive:true});
+    }catch(e){}
+  };
+  w.blueAd('pageview');
+})(window,document);
+<\/script>`;
+    }
+
+    async function loadSiteTrackers() {
+      const box = document.getElementById('tracker-list');
+      if (!box) return;
+      box.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Loading…</div>';
+      const { data, error } = await sb.from('site_trackers')
+        .select('*').eq('organization_id', currentOrgId).order('created_at', { ascending: false });
+      if (error) { box.innerHTML = `<div class="modal-status error">${escHtml(error.message)}</div>`; return; }
+      if (!data?.length) {
+        box.innerHTML = '<div style="font-size:12.5px;color:var(--text-muted)">No trackers yet. Create one above.</div>';
+        return;
+      }
+      box.innerHTML = data.map(t => `
+        <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-weight:700;font-size:13.5px;flex:1">${escHtml(t.name)}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${escHtml(t.domain || 'no domain')}</span>
+            <button class="cpm-mini" onclick="deleteSiteTracker('${t.id}')">Remove</button>
+          </div>
+          <textarea readonly class="connect-input" style="width:100%;height:120px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.5"
+            id="snippet-${t.id}">${escHtml(_trackerSnippet(t.site_key))}</textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <button class="connect-btn" onclick="copySnippet('${t.id}', this)">Copy snippet</button>
+            <span style="font-size:11px;color:var(--text-muted)">Paste in the site's &lt;head&gt;. For a sale, call
+              <code>blueAd('purchase',{orderId:'123',value:499,currency:'EGP',quantity:1})</code> on the thank-you page.</span>
+          </div>
+        </div>`).join('');
+    }
+
+    async function createSiteTracker() {
+      const name = document.getElementById('tracker-name').value.trim();
+      const domain = document.getElementById('tracker-domain').value.trim();
+      const status = document.getElementById('tracker-status');
+      if (!name) { status.className = 'modal-status error'; status.textContent = 'Give the site a name.'; return; }
+      const { error } = await sb.from('site_trackers').insert({
+        organization_id: currentOrgId, name, domain: domain || null, created_by: currentUser?.id,
+      });
+      if (error) { status.className = 'modal-status error'; status.textContent = error.message; return; }
+      document.getElementById('tracker-name').value = '';
+      document.getElementById('tracker-domain').value = '';
+      status.className = 'modal-status success';
+      status.textContent = '✓ Tracker created — copy the snippet below.';
+      setTimeout(() => { status.textContent = ''; status.className = 'modal-status'; }, 3000);
+      loadSiteTrackers();
+    }
+
+    async function deleteSiteTracker(id) {
+      if (!confirm('Remove this tracker? The snippet on the site will stop reporting.')) return;
+      const { error } = await sb.from('site_trackers').delete().eq('id', id);
+      if (error) return alert(error.message);
+      loadSiteTrackers();
+    }
+
+    function copySnippet(id, btn) {
+      const el = document.getElementById('snippet-' + id);
+      el.select();
+      navigator.clipboard.writeText(el.value).then(() => {
+        const t = btn.textContent; btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.textContent = t; }, 1600);
+      });
     }
 
     function renderDashboardCustomPanel() {
@@ -8965,7 +9070,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       const [{ data: metaAccs }, { data: stores }, { data: clarityProjs }] = await Promise.all([
         sb.from('meta_ad_accounts_safe')
-          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id')
+          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id, site_tracker_id')
           .eq('organization_id', currentOrgId).eq('is_active', true),
         sb.from('shopify_stores_safe')
           .select('id, shop_name, shop_domain')
@@ -8985,6 +9090,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const clarityOpts = `<option value="">— No Clarity —</option>` +
         (clarityProjs||[]).map(p => `<option value="${escHtml(p.id)}">${escHtml(p.project_name)}</option>`).join('');
 
+      const { data: trackers } = await sb.from('site_trackers')
+        .select('id, name').eq('organization_id', currentOrgId).eq('is_active', true);
+      const trackerOpts = `<option value="">— No website —</option>` +
+        (trackers||[]).map(t => `<option value="${escHtml(t.id)}">${escHtml(t.name)}</option>`).join('');
+
       _linkPending = {};
       container.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -8998,6 +9108,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <th style="text-align:left;padding:6px 8px 8px">Meta Account</th>
               <th style="text-align:left;padding:6px 8px 8px">Shopify Store</th>
               <th style="text-align:left;padding:6px 8px 8px">Clarity Project</th>
+              <th style="text-align:left;padding:6px 8px 8px">Website Tracker</th>
             </tr>
           </thead>
           <tbody>
@@ -9017,6 +9128,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   <select class="connect-input" style="font-size:12px;padding:4px 8px"
                     onchange="stageLinkedAccount('${escHtml(a.id)}', 'clarity_project_id', this.value)">
                     ${clarityOpts.replace(`value="${escHtml(a.clarity_project_id||'')}"`,`value="${escHtml(a.clarity_project_id||'')}" selected`)}
+                  </select>
+                </td>
+                <td style="padding:10px 8px">
+                  <select class="connect-input" style="font-size:12px;padding:4px 8px"
+                    onchange="stageLinkedAccount('${escHtml(a.id)}', 'site_tracker_id', this.value)">
+                    ${trackerOpts.replace(`value="${escHtml(a.site_tracker_id||'')}"`,`value="${escHtml(a.site_tracker_id||'')}" selected`)}
                   </select>
                 </td>
               </tr>`).join('')}
