@@ -6400,13 +6400,26 @@
       // Meta's `balance` is unbilled spend (what you owe), NOT the money available.
       // For prepaid accounts the real fund sits in the funding source string,
       // e.g. "Available balance (EGP4,508.19)". Prefer that when present.
+      // Meta gives no account-level daily budget unless budgets are set there,
+      // so ask for the sum of whatever is ACTIVE right now.
+      let activeBudget = null, activeCampaignCount = null;
+      try {
+        const ab = await callEdgeFunction('meta-active-budget', { account_db_id: account.id });
+        if (!ab.error) {
+          activeBudget = ab.daily_budget;
+          activeCampaignCount = (ab.active_campaigns || 0) + (ab.active_adsets || 0);
+        }
+      } catch {}
+
       const _owed = d.account_balance != null ? parseFloat(d.account_balance) : null;
       const _prepaidMatch = /available balance[^0-9]*([\d.,]+)/i.exec(String(d.funding_source || ''));
       const prepaidFund = _prepaidMatch ? parseFloat(_prepaidMatch[1].replace(/,/g, '')) : null;
       const accountBalance  = prepaidFund !== null ? prepaidFund : _owed;
       const amountOwed      = _owed;
       const spendCap        = d.spend_cap != null ? parseFloat(d.spend_cap) : null;
-      const dailyBudget     = d.daily_budget != null ? parseFloat(d.daily_budget) : null;
+      const dailyBudget     = activeBudget != null ? activeBudget
+                            : (d.daily_budget != null ? parseFloat(d.daily_budget) : null);
+      const noActiveCampaigns = activeCampaignCount === 0;
       const estimatedDays   = (accountBalance !== null && dailyBudget !== null && dailyBudget > 0)
         ? Math.floor(accountBalance / dailyBudget) : null;
       const costPerEngage   = parseNum(d['cost_per_action_type:page_engagement']);
@@ -6532,12 +6545,14 @@
                 : 'Meta Ads'
             )}
             ${kpi('c-sky', '📅', 'Daily Budget',
-              dailyBudget !== null ? fmt(dailyBudget, curr) : '—',
-              dailyBudget !== null ? '● Active campaigns total' : 'Meta Ads'
-            )}
+                dailyBudget !== null ? fmt(dailyBudget, curr) : (noActiveCampaigns ? fmt(0, curr) : '—'),
+                dailyBudget !== null ? '● Active campaigns total'
+                  : (noActiveCampaigns ? '● No campaigns running' : 'Meta Ads')
+              )}
             ${kpi('c-coral', '⏳', 'Days Remaining',
-              estimatedDays !== null ? String(estimatedDays) + ' days' : '—',
-              estimatedDays !== null ? `● Fund ÷ ${fmt(dailyBudget, curr)}/day` : 'Fund ÷ Daily Budget'
+              estimatedDays !== null ? String(estimatedDays) + ' days' : (noActiveCampaigns ? '∞' : '—'),
+              estimatedDays !== null ? `● Fund ÷ ${fmt(dailyBudget, curr)}/day`
+                : (noActiveCampaigns ? '● Nothing spending right now' : 'Fund ÷ Daily Budget')
             )}
             ${includeRevenue ? `
             ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
@@ -6699,8 +6714,9 @@
                   : 'Meta Ads'
               )}
               ${kpi('c-sky', '📅', 'Daily Budget',
-                dailyBudget !== null ? fmt(dailyBudget, curr) : '—',
-                dailyBudget !== null ? '● Active campaigns total' : 'Meta Ads'
+                dailyBudget !== null ? fmt(dailyBudget, curr) : (noActiveCampaigns ? fmt(0, curr) : '—'),
+                dailyBudget !== null ? '● Active campaigns total'
+                  : (noActiveCampaigns ? '● No campaigns running' : 'Meta Ads')
               )}
               ${kpi('c-coral', '⏳', 'Days Remaining',
                 estimatedDays !== null ? String(estimatedDays) + ' days' : '—',
