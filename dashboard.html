@@ -8557,8 +8557,6 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               </tr>`).join('')}
           </tbody>
         </table>`;
-
-      renderCombinedAccountsBlock(metaAccs || []);
     }
 
     // ── Combined accounts, edited from Linked Accounts ──────────────────────
@@ -8945,6 +8943,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               </tr>`).join('')}
           </tbody>
         </table>`;
+
+      await renderCombinedAccountsBlock(metaAccs || []);
     }
 
     async function refreshSettingsData() {
