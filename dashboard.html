@@ -6644,8 +6644,9 @@
         : !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : '<span class="shopify-badge">● Shopify</span>';
-      const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
-      const sfmtSub = text => !shopifyEnabled
+      const webEnabled = shopifyEnabled || !!_webSource;
+      const sfmt = (val, fn) => !webEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
+      const sfmtSub = text => !webEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : text;
       // Label shown when ShopifyQL Analytics is unavailable on the store's plan
@@ -6708,7 +6709,7 @@
                 : (noActiveCampaigns ? '● Nothing spending right now' : 'Fund ÷ Daily Budget')
             )}
             ${includeRevenue ? `
-            ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+            ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
             ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
             ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
             ` : ''}
@@ -6877,7 +6878,7 @@
                   ? `● Fund ÷ ${fmt(dailyBudget, curr)}/day`
                   : 'Fund ÷ Daily Budget'
               )}
-              ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+              ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
               ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
             </div>
@@ -6892,7 +6893,7 @@
               ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—',                   costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
               ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
               ${kpi('c-purple solid', '🎯', 'Total Conversion Rate',  sfmt(adConversionRate, v => fmt(v,'',2) + '%'),                               sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
-              ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+              ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
             </div>
           </div>
 
@@ -7446,8 +7447,9 @@
       const curr        = currencies.length === 1 ? currencies[0] + ' ' : '';
       const currLabel   = currencies.length === 1 ? currencies[0] : 'Mixed';
 
-      const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
-      const sfmtSub = text => !shopifyEnabled
+      const webEnabled = shopifyEnabled || !!_webSource;
+      const sfmt = (val, fn) => !webEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
+      const sfmtSub = text => !webEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
         : text;
       const shopifySubLabel = !shopifyEnabled
