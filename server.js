@@ -115,8 +115,52 @@ const CREATE_CLIENT_NEW = [
   "    });"
 ].join('\n');
 
+// ── EasyOrders webhook relay ─────────────────────────────────────────────────
+// EasyOrders can only send a `secret` header, and Supabase Edge Functions demand
+// an Authorization header, so the store posts here and we forward the order on
+// with the anon key attached.
+function relayEasyOrders(req, res) {
+  let body = '';
+  req.on('data', c => { body += c; if (body.length > 2e6) req.destroy(); });
+  req.on('end', async () => {
+    const q = req.url.split('?')[1] || '';
+    const target = `${SUPABASE_URL}/functions/v1/easyorders-webhook?${q}`;
+    try {
+      const r = await fetch(target, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON,
+          'Authorization': 'Bearer ' + SUPABASE_ANON,
+        },
+        body,
+      });
+      const text = await r.text();
+      res.writeHead(r.status, { 'Content-Type': 'application/json' });
+      res.end(text);
+    } catch (e) {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+
 http.createServer((req, res) => {
   let urlPath = req.url.split('?')[0];
+
+  if (urlPath === '/hooks/easyorders') {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'content-type, secret',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      });
+      return res.end();
+    }
+    if (req.method === 'POST') return relayEasyOrders(req, res);
+    res.writeHead(405); return res.end('POST only');
+  }
+
   if (urlPath === '/' || urlPath === '') urlPath = '/dashboard.html';
   const filePath = path.join(__dirname, urlPath);
   const ext = path.extname(filePath);
