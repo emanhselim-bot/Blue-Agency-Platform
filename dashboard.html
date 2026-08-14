@@ -7354,11 +7354,13 @@
       let totSessions = null, claritySourceCount = 0;
       try {
         const days = clarityNumDays(currentPeriod);
+        // Only pull Clarity when the selected accounts are actually linked to a
+        // project. Falling back to the org-wide call here would mix in every other
+        // client's sessions, which is worse than showing nothing.
         const clarityRes = uniqueClarityIds.length
           ? await Promise.allSettled(uniqueClarityIds.map(pid =>
               callEdgeFunction('clarity-data', { numOfDays: days, orgId: currentOrgId, clarityProjectId: pid })))
-          : [await Promise.resolve({ status: 'fulfilled',
-              value: await callEdgeFunction('clarity-data', { numOfDays: days, orgId: currentOrgId }) })];
+          : [];
         for (const r of clarityRes) {
           const v = r.status === 'fulfilled' ? r.value : null;
           const sess = v?.sessions ?? v?.totals?.sessions ?? v?.summary?.sessions;
