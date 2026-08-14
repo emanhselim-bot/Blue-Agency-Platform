@@ -9246,6 +9246,21 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       status.className = 'onboarding-status';
       status.textContent = '';
 
+      // Someone invited to an existing workspace must never end up creating a second,
+      // empty one — that is what makes their clients look like they disappeared.
+      const { data: existing } = await sb
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', currentUser.id)
+        .not('accepted_at', 'is', null)
+        .limit(1);
+      if (existing?.length) {
+        hideOnboarding();
+        btn.disabled = false; btn.textContent = 'Create Organisation →';
+        await loadOrgs();
+        return;
+      }
+
       const { data: newOrgId, error } = await sb.rpc('create_organization', { org_name: name });
       if (error) {
         status.className = 'onboarding-status error';
