@@ -6568,7 +6568,7 @@
         : 'Shopify Analytics';
       const shopifySubLabel = !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
-        : `<span class="shopify-badge">● Shopify${uniqueStoreIds.length > 1 ? ` · ${uniqueStoreIds.length} stores` : ''}</span>`;
+        : '<span class="shopify-badge">● Shopify</span>';
       const sfmt = (val, fn) => !shopifyEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
       const sfmtSub = text => !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
@@ -7315,6 +7315,7 @@
       const uniqueStoreIds   = [...new Set(allAccounts.map(a => a.shopify_store_id).filter(Boolean))];
       const uniqueClarityIds = [...new Set(allAccounts.map(a => a.clarity_project_id).filter(Boolean))];
       const shopifyEnabled = uniqueStoreIds.length > 0;
+      const storesNote = uniqueStoreIds.length > 1 ? ` · ${uniqueStoreIds.length} stores` : '';
 
       // Clarity: one call per distinct project, then add the sessions together
       let totSessions = null, claritySourceCount = 0;
