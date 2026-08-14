@@ -132,6 +132,8 @@ function relayEasyOrders(req, res) {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_ANON,
           'Authorization': 'Bearer ' + SUPABASE_ANON,
+          // pass EasyOrders' shared secret through so the function can verify it
+          'secret': req.headers['secret'] || '',
         },
         body,
       });
