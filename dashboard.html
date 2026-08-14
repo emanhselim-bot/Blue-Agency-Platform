@@ -4701,7 +4701,10 @@
 
     async function saveAccountGroup() {
       const name = document.getElementById('cmb-name').value.trim();
-      const ids = [...document.querySelectorAll('#combine-body input[type=checkbox]:checked')].map(c => c.value);
+      // the picker lives in Settings → Linked Accounts now
+      const ids = [...document.querySelectorAll(
+        '#combined-accounts-block input[type=checkbox]:checked, #combine-body input[type=checkbox]:checked'
+      )].map(c => c.value);
       if (!name) return alert('Give the combination a name.');
       if (ids.length < 2) return alert('Pick at least two accounts.');
       const { error } = await sb.from('account_groups').insert({
