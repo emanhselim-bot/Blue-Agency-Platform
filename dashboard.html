@@ -8579,12 +8579,81 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           </div>
           <textarea readonly class="connect-input" style="width:100%;height:120px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.5"
             id="snippet-${t.id}">${escHtml(_trackerSnippet(t.site_key))}</textarea>
-          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
             <button class="connect-btn" onclick="copySnippet('${t.id}', this)">Copy snippet</button>
+            <label class="connect-btn" style="cursor:pointer;margin:0">
+              ⬆ Import past orders
+              <input type="file" accept=".csv,text/csv,.xlsx" style="display:none"
+                onchange="importOrdersCsv('${t.id}', this)">
+            </label>
+            <span id="imp-status-${t.id}" style="font-size:11.5px"></span>
             <span style="font-size:11px;color:var(--text-muted)">Paste in the site's &lt;head&gt;. For a sale, call
               <code>blueAd('purchase',{orderId:'123',value:499,currency:'EGP',quantity:1})</code> on the thank-you page.</span>
           </div>
         </div>`).join('');
+    }
+
+    // Backfill past orders from a store's CSV export (EasyOrders → Orders → Export).
+    function _parseCsv(text) {
+      const rows = [];
+      let row = [], field = '', q = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) {
+          if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+          else if (c === '"') q = false;
+          else field += c;
+        } else if (c === '"') q = true;
+        else if (c === ',' || c === ';' || c === '\t') { row.push(field); field = ''; }
+        else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+        else if (c !== '\r') field += c;
+      }
+      if (field || row.length) { row.push(field); rows.push(row); }
+      return rows.filter(r => r.some(v => String(v).trim() !== ''));
+    }
+
+    async function importOrdersCsv(trackerId, input) {
+      const file = input.files?.[0];
+      const status = document.getElementById('imp-status-' + trackerId);
+      input.value = '';
+      if (!file) return;
+      if (/\.xlsx$/i.test(file.name)) {
+        status.textContent = '✗ Export as CSV, not Excel.';
+        status.style.color = '#DC2626';
+        return;
+      }
+      status.style.color = 'var(--text-muted)';
+      status.textContent = 'Reading…';
+
+      const text = await file.text();
+      const rows = _parseCsv(text);
+      if (rows.length < 2) { status.textContent = '✗ Empty file.'; status.style.color = '#DC2626'; return; }
+
+      const head = rows[0].map(h => h.toLowerCase().replace(/[\s_]+/g, ''));
+      const find = (...names) => head.findIndex(h => names.some(n => h.includes(n)));
+      const iId    = find('id', 'رقم');
+      const iTotal = find('totalamount', 'total', 'amount', 'cost', 'الاجمالي', 'إجمالي');
+      const iDate  = find('orderdate', 'date', 'createdat', 'تاريخ');
+      const iQty   = find('quantity', 'qty', 'items', 'الكمية');
+
+      if (iId < 0 || iTotal < 0 || iDate < 0) {
+        status.style.color = '#DC2626';
+        status.textContent = `✗ Could not find id / total / date columns. Found: ${rows[0].join(', ').slice(0, 90)}`;
+        return;
+      }
+
+      const parsed = rows.slice(1).map(r => ({
+        order_id:   (r[iId] || '').trim(),
+        value:      parseFloat(String(r[iTotal] || '').replace(/[^0-9.\-]/g, '')) || 0,
+        quantity:   iQty >= 0 ? parseInt(r[iQty]) || 1 : 1,
+        created_at: (r[iDate] || '').trim(),
+      })).filter(r => r.order_id && r.created_at);
+
+      status.textContent = `Importing ${parsed.length} orders…`;
+      const res = await callEdgeFunction('site-import', { tracker_id: trackerId, rows: parsed });
+      if (res.error) { status.style.color = '#DC2626'; status.textContent = '✗ ' + res.error; return; }
+      status.style.color = '#16A34A';
+      status.textContent = `✓ ${res.inserted} imported${res.skipped ? `, ${res.skipped} already there` : ''}`;
     }
 
     async function createSiteTracker() {
