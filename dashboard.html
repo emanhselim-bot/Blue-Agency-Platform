@@ -6638,7 +6638,7 @@
       // crSubLabel: show analytics error tooltip when the API is unavailable on the store's plan
       const crSubLabel = (shopifyEnabled && analyticsError)
         ? `<span title="${analyticsError.replace(/"/g,'&quot;')}" style="font-size:10px;color:var(--text-muted);font-weight:600;cursor:help">Analytics N/A ⓘ</span>`
-        : 'Shopify Analytics';
+        : (_webSource ? '● ' + _webSource : 'Shopify Analytics');
       const shopifySubLabel = _webSource
         ? `<span class="shopify-badge">● ${_webSource}</span>`
         : !shopifyEnabled
@@ -6887,8 +6887,8 @@
           <div class="kpi-section" data-section-id="totals">
             <div class="section-label">Total / Cost <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="totals">
-              ${kpi('c-green solid',  '📊', 'Total Orders',           (shopifyEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—',    'Website + Messages',             totalOrders, _t.orders, true, 'kpi-total-orders-val')}
-              ${kpi('c-teal solid',   '📦', 'Total Pieces',           (shopifyEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—',    'Website + Messages',             null, null, null, 'kpi-total-pieces-val')}
+              ${kpi('c-green solid',  '📊', 'Total Orders',           (webEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—',    'Website + Messages',             totalOrders, _t.orders, true, 'kpi-total-orders-val')}
+              ${kpi('c-teal solid',   '📦', 'Total Pieces',           (webEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—',    'Website + Messages',             null, null, null, 'kpi-total-pieces-val')}
               ${kpi('c-coral solid',  '🏷️', 'Avg Cost per Piece',    sfmt(avgCostPerPiece,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Pieces'),  null, null, null, 'kpi-avg-cost-per-piece-val')}
               ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—',                   costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
               ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
@@ -6909,7 +6909,7 @@
                 const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
                 const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
                 const _crSub      = (shopifyConversionRate != null && shopifyConversionRate > 0) ? sfmtSub(crSubLabel) : (sessionsFromClarity ? '● Orders ÷ Clarity Sessions' : sfmtSub(crSubLabel));
-                return kpi('c-teal', '🛍️', 'Shopify Conversion Rate', _crDisplay != null ? fmt(_crDisplay,'',2)+'%' : '—', _crSub);
+                return kpi('c-teal', '🛍️', (_webSource ? _webSource + ' Conversion Rate' : 'Shopify Conversion Rate'), _crDisplay != null ? fmt(_crDisplay,'',2)+'%' : '—', _crSub);
               })()}
             </div>
           </div>
@@ -6949,10 +6949,10 @@
             : '';
           // Merge Add to Cart sources: prefer ShopifyQL, fall back to Clarity
           const atcVal = funnelCartSessions !== null ? funnelCartSessions : clarityAddToCart;
-          const atcSrc = funnelCartSessions !== null ? 'Shopify Analytics' : (clarityAddToCart !== null ? 'Microsoft Clarity' : 'Shopify Analytics');
+          const atcSrc = funnelCartSessions !== null ? (_webSource ? '● ' + _webSource : 'Shopify Analytics') : (clarityAddToCart !== null ? 'Microsoft Clarity' : (_webSource ? '● ' + _webSource : 'Shopify Analytics'));
           const viewContentSrc = sessionsFromClarity
             ? `Microsoft Clarity${clarityWarningIcon}${clarityWindowNote}`
-            : 'Shopify Analytics';
+            : (_webSource ? '● ' + _webSource : 'Shopify Analytics');
           const fStepsAll = [
             { icon:'👁️', label:'View Content',      val: displaySessions,  src: viewContentSrc, color:'#0573F5', shopify: !sessionsFromClarity, isAnalytics: !sessionsFromClarity, alwaysShow: true },
             { icon:'🛒', label:'Add to Cart',        val: atcVal,           src: atcSrc,         color:'#179BB4', shopify: true,  isAnalytics: true,  alwaysShow: false },
