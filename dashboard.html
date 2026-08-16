@@ -13255,7 +13255,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.getElementById('acx-tab-clients').classList.toggle('active', t === 'clients');
       document.getElementById('acx-panel-team').style.display    = t === 'team'    ? '' : 'none';
       document.getElementById('acx-panel-clients').style.display = t === 'clients' ? '' : 'none';
-      if (t === 'clients') acxLoadClients();
+      // The clients list resolves client names from _acxClients, so make sure
+      // that has loaded before rendering.
+      if (t === 'clients') { (_acxClients.length ? Promise.resolve() : acxInit()).then(acxLoadClients); }
     }
 
     async function acxInit() {
@@ -13472,9 +13474,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </label>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No accounts.</div>';
     }
 
+    const ACX_MODE_LABEL = { view: '👁 View only', comment: '💬 View + comment', edit: '✎ Editor', editor: '✎ Editor' };
+
     async function acxLoadClients() {
       const el = document.getElementById('acx-clients-list');
-      const [{ data, error }, { data: logins }] = await Promise.all([
+      const [{ data, error }, { data: logins }, { data: tls }] = await Promise.all([
         sb.from('md_shares')
           .select('id, token, label, recipient_email, account_ids, created_at, last_viewed_at')
           .eq('organization_id', currentOrgId).eq('revoked', false)
@@ -13483,8 +13487,31 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           .select('id, full_name, email, account_ids')
           .eq('organization_id', currentOrgId).eq('archived', false)
           .eq('client_scope', 'none').order('full_name'),
+        // Timeline links created from a client's pipeline page — they belong in
+        // the same list, otherwise access is split across two screens again.
+        sb.from('cp_timeline_shares')
+          .select('id, token, label, mode, client_id, created_at, last_viewed_at')
+          .eq('organization_id', currentOrgId).eq('revoked', false)
+          .order('created_at', { ascending: false }),
       ]);
       if (error) { el.innerHTML = `<div style="color:#e53e3e;font-size:12px">${escHtml(error.message)}</div>`; return; }
+
+      const clientName = Object.fromEntries(_acxClients.map(c => [c.id, c.name]));
+      const tlHtml = (tls || []).map(s => {
+        const url = location.origin + location.pathname + '?timeline=' + s.token;
+        const seen = s.last_viewed_at ? 'opened ' + _alWhen(s.last_viewed_at) : 'not opened yet';
+        return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+          <div style="font-size:13.5px;font-weight:700">${escHtml(s.label || 'Untitled')}
+            <span style="font-size:11px;font-weight:400;color:var(--text-muted)">· timeline</span></div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin:2px 0 8px">
+            ${escHtml(clientName[s.client_id] || 'Unknown client')} · ${escHtml(ACX_MODE_LABEL[s.mode] || s.mode)} · ${escHtml(seen)}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="navigator.clipboard.writeText('${escHtml(url)}');this.textContent='✓ Copied'" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Copy link</button>
+            <button onclick="acxRevokeTimeline('${escHtml(s.id)}','${escHtml(s.label || '')}')" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Revoke</button>
+          </div>
+        </div>`;
+      }).join('');
 
       const loginHtml = (logins || []).map(c => `
         <div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
@@ -13495,12 +13522,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <button onclick="acxRemoveClientLogin('${escHtml(c.id)}','${escHtml(c.email)}')" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Revoke access</button>
         </div>`).join('');
 
-      if (!data?.length && !loginHtml) {
+      if (!data?.length && !loginHtml && !tlHtml) {
         el.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No client access yet.</div>';
         return;
       }
 
-      el.innerHTML = loginHtml + data.map(s => {
+      const head = t => `<div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin:14px 0 8px">${t}</div>`;
+
+      el.innerHTML =
+        (loginHtml ? head('Logins') + loginHtml : '') +
+        (data?.length ? head('Dashboard links') : '') +
+        data.map(s => {
         const url = location.origin + location.pathname + '?md=' + s.token;
         const seen = s.last_viewed_at ? 'opened ' + _alWhen(s.last_viewed_at) : 'not opened yet';
         return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
@@ -13513,7 +13545,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <button onclick="revokeMdShare('${escHtml(s.id)}');setTimeout(acxLoadClients,300)" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Revoke</button>
           </div>
         </div>`;
-      }).join('');
+      }).join('') +
+        (tlHtml ? head('Timeline links') + tlHtml : '');
+    }
+
+    async function acxRevokeTimeline(id, label) {
+      if (!confirm(`Revoke "${label || 'this link'}"? Anyone holding it loses access immediately.`)) return;
+      const err = document.getElementById('acx-cl-error');
+      const { error } = await sb.from('cp_timeline_shares').update({ revoked: true }).eq('id', id);
+      if (error) { err.style.color = '#e53e3e'; err.textContent = error.message; return; }
+      logActivity('share', 'Revoked a timeline link', { module: 'pipeline', entityType: 'settings', label });
+      acxLoadClients();
     }
 
     async function acxRemoveClientLogin(memberId, email) {
