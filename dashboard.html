@@ -2554,6 +2554,12 @@
             <div class="hub-card-desc">Who signed in and what they changed — across pipeline, media buying and finance.</div>
             <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
           </div>
+          <div class="hub-card" id="hub-card-access" data-mod="access" onclick="hubOpen('access')" style="display:none">
+            <div class="hub-card-icon">🔐</div>
+            <div class="hub-card-title">Access</div>
+            <div class="hub-card-desc">Who can see what — your team and your clients, across both dashboards.</div>
+            <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
+          </div>
         </div>
 
         <button class="hub-signout" onclick="document.getElementById('signout-btn').click()">Sign out</button>
@@ -2582,6 +2588,48 @@
           <div class="hub-act-col"><div class="hub-act-head">🤝 Clients Pipeline</div><div id="ha-pipeline" class="hub-act-body"></div></div>
           <div class="hub-act-col"><div class="hub-act-head">📊 Media Buying</div><div id="ha-media"    class="hub-act-body"></div></div>
           <div class="hub-act-col"><div class="hub-act-head">💰 Finance</div>        <div id="ha-finance"  class="hub-act-body"></div></div>
+        </div>
+      </div>
+
+      <!-- Access module (owner only) -->
+      <div id="hub-access-view" style="display:none">
+        <div class="hub-mod-head">
+          <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+          <h2>🔐 Access</h2>
+        </div>
+        <div class="cpm-tabs" style="margin-bottom:16px">
+          <button class="cpm-tab active" id="acx-tab-team"    onclick="acxTab('team')">👥 My team</button>
+          <button class="cpm-tab"        id="acx-tab-clients" onclick="acxTab('clients')">🤝 Clients</button>
+        </div>
+
+        <div id="acx-panel-team">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            <input id="acx-new-name"  class="connect-input" placeholder="Full name"  style="min-width:150px">
+            <input id="acx-new-email" class="connect-input" placeholder="Email"      style="min-width:190px" type="email">
+            <button onclick="acxAddMember()" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">＋ Add person</button>
+          </div>
+          <div id="acx-team-list"></div>
+          <div id="acx-team-error" style="color:#e53e3e;font-size:12px;margin-top:8px"></div>
+        </div>
+
+        <div id="acx-panel-clients" style="display:none">
+          <p style="font-size:12.5px;color:var(--text-muted);line-height:1.6;margin-bottom:14px">
+            Give a client a read-only link (nothing to remember) or a login (email and password).
+            Either way you pick exactly which ad accounts they can open.
+          </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            <input id="acx-cl-label" class="connect-input" placeholder="Client name"   style="min-width:160px">
+            <input id="acx-cl-email" class="connect-input" placeholder="Email"          style="min-width:190px" type="email">
+            <select id="acx-cl-kind" class="connect-input" style="min-width:150px">
+              <option value="link">Share link — no login</option>
+              <option value="login">Login — email + password</option>
+            </select>
+            <button onclick="acxCreateClient()" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">＋ Create</button>
+          </div>
+          <div class="modal-label">Accounts they may see</div>
+          <div id="acx-cl-accounts" style="max-height:170px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:6px 0 16px"></div>
+          <div id="acx-cl-error" style="color:#e53e3e;font-size:12px;margin-bottom:10px"></div>
+          <div id="acx-clients-list"></div>
         </div>
       </div>
       <div id="hub-pipeline-view" style="display:none">
@@ -2795,9 +2843,12 @@
       <div class="settings-layout">
         <!-- Sidebar nav -->
         <div class="settings-sidebar">
-          <div class="settings-nav-section">People</div>
-          <button class="settings-nav-item active" id="snav-teams"    onclick="setSettingsTab('teams')">   <span class="settings-nav-icon">👥</span> Teams</button>
-          <button class="settings-nav-item"        id="snav-clients"  onclick="setSettingsTab('clients')"> <span class="settings-nav-icon">🔑</span> Client Accounts</button>
+          <!-- People now lives in the Access module on the home hub. These two
+               panels stay in the DOM because Access opens the Client Accounts
+               one when you choose to create a login, but they are no longer
+               separate places to manage permissions. -->
+          <button class="settings-nav-item active" id="snav-teams"    onclick="setSettingsTab('teams')"   style="display:none"><span class="settings-nav-icon">👥</span> Teams</button>
+          <button class="settings-nav-item"        id="snav-clients"  onclick="setSettingsTab('clients')" style="display:none"><span class="settings-nav-icon">🔑</span> Client Accounts</button>
           <div class="settings-nav-section">Integrations</div>
           <button class="settings-nav-item"        id="snav-shopify"  onclick="setSettingsTab('shopify')"> <span class="settings-nav-icon">🛍️</span> Shopify Stores</button>
           <button class="settings-nav-item"        id="snav-clarity"  onclick="setSettingsTab('clarity')"> <span class="settings-nav-icon">🔍</span> Microsoft Clarity</button>
@@ -5173,6 +5224,7 @@
       if (_alNav) _alNav.style.display = currentRole === 'owner' ? '' : 'none';
       _hubActivityGate();
       mdShareGate();
+      acxGate();
 
       // Load current user's access restrictions (for non-owners)
       await loadMyAccess();
@@ -8667,7 +8719,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
     function openSettings(tab) {
       document.getElementById('settings-modal').classList.remove('hidden');
-      setSettingsTab(tab || 'teams');
+      // Teams/Client Accounts are no longer nav entries, so default elsewhere.
+      setSettingsTab(tab || 'shopify');
       renderAgencySettings();
     }
     document.getElementById('modal-close').addEventListener('click', closeSettingsModal);
@@ -10430,7 +10483,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!await _hubWaitOrg()) { box.innerHTML = '<div class="hub-loading">No organization loaded — open the Media Buying Dashboard once, then come back.</div>'; return; }
       const { data, error } = await sb.from('pipeline_clients').select('*').eq('organization_id', currentOrgId).order('created_at');
       if (error) { box.innerHTML = '<div class="hub-loading">Error: ' + _hubEsc(error.message) + '</div>'; return; }
-      _pipeClients = data || [];
+      // Respect a per-person client scope set in Access.
+      _pipeClients = (data || []).filter(c => canSeeClient(c.id));
       renderPipeline();
     }
 
@@ -13160,12 +13214,239 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.getElementById('hub-finance-view').style.display  = v === 'finance'  ? '' : 'none';
       const av = document.getElementById('hub-activity-view');
       if (av) av.style.display = v === 'activity' ? '' : 'none';
+      const xv = document.getElementById('hub-access-view');
+      if (xv) xv.style.display = v === 'access' ? '' : 'none';
       const cv = document.getElementById('hub-client-view');
       if (cv) cv.style.display = v === 'client' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
       if (v === 'pipeline') cpmInit();
       if (v === 'finance')  loadFinance();
       if (v === 'activity') renderHubActivity();
+      if (v === 'access')   acxInit();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // ACCESS — one place to say who sees what (owner only).
+    // Team permissions live on cp_members: module_roles decides which
+    // dashboards and at what level; account_ids / client_ids narrow it to
+    // specific ad accounts and pipeline clients (null = everything).
+    // ══════════════════════════════════════════════════════════════
+    const ACX_MODULES = [
+      ['pipeline', '🤝 Pipeline'],
+      ['media',    '📊 Media buying'],
+      ['finance',  '💰 Finance'],
+    ];
+    let _acxMembers = [], _acxAccounts = [], _acxClients = [];
+
+    function acxGate() {
+      const c = document.getElementById('hub-card-access');
+      if (c) c.style.display = currentRole === 'owner' ? '' : 'none';
+    }
+
+    function acxTab(t) {
+      document.getElementById('acx-tab-team').classList.toggle('active', t === 'team');
+      document.getElementById('acx-tab-clients').classList.toggle('active', t === 'clients');
+      document.getElementById('acx-panel-team').style.display    = t === 'team'    ? '' : 'none';
+      document.getElementById('acx-panel-clients').style.display = t === 'clients' ? '' : 'none';
+      if (t === 'clients') acxLoadClients();
+    }
+
+    async function acxInit() {
+      if (currentRole !== 'owner') return;
+      const [{ data: accts }, { data: clients }, { data: members }] = await Promise.all([
+        sb.from('meta_ad_accounts_safe').select('id, account_name')
+          .eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
+        sb.from('pipeline_clients').select('id, name').eq('organization_id', currentOrgId).order('name'),
+        sb.from('cp_members').select('*').eq('organization_id', currentOrgId)
+          .eq('archived', false).order('full_name'),
+      ]);
+      _acxAccounts = accts   || [];
+      _acxClients  = clients || [];
+      _acxMembers  = members || [];
+      acxRenderTeam();
+      acxRenderAccountPicker();
+    }
+
+    function _acxChecks(list, chosen, onchange, idKey, labelKey) {
+      // chosen === null means "everything", shown as all ticked.
+      return list.map(x => {
+        const on = !chosen || chosen.includes(x[idKey]);
+        return `<label style="display:inline-flex;gap:5px;align-items:center;font-size:12px;margin:0 10px 5px 0;cursor:pointer">
+            <input type="checkbox" ${on ? 'checked' : ''} value="${escHtml(x[idKey])}" onchange="${onchange}">
+            <span>${escHtml(x[labelKey])}</span></label>`;
+      }).join('');
+    }
+
+    function acxRenderTeam() {
+      const el = document.getElementById('acx-team-list');
+      if (!_acxMembers.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No team members yet.</div>'; return; }
+
+      el.innerHTML = _acxMembers.map((m, i) => {
+        const roles = m.module_roles || {};
+        const isOwner = m.role === 'owner';
+        const modCells = ACX_MODULES.map(([key, label]) => `
+          <div style="display:flex;align-items:center;gap:6px;margin:0 14px 6px 0">
+            <span style="font-size:12px;min-width:110px">${label}</span>
+            <select ${isOwner ? 'disabled' : ''} onchange="acxSetModule(${i},'${key}',this.value)" class="connect-input" style="padding:4px 8px;font-size:12px;min-width:auto">
+              <option value=""       ${!roles[key]              ? 'selected' : ''}>No access</option>
+              <option value="viewer" ${roles[key] === 'viewer'  ? 'selected' : ''}>Viewer</option>
+              <option value="editor" ${roles[key] === 'editor'  ? 'selected' : ''}>Editor</option>
+            </select>
+          </div>`).join('');
+
+        return `<div style="border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:14px;font-weight:700">${escHtml(m.full_name || m.email)}${isOwner ? ' <span style="font-size:11px;color:var(--text-muted)">(owner — full access)</span>' : ''}</div>
+              <div style="font-size:12px;color:var(--text-muted)">${escHtml(m.email)}</div>
+            </div>
+            ${isOwner ? '' : `<button onclick="acxRemoveMember(${i})" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Remove</button>`}
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;margin-top:12px">${modCells}</div>
+
+          ${isOwner ? '' : `
+          <details style="margin-top:6px">
+            <summary style="font-size:12px;cursor:pointer;color:var(--text-muted)">Limit to specific accounts and clients</summary>
+            <div style="margin-top:10px">
+              <div style="font-size:12px;font-weight:600;margin-bottom:5px">Ad accounts ${m.account_ids ? '' : '<span style="color:var(--text-muted);font-weight:400">— all</span>'}</div>
+              <div>${_acxChecks(_acxAccounts, m.account_ids, `acxSetScope(${i},'account_ids',this)`, 'id', 'account_name')}</div>
+              <div style="font-size:12px;font-weight:600;margin:10px 0 5px">Pipeline clients ${m.client_ids ? '' : '<span style="color:var(--text-muted);font-weight:400">— all</span>'}</div>
+              <div>${_acxChecks(_acxClients, m.client_ids, `acxSetScope(${i},'client_ids',this)`, 'id', 'name')}</div>
+            </div>
+          </details>`}
+        </div>`;
+      }).join('');
+    }
+
+    async function _acxSave(i, patch) {
+      const m = _acxMembers[i];
+      Object.assign(m, patch);
+      const { error } = await sb.from('cp_members')
+        .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', m.id);
+      const err = document.getElementById('acx-team-error');
+      err.textContent = error ? error.message : '';
+      if (!error) {
+        logActivity('change', 'Changed access for ' + (m.full_name || m.email), {
+          entityType: 'settings', label: 'Access', details: patch,
+        });
+      }
+    }
+
+    function acxSetModule(i, key, value) {
+      const roles = { ...(_acxMembers[i].module_roles || {}) };
+      if (value) roles[key] = value; else delete roles[key];
+      // modules[] is still read by older code paths; keep the two in step.
+      _acxSave(i, { module_roles: roles, modules: Object.keys(roles) });
+    }
+
+    function acxSetScope(i, field, input) {
+      const box = input.closest('div');
+      const ids = [...box.querySelectorAll('input:checked')].map(x => x.value);
+      const total = box.querySelectorAll('input').length;
+      // Everything ticked is stored as null, meaning "all, including future ones".
+      _acxSave(i, { [field]: ids.length === total ? null : ids });
+    }
+
+    async function acxAddMember() {
+      const name  = document.getElementById('acx-new-name').value.trim();
+      const email = document.getElementById('acx-new-email').value.trim().toLowerCase();
+      const err   = document.getElementById('acx-team-error');
+      if (!name || !email) { err.textContent = 'Name and email are both needed.'; return; }
+
+      const { error } = await sb.from('cp_members').insert({
+        organization_id: currentOrgId, full_name: name, email,
+        role: 'editor', modules: ['pipeline'],
+        module_roles: { pipeline: 'editor' }, client_scope: 'all',
+      });
+      if (error) { err.textContent = error.message; return; }
+      logActivity('change', 'Added a team member', { entityType: 'settings', label: name });
+      document.getElementById('acx-new-name').value = '';
+      document.getElementById('acx-new-email').value = '';
+      acxInit();
+    }
+
+    async function acxRemoveMember(i) {
+      const m = _acxMembers[i];
+      if (!confirm(`Remove ${m.full_name || m.email}? They lose access immediately.`)) return;
+      const { error } = await sb.from('cp_members').update({ archived: true }).eq('id', m.id);
+      if (error) { document.getElementById('acx-team-error').textContent = error.message; return; }
+      logActivity('change', 'Removed a team member', { entityType: 'settings', label: m.full_name || m.email });
+      acxInit();
+    }
+
+    // ── Clients tab ───────────────────────────────────────────────
+    function acxRenderAccountPicker() {
+      document.getElementById('acx-cl-accounts').innerHTML = _acxAccounts.map(a => `
+        <label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:13px;cursor:pointer">
+          <input type="checkbox" value="${escHtml(a.id)}">
+          <span>${escHtml(a.account_name)}</span>
+        </label>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No accounts.</div>';
+    }
+
+    async function acxLoadClients() {
+      const el = document.getElementById('acx-clients-list');
+      const { data, error } = await sb.from('md_shares')
+        .select('id, token, label, recipient_email, account_ids, created_at, last_viewed_at')
+        .eq('organization_id', currentOrgId).eq('revoked', false)
+        .order('created_at', { ascending: false });
+      if (error) { el.innerHTML = `<div style="color:#e53e3e;font-size:12px">${escHtml(error.message)}</div>`; return; }
+      if (!data?.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No client access yet.</div>'; return; }
+
+      el.innerHTML = data.map(s => {
+        const url = location.origin + location.pathname + '?md=' + s.token;
+        const seen = s.last_viewed_at ? 'opened ' + _alWhen(s.last_viewed_at) : 'not opened yet';
+        return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+          <div style="font-size:13.5px;font-weight:700">${escHtml(s.label || 'Untitled')}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin:2px 0 8px">
+            ${s.account_ids.length} account${s.account_ids.length === 1 ? '' : 's'} · ${escHtml(seen)}${s.recipient_email ? ' · ' + escHtml(s.recipient_email) : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="navigator.clipboard.writeText('${escHtml(url)}');this.textContent='✓ Copied'" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Copy link</button>
+            <button onclick="revokeMdShare('${escHtml(s.id)}');setTimeout(acxLoadClients,300)" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Revoke</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function acxCreateClient() {
+      const label = document.getElementById('acx-cl-label').value.trim();
+      const email = document.getElementById('acx-cl-email').value.trim();
+      const kind  = document.getElementById('acx-cl-kind').value;
+      const ids   = [...document.querySelectorAll('#acx-cl-accounts input:checked')].map(i => i.value);
+      const err   = document.getElementById('acx-cl-error');
+      err.style.color = '#e53e3e'; err.textContent = '';
+
+      if (!label)      { err.textContent = 'Give the client a name.'; return; }
+      if (!ids.length) { err.textContent = 'Tick at least one account.'; return; }
+
+      if (kind === 'login') {
+        if (!email) { err.textContent = 'A login needs an email address.'; return; }
+        err.style.color = 'var(--text-muted)';
+        err.textContent = 'Creating a login… use Settings → Client Accounts to set their password.';
+        openSettings('clients');
+        return;
+      }
+
+      const { data, error } = await sb.from('md_shares').insert({
+        organization_id: currentOrgId, account_ids: ids, label,
+        recipient_email: email || null, created_by: currentUser?.id,
+      }).select('token').single();
+      if (error) { err.textContent = error.message; return; }
+
+      const url = location.origin + location.pathname + '?md=' + data.token;
+      logActivity('share', 'Gave a client dashboard access', {
+        module: 'media', entityType: 'md_share', label, details: { accounts: ids.length, email, kind },
+      });
+      if (email) {
+        window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Blue Ad dashboard')}&body=${encodeURIComponent(`Hello,\n\nHere is your live performance dashboard:\n\n${url}\n\nIt updates automatically — no login needed.\n\nBlue Ad`)}`);
+      }
+      try { await navigator.clipboard.writeText(url); } catch (e) { /* clipboard may be blocked */ }
+      err.style.color = '#16A34A';
+      err.textContent = '✓ Link created and copied.';
+      document.getElementById('acx-cl-label').value = '';
+      document.getElementById('acx-cl-email').value = '';
+      acxLoadClients();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -13417,20 +13698,54 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function loadMyModules() {
       try {
         const { data } = await sb.from('cp_members')
-          .select('role, modules, client_scope, archived')
+          .select('role, modules, module_roles, account_ids, client_ids, client_scope, archived')
           .eq('organization_id', currentOrgId)
           .ilike('email', currentUser?.email || '')
           .maybeSingle();
-        if (!data || data.archived) { _cpModules = null; return; }   // not on the team list → unrestricted
+        if (!data || data.archived) { _cpModules = null; _myAccess = null; return; }  // not listed → unrestricted
+        const roles = data.module_roles && Object.keys(data.module_roles).length
+          ? data.module_roles : null;
         _cpModules = data.role === 'owner'
           ? ['pipeline','media','finance']
-          : (Array.isArray(data.modules) ? data.modules : ['pipeline']);
-      } catch { _cpModules = null; }
+          : (roles ? Object.keys(roles)
+                   : (Array.isArray(data.modules) ? data.modules : ['pipeline']));
+        _myAccess = data.role === 'owner' ? null : {
+          roles:       roles || {},
+          accountIds:  data.account_ids || null,   // null = all
+          clientIds:   data.client_ids  || null,
+        };
+      } catch { _cpModules = null; _myAccess = null; }
       applyModuleAccess();
+      applyScopeFilters();
+    }
+
+    // null means unrestricted (owner, or someone not on the team list at all).
+    let _myAccess = null;
+
+    function myRoleIn(module) {
+      if (!_myAccess) return 'editor';
+      return _myAccess.roles[module] || null;
+    }
+    function canSeeAccount(id) {
+      return !_myAccess || !_myAccess.accountIds || _myAccess.accountIds.includes(id);
+    }
+    function canSeeClient(id) {
+      return !_myAccess || !_myAccess.clientIds || _myAccess.clientIds.includes(id);
+    }
+
+    // Drop out-of-scope ad accounts from the picker. The data functions still
+    // hold the authoritative check; this keeps the UI honest.
+    function applyScopeFilters() {
+      if (!_myAccess || !_myAccess.accountIds) return;
+      [...sel.options].forEach(o => {
+        if (!o.value || o.value === '__all__' || o.value.startsWith('__group__')) return;
+        if (!canSeeAccount(o.value)) o.remove();
+      });
+      if (sel.value && !canSeeAccount(sel.value)) { sel.value = ''; }
     }
     function canOpenModule(m) {
-      // Team Activity is never part of a member's module list — it is owner-only.
-      if (m === 'activity') return currentRole === 'owner';
+      // Owner-only modules are never part of a member's module list.
+      if (m === 'activity' || m === 'access') return currentRole === 'owner';
       return !_cpModules || _cpModules.includes(m);
     }
     function applyModuleAccess() {
