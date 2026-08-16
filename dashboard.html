@@ -2630,18 +2630,38 @@
             Either way you pick exactly which ad accounts they can open.
           </p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <select id="acx-cl-scope" class="connect-input" style="min-width:190px" onchange="acxKindChanged()">
+              <option value="media">📊 Media buying dashboard</option>
+              <option value="pipeline">🤝 Pipeline timeline</option>
+            </select>
             <input id="acx-cl-label" class="connect-input" placeholder="Client name"   style="min-width:150px">
-            <input id="acx-cl-email" class="connect-input" placeholder="Email"          style="min-width:180px" type="email">
+            <input id="acx-cl-email" class="connect-input" placeholder="Email"          style="min-width:170px" type="email">
             <select id="acx-cl-kind" class="connect-input" style="min-width:150px" onchange="acxKindChanged()">
               <option value="link">Share link — no login</option>
               <option value="login">Login — username + password</option>
             </select>
-            <input id="acx-cl-user" class="connect-input" placeholder="Username" style="min-width:140px;display:none" autocomplete="off">
-            <input id="acx-cl-pass" class="connect-input" placeholder="Password" style="min-width:140px;display:none" type="password" autocomplete="new-password">
+            <input id="acx-cl-user" class="connect-input" placeholder="Username" style="min-width:130px;display:none" autocomplete="off">
+            <input id="acx-cl-pass" class="connect-input" placeholder="Password" style="min-width:130px;display:none" type="password" autocomplete="new-password">
             <button onclick="acxCreateClient()" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">＋ Create</button>
           </div>
-          <div class="modal-label">Accounts they may see</div>
-          <div id="acx-cl-accounts" style="max-height:170px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:6px 0 16px"></div>
+
+          <!-- Media buying: which ad accounts -->
+          <div id="acx-cl-media-box">
+            <div class="modal-label">Accounts they may see</div>
+            <div id="acx-cl-accounts" style="max-height:170px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:6px 0 16px"></div>
+          </div>
+
+          <!-- Pipeline: which client's timeline, and what they can do -->
+          <div id="acx-cl-pipe-box" style="display:none;margin:6px 0 16px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <select id="acx-cl-pipeclient" class="connect-input" style="min-width:200px"></select>
+              <select id="acx-cl-pipemode" class="connect-input" style="min-width:190px">
+                <option value="view">👁 View only</option>
+                <option value="edit">💬 View + comment</option>
+                <option value="editor">✎ Editor</option>
+              </select>
+            </div>
+          </div>
           <div id="acx-cl-error" style="color:#e53e3e;font-size:12px;margin-bottom:10px"></div>
           <div id="acx-clients-list"></div>
         </div>
@@ -13743,9 +13763,26 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     function acxKindChanged() {
-      const login = document.getElementById('acx-cl-kind').value === 'login';
+      const scope = document.getElementById('acx-cl-scope').value;
+      const kind  = document.getElementById('acx-cl-kind');
+      const pipe  = scope === 'pipeline';
+
+      // A pipeline timeline is link-only — there is no logged-in view of it.
+      kind.disabled = pipe;
+      if (pipe) kind.value = 'link';
+      const login = !pipe && kind.value === 'login';
+
       document.getElementById('acx-cl-user').style.display = login ? '' : 'none';
       document.getElementById('acx-cl-pass').style.display = login ? '' : 'none';
+      document.getElementById('acx-cl-media-box').style.display = pipe ? 'none' : '';
+      document.getElementById('acx-cl-pipe-box').style.display  = pipe ? '' : 'none';
+
+      const sel = document.getElementById('acx-cl-pipeclient');
+      if (pipe && !sel.options.length) {
+        sel.innerHTML = _acxClients.length
+          ? _acxClients.map(c => `<option value="${escHtml(c.id)}">${escHtml(c.name)}</option>`).join('')
+          : '<option value="">No pipeline clients yet</option>';
+      }
     }
 
     function _acxChecks(list, chosen, onchange, idKey, labelKey) {
@@ -14103,6 +14140,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     async function acxCreateClient() {
+      const scope = document.getElementById('acx-cl-scope').value;
       const label = document.getElementById('acx-cl-label').value.trim();
       const email = document.getElementById('acx-cl-email').value.trim();
       const kind  = document.getElementById('acx-cl-kind').value;
@@ -14110,7 +14148,36 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const err   = document.getElementById('acx-cl-error');
       err.style.color = '#e53e3e'; err.textContent = '';
 
-      if (!label)      { err.textContent = 'Give the client a name.'; return; }
+      if (!label) { err.textContent = 'Give the client a name.'; return; }
+
+      // ── Pipeline timeline link ──────────────────────────────────
+      if (scope === 'pipeline') {
+        const clientId = document.getElementById('acx-cl-pipeclient').value;
+        const mode     = document.getElementById('acx-cl-pipemode').value;
+        if (!clientId) { err.textContent = 'Pick which client\'s timeline to share.'; return; }
+
+        const { data, error } = await sb.from('cp_timeline_shares').insert({
+          client_id: clientId, organization_id: currentOrgId,
+          mode, label, created_by: currentUser?.id,
+        }).select('token').single();
+        if (error) { err.textContent = error.message; return; }
+
+        const url = location.origin + location.pathname + '?timeline=' + data.token;
+        logActivity('share', 'Gave a client timeline access', {
+          module: 'pipeline', entityType: 'client', entityId: clientId, label, details: { mode },
+        });
+        if (email) {
+          window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your project timeline')}&body=${encodeURIComponent(`Hello,\n\nHere is your live project timeline:\n\n${url}\n\nNo login needed.\n\nBlue Ad`)}`);
+        }
+        try { await navigator.clipboard.writeText(url); } catch (e) { /* clipboard may be blocked */ }
+        err.style.color = '#16A34A';
+        err.textContent = '✓ Timeline link created and copied.';
+        document.getElementById('acx-cl-label').value = '';
+        document.getElementById('acx-cl-email').value = '';
+        acxLoadClients();
+        return;
+      }
+
       if (!ids.length) { err.textContent = 'Tick at least one account.'; return; }
 
       if (kind === 'login') {
