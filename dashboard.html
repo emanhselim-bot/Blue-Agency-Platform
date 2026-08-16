@@ -13367,16 +13367,24 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               </div>
             </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
-              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Contract</div>
-                   <strong>${escHtml(fnMoney(c.contract_value, c.currency))}</strong></div>
-              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Received</div>
-                   <strong style="color:#16A34A">${escHtml(fnMoney(c.received_base))}</strong></div>
-              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Remaining</div>
-                   <strong style="color:${overdue ? '#E53E3E' : 'inherit'}">${escHtml(fnMoney(c.remaining_base))}</strong></div>
-              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Expenses</div>
-                   <strong style="color:#7C3AED">${escHtml(fnMoney(c.expenses_base))}</strong></div>
-              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Profit</div>
-                   <strong>${escHtml(fnMoney(c.expected_profit_base))}${c.margin_pct != null ? ` <span style="font-weight:400;color:var(--text-muted)">${c.margin_pct}%</span>` : ''}</strong></div>
+              ${(month
+                // Period selected: the headline figures describe the period.
+                // Contract and Remaining are lifetime values, marked as such.
+                ? [['Contract · total', fnMoney(c.contract_value, c.currency), 'inherit'],
+                   ['Received in period', fnMoney(mt.rec[c.id] || 0), '#16A34A'],
+                   ['Spent in period',    fnMoney(mt.exp[c.id] || 0), '#7C3AED'],
+                   ['Due in period',      fnMoney(mt.due[c.id] || 0), '#EA8C00'],
+                   ['Profit in period',   fnMoney((mt.rec[c.id] || 0) - (mt.exp[c.id] || 0)),
+                                          ((mt.rec[c.id] || 0) - (mt.exp[c.id] || 0)) >= 0 ? '#16A34A' : '#E53E3E'],
+                   ['Remaining · total',  fnMoney(c.remaining_base), overdue ? '#E53E3E' : 'inherit']]
+                : [['Contract',  fnMoney(c.contract_value, c.currency), 'inherit'],
+                   ['Received',  fnMoney(c.received_base),  '#16A34A'],
+                   ['Remaining', fnMoney(c.remaining_base), overdue ? '#E53E3E' : 'inherit'],
+                   ['Expenses',  fnMoney(c.expenses_base),  '#7C3AED'],
+                   ['Profit',    fnMoney(c.expected_profit_base) + (c.margin_pct != null ? ` ${c.margin_pct}%` : ''), 'inherit']]
+              ).map(([label, val, col]) => `
+                <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">${escHtml(label)}</div>
+                     <strong style="color:${col}">${escHtml(val)}</strong></div>`).join('')}
             </div>
             <span style="background:${col}22;color:${col};border:1px solid ${col}55;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;white-space:nowrap">${escHtml(label)}</span>
           </div>
@@ -13384,8 +13392,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <div style="height:100%;width:${pct}%;background:${col}"></div>
           </div>
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)">
-            <span>${month ? `<strong style="color:#16A34A">${escHtml(fnMoney(mt.rec[c.id] || 0))} received</strong>${mt.exp[c.id] ? ` · <span style="color:#7C3AED">${escHtml(fnMoney(mt.exp[c.id]))} spent</span>` : ''}${mt.due[c.id] ? ` · <span style="color:#EA8C00">${escHtml(fnMoney(mt.due[c.id]))} due</span>` : ''} in period · `
-                       : ''}${pct}% collected
+            <span>${pct}% of contract collected all-time
               ${c.payment_count ? ` · ${c.payment_count} payment${c.payment_count === 1 ? '' : 's'}` : ''}
               ${c.last_payment_on ? ` · last paid ${escHtml(fnDate(c.last_payment_on))}` : ' · no payments yet'}
               ${c.next_due_on ? ` · <span style="color:${overdue ? '#E53E3E' : 'inherit'}">next due ${escHtml(fnDate(c.next_due_on))}</span>` : ''}
