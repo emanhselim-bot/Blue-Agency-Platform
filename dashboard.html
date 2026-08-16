@@ -13474,7 +13474,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </label>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No accounts.</div>';
     }
 
-    const ACX_MODE_LABEL = { view: '👁 View only', comment: '💬 View + comment', edit: '✎ Editor', editor: '✎ Editor' };
+    // 'edit' is the stored value for view+comment; 'editor' is full editing.
+    const ACX_MODE_LABEL = { view: '👁 View only', edit: '💬 View + comment', editor: '✎ Editor' };
 
     async function acxLoadClients() {
       const el = document.getElementById('acx-clients-list');
@@ -13501,10 +13502,19 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         const url = location.origin + location.pathname + '?timeline=' + s.token;
         const seen = s.last_viewed_at ? 'opened ' + _alWhen(s.last_viewed_at) : 'not opened yet';
         return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
-          <div style="font-size:13.5px;font-weight:700">${escHtml(s.label || 'Untitled')}
-            <span style="font-size:11px;font-weight:400;color:var(--text-muted)">· timeline</span></div>
-          <div style="font-size:11.5px;color:var(--text-muted);margin:2px 0 8px">
-            ${escHtml(clientName[s.client_id] || 'Unknown client')} · ${escHtml(ACX_MODE_LABEL[s.mode] || s.mode)} · ${escHtml(seen)}
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+            <input value="${escHtml(s.label || '')}" placeholder="Name this link"
+                   onchange="acxRenameShare('cp_timeline_shares','${escHtml(s.id)}',this.value)"
+                   class="connect-input" style="min-width:150px;padding:6px 10px;font-size:13px;font-weight:600">
+            <select onchange="acxSetShareMode('${escHtml(s.id)}',this.value)" class="connect-input" style="min-width:auto;padding:6px 10px;font-size:12px">
+              <option value="view"   ${s.mode === 'view'   ? 'selected' : ''}>👁 View only</option>
+              <option value="edit"   ${s.mode === 'edit'   ? 'selected' : ''}>💬 View + comment</option>
+              <option value="editor" ${s.mode === 'editor' ? 'selected' : ''}>✎ Editor</option>
+            </select>
+            <span style="font-size:11px;color:var(--text-muted)">timeline</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin:0 0 8px">
+            ${escHtml(clientName[s.client_id] || 'Unknown client')} · ${escHtml(seen)}
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button onclick="navigator.clipboard.writeText('${escHtml(url)}');this.textContent='✓ Copied'" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Copy link</button>
@@ -13536,7 +13546,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         const url = location.origin + location.pathname + '?md=' + s.token;
         const seen = s.last_viewed_at ? 'opened ' + _alWhen(s.last_viewed_at) : 'not opened yet';
         return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
-          <div style="font-size:13.5px;font-weight:700">${escHtml(s.label || 'Untitled')}</div>
+          <input value="${escHtml(s.label || '')}" placeholder="Name this link"
+                 onchange="acxRenameShare('md_shares','${escHtml(s.id)}',this.value)"
+                 class="connect-input" style="min-width:180px;padding:6px 10px;font-size:13px;font-weight:600;margin-bottom:6px">
           <div style="font-size:11.5px;color:var(--text-muted);margin:2px 0 8px">
             ${s.account_ids.length} account${s.account_ids.length === 1 ? '' : 's'} · ${escHtml(seen)}${s.recipient_email ? ' · ' + escHtml(s.recipient_email) : ''}
           </div>
@@ -13547,6 +13559,30 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </div>`;
       }).join('') +
         (tlHtml ? head('Timeline links') + tlHtml : '');
+    }
+
+    // Renaming and re-scoping a live link takes effect immediately for whoever
+    // already holds it — the URL does not change.
+    async function acxRenameShare(table, id, label) {
+      const err = document.getElementById('acx-cl-error');
+      const { error } = await sb.from(table).update({ label: label.trim() || null }).eq('id', id);
+      if (error) { err.style.color = '#e53e3e'; err.textContent = error.message; return; }
+      logActivity('change', 'Renamed a share link', { entityType: 'settings', label: label.trim() });
+      err.style.color = '#16A34A';
+      err.textContent = '✓ Name saved.';
+      setTimeout(() => { err.textContent = ''; }, 2500);
+    }
+
+    async function acxSetShareMode(id, mode) {
+      const err = document.getElementById('acx-cl-error');
+      const { error } = await sb.from('cp_timeline_shares').update({ mode }).eq('id', id);
+      if (error) { err.style.color = '#e53e3e'; err.textContent = error.message; return; }
+      logActivity('change', 'Changed a share link to ' + mode, {
+        module: 'pipeline', entityType: 'settings', details: { mode },
+      });
+      err.style.color = '#16A34A';
+      err.textContent = '✓ Access level updated — applies to the existing link.';
+      setTimeout(() => { err.textContent = ''; }, 3500);
     }
 
     async function acxRevokeTimeline(id, label) {
