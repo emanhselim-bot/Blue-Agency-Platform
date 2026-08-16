@@ -13796,16 +13796,40 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
           <div style="display:flex;flex-wrap:wrap;margin-top:12px">${modCells}</div>
 
-          ${isOwner ? '' : `
-          <details style="margin-top:6px">
-            <summary style="font-size:12px;cursor:pointer;color:var(--text-muted)">Limit to specific accounts and clients</summary>
-            <div style="margin-top:10px">
-              <div style="font-size:12px;font-weight:600;margin-bottom:5px">Ad accounts ${m.account_ids ? '' : '<span style="color:var(--text-muted);font-weight:400">— all</span>'}</div>
-              <div>${_acxChecks(_acxAccounts, m.account_ids, `acxSetScope(${i},'account_ids',this)`, 'id', 'account_name')}</div>
-              <div style="font-size:12px;font-weight:600;margin:10px 0 5px">Pipeline clients ${m.client_ids ? '' : '<span style="color:var(--text-muted);font-weight:400">— all</span>'}</div>
-              <div>${_acxChecks(_acxClients, m.client_ids, `acxSetScope(${i},'client_ids',this)`, 'id', 'name')}</div>
-            </div>
-          </details>`}
+          ${isOwner ? '' : (() => {
+            const nameOf = (list, ids, key) => ids
+              ? list.filter(x => ids.includes(x.id)).map(x => x[key])
+              : null;
+            const accNames = nameOf(_acxAccounts, m.account_ids, 'account_name');
+            const cliNames = nameOf(_acxClients,  m.client_ids,  'name');
+            const summarise = (names, all) => names === null
+              ? `<span style="color:#16A34A">all ${all}</span>`
+              : (names.length
+                  ? `<strong>${escHtml(names.slice(0, 3).join(', '))}</strong>${names.length > 3 ? ` +${names.length - 3}` : ''}`
+                  : '<span style="color:#E53E3E">none</span>');
+
+            return `
+            <details style="margin-top:8px" ${m.account_ids ? 'open' : ''}>
+              <summary style="font-size:12px;cursor:pointer;color:var(--text-muted)">
+                📊 Manages ${summarise(accNames, 'ad accounts')} · 🤝 ${summarise(cliNames, 'clients')}
+              </summary>
+              <div style="margin-top:12px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <span style="font-size:12px;font-weight:600">Ad accounts they manage</span>
+                  <button onclick="acxScopeAll(${i},'account_ids',true)"  style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">All</button>
+                  <button onclick="acxScopeAll(${i},'account_ids',false)" style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">None</button>
+                </div>
+                <div>${_acxChecks(_acxAccounts, m.account_ids, `acxSetScope(${i},'account_ids',this)`, 'id', 'account_name')}</div>
+
+                <div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
+                  <span style="font-size:12px;font-weight:600">Pipeline clients</span>
+                  <button onclick="acxScopeAll(${i},'client_ids',true)"  style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">All</button>
+                  <button onclick="acxScopeAll(${i},'client_ids',false)" style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">None</button>
+                </div>
+                <div>${_acxChecks(_acxClients, m.client_ids, `acxSetScope(${i},'client_ids',this)`, 'id', 'name')}</div>
+              </div>
+            </details>`;
+          })()}
         </div>`;
       }).join('');
     }
@@ -13831,12 +13855,20 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       _acxSave(i, { module_roles: roles, modules: Object.keys(roles) });
     }
 
-    function acxSetScope(i, field, input) {
+    // null = everything, including accounts added later. An empty array means
+    // deliberately nothing, which is different.
+    async function acxScopeAll(i, field, all) {
+      await _acxSave(i, { [field]: all ? null : [] });
+      acxRenderTeam();
+    }
+
+    async function acxSetScope(i, field, input) {
       const box = input.closest('div');
       const ids = [...box.querySelectorAll('input:checked')].map(x => x.value);
       const total = box.querySelectorAll('input').length;
       // Everything ticked is stored as null, meaning "all, including future ones".
-      _acxSave(i, { [field]: ids.length === total ? null : ids });
+      await _acxSave(i, { [field]: ids.length === total ? null : ids });
+      acxRenderTeam();   // refresh the summary line
     }
 
     async function acxAddMember() {
