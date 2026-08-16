@@ -6453,7 +6453,10 @@
       if (!currentOrgId) return;
       const el = document.getElementById('google-ads-list');
       el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
-      const { data, error } = await sb.from('google_ads_accounts').select('*').eq('organization_id', currentOrgId).order('created_at');
+      // Explicit columns: secrets are revoked at the database level, so select('*') would fail.
+      const { data, error } = await sb.from('google_ads_accounts')
+        .select('id, organization_id, customer_id, client_id, account_name, is_active, created_at, updated_at, login_customer_id, ga4_property_id, search_console_site')
+        .eq('organization_id', currentOrgId).order('created_at');
       if (error || !data?.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No Google Ads accounts connected yet.</div>'; return; }
 
       const pending = data.find(a => a.customer_id === 'SETUP_REQUIRED');
@@ -6567,7 +6570,9 @@
       if (!currentOrgId) return;
       const el = document.getElementById('tiktok-ads-list');
       el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
-      const { data, error } = await sb.from('tiktok_ads_accounts').select('*').eq('organization_id', currentOrgId).order('created_at');
+      const { data, error } = await sb.from('tiktok_ads_accounts')
+        .select('id, organization_id, advertiser_id, account_name, is_active, created_at, updated_at')
+        .eq('organization_id', currentOrgId).order('created_at');
       if (error || !data?.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No TikTok Ads accounts connected yet.</div>'; return; }
       el.innerHTML = data.map(a => `
         <div class="store-item" style="display:flex;justify-content:space-between;align-items:center">
@@ -9035,7 +9040,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!box) return;
       box.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Loading…</div>';
       const { data, error } = await sb.from('site_trackers')
-        .select('*').eq('organization_id', currentOrgId).order('created_at', { ascending: false });
+        .select('id, organization_id, name, site_key, domain, currency, is_active, created_by, created_at')
+        .eq('organization_id', currentOrgId).order('created_at', { ascending: false });
       if (error) { box.innerHTML = `<div class="modal-status error">${escHtml(error.message)}</div>`; return; }
       if (!data?.length) {
         box.innerHTML = '<div style="font-size:12.5px;color:var(--text-muted)">No trackers yet. Create one above.</div>';
