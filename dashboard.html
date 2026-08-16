@@ -2345,6 +2345,7 @@
       </div>
     </div>
     <button class="layout-edit-btn" id="layout-edit-btn" onclick="toggleLayoutEdit()">⠿ Edit Layout</button>
+    <button class="layout-edit-btn" id="md-share-btn" onclick="openMdShare()" style="display:none;margin-left:8px">🔗 Share with client</button>
   </div>
 
   <!-- AGENCY TARGETS PANEL -->
@@ -3165,6 +3166,64 @@
         </div><!-- /settings-content -->
       </div><!-- /settings-layout -->
     </div>
+  </div>
+
+  <!-- SHARE MEDIA DASHBOARD WITH CLIENT (owner only) -->
+  <div class="modal-overlay hidden" id="md-share-modal">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
+        <h2 style="color:#e6edf3;font-size:15px">🔗 Share dashboard with client</h2>
+        <button class="modal-close" style="color:rgba(255,255,255,0.45)" onclick="document.getElementById('md-share-modal').classList.add('hidden')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:12px">
+            The client sees a read-only dashboard for the accounts you tick — nothing else.
+            Ad account fund, spend cap and daily budget are never shown.
+          </p>
+
+          <div class="modal-label">Accounts they may see *</div>
+          <div id="mds-accounts" style="max-height:190px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:12px"></div>
+
+          <div class="modal-label">Label (optional)</div>
+          <input id="mds-label" class="connect-input" placeholder="e.g. Nuya — monthly reporting" style="width:100%;margin-bottom:12px">
+
+          <div class="modal-label">Send to email (optional)</div>
+          <input id="mds-email" class="connect-input" type="email" placeholder="client@company.com" style="width:100%;margin-bottom:6px">
+          <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Leave blank to just get the link and send it yourself.</p>
+
+          <button onclick="createMdShare()" style="padding:9px 18px;background:#0573F5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">＋ Create link</button>
+          <div id="mds-error" style="color:#e53e3e;font-size:12px;margin-top:8px"></div>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">Existing links</div>
+          <div id="mds-list"><div style="font-size:13px;color:var(--text-muted)">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENT-FACING READ-ONLY DASHBOARD (opened via ?md=token) -->
+  <div id="md-client-view" style="display:none;padding:22px 18px;max-width:1100px;margin:0 auto">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:18px">
+      <div style="font-weight:800;letter-spacing:2px;font-size:18px">BLUE AD</div>
+      <span id="mdc-label" style="font-size:13px;color:var(--text-muted)"></span>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <select id="mdc-account" class="connect-input" onchange="mdcLoad()"></select>
+        <select id="mdc-period" class="connect-input" onchange="mdcLoad()">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="last_7_days">Last 7 days</option>
+          <option value="this_month" selected>This month</option>
+          <option value="last_month">Last month</option>
+          <option value="this_year">This year</option>
+        </select>
+      </div>
+    </div>
+    <div id="mdc-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"></div>
+    <div id="mdc-campaigns" style="margin-top:22px"></div>
+    <div style="margin-top:26px;font-size:11px;color:var(--text-muted);text-align:center">Live data · Blue Ad</div>
   </div>
 
   <!-- ADD CLIENT MODAL -->
@@ -5113,6 +5172,7 @@
       const _alNav = document.getElementById('snav-activity');
       if (_alNav) _alNav.style.display = currentRole === 'owner' ? '' : 'none';
       _hubActivityGate();
+      mdShareGate();
 
       // Load current user's access restrictions (for non-owners)
       await loadMyAccess();
@@ -13108,6 +13168,192 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (v === 'activity') renderHubActivity();
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // SHARE THE MEDIA DASHBOARD WITH A CLIENT (owner only)
+    // The link carries a token; md-share-data serves only the accounts
+    // listed on that token, and never the account's funding figures.
+    // ══════════════════════════════════════════════════════════════
+    function mdShareGate() {
+      const b = document.getElementById('md-share-btn');
+      if (b) b.style.display = currentRole === 'owner' ? '' : 'none';
+    }
+
+    async function openMdShare() {
+      if (currentRole !== 'owner') return;
+      document.getElementById('md-share-modal').classList.remove('hidden');
+      document.getElementById('mds-error').textContent = '';
+
+      const { data: accts } = await sb.from('meta_ad_accounts_safe')
+        .select('id, account_name').eq('organization_id', currentOrgId)
+        .eq('is_active', true).order('account_name');
+
+      const current = sel.value;
+      document.getElementById('mds-accounts').innerHTML = (accts || []).map(a => `
+        <label style="display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13px;cursor:pointer">
+          <input type="checkbox" value="${escHtml(a.id)}" ${a.id === current ? 'checked' : ''}>
+          <span>${escHtml(a.account_name)}</span>
+        </label>`).join('') || '<div style="font-size:13px;color:var(--text-muted)">No accounts.</div>';
+
+      loadMdShares();
+    }
+
+    async function loadMdShares() {
+      const el = document.getElementById('mds-list');
+      const { data, error } = await sb.from('md_shares')
+        .select('id, token, label, recipient_email, account_ids, revoked, created_at, last_viewed_at')
+        .eq('organization_id', currentOrgId).eq('revoked', false)
+        .order('created_at', { ascending: false });
+      if (error) { el.innerHTML = `<div style="color:#e53e3e;font-size:12px">${escHtml(error.message)}</div>`; return; }
+      if (!data?.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No links yet.</div>'; return; }
+
+      el.innerHTML = data.map(s => {
+        const url = location.origin + location.pathname + '?md=' + s.token;
+        const seen = s.last_viewed_at ? 'opened ' + _alWhen(s.last_viewed_at) : 'not opened yet';
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:600">${escHtml(s.label || 'Untitled link')}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px">
+            ${s.account_ids.length} account${s.account_ids.length === 1 ? '' : 's'} · ${escHtml(seen)}${s.recipient_email ? ' · ' + escHtml(s.recipient_email) : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="navigator.clipboard.writeText('${escHtml(url)}');this.textContent='✓ Copied'" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Copy link</button>
+            <button onclick="revokeMdShare('${escHtml(s.id)}')" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Revoke</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function createMdShare() {
+      const ids = [...document.querySelectorAll('#mds-accounts input:checked')].map(i => i.value);
+      const err = document.getElementById('mds-error');
+      err.textContent = '';
+      if (!ids.length) { err.textContent = 'Tick at least one account.'; return; }
+
+      const label = document.getElementById('mds-label').value.trim() || null;
+      const email = document.getElementById('mds-email').value.trim() || null;
+
+      const { data, error } = await sb.from('md_shares').insert({
+        organization_id: currentOrgId, account_ids: ids,
+        label, recipient_email: email, created_by: currentUser?.id,
+      }).select('token').single();
+      if (error) { err.textContent = error.message; return; }
+
+      const url = location.origin + location.pathname + '?md=' + data.token;
+      logActivity('share', 'Created a client dashboard link', {
+        module: 'media', entityType: 'md_share', label, details: { accounts: ids.length, email },
+      });
+
+      if (email) {
+        const subject = encodeURIComponent('Your Blue Ad dashboard');
+        const body = encodeURIComponent(`Hello,\n\nHere is your live performance dashboard:\n\n${url}\n\nIt updates automatically — no login needed.\n\nBlue Ad`);
+        window.open(`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`);
+      }
+      try { await navigator.clipboard.writeText(url); } catch (e) { /* clipboard may be blocked */ }
+      err.style.color = '#16A34A';
+      err.textContent = email ? '✓ Link created, copied, and your email app opened.' : '✓ Link created and copied.';
+      setTimeout(() => { err.style.color = '#e53e3e'; err.textContent = ''; }, 5000);
+
+      document.getElementById('mds-label').value = '';
+      document.getElementById('mds-email').value = '';
+      loadMdShares();
+    }
+
+    async function revokeMdShare(id) {
+      if (!confirm('Revoke this link? The client will lose access immediately.')) return;
+      const { error } = await sb.from('md_shares').update({ revoked: true }).eq('id', id);
+      if (error) { document.getElementById('mds-error').textContent = error.message; return; }
+      logActivity('share', 'Revoked a client dashboard link', { module: 'media', entityType: 'md_share', entityId: id });
+      loadMdShares();
+    }
+
+    // ── Client-facing read-only view ──────────────────────────────
+    let _mdcToken = null;
+
+    function _mdcFmt(v, kind, cur) {
+      if (v == null || v === '' || isNaN(v)) return '—';
+      const n = parseFloat(v);
+      if (kind === 'money') return (cur || '') + ' ' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      if (kind === 'pct')   return n.toFixed(2) + '%';
+      return n.toLocaleString();
+    }
+
+    async function mdcInit(token) {
+      _mdcToken = token;
+      document.body.innerHTML = document.getElementById('md-client-view').outerHTML;
+      const view = document.getElementById('md-client-view');
+      view.style.display = '';
+
+      const { data, error } = await sb.rpc('md_share_get', { p_token: token });
+      if (error || !data) {
+        view.innerHTML = '<div style="padding:60px;text-align:center;font-size:15px">This link is no longer active.</div>';
+        return;
+      }
+      document.getElementById('mdc-label').textContent = data.label || '';
+      const asel = document.getElementById('mdc-account');
+      asel.innerHTML = (data.accounts || []).map(a =>
+        `<option value="${escHtml(a.id)}" data-cur="${escHtml(a.currency || '')}">${escHtml(a.name)}</option>`).join('');
+      if (!asel.options.length) {
+        view.innerHTML = '<div style="padding:60px;text-align:center;font-size:15px">No accounts are shared on this link.</div>';
+        return;
+      }
+      mdcLoad();
+    }
+
+    async function mdcLoad() {
+      const asel = document.getElementById('mdc-account');
+      const accountId = asel.value;
+      const cur = asel.options[asel.selectedIndex]?.dataset.cur || '';
+      const period = document.getElementById('mdc-period').value;
+      const cards = document.getElementById('mdc-cards');
+      cards.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);font-size:13px">Loading…</div>';
+
+      const url = SUPABASE_URL + '/functions/v1/md-share-data';
+      const post = (extra) => fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: _mdcToken, account_db_id: accountId, period, ...extra }),
+      }).then(r => r.json());
+
+      const [main, camp] = await Promise.all([post({}), post({ level: 'campaign' })]);
+      if (main.error) { cards.innerHTML = `<div style="grid-column:1/-1;color:#e53e3e;font-size:13px">${escHtml(main.error)}</div>`; return; }
+
+      const e = main.ad_entity || {};
+      const defs = [
+        ['Amount spent',    e.amount_spent,             'money'],
+        ['Reach',           e.reach,                    'num'],
+        ['Impressions',     e.impressions,              'num'],
+        ['Clicks',          e.clicks,                   'num'],
+        ['CTR',             e.ctr,                      'pct'],
+        ['CPC',             e.cpc,                      'money'],
+        ['CPM',             e.cpm,                      'money'],
+        ['Results',         e.results,                  'num'],
+        ['Cost per result', e.cost_per_result,          'money'],
+        ['Messages',        e.messages,                 'num'],
+        ['Link clicks',     e['actions:link_click'],    'num'],
+        ['Purchases',       e['actions:omni_purchase'], 'num'],
+      ];
+      cards.innerHTML = defs.map(([label, val, kind]) => `
+        <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:14px 16px">
+          <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">${escHtml(label)}</div>
+          <div style="font-size:20px;font-weight:700">${escHtml(_mdcFmt(val, kind, cur))}</div>
+        </div>`).join('');
+
+      const rows = camp.campaigns || [];
+      document.getElementById('mdc-campaigns').innerHTML = !rows.length ? '' : `
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">Active campaigns</div>
+        <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr>${['Campaign','Spend','Reach','Clicks','CTR','Results','Cost / result']
+            .map(h => `<th style="text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map(c => `<tr>
+            <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${escHtml(c.campaign_name || '')}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${escHtml(_mdcFmt(c.spend,'money',cur))}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${escHtml(_mdcFmt(c.reach,'num'))}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${escHtml(_mdcFmt(c.clicks,'num'))}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${escHtml(_mdcFmt(c.ctr,'pct'))}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${escHtml(_mdcFmt(c.results,'num'))}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${escHtml(_mdcFmt(c.cost_per_result,'money',cur))}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>`;
+    }
+
     // ── Team Activity module: one column per area of the product (owner only) ──
     function _hubActivityGate() {
       const card = document.getElementById('hub-card-activity');
@@ -13208,9 +13454,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       hubShowView(section);
     }
 
+    // A client dashboard link owns the whole page: no sign-in, no org context.
+    // This must run before any auth handling redraws the document.
+    (function () {
+      const t = new URLSearchParams(location.search).get('md');
+      if (t) { document.addEventListener('DOMContentLoaded', () => mdcInit(t)); if (document.readyState !== 'loading') mdcInit(t); }
+    })();
+
     Auth.onAuthStateChange((event, session) => {
-      // a shared timeline link owns the page — never let the auth flow redraw it
-      if (new URLSearchParams(location.search).get('timeline')) return;
+      // a shared link owns the page — never let the auth flow redraw it
+      const _qs = new URLSearchParams(location.search);
+      if (_qs.get('timeline') || _qs.get('md')) return;
       const overlay = document.getElementById('auth-overlay');
       if (session?.user) {
         currentUser = session.user;
