@@ -2603,11 +2603,16 @@
         </div>
 
         <div id="acx-panel-team">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-            <input id="acx-new-name"  class="connect-input" placeholder="Full name"  style="min-width:150px">
-            <input id="acx-new-email" class="connect-input" placeholder="Email"      style="min-width:190px" type="email">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <input id="acx-new-name"  class="connect-input" placeholder="Full name"           style="min-width:140px">
+            <input id="acx-new-email" class="connect-input" placeholder="Email"               style="min-width:180px" type="email">
+            <input id="acx-new-user"  class="connect-input" placeholder="Username (optional)" style="min-width:150px" autocomplete="off">
+            <input id="acx-new-pass"  class="connect-input" placeholder="Password"            style="min-width:150px" type="password" autocomplete="new-password">
             <button onclick="acxAddMember()" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">＋ Add person</button>
           </div>
+          <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:14px">
+            Set a password to create their login now (at least 8 characters). Leave it blank to add them to the list without an account yet.
+          </p>
           <div id="acx-team-list"></div>
           <div id="acx-team-error" style="color:#e53e3e;font-size:12px;margin-top:8px"></div>
         </div>
@@ -2617,13 +2622,15 @@
             Give a client a read-only link (nothing to remember) or a login (email and password).
             Either way you pick exactly which ad accounts they can open.
           </p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-            <input id="acx-cl-label" class="connect-input" placeholder="Client name"   style="min-width:160px">
-            <input id="acx-cl-email" class="connect-input" placeholder="Email"          style="min-width:190px" type="email">
-            <select id="acx-cl-kind" class="connect-input" style="min-width:150px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <input id="acx-cl-label" class="connect-input" placeholder="Client name"   style="min-width:150px">
+            <input id="acx-cl-email" class="connect-input" placeholder="Email"          style="min-width:180px" type="email">
+            <select id="acx-cl-kind" class="connect-input" style="min-width:150px" onchange="acxKindChanged()">
               <option value="link">Share link — no login</option>
-              <option value="login">Login — email + password</option>
+              <option value="login">Login — username + password</option>
             </select>
+            <input id="acx-cl-user" class="connect-input" placeholder="Username" style="min-width:140px;display:none" autocomplete="off">
+            <input id="acx-cl-pass" class="connect-input" placeholder="Password" style="min-width:140px;display:none" type="password" autocomplete="new-password">
             <button onclick="acxCreateClient()" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">＋ Create</button>
           </div>
           <div class="modal-label">Accounts they may see</div>
@@ -13236,7 +13243,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       ['media',    '📊 Media buying'],
       ['finance',  '💰 Finance'],
     ];
-    let _acxMembers = [], _acxAccounts = [], _acxClients = [];
+    let _acxMembers = [], _acxAccounts = [], _acxClients = [], _acxLogins = [];
 
     function acxGate() {
       const c = document.getElementById('hub-card-access');
@@ -13263,8 +13270,20 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       _acxAccounts = accts   || [];
       _acxClients  = clients || [];
       _acxMembers  = members || [];
+
+      // Who actually has a login. manage-users returns usernames and last
+      // sign-in, never passwords.
+      const l = await callEdgeFunction('manage-users', { action: 'list' });
+      _acxLogins = l.users || [];
+
       acxRenderTeam();
       acxRenderAccountPicker();
+    }
+
+    function acxKindChanged() {
+      const login = document.getElementById('acx-cl-kind').value === 'login';
+      document.getElementById('acx-cl-user').style.display = login ? '' : 'none';
+      document.getElementById('acx-cl-pass').style.display = login ? '' : 'none';
     }
 
     function _acxChecks(list, chosen, onchange, idKey, labelKey) {
@@ -13294,13 +13313,23 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             </select>
           </div>`).join('');
 
+        const login = _acxLogins.find(u => (u.email || '').toLowerCase() === (m.email || '').toLowerCase());
+        const loginBits = login
+          ? `<span style="font-size:11px;color:#16A34A">● login active${login.username ? ' · ' + escHtml(login.username) : ''}</span>`
+          : `<span style="font-size:11px;color:var(--text-muted)">○ no login</span>`;
+
         return `<div style="border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
             <div>
               <div style="font-size:14px;font-weight:700">${escHtml(m.full_name || m.email)}${isOwner ? ' <span style="font-size:11px;color:var(--text-muted)">(owner — full access)</span>' : ''}</div>
-              <div style="font-size:12px;color:var(--text-muted)">${escHtml(m.email)}</div>
+              <div style="font-size:12px;color:var(--text-muted)">${escHtml(m.email)} · ${loginBits}</div>
             </div>
-            ${isOwner ? '' : `<button onclick="acxRemoveMember(${i})" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Remove</button>`}
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${isOwner ? '' : (login
+                ? `<button onclick="acxSetPassword(${i})" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">🔒 Reset password</button>`
+                : `<button onclick="acxCreateLogin(${i})" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Create login</button>`)}
+              ${isOwner ? '' : `<button onclick="acxRemoveMember(${i})" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Remove</button>`}
+            </div>
           </div>
 
           <div style="display:flex;flex-wrap:wrap;margin-top:12px">${modCells}</div>
@@ -13351,8 +13380,19 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function acxAddMember() {
       const name  = document.getElementById('acx-new-name').value.trim();
       const email = document.getElementById('acx-new-email').value.trim().toLowerCase();
+      const uname = document.getElementById('acx-new-user').value.trim();
+      const pass  = document.getElementById('acx-new-pass').value;
       const err   = document.getElementById('acx-team-error');
+      err.style.color = '#e53e3e'; err.textContent = '';
       if (!name || !email) { err.textContent = 'Name and email are both needed.'; return; }
+      if (pass && pass.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+
+      if (pass) {
+        const r = await callEdgeFunction('manage-users', {
+          action: 'create', username: uname, name, email, password: pass, role: 'editor',
+        });
+        if (r.error) { err.textContent = r.error; return; }
+      }
 
       const { error } = await sb.from('cp_members').insert({
         organization_id: currentOrgId, full_name: name, email,
@@ -13360,9 +13400,57 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         module_roles: { pipeline: 'editor' }, client_scope: 'all',
       });
       if (error) { err.textContent = error.message; return; }
-      logActivity('change', 'Added a team member', { entityType: 'settings', label: name });
-      document.getElementById('acx-new-name').value = '';
-      document.getElementById('acx-new-email').value = '';
+
+      logActivity('change', 'Added a team member', {
+        entityType: 'settings', label: name, details: { login: !!pass },
+      });
+      ['acx-new-name','acx-new-email','acx-new-user','acx-new-pass'].forEach(id => document.getElementById(id).value = '');
+      err.style.color = '#16A34A';
+      err.textContent = pass ? '✓ Added, and their login is ready.' : '✓ Added. No login yet — set a password to create one.';
+      setTimeout(() => { err.textContent = ''; }, 5000);
+      acxInit();
+    }
+
+    // Passwords are set through manage-users, which runs as owner and never
+    // returns the value. Nothing here reads an existing password back.
+    async function acxSetPassword(i) {
+      const m = _acxMembers[i];
+      const login = _acxLogins.find(u => (u.email || '').toLowerCase() === (m.email || '').toLowerCase());
+      const err = document.getElementById('acx-team-error');
+      err.style.color = '#e53e3e';
+      if (!login) { err.textContent = 'No login exists for this person yet.'; return; }
+
+      const pass = prompt(`New password for ${m.full_name || m.email} (at least 8 characters):`);
+      if (pass === null) return;
+      if (pass.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+
+      const r = await callEdgeFunction('manage-users', {
+        action: 'set_password', user_id: login.user_id, password: pass,
+      });
+      if (r.error) { err.textContent = r.error; return; }
+      logActivity('change', 'Reset a password', { entityType: 'settings', label: m.full_name || m.email });
+      err.style.color = '#16A34A';
+      err.textContent = '✓ Password updated.';
+      setTimeout(() => { err.textContent = ''; }, 4000);
+    }
+
+    async function acxCreateLogin(i) {
+      const m = _acxMembers[i];
+      const err = document.getElementById('acx-team-error');
+      err.style.color = '#e53e3e';
+      const pass = prompt(`Create a login for ${m.full_name || m.email}.\nPassword (at least 8 characters):`);
+      if (pass === null) return;
+      if (pass.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+      const uname = prompt('Username (optional — leave blank to use their email):') || '';
+
+      const r = await callEdgeFunction('manage-users', {
+        action: 'create', username: uname.trim(), name: m.full_name || '', email: m.email,
+        password: pass, role: 'editor',
+      });
+      if (r.error) { err.textContent = r.error; return; }
+      logActivity('change', 'Created a login', { entityType: 'settings', label: m.full_name || m.email });
+      err.style.color = '#16A34A';
+      err.textContent = '✓ Login created.';
       acxInit();
     }
 
@@ -13386,14 +13474,33 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     async function acxLoadClients() {
       const el = document.getElementById('acx-clients-list');
-      const { data, error } = await sb.from('md_shares')
-        .select('id, token, label, recipient_email, account_ids, created_at, last_viewed_at')
-        .eq('organization_id', currentOrgId).eq('revoked', false)
-        .order('created_at', { ascending: false });
+      const [{ data, error }, { data: logins }] = await Promise.all([
+        sb.from('md_shares')
+          .select('id, token, label, recipient_email, account_ids, created_at, last_viewed_at')
+          .eq('organization_id', currentOrgId).eq('revoked', false)
+          .order('created_at', { ascending: false }),
+        sb.from('cp_members')
+          .select('id, full_name, email, account_ids')
+          .eq('organization_id', currentOrgId).eq('archived', false)
+          .eq('client_scope', 'none').order('full_name'),
+      ]);
       if (error) { el.innerHTML = `<div style="color:#e53e3e;font-size:12px">${escHtml(error.message)}</div>`; return; }
-      if (!data?.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No client access yet.</div>'; return; }
 
-      el.innerHTML = data.map(s => {
+      const loginHtml = (logins || []).map(c => `
+        <div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+          <div style="font-size:13.5px;font-weight:700">${escHtml(c.full_name || c.email)} <span style="font-size:11px;color:#16A34A;font-weight:400">● login</span></div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin:2px 0 8px">
+            ${escHtml(c.email)} · ${(c.account_ids || []).length} account${(c.account_ids || []).length === 1 ? '' : 's'}
+          </div>
+          <button onclick="acxRemoveClientLogin('${escHtml(c.id)}','${escHtml(c.email)}')" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Revoke access</button>
+        </div>`).join('');
+
+      if (!data?.length && !loginHtml) {
+        el.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No client access yet.</div>';
+        return;
+      }
+
+      el.innerHTML = loginHtml + data.map(s => {
         const url = location.origin + location.pathname + '?md=' + s.token;
         const seen = s.last_viewed_at ? 'opened ' + _alWhen(s.last_viewed_at) : 'not opened yet';
         return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
@@ -13409,6 +13516,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }).join('');
     }
 
+    async function acxRemoveClientLogin(memberId, email) {
+      if (!confirm(`Revoke access for ${email}? Their login stops working immediately.`)) return;
+      const err = document.getElementById('acx-cl-error');
+      err.style.color = '#e53e3e';
+
+      await sb.from('cp_members').update({ archived: true }).eq('id', memberId);
+      const login = _acxLogins.find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase());
+      if (login) {
+        const r = await callEdgeFunction('manage-users', { action: 'delete', user_id: login.user_id });
+        if (r.error) { err.textContent = r.error; return; }
+      }
+      logActivity('change', 'Revoked a client login', { module: 'media', entityType: 'settings', label: email });
+      acxInit();
+      acxLoadClients();
+    }
+
     async function acxCreateClient() {
       const label = document.getElementById('acx-cl-label').value.trim();
       const email = document.getElementById('acx-cl-email').value.trim();
@@ -13421,10 +13544,34 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!ids.length) { err.textContent = 'Tick at least one account.'; return; }
 
       if (kind === 'login') {
+        const uname = document.getElementById('acx-cl-user').value.trim();
+        const pass  = document.getElementById('acx-cl-pass').value;
         if (!email) { err.textContent = 'A login needs an email address.'; return; }
-        err.style.color = 'var(--text-muted)';
-        err.textContent = 'Creating a login… use Settings → Client Accounts to set their password.';
-        openSettings('clients');
+        if (!pass || pass.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+
+        const r = await callEdgeFunction('manage-users', {
+          action: 'create', username: uname, name: label, email, password: pass, role: 'viewer',
+        });
+        if (r.error) { err.textContent = r.error; return; }
+
+        // A client login is a member whose only module is media buying, as a
+        // viewer, limited to the accounts ticked above.
+        const { error: mErr } = await sb.from('cp_members').insert({
+          organization_id: currentOrgId, full_name: label, email,
+          role: 'viewer', modules: ['media'],
+          module_roles: { media: 'viewer' },
+          account_ids: ids, client_ids: [], client_scope: 'none',
+        });
+        if (mErr) { err.textContent = mErr.message; return; }
+
+        logActivity('change', 'Created a client login', {
+          module: 'media', entityType: 'settings', label,
+          details: { accounts: ids.length, username: r.username },
+        });
+        err.style.color = '#16A34A';
+        err.textContent = `✓ Login created for ${label} — username ${r.username}.`;
+        ['acx-cl-label','acx-cl-email','acx-cl-user','acx-cl-pass'].forEach(id => document.getElementById(id).value = '');
+        acxLoadClients();
         return;
       }
 
