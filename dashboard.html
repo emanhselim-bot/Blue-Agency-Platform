@@ -2696,6 +2696,9 @@
               <option value="365">Paid in last year</option>
               <option value="none">Never paid</option>
             </select>
+            <select id="fn-f-month" class="connect-input" onchange="fnRender()" style="min-width:150px" title="Show one month only">
+              <option value="">All time</option>
+            </select>
           </div>
         </div>
         <div id="fn-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 18px"></div>
@@ -13118,7 +13121,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // on the day they were paid; *_base figures are the EGP equivalent.
     // ══════════════════════════════════════════════════════════════
     const FN_BASE = 'EGP';
-    let _fnClients = [], _fnExpenses = [];
+    let _fnClients = [], _fnExpenses = [], _fnPayments = [];
 
     const FN_PAY_STYLE = {
       paid:    ['#16A34A', 'Paid'],
@@ -13180,15 +13183,30 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         box.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No organisation loaded — open the Media Buying Dashboard once, then come back.</div>';
         return;
       }
-      const [{ data: cs, error }, { data: ex }] = await Promise.all([
+      const [{ data: cs, error }, { data: ex }, { data: pm }] = await Promise.all([
         sb.from('fin_client_summary').select('*').eq('organization_id', currentOrgId)
           .eq('archived', false).order('name'),
         sb.from('fin_expenses').select('amount_base, category, client_id, spent_on')
+          .eq('organization_id', currentOrgId),
+        sb.from('fin_payments').select('amount_base, client_id, paid_on, due_on, status')
           .eq('organization_id', currentOrgId),
       ]);
       if (error) { box.innerHTML = `<div style="color:#e53e3e;font-size:13px">${escHtml(error.message)}</div>`; return; }
       _fnClients  = cs || [];
       _fnExpenses = ex || [];
+      _fnPayments = pm || [];
+
+      // Month list built from whatever actually has activity, newest first.
+      const msel = document.getElementById('fn-f-month');
+      if (msel.options.length <= 1) {
+        const months = new Set();
+        _fnPayments.forEach(p => { const d = p.paid_on || p.due_on; if (d) months.add(d.slice(0, 7)); });
+        _fnExpenses.forEach(e => { if (e.spent_on) months.add(e.spent_on.slice(0, 7)); });
+        [...months].sort().reverse().forEach(m => {
+          const label = new Date(m + '-01').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+          msel.insertAdjacentHTML('beforeend', `<option value="${m}">${escHtml(label)}</option>`);
+        });
+      }
 
       const am = document.getElementById('fn-f-am');
       if (am.options.length <= 1) {
@@ -13226,24 +13244,51 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
+    // Money received / spent inside one calendar month, per client.
+    function fnMonthTotals(month) {
+      const rec = {}, exp = {}, due = {};
+      if (!month) return { rec, exp, due };
+      _fnPayments.forEach(p => {
+        if (p.status === 'received' && (p.paid_on || '').startsWith(month))
+          rec[p.client_id] = (rec[p.client_id] || 0) + Number(p.amount_base || 0);
+        if (p.status === 'pending' && (p.due_on || '').startsWith(month))
+          due[p.client_id] = (due[p.client_id] || 0) + Number(p.amount_base || 0);
+      });
+      _fnExpenses.forEach(e => {
+        if ((e.spent_on || '').startsWith(month))
+          exp[e.client_id || '_overhead'] = (exp[e.client_id || '_overhead'] || 0) + Number(e.amount_base || 0);
+      });
+      return { rec, exp, due };
+    }
+
     function fnRender() {
-      const rows = fnFiltered();
-      const sum = k => rows.reduce((t, c) => t + Number(c[k] || 0), 0);
+      const month = document.getElementById('fn-f-month').value;
+      const mt = fnMonthTotals(month);
+      let rows = fnFiltered();
+
+      // With a month selected, only show clients that had activity in it.
+      if (month) rows = rows.filter(c => mt.rec[c.id] || mt.exp[c.id] || mt.due[c.id]);
+
+      const sum   = k => rows.reduce((t, c) => t + Number(c[k] || 0), 0);
+      const sumMap = m => rows.reduce((t, c) => t + (m[c.id] || 0), 0);
 
       // Overhead (expenses with no client) still counts against the business.
-      const overhead = _fnExpenses.filter(e => !e.client_id)
+      const overheadAll = _fnExpenses.filter(e => !e.client_id)
         .reduce((t, e) => t + Number(e.amount_base || 0), 0);
+      const overhead = month ? (mt.exp._overhead || 0) : overheadAll;
 
-      const revenue   = sum('received_base');
-      const expenses  = sum('expenses_base') + overhead;
+      const revenue   = month ? sumMap(mt.rec) : sum('received_base');
+      const expenses  = (month ? sumMap(mt.exp) : sum('expenses_base')) + overhead;
       const netProfit = revenue - expenses;
+      const expected  = month ? sumMap(mt.due) : sum('pending_base');
+
       const kpis = [
-        ['Total revenue',      revenue,               '#2563EB'],
-        ['Total expenses',     expenses,              '#7C3AED'],
-        ['Net profit',         netProfit,             netProfit >= 0 ? '#16A34A' : '#E53E3E'],
-        ['Cash available',     revenue - expenses,    '#16A34A'],
-        ['Outstanding',        sum('remaining_base'), '#E53E3E'],
-        ['Expected income',    sum('pending_base'),   '#EA8C00'],
+        [month ? 'Received this month' : 'Total revenue', revenue,            '#2563EB'],
+        [month ? 'Spent this month'    : 'Total expenses', expenses,          '#7C3AED'],
+        [month ? 'Profit this month'   : 'Net profit',     netProfit,         netProfit >= 0 ? '#16A34A' : '#E53E3E'],
+        ['Cash available',                                 revenue - expenses, '#16A34A'],
+        ['Outstanding',                                    sum('remaining_base'), '#E53E3E'],
+        [month ? 'Due this month'      : 'Expected income', expected,         '#EA8C00'],
       ];
       document.getElementById('fn-kpis').innerHTML = kpis.map(([label, val, col]) => `
         <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
@@ -13262,7 +13307,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const box = document.getElementById('fn-clients');
       if (!rows.length) {
         box.innerHTML = `<div style="font-size:13px;color:var(--text-muted);padding:10px 0">
-          ${_fnClients.length ? 'No clients match these filters.' : 'No clients yet — add one to start tracking contracts and payments.'}</div>`;
+          ${month ? 'No payments or expenses in that month.'
+                  : (_fnClients.length ? 'No clients match these filters.'
+                                       : 'No clients yet — add one to start tracking contracts and payments.')}</div>`;
         return;
       }
 
@@ -13297,7 +13344,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <div style="height:100%;width:${pct}%;background:${col}"></div>
           </div>
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)">
-            <span>${pct}% collected
+            <span>${month ? `<strong style="color:#16A34A">${escHtml(fnMoney(mt.rec[c.id] || 0))} received</strong>${mt.exp[c.id] ? ` · <span style="color:#7C3AED">${escHtml(fnMoney(mt.exp[c.id]))} spent</span>` : ''}${mt.due[c.id] ? ` · <span style="color:#EA8C00">${escHtml(fnMoney(mt.due[c.id]))} due</span>` : ''} this month · `
+                       : ''}${pct}% collected
               ${c.payment_count ? ` · ${c.payment_count} payment${c.payment_count === 1 ? '' : 's'}` : ''}
               ${c.last_payment_on ? ` · last paid ${escHtml(fnDate(c.last_payment_on))}` : ' · no payments yet'}
               ${c.next_due_on ? ` · <span style="color:${overdue ? '#E53E3E' : 'inherit'}">next due ${escHtml(fnDate(c.next_due_on))}</span>` : ''}
