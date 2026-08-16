@@ -8690,6 +8690,41 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     function _alEsc(s) { return escHtml(String(s == null ? '' : s)); }
 
+    // Timeline edits predate activity_log and can also come from share links,
+    // where there is no signed-in user. cp_change_log already captures both, so
+    // it is folded into the pipeline column rather than being lost.
+    let _alClientNames = null;
+    async function _fetchTimelineHistory(sinceIso, limit) {
+      try {
+        let q = sb.from('cp_change_log')
+          .select('client_id, month, actor_name, actor_id, source, summary, created_at')
+          .eq('organization_id', currentOrgId)
+          .order('created_at', { ascending: false })
+          .limit(limit || 300);
+        if (sinceIso) q = q.gte('created_at', sinceIso);
+        const { data, error } = await q;
+        if (error || !data) return [];
+
+        if (!_alClientNames) {
+          const { data: cs } = await sb.from('pipeline_clients')
+            .select('id, name').eq('organization_id', currentOrgId);
+          _alClientNames = Object.fromEntries((cs || []).map(c => [c.id, c.name]));
+        }
+
+        return data.map(r => ({
+          user_id:      r.actor_id || null,
+          user_name:    r.actor_name || 'Shared editor',
+          user_email:   null,
+          category:     'change',
+          module:       'pipeline',
+          action:       r.summary || 'Saved changes to the timeline',
+          entity_label: _alClientNames[r.client_id] || null,
+          created_at:   r.created_at,
+          _viaShare:    r.source !== 'dashboard',
+        }));
+      } catch { return []; }
+    }
+
     function _alWhen(iso) {
       const d = new Date(iso), now = new Date();
       const mins = Math.round((now - d) / 60000);
@@ -8720,7 +8755,16 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const { data, error } = await q;
       if (error) { list.innerHTML = `<div style="color:#e53e3e;font-size:13px">${_alEsc(error.message)}</div>`; return; }
 
-      _alRows = append ? _alRows.concat(data || []) : (data || []);
+      // Fold in timeline history (covers share-link editors and everything that
+      // happened before the activity log existed). Only on the first page, and
+      // only when the filters could include it.
+      let extra = [];
+      if (!append && !person && (!category || category === 'change')) {
+        extra = await _fetchTimelineHistory(days > 0 ? new Date(Date.now() - days * 864e5).toISOString() : null, 300);
+      }
+
+      _alRows = append ? _alRows.concat(data || [])
+                       : (data || []).concat(extra).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       _alOffset = _alRows.length;
       document.getElementById('al-more').style.display = (data || []).length === AL_PAGE ? '' : 'none';
 
@@ -8747,11 +8791,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         lastDay = day;
         const who   = r.user_name || r.user_email || 'Unknown';
         const label = r.entity_label ? ` · <span style="color:var(--text-muted)">${_alEsc(r.entity_label)}</span>` : '';
+        const via   = r._viaShare ? ' <span style="color:var(--text-muted)">(share link)</span>' : '';
         return `${header}
           <div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:13px;width:18px;text-align:center;flex:none">${AL_ICON[r.category] || '•'}</span>
+            <span style="font-size:13px;width:18px;text-align:center;flex:none">${r._viaShare ? '🔗' : (AL_ICON[r.category] || '•')}</span>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;color:var(--text-main)"><strong>${_alEsc(who)}</strong> — ${_alEsc(r.action)}${label}</div>
+              <div style="font-size:13px;color:var(--text-main)"><strong>${_alEsc(who)}</strong> — ${_alEsc(r.action)}${label}${via}</div>
             </div>
             <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;flex:none" title="${_alEsc(new Date(r.created_at).toLocaleString())}">${_alEsc(_alWhen(r.created_at))}</span>
           </div>`;
@@ -13085,7 +13130,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         .limit(600);
       if (person) q = q.eq('user_id', person);
 
-      const { data, error } = await q;
+      const sinceIso = new Date(Date.now() - days * 864e5).toISOString();
+      const [{ data, error }, hist] = await Promise.all([q, _fetchTimelineHistory(sinceIso, 300)]);
       if (error) {
         Object.values(cols).forEach(id => {
           document.getElementById(id).innerHTML = `<div class="hub-act-empty">${escHtml(error.message)}</div>`;
@@ -13093,24 +13139,28 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         return;
       }
 
+      const all = (data || []).concat(person ? [] : hist)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
       // Fill the people picker once, from whoever appears in the log.
       const psel = document.getElementById('ha-person');
       if (psel && psel.options.length <= 1) {
         const seen = new Map();
-        (data || []).forEach(r => { if (r.user_id && !seen.has(r.user_id)) seen.set(r.user_id, r.user_name || r.user_email || r.user_id); });
+        all.forEach(r => { if (r.user_id && !seen.has(r.user_id)) seen.set(r.user_id, r.user_name || r.user_email || r.user_id); });
         seen.forEach((name, id) => psel.insertAdjacentHTML('beforeend', `<option value="${escHtml(id)}">${escHtml(name)}</option>`));
       }
 
       Object.entries(cols).forEach(([mod, id]) => {
-        const rows = (data || []).filter(r => r.module === mod).slice(0, 25);
+        const rows = all.filter(r => r.module === mod).slice(0, 25);
         const el = document.getElementById(id);
         if (!rows.length) { el.innerHTML = '<div class="hub-act-empty">No activity in this period.</div>'; return; }
         el.innerHTML = rows.map(r => {
           const who  = (r.user_name || r.user_email || 'Someone').split('@')[0];
           const what = r.action + (r.entity_label ? ' · ' + r.entity_label : '');
+          const tag  = r._viaShare ? ' <span style="opacity:.6">(share link)</span>' : '';
           return `<div class="hub-act-row">
-              <span>${AL_ICON[r.category] || '•'}</span>
-              <span class="hub-act-what"><span class="hub-act-who">${escHtml(who)}</span> ${escHtml(what)}</span>
+              <span>${r._viaShare ? '🔗' : (AL_ICON[r.category] || '•')}</span>
+              <span class="hub-act-what"><span class="hub-act-who">${escHtml(who)}</span> ${escHtml(what)}${tag}</span>
               <span class="hub-act-when" title="${escHtml(new Date(r.created_at).toLocaleString())}">${escHtml(_alWhen(r.created_at))}</span>
             </div>`;
         }).join('');
