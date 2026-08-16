@@ -2663,13 +2663,34 @@
         <div class="cp-wrap" id="cp-body"></div>
       </div>
       <div id="hub-finance-view" style="display:none">
-        <div class="hub-mod-head">
-          <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
-          <h2>💰 Finance</h2>
-          <button class="hub-mod-btn" onclick="openFinModal()">＋ Add payment</button>
+        <div style="position:sticky;top:0;z-index:20;background:var(--page-bg,#1B2A6B);padding:6px 0 10px">
+          <div class="hub-mod-head" style="margin-bottom:10px">
+            <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+            <h2>💰 Finance</h2>
+            <button class="hub-mod-btn" onclick="fnOpenClient()">＋ Client</button>
+            <button class="hub-mod-btn" onclick="fnOpenPayment()">＋ Payment</button>
+            <button class="hub-mod-btn" onclick="fnOpenExpense()">＋ Expense</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="fn-search" class="connect-input" placeholder="Search client…" oninput="fnRender()" style="min-width:170px">
+            <select id="fn-f-pay" class="connect-input" onchange="fnRender()" style="min-width:140px">
+              <option value="">All payment states</option>
+              <option value="paid">Paid</option><option value="partial">Partial</option>
+              <option value="unpaid">Unpaid</option><option value="overdue">Overdue</option>
+            </select>
+            <select id="fn-f-proj" class="connect-input" onchange="fnRender()" style="min-width:140px">
+              <option value="">All projects</option>
+              <option value="active">Active</option><option value="not_started">Not started</option>
+              <option value="on_hold">On hold</option><option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            <select id="fn-f-am" class="connect-input" onchange="fnRender()" style="min-width:150px">
+              <option value="">All account managers</option>
+            </select>
+          </div>
         </div>
-        <div class="fin-summary" id="fin-summary"></div>
-        <div class="fin-table-wrap" id="fin-table-wrap"><div class="fin-empty">Loading…</div></div>
+        <div id="fn-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 18px"></div>
+        <div id="fn-clients"><div style="font-size:13px;color:var(--text-muted)">Loading…</div></div>
       </div>
     </div>
   </div>
@@ -13078,13 +13099,257 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       loadPipeline();
     }
 
-    // ── FINANCE ──
+    // ══════════════════════════════════════════════════════════════
+    // FINANCE
+    // Balances, profit and margins are computed by the fin_client_summary
+    // view, not here — the browser only formats what the database returns.
+    // Amounts are stored in their own currency with the FX rate that applied
+    // on the day they were paid; *_base figures are the EGP equivalent.
+    // ══════════════════════════════════════════════════════════════
+    const FN_BASE = 'EGP';
+    let _fnClients = [], _fnExpenses = [];
+
+    const FN_PAY_STYLE = {
+      paid:    ['#16A34A', 'Paid'],
+      partial: ['#EA8C00', 'Partial'],
+      unpaid:  ['#6B7280', 'Unpaid'],
+      overdue: ['#E53E3E', 'Overdue'],
+    };
+    const FN_PROJ_LABEL = {
+      not_started: 'Not started', active: 'Active', on_hold: 'On hold',
+      completed: 'Completed', cancelled: 'Cancelled',
+    };
+
+    function fnMoney(v, cur) {
+      const n = Number(v || 0);
+      return (cur || FN_BASE) + ' ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    }
+
+    async function fnInit() {
+      const box = document.getElementById('fn-clients');
+      if (!await _hubWaitOrg()) {
+        box.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No organisation loaded — open the Media Buying Dashboard once, then come back.</div>';
+        return;
+      }
+      const [{ data: cs, error }, { data: ex }] = await Promise.all([
+        sb.from('fin_client_summary').select('*').eq('organization_id', currentOrgId)
+          .eq('archived', false).order('name'),
+        sb.from('fin_expenses').select('amount_base, category, client_id, spent_on')
+          .eq('organization_id', currentOrgId),
+      ]);
+      if (error) { box.innerHTML = `<div style="color:#e53e3e;font-size:13px">${escHtml(error.message)}</div>`; return; }
+      _fnClients  = cs || [];
+      _fnExpenses = ex || [];
+
+      const am = document.getElementById('fn-f-am');
+      if (am.options.length <= 1) {
+        [...new Set(_fnClients.map(c => c.account_manager).filter(Boolean))]
+          .forEach(x => am.insertAdjacentHTML('beforeend', `<option>${escHtml(x)}</option>`));
+      }
+      fnRender();
+    }
+
+    function fnFiltered() {
+      const q    = document.getElementById('fn-search').value.trim().toLowerCase();
+      const pay  = document.getElementById('fn-f-pay').value;
+      const proj = document.getElementById('fn-f-proj').value;
+      const am   = document.getElementById('fn-f-am').value;
+      return _fnClients.filter(c =>
+        (!q    || (c.name || '').toLowerCase().includes(q) || (c.service || '').toLowerCase().includes(q)) &&
+        (!pay  || c.payment_status === pay) &&
+        (!proj || c.project_status === proj) &&
+        (!am   || c.account_manager === am));
+    }
+
+    function fnRender() {
+      const rows = fnFiltered();
+      const sum = k => rows.reduce((t, c) => t + Number(c[k] || 0), 0);
+
+      // Overhead (expenses with no client) still counts against the business.
+      const overhead = _fnExpenses.filter(e => !e.client_id)
+        .reduce((t, e) => t + Number(e.amount_base || 0), 0);
+
+      const revenue   = sum('received_base');
+      const expenses  = sum('expenses_base') + overhead;
+      const netProfit = revenue - expenses;
+      const kpis = [
+        ['Total revenue',      revenue,               '#2563EB'],
+        ['Total expenses',     expenses,              '#7C3AED'],
+        ['Net profit',         netProfit,             netProfit >= 0 ? '#16A34A' : '#E53E3E'],
+        ['Cash available',     revenue - expenses,    '#16A34A'],
+        ['Outstanding',        sum('remaining_base'), '#E53E3E'],
+        ['Expected income',    sum('pending_base'),   '#EA8C00'],
+      ];
+      document.getElementById('fn-kpis').innerHTML = kpis.map(([label, val, col]) => `
+        <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+          <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">${escHtml(label)}</div>
+          <div style="font-size:17px;font-weight:700;color:${col}">${escHtml(fnMoney(val))}</div>
+        </div>`).join('') + `
+        <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+          <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">Active clients</div>
+          <div style="font-size:17px;font-weight:700">${rows.filter(c => c.project_status === 'active').length}</div>
+        </div>
+        <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+          <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">Completed</div>
+          <div style="font-size:17px;font-weight:700">${rows.filter(c => c.project_status === 'completed').length}</div>
+        </div>`;
+
+      const box = document.getElementById('fn-clients');
+      if (!rows.length) {
+        box.innerHTML = `<div style="font-size:13px;color:var(--text-muted);padding:10px 0">
+          ${_fnClients.length ? 'No clients match these filters.' : 'No clients yet — add one to start tracking contracts and payments.'}</div>`;
+        return;
+      }
+
+      box.innerHTML = rows.map(c => {
+        const [col, label] = FN_PAY_STYLE[c.payment_status] || FN_PAY_STYLE.unpaid;
+        const pct = c.contract_value_base > 0
+          ? Math.min(100, Math.round((c.received_base / c.contract_value_base) * 100)) : 0;
+        const overdue = Number(c.overdue_base || 0) > 0;
+        return `<div style="border:1px solid var(--border);border-left:3px solid ${col};border-radius:12px;padding:14px 16px;margin-bottom:10px;background:var(--card-bg,rgba(255,255,255,.04))">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+            <div style="min-width:180px">
+              <div style="font-size:14.5px;font-weight:700">${escHtml(c.name)}</div>
+              <div style="font-size:11.5px;color:var(--text-muted)">
+                ${escHtml(c.service || '—')}${c.account_manager ? ' · ' + escHtml(c.account_manager) : ''} · ${escHtml(FN_PROJ_LABEL[c.project_status] || c.project_status)}
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
+              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Contract</div>
+                   <strong>${escHtml(fnMoney(c.contract_value, c.currency))}</strong></div>
+              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Received</div>
+                   <strong style="color:#16A34A">${escHtml(fnMoney(c.received_base))}</strong></div>
+              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Remaining</div>
+                   <strong style="color:${overdue ? '#E53E3E' : 'inherit'}">${escHtml(fnMoney(c.remaining_base))}</strong></div>
+              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Expenses</div>
+                   <strong style="color:#7C3AED">${escHtml(fnMoney(c.expenses_base))}</strong></div>
+              <div><div style="color:var(--text-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px">Profit</div>
+                   <strong>${escHtml(fnMoney(c.expected_profit_base))}${c.margin_pct != null ? ` <span style="font-weight:400;color:var(--text-muted)">${c.margin_pct}%</span>` : ''}</strong></div>
+            </div>
+            <span style="background:${col}22;color:${col};border:1px solid ${col}55;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;white-space:nowrap">${escHtml(label)}</span>
+          </div>
+          <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.12);margin:10px 0 6px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${col}"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)">
+            <span>${pct}% collected${c.next_due_on ? ' · next due ' + escHtml(c.next_due_on) : ''}</span>
+            <span style="display:flex;gap:6px">
+              <button onclick="fnOpenPayment('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Payment</button>
+              <button onclick="fnOpenExpense('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Expense</button>
+              <button onclick="fnOpenClient('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Edit</button>
+            </span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Entry forms ───────────────────────────────────────────────
+    function _fnPrompt(fields) {
+      // Small sequential prompt helper: enough to record data now, replaced by
+      // proper modals in the next phase.
+      const out = {};
+      for (const [key, label, dflt] of fields) {
+        const v = prompt(label, dflt ?? '');
+        if (v === null) return null;
+        out[key] = v.trim();
+      }
+      return out;
+    }
+
+    async function fnOpenClient(id) {
+      const c = id ? _fnClients.find(x => x.id === id) : null;
+      const f = _fnPrompt([
+        ['name',    'Client name',                                c?.name || ''],
+        ['service', 'Service (e.g. Media Buying)',                c?.service || ''],
+        ['manager', 'Account manager',                            c?.account_manager || ''],
+        ['value',   'Contract value (number only)',               c?.contract_value || ''],
+        ['cur',     'Currency — EGP, USD, SAR or AED',            c?.currency || FN_BASE],
+        ['rate',    `Rate to ${FN_BASE} on the contract date (1 if already ${FN_BASE})`, c?.fx_rate || '1'],
+        ['status',  'Project status: not_started, active, on_hold, completed, cancelled', c?.project_status || 'active'],
+      ]);
+      if (!f) return;
+      const row = {
+        organization_id: currentOrgId, name: f.name, service: f.service || null,
+        account_manager: f.manager || null, contract_value: Number(f.value) || 0,
+        currency: (f.cur || FN_BASE).toUpperCase(), fx_rate: Number(f.rate) || 1,
+        project_status: f.status || 'active', updated_at: new Date().toISOString(),
+      };
+      const { error } = id
+        ? await sb.from('fin_clients').update(row).eq('id', id)
+        : await sb.from('fin_clients').insert({ ...row, created_by: currentUser?.id, contract_date: new Date().toISOString().slice(0, 10) });
+      if (error) { alert(error.message); return; }
+      logActivity('change', id ? 'Updated a finance client' : 'Added a finance client',
+        { module: 'finance', entityType: 'fin_client', entityId: id, label: f.name });
+      fnInit();
+    }
+
+    async function fnOpenPayment(clientId) {
+      if (!_fnClients.length) { alert('Add a client first.'); return; }
+      const c = _fnClients.find(x => x.id === clientId) || _fnClients[0];
+      const f = _fnPrompt([
+        ['amount', `Payment amount for ${c.name}`,                        ''],
+        ['cur',    'Currency — EGP, USD, SAR or AED',                     c.currency || FN_BASE],
+        ['rate',   `Rate to ${FN_BASE} on the day it was paid`,           '1'],
+        ['kind',   'Type: down_payment, installment or final',            'installment'],
+        ['status', 'Status: received or pending',                         'received'],
+        ['date',   'Date paid (YYYY-MM-DD) — or due date if pending',     new Date().toISOString().slice(0, 10)],
+        ['method', 'Method (bank, cash, instapay…)',                      ''],
+      ]);
+      if (!f) return;
+      const pending = f.status === 'pending';
+      const { error } = await sb.from('fin_payments').insert({
+        organization_id: currentOrgId, client_id: c.id,
+        amount: Number(f.amount) || 0, currency: (f.cur || FN_BASE).toUpperCase(),
+        fx_rate: Number(f.rate) || 1, kind: f.kind || 'installment',
+        status: f.status || 'received',
+        paid_on: pending ? null : f.date, due_on: pending ? f.date : null,
+        method: f.method || null, created_by: currentUser?.id,
+      });
+      if (error) { alert(error.message); return; }
+      logActivity('change', 'Recorded a payment', {
+        module: 'finance', entityType: 'fin_client', entityId: c.id, label: c.name,
+        details: { amount: f.amount, currency: f.cur, status: f.status },
+      });
+      fnInit();
+    }
+
+    async function fnOpenExpense(clientId) {
+      const c = _fnClients.find(x => x.id === clientId);
+      const f = _fnPrompt([
+        ['amount',   `Expense amount${c ? ' for ' + c.name : ' (leave client blank for overhead)'}`, ''],
+        ['cur',      'Currency — EGP, USD, SAR or AED',    FN_BASE],
+        ['rate',     `Rate to ${FN_BASE} on the day paid`, '1'],
+        ['category', 'Category: media_buying, design, video_editing, copywriting, subscriptions, freelancers, misc', 'media_buying'],
+        ['paid_to',  'Paid to',                            ''],
+        ['date',     'Date (YYYY-MM-DD)',                  new Date().toISOString().slice(0, 10)],
+        ['method',   'Method (bank, cash, card…)',         ''],
+      ]);
+      if (!f) return;
+      const { error } = await sb.from('fin_expenses').insert({
+        organization_id: currentOrgId, client_id: c?.id || null,
+        amount: Number(f.amount) || 0, currency: (f.cur || FN_BASE).toUpperCase(),
+        fx_rate: Number(f.rate) || 1, category: f.category || 'misc',
+        paid_to: f.paid_to || null, spent_on: f.date, method: f.method || null,
+        created_by: currentUser?.id,
+      });
+      if (error) { alert(error.message); return; }
+      logActivity('change', 'Recorded an expense', {
+        module: 'finance', entityType: 'fin_client', entityId: c?.id, label: c?.name || 'Overhead',
+        details: { amount: f.amount, category: f.category },
+      });
+      fnInit();
+    }
+
+    // ── Legacy payments list (kept until the new module fully replaces it) ──
     let _finRows = [];
 
     async function loadFinance() {
+      // The old markup is gone; legacy handlers now refresh the new module.
       const wrap = document.getElementById('fin-table-wrap');
+      if (!wrap) return fnInit();
       wrap.innerHTML = '<div class="fin-empty">Loading…</div>';
-      document.getElementById('fin-summary').innerHTML = '';
+      const sm = document.getElementById('fin-summary');
+      if (sm) sm.innerHTML = '';
       if (!await _hubWaitOrg()) { wrap.innerHTML = '<div class="fin-empty">No organization loaded — open the Media Buying Dashboard once, then come back.</div>'; return; }
       const { data, error } = await sb.from('finance_payments').select('*').eq('organization_id', currentOrgId).order('created_at', { ascending: false });
       if (error) { wrap.innerHTML = '<div class="fin-empty">Error: ' + _hubEsc(error.message) + '</div>'; return; }
@@ -13101,6 +13366,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function _finRemaining(r) { return Math.max(0, (Number(r.amount) || 0) - _finPaid(r)); }
 
     function renderFinance() {
+      if (!document.getElementById('fin-summary')) return;   // superseded by fnRender
       const rows = _finRows;
       const paidRows      = rows.map(r => ({ currency: r.currency, amount: _finPaid(r) })).filter(r => r.amount > 0);
       const remainingRows = rows.map(r => ({ currency: r.currency, amount: _finRemaining(r) })).filter(r => r.amount > 0);
@@ -13234,7 +13500,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (cv) cv.style.display = v === 'client' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
       if (v === 'pipeline') cpmInit();
-      if (v === 'finance')  loadFinance();
+      if (v === 'finance')  fnInit();
       if (v === 'activity') renderHubActivity();
       if (v === 'access')   acxInit();
     }
