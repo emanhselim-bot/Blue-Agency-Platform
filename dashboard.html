@@ -5466,10 +5466,10 @@
       }
     }
 
-    async function callEdgeFunction(name, body) {
+    async function callEdgeFunction(name, body, timeoutMs) {
       const jwt = await getJWT();
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
+      const timeout = setTimeout(() => controller.abort(), timeoutMs || 30000);
       try {
         const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
           method: 'POST',
@@ -5483,7 +5483,9 @@
         catch { return { error: `Non-JSON response (HTTP ${res.status}): ${text.slice(0, 200)}` }; }
       } catch (err) {
         clearTimeout(timeout);
-        return { error: err.name === 'AbortError' ? 'Request timed out after 30s' : (err.message || String(err)) };
+        return { error: err.name === 'AbortError'
+          ? `Request timed out after ${Math.round((timeoutMs || 30000) / 1000)}s`
+          : (err.message || String(err)) };
       }
     }
 
@@ -13136,7 +13138,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       st.style.color = 'var(--text-muted)';
       st.textContent = 'Talking to Zoho Books — this can take a minute on the first run.';
 
-      const r = await callEdgeFunction('zoho-sync', {});
+      // Hundreds of invoices and expenses on the first run — well past the default.
+      const r = await callEdgeFunction('zoho-sync', {}, 180000);
       btn.disabled = false; btn.textContent = '⟳ Sync Zoho';
 
       if (r.error) {
