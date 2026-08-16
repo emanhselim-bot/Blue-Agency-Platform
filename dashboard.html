@@ -2696,9 +2696,14 @@
               <option value="365">Paid in last year</option>
               <option value="none">Never paid</option>
             </select>
-            <select id="fn-f-month" class="connect-input" onchange="fnRender()" style="min-width:150px" title="Show one month only">
+            <select id="fn-f-month" class="connect-input" onchange="fnMonthPicked()" style="min-width:150px" title="Show one month only">
               <option value="">All time</option>
             </select>
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-muted)">
+              from <input type="date" id="fn-from" class="connect-input" onchange="fnDatesPicked()" style="min-width:auto;padding:7px 9px">
+              to   <input type="date" id="fn-to"   class="connect-input" onchange="fnDatesPicked()" style="min-width:auto;padding:7px 9px">
+              <button onclick="fnClearRange()" style="padding:6px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Clear</button>
+            </span>
           </div>
         </div>
         <div id="fn-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 18px"></div>
@@ -13244,30 +13249,64 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
-    // Money received / spent inside one calendar month, per client.
-    function fnMonthTotals(month) {
+    // Picking a month fills the date boxes; picking dates clears the month.
+    // One source of truth either way — the range below.
+    function fnMonthPicked() {
+      const m = document.getElementById('fn-f-month').value;
+      const from = document.getElementById('fn-from'), to = document.getElementById('fn-to');
+      if (m) {
+        const [y, mo] = m.split('-').map(Number);
+        // Build the string from parts: toISOString() would shift to UTC and
+        // land on the previous day for anyone east of Greenwich.
+        const last = new Date(y, mo, 0).getDate();
+        from.value = m + '-01';
+        to.value   = `${m}-${String(last).padStart(2, '0')}`;
+      } else { from.value = ''; to.value = ''; }
+      fnRender();
+    }
+    function fnDatesPicked() {
+      document.getElementById('fn-f-month').value = '';
+      fnRender();
+    }
+    function fnClearRange() {
+      document.getElementById('fn-f-month').value = '';
+      document.getElementById('fn-from').value = '';
+      document.getElementById('fn-to').value = '';
+      fnRender();
+    }
+
+    function fnRange() {
+      const from = document.getElementById('fn-from').value;
+      const to   = document.getElementById('fn-to').value;
+      return (from || to) ? { from: from || '0000-01-01', to: to || '9999-12-31' } : null;
+    }
+
+    // Money received / spent inside the chosen range, per client.
+    function fnRangeTotals(range) {
       const rec = {}, exp = {}, due = {};
-      if (!month) return { rec, exp, due };
+      if (!range) return { rec, exp, due };
+      const inR = d => d && d >= range.from && d <= range.to;   // ISO dates compare as strings
       _fnPayments.forEach(p => {
-        if (p.status === 'received' && (p.paid_on || '').startsWith(month))
+        if (p.status === 'received' && inR(p.paid_on))
           rec[p.client_id] = (rec[p.client_id] || 0) + Number(p.amount_base || 0);
-        if (p.status === 'pending' && (p.due_on || '').startsWith(month))
+        if (p.status === 'pending' && inR(p.due_on))
           due[p.client_id] = (due[p.client_id] || 0) + Number(p.amount_base || 0);
       });
       _fnExpenses.forEach(e => {
-        if ((e.spent_on || '').startsWith(month))
+        if (inR(e.spent_on))
           exp[e.client_id || '_overhead'] = (exp[e.client_id || '_overhead'] || 0) + Number(e.amount_base || 0);
       });
       return { rec, exp, due };
     }
 
     function fnRender() {
-      const month = document.getElementById('fn-f-month').value;
-      const mt = fnMonthTotals(month);
+      const range = fnRange();
+      const month = !!range;                      // any range: show period figures
+      const mt = fnRangeTotals(range);
       let rows = fnFiltered();
 
-      // With a month selected, only show clients that had activity in it.
-      if (month) rows = rows.filter(c => mt.rec[c.id] || mt.exp[c.id] || mt.due[c.id]);
+      // With a period selected, only show clients that had activity in it.
+      if (range) rows = rows.filter(c => mt.rec[c.id] || mt.exp[c.id] || mt.due[c.id]);
 
       const sum   = k => rows.reduce((t, c) => t + Number(c[k] || 0), 0);
       const sumMap = m => rows.reduce((t, c) => t + (m[c.id] || 0), 0);
@@ -13282,13 +13321,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const netProfit = revenue - expenses;
       const expected  = month ? sumMap(mt.due) : sum('pending_base');
 
+      const per = month ? ' in period' : '';
       const kpis = [
-        [month ? 'Received this month' : 'Total revenue', revenue,            '#2563EB'],
-        [month ? 'Spent this month'    : 'Total expenses', expenses,          '#7C3AED'],
-        [month ? 'Profit this month'   : 'Net profit',     netProfit,         netProfit >= 0 ? '#16A34A' : '#E53E3E'],
-        ['Cash available',                                 revenue - expenses, '#16A34A'],
-        ['Outstanding',                                    sum('remaining_base'), '#E53E3E'],
-        [month ? 'Due this month'      : 'Expected income', expected,         '#EA8C00'],
+        [month ? 'Received' + per : 'Total revenue',  revenue,               '#2563EB'],
+        [month ? 'Spent' + per    : 'Total expenses', expenses,              '#7C3AED'],
+        [month ? 'Profit' + per   : 'Net profit',     netProfit,             netProfit >= 0 ? '#16A34A' : '#E53E3E'],
+        ['Cash available',                            revenue - expenses,    '#16A34A'],
+        ['Outstanding',                               sum('remaining_base'), '#E53E3E'],
+        [month ? 'Due' + per      : 'Expected income', expected,             '#EA8C00'],
       ];
       document.getElementById('fn-kpis').innerHTML = kpis.map(([label, val, col]) => `
         <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
@@ -13307,7 +13347,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const box = document.getElementById('fn-clients');
       if (!rows.length) {
         box.innerHTML = `<div style="font-size:13px;color:var(--text-muted);padding:10px 0">
-          ${month ? 'No payments or expenses in that month.'
+          ${month ? 'No payments or expenses in that period.'
                   : (_fnClients.length ? 'No clients match these filters.'
                                        : 'No clients yet — add one to start tracking contracts and payments.')}</div>`;
         return;
@@ -13344,7 +13384,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <div style="height:100%;width:${pct}%;background:${col}"></div>
           </div>
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)">
-            <span>${month ? `<strong style="color:#16A34A">${escHtml(fnMoney(mt.rec[c.id] || 0))} received</strong>${mt.exp[c.id] ? ` · <span style="color:#7C3AED">${escHtml(fnMoney(mt.exp[c.id]))} spent</span>` : ''}${mt.due[c.id] ? ` · <span style="color:#EA8C00">${escHtml(fnMoney(mt.due[c.id]))} due</span>` : ''} this month · `
+            <span>${month ? `<strong style="color:#16A34A">${escHtml(fnMoney(mt.rec[c.id] || 0))} received</strong>${mt.exp[c.id] ? ` · <span style="color:#7C3AED">${escHtml(fnMoney(mt.exp[c.id]))} spent</span>` : ''}${mt.due[c.id] ? ` · <span style="color:#EA8C00">${escHtml(fnMoney(mt.due[c.id]))} due</span>` : ''} in period · `
                        : ''}${pct}% collected
               ${c.payment_count ? ` · ${c.payment_count} payment${c.payment_count === 1 ? '' : 's'}` : ''}
               ${c.last_payment_on ? ` · last paid ${escHtml(fnDate(c.last_payment_on))}` : ' · no payments yet'}
