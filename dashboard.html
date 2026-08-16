@@ -201,9 +201,12 @@
     .auth-overlay.hidden { display: none; }
 
     /* ── HOME HUB ─────────────────────────────────── */
-    .home-hub { position: fixed; inset: 0; background: #083BBF; z-index: 9000; display: flex; align-items: center; justify-content: center; overflow-y: auto; }
+    /* align-items:center centres the panel but makes its top unreachable once
+       the content is taller than the viewport — you can scroll down and never
+       get back up. Auto margins centre it while keeping the top scrollable. */
+    .home-hub { position: fixed; inset: 0; background: #083BBF; z-index: 9000; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; }
     .home-hub.hidden { display: none; }
-    .hub-inner { width: 100%; max-width: 1040px; padding: 40px 24px; text-align: center; }
+    .hub-inner { width: 100%; max-width: 1040px; padding: 40px 24px; text-align: center; margin: auto; }
     .hub-logo { display: inline-flex; gap: 5px; align-items: flex-end; height: 40px; margin-bottom: 14px; }
     .hub-logo span { width: 9px; border-radius: 3px; background: #fff; display: inline-block; }
     .hub-logo span:nth-child(1) { height: 16px; opacity: .75; }
@@ -2593,13 +2596,17 @@
 
       <!-- Access module (owner only) -->
       <div id="hub-access-view" style="display:none">
-        <div class="hub-mod-head">
-          <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
-          <h2>🔐 Access</h2>
-        </div>
-        <div class="cpm-tabs" style="margin-bottom:16px">
-          <button class="cpm-tab active" id="acx-tab-team"    onclick="acxTab('team')">👥 My team</button>
-          <button class="cpm-tab"        id="acx-tab-clients" onclick="acxTab('clients')">🤝 Clients</button>
+        <!-- The lists get long, so the header and tabs stay pinned — otherwise
+             the only way back is scrolling to the very top. -->
+        <div style="position:sticky;top:0;z-index:20;background:var(--page-bg,#1B2A6B);padding:6px 0 10px;margin:0 0 6px">
+          <div class="hub-mod-head" style="margin-bottom:10px">
+            <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+            <h2>🔐 Access</h2>
+          </div>
+          <div class="cpm-tabs" style="margin:0">
+            <button class="cpm-tab active" id="acx-tab-team"    onclick="acxTab('team')">👥 My team</button>
+            <button class="cpm-tab"        id="acx-tab-clients" onclick="acxTab('clients')">🤝 Clients</button>
+          </div>
         </div>
 
         <div id="acx-panel-team">
