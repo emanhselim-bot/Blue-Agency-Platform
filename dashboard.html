@@ -2689,6 +2689,13 @@
             <select id="fn-f-am" class="connect-input" onchange="fnRender()" style="min-width:150px">
               <option value="">All account managers</option>
             </select>
+            <select id="fn-f-when" class="connect-input" onchange="fnRender()" style="min-width:160px" title="Filters by the date of the last payment received">
+              <option value="">Any payment date</option>
+              <option value="30">Paid in last 30 days</option>
+              <option value="90">Paid in last 90 days</option>
+              <option value="365">Paid in last year</option>
+              <option value="none">Never paid</option>
+            </select>
           </div>
         </div>
         <div id="fn-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 18px"></div>
@@ -13197,11 +13204,26 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const pay  = document.getElementById('fn-f-pay').value;
       const proj = document.getElementById('fn-f-proj').value;
       const am   = document.getElementById('fn-f-am').value;
+      const when = document.getElementById('fn-f-when').value;
+
+      const inWindow = c => {
+        if (!when) return true;
+        if (when === 'none') return !c.last_payment_on;
+        if (!c.last_payment_on) return false;
+        return (Date.now() - new Date(c.last_payment_on).getTime()) <= Number(when) * 864e5;
+      };
+
       return _fnClients.filter(c =>
         (!q    || (c.name || '').toLowerCase().includes(q) || (c.service || '').toLowerCase().includes(q)) &&
         (!pay  || c.payment_status === pay) &&
         (!proj || c.project_status === proj) &&
-        (!am   || c.account_manager === am));
+        (!am   || c.account_manager === am) &&
+        inWindow(c));
+    }
+
+    function fnDate(d) {
+      if (!d) return null;
+      return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
     function fnRender() {
@@ -13275,7 +13297,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <div style="height:100%;width:${pct}%;background:${col}"></div>
           </div>
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)">
-            <span>${pct}% collected${c.next_due_on ? ' · next due ' + escHtml(c.next_due_on) : ''}</span>
+            <span>${pct}% collected
+              ${c.payment_count ? ` · ${c.payment_count} payment${c.payment_count === 1 ? '' : 's'}` : ''}
+              ${c.last_payment_on ? ` · last paid ${escHtml(fnDate(c.last_payment_on))}` : ' · no payments yet'}
+              ${c.next_due_on ? ` · <span style="color:${overdue ? '#E53E3E' : 'inherit'}">next due ${escHtml(fnDate(c.next_due_on))}</span>` : ''}
+            </span>
             <span style="display:flex;gap:6px">
               <button onclick="fnOpenPayment('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Payment</button>
               <button onclick="fnOpenExpense('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Expense</button>
