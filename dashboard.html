@@ -13247,6 +13247,20 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         inWindow(c));
     }
 
+    // Set straight from the row. Kept locally too so the list does not have to
+    // be refetched just to move one client between states.
+    async function fnSetStatus(id, status) {
+      const c = _fnClients.find(x => x.id === id);
+      const { error } = await sb.from('fin_clients')
+        .update({ project_status: status, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) { alert('Could not change status: ' + error.message); return; }
+      if (c) c.project_status = status;
+      logActivity('change', 'Marked a client ' + status, {
+        module: 'finance', entityType: 'fin_client', entityId: id, label: c?.name,
+      });
+      fnRender();
+    }
+
     function fnDate(d) {
       if (!d) return null;
       return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -13365,8 +13379,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
             <div style="min-width:180px">
               <div style="font-size:14.5px;font-weight:700">${escHtml(c.name)}</div>
-              <div style="font-size:11.5px;color:var(--text-muted)">
-                ${escHtml(c.service || '—')}${c.account_manager ? ' · ' + escHtml(c.account_manager) : ''} · ${escHtml(FN_PROJ_LABEL[c.project_status] || c.project_status)}
+              <div style="font-size:11.5px;color:var(--text-muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
+                <span>${escHtml(c.service || '—')}${c.account_manager ? ' · ' + escHtml(c.account_manager) : ''}</span>
+                <select onchange="fnSetStatus('${escHtml(c.id)}', this.value)" class="connect-input"
+                        style="min-width:auto;padding:3px 8px;font-size:11px"
+                        title="Change this client's status">
+                  <option value="active"    ${FN_PROJ_LABEL[c.project_status] === 'Active'    ? 'selected' : ''}>● Active</option>
+                  <option value="inactive"  ${FN_PROJ_LABEL[c.project_status] === 'Inactive'  ? 'selected' : ''}>○ Inactive</option>
+                  <option value="completed" ${FN_PROJ_LABEL[c.project_status] === 'Completed' ? 'selected' : ''}>✓ Completed</option>
+                </select>
               </div>
             </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
