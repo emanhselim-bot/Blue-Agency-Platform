@@ -13352,14 +13352,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">${escHtml(label)}</div>
           <div style="font-size:17px;font-weight:700;color:${col}">${escHtml(fnMoney(val))}</div>
         </div>`).join('') + `
-        <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
-          <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">Active clients</div>
-          <div style="font-size:17px;font-weight:700">${rows.filter(c => FN_PROJ_LABEL[c.project_status] === 'Active').length}</div>
-        </div>
-        <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
-          <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">Completed</div>
-          <div style="font-size:17px;font-weight:700">${rows.filter(c => FN_PROJ_LABEL[c.project_status] === 'Completed').length}</div>
-        </div>`;
+        ${[['Active clients', 'Active', '#16A34A'],
+           ['Inactive',       'Inactive', '#6B7280'],
+           ['Completed',      'Completed', '#2563EB']].map(([label, state, col]) => `
+          <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+            <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">${escHtml(label)}</div>
+            <div style="font-size:17px;font-weight:700;color:${col}">${rows.filter(c => FN_PROJ_LABEL[c.project_status] === state).length}</div>
+          </div>`).join('')}`;
 
       const box = document.getElementById('fn-clients');
       if (!rows.length) {
