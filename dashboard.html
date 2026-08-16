@@ -219,6 +219,17 @@
     .hub-card-title { font-size: 19px; font-weight: 800; color: #0A1CA3; margin-bottom: 8px; }
     .hub-card-desc { font-size: 13px; color: #5B6472; line-height: 1.5; }
     .hub-card-badge { display: inline-block; margin-top: 14px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 20px; background: #EAF2FE; color: #0573F5; }
+    .hub-activity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; text-align: left; }
+    .hub-act-col { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 16px 18px; }
+    .hub-act-head { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #fff; }
+    .hub-act-body { font-size: 12.5px; line-height: 1.5; }
+    .hub-act-row { display: flex; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .hub-act-row:last-child { border-bottom: none; }
+    .hub-act-who { font-weight: 700; color: var(--brand-gold, #FCBA00); }
+    .hub-act-what { color: rgba(255,255,255,.82); }
+    .hub-act-when { color: rgba(255,255,255,.5); white-space: nowrap; margin-left: auto; font-size: 11px; }
+    .hub-act-empty { color: rgba(255,255,255,.45); padding: 6px 0; }
+    @media (max-width: 640px) { .hub-activity-grid { grid-template-columns: 1fr; } }
     .hub-signout { margin-top: 40px; background: none; border: 1px solid rgba(255,255,255,.4); color: rgba(255,255,255,.85); padding: 8px 22px; border-radius: 8px; cursor: pointer; font-size: 13px; }
     .hub-signout:hover { background: rgba(255,255,255,.1); }
     /* section placeholder views */
@@ -454,6 +465,7 @@
     /* shared link: strip everything except this one client's timeline */
     body.cp-shared .header, body.cp-shared #content, body.cp-shared .hub-mod-head,
     body.cp-shared #hub-cards-view, body.cp-shared #hub-pipeline-view, body.cp-shared #hub-finance-view,
+    body.cp-shared #hub-activity-view,
     body.cp-shared #auth-overlay, body.cp-shared .cp-owner-only { display: none !important; }
     body.cp-shared .hub-inner { max-width: 1200px; }
     body.cp-readonly .cp-node-date { pointer-events: none; }
@@ -2535,8 +2547,41 @@
             <div class="hub-card-desc">Payments management — client invoices, collections and outstanding balances.</div>
             <div class="hub-card-badge">COMING SOON</div>
           </div>
+          <div class="hub-card" id="hub-card-activity" data-mod="activity" onclick="hubOpen('activity')" style="display:none">
+            <div class="hub-card-icon">🕘</div>
+            <div class="hub-card-title">Team Activity</div>
+            <div class="hub-card-desc">Who signed in and what they changed — across pipeline, media buying and finance.</div>
+            <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
+          </div>
         </div>
+
         <button class="hub-signout" onclick="document.getElementById('signout-btn').click()">Sign out</button>
+      </div>
+
+      <!-- Team activity module (owner only) -->
+      <div id="hub-activity-view" style="display:none">
+        <div class="hub-mod-head">
+          <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+          <h2>🕘 Team Activity</h2>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:18px">
+          <select id="ha-range" onchange="renderHubActivity()" class="connect-input" style="min-width:150px">
+            <option value="1">Today</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <select id="ha-person" onchange="renderHubActivity()" class="connect-input" style="min-width:170px">
+            <option value="">Everyone</option>
+          </select>
+          <button onclick="renderHubActivity()" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">↻ Refresh</button>
+          <button onclick="openSettings('activity')" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">Full history &amp; export →</button>
+        </div>
+        <div class="hub-activity-grid">
+          <div class="hub-act-col"><div class="hub-act-head">🤝 Clients Pipeline</div><div id="ha-pipeline" class="hub-act-body"></div></div>
+          <div class="hub-act-col"><div class="hub-act-head">📊 Media Buying</div><div id="ha-media"    class="hub-act-body"></div></div>
+          <div class="hub-act-col"><div class="hub-act-head">💰 Finance</div>        <div id="ha-finance"  class="hub-act-body"></div></div>
+        </div>
       </div>
       <div id="hub-pipeline-view" style="display:none">
         <div class="hub-mod-head">
@@ -2764,6 +2809,7 @@
           <button class="settings-nav-item"        id="snav-link"      onclick="setSettingsTab('link')">     <span class="settings-nav-icon">⛓</span> Quick Link</button>
           <button class="settings-nav-item"        id="snav-agencies"  onclick="setSettingsTab('agencies')"> <span class="settings-nav-icon">🏢</span> Agency Workspaces</button>
           <button class="settings-nav-item"        id="snav-dashboard" onclick="setSettingsTab('dashboard')"><span class="settings-nav-icon">🎛️</span> Dashboard</button>
+          <button class="settings-nav-item"        id="snav-activity"  onclick="setSettingsTab('activity')" style="display:none"><span class="settings-nav-icon">🕘</span> Activity Log</button>
         </div>
 
         <!-- Content area -->
@@ -3073,6 +3119,47 @@
           </button>
         </div>
         </div><!-- /spanel-dashboard -->
+
+        <!-- ── PANEL: Activity Log (owner only) ── -->
+        <div class="settings-panel" id="spanel-activity">
+        <div class="modal-section">
+          <div class="modal-section-title">Team Activity</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+            Sign-ins, changes, views and shares across the whole dashboard. Visible to you only.
+          </p>
+
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <select id="al-person" class="connect-input" style="flex:1;min-width:150px" onchange="loadActivityLog()">
+              <option value="">All people</option>
+            </select>
+            <select id="al-category" class="connect-input" style="flex:1;min-width:130px" onchange="loadActivityLog()">
+              <option value="">All activity</option>
+              <option value="auth">Sign in / out</option>
+              <option value="change">Changes</option>
+              <option value="view">Views</option>
+              <option value="share">Shares &amp; exports</option>
+            </select>
+            <select id="al-range" class="connect-input" style="flex:1;min-width:130px" onchange="loadActivityLog()">
+              <option value="1">Today</option>
+              <option value="7" selected>Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="0">All time</option>
+            </select>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <button onclick="loadActivityLog()" style="padding:8px 16px;background:var(--accent,#0573F5);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
+            <button onclick="exportActivityCsv()" style="padding:8px 16px;background:transparent;color:var(--text-main);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">⬇ Export CSV</button>
+          </div>
+
+          <div id="al-summary" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
+          <div id="al-list"><div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading activity…</div></div>
+          <div style="text-align:center;margin-top:12px">
+            <button id="al-more" onclick="loadActivityLog(true)" style="display:none;padding:8px 20px;background:transparent;color:var(--text-main);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer">Load more</button>
+          </div>
+        </div>
+        </div><!-- /spanel-activity -->
 
         </div><!-- /modal-body -->
         </div><!-- /settings-content -->
@@ -4937,6 +5024,7 @@
 
     document.getElementById('signout-btn').addEventListener('click', async () => {
       if (timer) clearInterval(timer);
+      await logActivity('auth', 'Signed out');   // must run before the session is torn down
       await Auth.signOut();
     });
 
@@ -5020,6 +5108,11 @@
       // Gate the Team button: only owners can manage team access
       document.getElementById('team-btn').style.display =
         currentRole === 'owner' ? '' : 'none';
+
+      // Gate the Activity Log tab: owner only (RLS enforces this server-side too)
+      const _alNav = document.getElementById('snav-activity');
+      if (_alNav) _alNav.style.display = currentRole === 'owner' ? '' : 'none';
+      _hubActivityGate();
 
       // Load current user's access restrictions (for non-owners)
       await loadMyAccess();
@@ -5151,6 +5244,10 @@
         Auth.saveDashboardSettings(currentUser.id, currentOrgId, {
           default_account_id: sel.value,
         });
+      }
+      if (sel.value) {
+        const label = sel.options[sel.selectedIndex]?.textContent?.trim() || sel.value;
+        logView('ad account "' + label + '"', { entityType: 'ad_account', entityId: sel.value, label });
       }
       loadData();
     });
@@ -8520,7 +8617,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     });
 
     function setSettingsTab(name) {
-      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','website','linked','link','agencies','dashboard'].forEach(t => {
+      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','website','linked','link','agencies','dashboard','activity'].forEach(t => {
         const nav = document.getElementById('snav-'   + t);
         const pan = document.getElementById('spanel-' + t);
         if (nav) nav.classList.toggle('active', t === name);
@@ -8534,6 +8631,148 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (name === 'tiktok-ads') loadTikTokAdsList();
       if (name === 'agencies')   renderAgencySettings();
       if (name === 'dashboard')  renderDashboardCustomPanel();
+      if (name === 'activity')   { _alOffset = 0; loadActivityLog(); }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // ACTIVITY LOG
+    // Records who did what, and when. Writes are best-effort and must
+    // never block or break the action being logged — a failed insert is
+    // swallowed so a logging problem can't stop real work.
+    // Reads are owner-only, enforced by RLS on activity_log.
+    // ══════════════════════════════════════════════════════════════
+    let _alRows = [], _alOffset = 0, _alLastView = '', _hubView = 'cards';
+    const AL_PAGE = 100;
+
+    // Which part of the product an entry belongs to. Callers may pass it
+    // explicitly; otherwise it is inferred from the view the user is in.
+    function _alModule(opts) {
+      if (opts && opts.module) return opts.module;
+      const t = opts && opts.entityType;
+      if (t === 'client')     return 'pipeline';
+      if (t === 'ad_account') return 'media';
+      if (t === 'invoice' || t === 'payment') return 'finance';
+      if (t === 'settings' || t === 'shopify_app') return 'settings';
+      if (_hubView === 'pipeline' || _hubView === 'client') return 'pipeline';
+      if (_hubView === 'finance') return 'finance';
+      if (_hubView === 'media')   return 'media';
+      return 'account';
+    }
+
+    async function logActivity(category, action, opts) {
+      try {
+        if (!currentUser || !currentOrgId) return;
+        opts = opts || {};
+        await sb.from('activity_log').insert({
+          organization_id: currentOrgId,
+          user_id:      currentUser.id,
+          user_email:   currentUser.email || null,
+          user_name:    currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || null,
+          category:     category,
+          module:       _alModule(opts),
+          action:       action,
+          entity_type:  opts.entityType  || null,
+          entity_id:    opts.entityId != null ? String(opts.entityId) : null,
+          entity_label: opts.label       || null,
+          details:      opts.details     || null,
+          user_agent:   navigator.userAgent.slice(0, 300),
+        });
+      } catch (e) { /* logging must never break the app */ }
+    }
+
+    // Views fire constantly; only record when the thing being looked at changes.
+    function logView(label, opts) {
+      const key = (opts?.entityType || '') + ':' + (opts?.entityId || label);
+      if (key === _alLastView) return;
+      _alLastView = key;
+      logActivity('view', 'Opened ' + label, opts);
+    }
+
+    function _alEsc(s) { return escHtml(String(s == null ? '' : s)); }
+
+    function _alWhen(iso) {
+      const d = new Date(iso), now = new Date();
+      const mins = Math.round((now - d) / 60000);
+      if (mins < 1)    return 'just now';
+      if (mins < 60)   return mins + 'm ago';
+      if (mins < 1440) return Math.round(mins / 60) + 'h ago';
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    const AL_ICON = { auth: '🔑', change: '✎', view: '👁', share: '🔗' };
+
+    async function loadActivityLog(append) {
+      const list = document.getElementById('al-list');
+      if (!list || currentRole !== 'owner') return;
+      if (!append) { _alOffset = 0; _alRows = []; list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading activity…</div>'; }
+
+      const person   = document.getElementById('al-person').value;
+      const category = document.getElementById('al-category').value;
+      const days     = parseInt(document.getElementById('al-range').value, 10);
+
+      let q = sb.from('activity_log').select('*').eq('organization_id', currentOrgId)
+                .order('created_at', { ascending: false })
+                .range(_alOffset, _alOffset + AL_PAGE - 1);
+      if (person)   q = q.eq('user_id', person);
+      if (category) q = q.eq('category', category);
+      if (days > 0) q = q.gte('created_at', new Date(Date.now() - days * 864e5).toISOString());
+
+      const { data, error } = await q;
+      if (error) { list.innerHTML = `<div style="color:#e53e3e;font-size:13px">${_alEsc(error.message)}</div>`; return; }
+
+      _alRows = append ? _alRows.concat(data || []) : (data || []);
+      _alOffset = _alRows.length;
+      document.getElementById('al-more').style.display = (data || []).length === AL_PAGE ? '' : 'none';
+
+      // Populate the people filter once, from whoever actually appears in the log.
+      const psel = document.getElementById('al-person');
+      if (psel.options.length <= 1) {
+        const seen = new Map();
+        _alRows.forEach(r => { if (r.user_id && !seen.has(r.user_id)) seen.set(r.user_id, r.user_name || r.user_email || r.user_id); });
+        seen.forEach((name, id) => psel.insertAdjacentHTML('beforeend', `<option value="${_alEsc(id)}">${_alEsc(name)}</option>`));
+      }
+
+      document.getElementById('al-summary').textContent =
+        _alRows.length ? `${_alRows.length} entr${_alRows.length === 1 ? 'y' : 'ies'}` : '';
+
+      if (!_alRows.length) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No activity in this period.</div>';
+        return;
+      }
+
+      let lastDay = '';
+      list.innerHTML = _alRows.map(r => {
+        const day = new Date(r.created_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+        const header = day !== lastDay ? `<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">${_alEsc(day)}</div>` : '';
+        lastDay = day;
+        const who   = r.user_name || r.user_email || 'Unknown';
+        const label = r.entity_label ? ` · <span style="color:var(--text-muted)">${_alEsc(r.entity_label)}</span>` : '';
+        return `${header}
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px;width:18px;text-align:center;flex:none">${AL_ICON[r.category] || '•'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;color:var(--text-main)"><strong>${_alEsc(who)}</strong> — ${_alEsc(r.action)}${label}</div>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;flex:none" title="${_alEsc(new Date(r.created_at).toLocaleString())}">${_alEsc(_alWhen(r.created_at))}</span>
+          </div>`;
+      }).join('');
+    }
+
+    function exportActivityCsv() {
+      if (!_alRows.length) return;
+      const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const rows = [['Time', 'Person', 'Email', 'Type', 'Action', 'Item', 'Details']]
+        .concat(_alRows.map(r => [
+          new Date(r.created_at).toLocaleString(), r.user_name || '', r.user_email || '',
+          r.category, r.action, r.entity_label || '', r.details ? JSON.stringify(r.details) : '',
+        ]));
+      const blob = new Blob([rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `activity-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      logActivity('share', 'Exported the activity log to CSV', { details: { rows: _alRows.length } });
     }
 
     // ── Website tracking (non-Shopify clients) ──────────────────────────────
@@ -9157,6 +9396,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             .update(_linkPending[id]).eq('id', id).eq('organization_id', currentOrgId);
           if (error) throw error;
         }
+        logActivity('change', `Updated account links (${ids.length})`, {
+          entityType: 'settings', label: 'Linked Accounts', details: { accounts: ids.length },
+        });
         _linkPending = {};
         status.className = 'modal-status success';
         status.textContent = `✓ Saved ${ids.length} link${ids.length === 1 ? '' : 's'}.`;
@@ -9277,6 +9519,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     async function refreshSettingsData() {
       if (!currentOrgId) return;
+
+      // Populate the client-app picker. Without this the dropdown only ever holds
+      // "Default app", so Connect silently falls back to the platform credentials
+      // and the OAuth callback rejects the signature (invalid_hmac).
+      loadShopifyApps().catch(e => console.error('loadShopifyApps failed', e));
 
       // Load stores
       const { data: stores } = await sb
@@ -9446,12 +9693,27 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!name || !clientId || !clientSecret) {
         st.textContent = 'Fill in all three fields.'; st.style.color = '#F87171'; return;
       }
-      const { data, error } = await sb.from('shopify_apps').insert({
-        organization_id: currentOrgId, name, client_id: clientId,
-        client_secret: clientSecret, created_by: currentUser?.id,
-      }).select('id').single();
+      // Re-registering the same client ID replaces the stored secret rather than
+      // creating a duplicate app — this is the normal way to correct a bad paste.
+      const { data: existing } = await sb.from('shopify_apps_safe')
+        .select('id').eq('organization_id', currentOrgId).eq('client_id', clientId).maybeSingle();
+
+      let data, error;
+      if (existing?.id) {
+        ({ data, error } = await sb.from('shopify_apps')
+          .update({ name, client_secret: clientSecret, is_active: true, updated_at: new Date().toISOString() })
+          .eq('id', existing.id).select('id').single());
+      } else {
+        ({ data, error } = await sb.from('shopify_apps').insert({
+          organization_id: currentOrgId, name, client_id: clientId,
+          client_secret: clientSecret, created_by: currentUser?.id,
+        }).select('id').single());
+      }
       if (error) { st.textContent = error.message; st.style.color = '#F87171'; return; }
-      st.textContent = '✓ App saved'; st.style.color = '#16A34A';
+      logActivity('change', existing?.id ? 'Updated a Shopify app' : 'Registered a Shopify app', {
+        entityType: 'shopify_app', entityId: data?.id, label: name,
+      });
+      st.textContent = existing?.id ? '✓ App updated' : '✓ App saved'; st.style.color = '#16A34A';
       document.getElementById('sa-name').value = '';
       document.getElementById('sa-client-id').value = '';
       document.getElementById('sa-client-secret').value = '';
@@ -10877,6 +11139,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         _cpClient = data;
       }
       if (!_cpClient) return;
+      logView('client "' + (_cpClient.name || id) + '"', { entityType: 'client', entityId: id, label: _cpClient.name });
       hubShowView('client');
       renderClientProfile();
     }
@@ -11293,6 +11556,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         const idx = _pipeClients.findIndex(c => c.id === _cpClient.id);
         if (idx >= 0) Object.assign(_pipeClients[idx], patch);
       }
+      logActivity('change', 'Saved changes to the timeline', {
+        entityType: 'client', entityId: _cpClient.id, label: _cpClient.name,
+        details: { month: _cpMonth, summary, via: _cpShareToken ? 'share link' : 'dashboard' },
+      });
       _cpPending = null; _cpBaseline = null;
       renderClientProfile();
     }
@@ -12185,6 +12452,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         mode, label, created_by: currentUser?.id,
       });
       if (error) { document.getElementById('cps-error').textContent = error.message; return; }
+      logActivity('share', 'Created a ' + mode + ' share link', {
+        entityType: 'client', entityId: _cpClient.id, label: _cpClient.name, details: { mode, label },
+      });
       document.getElementById('cps-label').value = '';
       await cpLoadShares();
     }
@@ -12193,6 +12463,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!confirm('Revoke this link? Anyone holding it will lose access.')) return;
       const { error } = await sb.from('cp_timeline_shares').update({ revoked: true }).eq('id', id);
       if (error) { document.getElementById('cps-error').textContent = error.message; return; }
+      logActivity('share', 'Revoked a share link', {
+        entityType: 'client', entityId: _cpClient?.id, label: _cpClient?.name,
+      });
       await cpLoadShares();
     }
 
@@ -12257,6 +12530,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function cpDownloadTimeline() {
       const proc = _cpProc();
       if (!proc.length) { alert('Nothing to export yet — add a stage or load a map first.'); return; }
+      logActivity('share', 'Downloaded the timeline', {
+        entityType: 'client', entityId: _cpClient?.id, label: _cpClient?.name, details: { month: _cpMonth },
+      });
 
       const c = _cpClient || {};
       const monthLbl = _cpMonthLabel(_cpMonth);
@@ -12685,6 +12961,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const row = _finRows.find(r => r.id === id);
       const { error } = await sb.from('finance_payments').update({ status: 'paid', amount_paid: Number(row?.amount) || 0, paid_date: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() }).eq('id', id);
       if (error) { alert('Error: ' + error.message); return; }
+      logActivity('change', 'Marked an invoice as paid', {
+        module: 'finance', entityType: 'invoice', entityId: id,
+        label: row?.client_name || row?.description || null,
+        details: { amount: row?.amount, currency: row?.currency },
+      });
       loadFinance();
     }
 
@@ -12745,6 +13026,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (id) ({ error } = await sb.from('finance_payments').update(row).eq('id', id));
       else ({ error } = await sb.from('finance_payments').insert({ ...row, organization_id: currentOrgId, created_by: currentUser?.id }));
       if (error) { errEl.textContent = error.message; return; }
+      logActivity('change', id ? 'Updated a payment record' : 'Added a payment record', {
+        module: 'finance', entityType: 'invoice', entityId: id || null,
+        label: row.client_name || row.description || null,
+        details: { amount: row.amount, currency: row.currency, status },
+      });
       document.getElementById('fin-modal').classList.add('hidden');
       loadFinance();
     }
@@ -12754,20 +13040,81 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!id || !confirm('Delete this payment record?')) return;
       const { error } = await sb.from('finance_payments').delete().eq('id', id);
       if (error) { document.getElementById('fm-error').textContent = error.message; return; }
+      logActivity('change', 'Deleted a payment record', {
+        module: 'finance', entityType: 'invoice', entityId: id,
+      });
       document.getElementById('fin-modal').classList.add('hidden');
       loadFinance();
     }
 
     // ── HOME HUB ──────────────────────────────────
     function hubShowView(v) {
+      _hubView = v;
       document.getElementById('hub-cards-view').style.display    = v === 'cards'    ? '' : 'none';
       document.getElementById('hub-pipeline-view').style.display = v === 'pipeline' ? '' : 'none';
       document.getElementById('hub-finance-view').style.display  = v === 'finance'  ? '' : 'none';
+      const av = document.getElementById('hub-activity-view');
+      if (av) av.style.display = v === 'activity' ? '' : 'none';
       const cv = document.getElementById('hub-client-view');
       if (cv) cv.style.display = v === 'client' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
       if (v === 'pipeline') cpmInit();
       if (v === 'finance')  loadFinance();
+      if (v === 'activity') renderHubActivity();
+    }
+
+    // ── Team Activity module: one column per area of the product (owner only) ──
+    function _hubActivityGate() {
+      const card = document.getElementById('hub-card-activity');
+      if (card) card.style.display = currentRole === 'owner' ? '' : 'none';
+    }
+
+    async function renderHubActivity() {
+      if (currentRole !== 'owner' || !currentOrgId) return;
+      const cols = { pipeline: 'ha-pipeline', media: 'ha-media', finance: 'ha-finance' };
+      if (!document.getElementById(cols.pipeline)) return;
+
+      const days   = parseInt(document.getElementById('ha-range').value, 10) || 7;
+      const person = document.getElementById('ha-person').value;
+
+      let q = sb.from('activity_log')
+        .select('user_id, user_name, user_email, action, entity_label, module, category, created_at')
+        .eq('organization_id', currentOrgId)
+        .gte('created_at', new Date(Date.now() - days * 864e5).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(600);
+      if (person) q = q.eq('user_id', person);
+
+      const { data, error } = await q;
+      if (error) {
+        Object.values(cols).forEach(id => {
+          document.getElementById(id).innerHTML = `<div class="hub-act-empty">${escHtml(error.message)}</div>`;
+        });
+        return;
+      }
+
+      // Fill the people picker once, from whoever appears in the log.
+      const psel = document.getElementById('ha-person');
+      if (psel && psel.options.length <= 1) {
+        const seen = new Map();
+        (data || []).forEach(r => { if (r.user_id && !seen.has(r.user_id)) seen.set(r.user_id, r.user_name || r.user_email || r.user_id); });
+        seen.forEach((name, id) => psel.insertAdjacentHTML('beforeend', `<option value="${escHtml(id)}">${escHtml(name)}</option>`));
+      }
+
+      Object.entries(cols).forEach(([mod, id]) => {
+        const rows = (data || []).filter(r => r.module === mod).slice(0, 25);
+        const el = document.getElementById(id);
+        if (!rows.length) { el.innerHTML = '<div class="hub-act-empty">No activity in this period.</div>'; return; }
+        el.innerHTML = rows.map(r => {
+          const who  = (r.user_name || r.user_email || 'Someone').split('@')[0];
+          const what = r.action + (r.entity_label ? ' · ' + r.entity_label : '');
+          return `<div class="hub-act-row">
+              <span>${AL_ICON[r.category] || '•'}</span>
+              <span class="hub-act-what"><span class="hub-act-who">${escHtml(who)}</span> ${escHtml(what)}</span>
+              <span class="hub-act-when" title="${escHtml(new Date(r.created_at).toLocaleString())}">${escHtml(_alWhen(r.created_at))}</span>
+            </div>`;
+        }).join('');
+      });
     }
     // ── Which modules this person may open ──
     let _cpModules = null;          // null = not loaded yet → assume owner-ish until known
@@ -12785,7 +13132,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       } catch { _cpModules = null; }
       applyModuleAccess();
     }
-    function canOpenModule(m) { return !_cpModules || _cpModules.includes(m); }
+    function canOpenModule(m) {
+      // Team Activity is never part of a member's module list — it is owner-only.
+      if (m === 'activity') return currentRole === 'owner';
+      return !_cpModules || _cpModules.includes(m);
+    }
     function applyModuleAccess() {
       document.querySelectorAll('.hub-card[data-mod]').forEach(c => {
         c.style.display = canOpenModule(c.dataset.mod) ? '' : 'none';
@@ -12830,6 +13181,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           setTimeout(async () => {
             try {
               await loadOrgs();
+              // Record the sign-in once the org context exists. INITIAL_SESSION
+              // fires on every page load from a stored session, so only a real
+              // SIGNED_IN event counts as "signed in".
+              if (event === 'SIGNED_IN') logActivity('auth', 'Signed in');
+              else                       logActivity('auth', 'Opened the dashboard');
               // Show flash message if returning from Shopify OAuth
               const flash = localStorage.getItem('flash_success');
               if (flash) {
