@@ -2670,7 +2670,9 @@
             <button class="hub-mod-btn" onclick="fnOpenClient()">＋ Client</button>
             <button class="hub-mod-btn" onclick="fnOpenPayment()">＋ Payment</button>
             <button class="hub-mod-btn" onclick="fnOpenExpense()">＋ Expense</button>
+            <button class="hub-mod-btn" id="fn-sync-btn" onclick="fnSyncZoho()">⟳ Sync Zoho</button>
           </div>
+          <div id="fn-sync-status" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <input id="fn-search" class="connect-input" placeholder="Search client…" oninput="fnRender()" style="min-width:170px">
             <select id="fn-f-pay" class="connect-input" onchange="fnRender()" style="min-width:140px">
@@ -13125,6 +13127,43 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return (cur || FN_BASE) + ' ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
     }
 
+    // Pulls contacts, invoices, payments and expenses from Zoho Books.
+    // Read-only and idempotent — safe to press as often as you like.
+    async function fnSyncZoho() {
+      const btn = document.getElementById('fn-sync-btn');
+      const st  = document.getElementById('fn-sync-status');
+      btn.disabled = true; btn.textContent = '⟳ Syncing…';
+      st.style.color = 'var(--text-muted)';
+      st.textContent = 'Talking to Zoho Books — this can take a minute on the first run.';
+
+      const r = await callEdgeFunction('zoho-sync', {});
+      btn.disabled = false; btn.textContent = '⟳ Sync Zoho';
+
+      if (r.error) {
+        st.style.color = '#e53e3e';
+        st.textContent = '✗ ' + r.error;
+        return;
+      }
+      st.style.color = '#16A34A';
+      st.textContent = `✓ ${r.clients} clients · ${r.payments} payments · ${r.invoices} open invoices · ${r.expenses} expenses`;
+      logActivity('change', 'Synced Zoho Books', { module: 'finance', entityType: 'settings', details: r });
+      fnInit();
+    }
+
+    async function fnShowLastSync() {
+      const st = document.getElementById('fn-sync-status');
+      if (!st || st.textContent) return;
+      const { data } = await sb.from('fin_sync_runs')
+        .select('finished_at, ok, clients, payments, message')
+        .eq('organization_id', currentOrgId)
+        .order('id', { ascending: false }).limit(1).maybeSingle();
+      if (!data) { st.textContent = 'Not synced yet.'; return; }
+      st.style.color = data.ok ? 'var(--text-muted)' : '#e53e3e';
+      st.textContent = data.ok
+        ? `Last synced ${_alWhen(data.finished_at)} · ${data.clients} clients, ${data.payments} payments`
+        : '✗ Last sync failed: ' + (data.message || 'unknown error');
+    }
+
     async function fnInit() {
       const box = document.getElementById('fn-clients');
       if (!await _hubWaitOrg()) {
@@ -13147,6 +13186,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           .forEach(x => am.insertAdjacentHTML('beforeend', `<option>${escHtml(x)}</option>`));
       }
       fnRender();
+      fnShowLastSync();
     }
 
     function fnFiltered() {
