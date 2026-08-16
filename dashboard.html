@@ -2681,10 +2681,10 @@
               <option value="unpaid">Unpaid</option><option value="overdue">Overdue</option>
             </select>
             <select id="fn-f-proj" class="connect-input" onchange="fnRender()" style="min-width:140px">
-              <option value="">All projects</option>
-              <option value="active">Active</option><option value="not_started">Not started</option>
-              <option value="on_hold">On hold</option><option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="completed">Completed</option>
             </select>
             <select id="fn-f-am" class="connect-input" onchange="fnRender()" style="min-width:150px">
               <option value="">All account managers</option>
@@ -13134,9 +13134,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       unpaid:  ['#6B7280', 'Unpaid'],
       overdue: ['#E53E3E', 'Overdue'],
     };
+    // Three states only. Zoho drives active/inactive; completed is set here,
+    // since Zoho Books has no notion of a finished project.
     const FN_PROJ_LABEL = {
-      not_started: 'Not started', active: 'Active', on_hold: 'On hold',
-      completed: 'Completed', cancelled: 'Cancelled',
+      active: 'Active', inactive: 'Inactive', completed: 'Completed',
+      // legacy values, still rendered if any rows predate the simplification
+      not_started: 'Active', on_hold: 'Inactive', cancelled: 'Inactive',
     };
 
     function fnMoney(v, cur) {
@@ -13239,7 +13242,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return _fnClients.filter(c =>
         (!q    || (c.name || '').toLowerCase().includes(q) || (c.service || '').toLowerCase().includes(q)) &&
         (!pay  || c.payment_status === pay) &&
-        (!proj || c.project_status === proj) &&
+        (!proj || FN_PROJ_LABEL[c.project_status] === FN_PROJ_LABEL[proj]) &&
         (!am   || c.account_manager === am) &&
         inWindow(c));
     }
@@ -13337,11 +13340,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </div>`).join('') + `
         <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
           <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">Active clients</div>
-          <div style="font-size:17px;font-weight:700">${rows.filter(c => c.project_status === 'active').length}</div>
+          <div style="font-size:17px;font-weight:700">${rows.filter(c => FN_PROJ_LABEL[c.project_status] === 'Active').length}</div>
         </div>
         <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:12px 14px">
           <div style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">Completed</div>
-          <div style="font-size:17px;font-weight:700">${rows.filter(c => c.project_status === 'completed').length}</div>
+          <div style="font-size:17px;font-weight:700">${rows.filter(c => FN_PROJ_LABEL[c.project_status] === 'Completed').length}</div>
         </div>`;
 
       const box = document.getElementById('fn-clients');
@@ -13429,7 +13432,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         ['value',   'Contract value (number only)',               c?.contract_value || ''],
         ['cur',     'Currency — EGP, USD, SAR or AED',            c?.currency || FN_BASE],
         ['rate',    `Rate to ${FN_BASE} on the contract date (1 if already ${FN_BASE})`, c?.fx_rate || '1'],
-        ['status',  'Project status: not_started, active, on_hold, completed, cancelled', c?.project_status || 'active'],
+        ['status',  'Status: active, inactive or completed',      c?.project_status || 'active'],
       ]);
       if (!f) return;
       const row = {
