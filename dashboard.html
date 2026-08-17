@@ -10912,9 +10912,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
 
       const existing = cpmData.members.find(m => (m.email || '').toLowerCase() === email);
-      const mods = ['pipeline','media','finance'].filter(m => document.getElementById('nu-m-' + m)?.checked);
+      const allMods = ACX_MODULES.map(([key]) => key);
+      const mods = allMods.filter(m => document.getElementById('nu-m-' + m)?.checked);
       const row = { full_name: name, job_title: title || null, email, role, client_scope: scope,
-                    modules: role === 'owner' ? ['pipeline','media','finance'] : (mods.length ? mods : ['pipeline']) };
+                    modules: role === 'owner' ? allMods : (mods.length ? mods : ['pipeline']) };
       const { error } = existing
         ? await sb.from('cp_members').update({ ...row, archived: false, updated_at: new Date().toISOString() }).eq('id', existing.id)
         : await sb.from('cp_members').insert({ organization_id: currentOrgId, ...row });
@@ -14857,8 +14858,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         if (!data || data.archived) { _cpModules = null; _myAccess = null; return; }  // not listed → unrestricted
         const roles = data.module_roles && Object.keys(data.module_roles).length
           ? data.module_roles : null;
+        // Owners get every module. Derived from ACX_MODULES so adding a module
+        // there is enough — a hardcoded list here silently hid Meetings.
         _cpModules = data.role === 'owner'
-          ? ['pipeline','media','finance']
+          ? ACX_MODULES.map(([key]) => key)
           : (roles ? Object.keys(roles)
                    : (Array.isArray(data.modules) ? data.modules : ['pipeline']));
         _myAccess = data.role === 'owner' ? null : {
