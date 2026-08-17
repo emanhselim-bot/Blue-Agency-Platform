@@ -10643,7 +10643,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // ═══════════════════════════════════════════════════════════
     const CPM_STAGES = [
       'Quotation Sent','Quotation Approved','Contract Signed','Partial Payment Received',
-      'Group Created','Kickoff Meeting','Brand Analysis','Competitor Analysis','Content Strategy',
+      'Group Created','Kickoff Meeting','Brand Analysis','Competitor Analysis','Brief','Content Strategy',
       'Strategy Approval','TOVs','TOV Approval','Captions / Scripts','Copy Approval','Copy Revisions','Design','Design Approval',
       'Design Revisions','Final Client Review','Final Client Edits','Scheduling','Publishing','Monthly Report',
     ];
@@ -11435,8 +11435,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       'Monthly content calendar': [
         { stage: '🗣 Briefing Meeting', items: ['Briefing Meeting Scheduled', 'Briefing Meeting Held', '👤 Brief Approval', 'Sent to the Team'] },
         { stage: '🚀 Onboarding', items: ['New Client', 'Quotation Sent', 'Quotation Approved', 'Contract Signed', 'Partial Payment Received', 'WhatsApp/Slack Group Created', 'Kickoff Meeting', 'Assets & Access Received'] },
-        { stage: '🔍 Strategy Phase', items: ['Brand Analysis', 'Competitor Analysis', 'Content Strategy', 'Monthly Content Plan', '👤 Client Approval — Plan'] },
-        { stage: '✍️ Copywriting', items: ['Content Strategy', '👤 Strategy Approval', 'TOVs', '👤 TOV Approval', 'Captions / Scripts', '👤 Copy Approval'] },
+        { stage: '🔍 Strategy Phase', items: ['Brand Analysis', 'Competitor Analysis', 'Monthly Content Plan', '👤 Client Approval — Plan'] },
+        { stage: '🧠 Content Strategy', items: ['Brief', 'Content Strategy', '👤 Strategy Approval', 'TOVs', '👤 TOV Approval'] },
+        { stage: '✍️ Copywriting', items: ['Captions / Scripts', '👤 Copy Approval'] },
         { stage: '🎨 Design', items: ['Design', '👤 Design Approval'] },
         { stage: '📤 Delivery', items: ['Final Delivery', '👤 Final Client Review'] },
         { stage: '🚀 Publishing', items: ['Scheduling', 'Publishing', 'Community Management'] },
@@ -11586,8 +11587,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // ── Individual stage templates (add just the stages a client needs) ──
     const CP_STAGE_TEMPLATES = {
       '🚀 Onboarding': ['New Client','Quotation Sent','Quotation Approved','Contract Signed','Partial Payment Received','WhatsApp/Slack Group Created','Kickoff Meeting','Assets & Access Received'],
-      '🔍 Strategy Phase': ['Brand Analysis','Competitor Analysis','Content Strategy','Monthly Content Plan','Client Approval — Plan'],
-      '✍️ Copywriting': ['Content Strategy','👤 Strategy Approval','TOVs','👤 TOV Approval','Captions / Scripts','👤 Copy Approval'],
+      '🔍 Strategy Phase': ['Brand Analysis','Competitor Analysis','Monthly Content Plan','Client Approval — Plan'],
+      '🧠 Content Strategy': ['Brief','Content Strategy','👤 Strategy Approval','TOVs','👤 TOV Approval'],
+      '✍️ Copywriting': ['Captions / Scripts','👤 Copy Approval'],
       '🎨 Design': ['Design','Design Approval'],
       '📤 Delivery': ['Final Delivery','Final Client Review'],
       '🚀 Publishing': ['Scheduling','Publishing','Community Management'],
