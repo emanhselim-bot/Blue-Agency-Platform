@@ -2645,8 +2645,10 @@
 
         <div id="acx-panel-team">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-            <input id="acx-new-name"  class="connect-input" placeholder="Full name"           style="min-width:140px">
-            <input id="acx-new-email" class="connect-input" placeholder="Email"               style="min-width:180px" type="email">
+            <input id="acx-new-name"  class="connect-input" placeholder="Full name" list="acx-team-names"  style="min-width:140px" autocomplete="off" oninput="acxTeamPicked()">
+            <datalist id="acx-team-names"></datalist>
+            <input id="acx-new-email" class="connect-input" placeholder="Email"     list="acx-team-emails" style="min-width:180px" type="email" autocomplete="off">
+            <datalist id="acx-team-emails"></datalist>
             <input id="acx-new-user"  class="connect-input" placeholder="Username (optional)" style="min-width:150px" autocomplete="off">
             <input id="acx-new-pass"  class="connect-input" placeholder="Password"            style="min-width:150px" type="password" autocomplete="new-password">
             <button onclick="acxAddMember()" class="connect-input" style="cursor:pointer;min-width:auto;padding:9px 16px">＋ Add person</button>
@@ -2668,8 +2670,10 @@
               <option value="media">📊 Media buying dashboard</option>
               <option value="pipeline">🤝 Pipeline timeline</option>
             </select>
-            <input id="acx-cl-label" class="connect-input" placeholder="Client name"   style="min-width:150px">
-            <input id="acx-cl-email" class="connect-input" placeholder="Email"          style="min-width:170px" type="email">
+            <input id="acx-cl-label" class="connect-input" placeholder="Client name" list="acx-client-names" style="min-width:150px" autocomplete="off" oninput="acxClientPicked()">
+            <datalist id="acx-client-names"></datalist>
+            <input id="acx-cl-email" class="connect-input" placeholder="Email"       list="acx-client-emails" style="min-width:170px" type="email" autocomplete="off">
+            <datalist id="acx-client-emails"></datalist>
             <select id="acx-cl-kind" class="connect-input" style="min-width:150px" onchange="acxKindChanged()">
               <option value="link">Share link — no login</option>
               <option value="login">Login — username + password</option>
@@ -14063,6 +14067,65 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       acxRenderTeam();
       acxRenderAccountPicker();
+      acxFillDirectories();
+    }
+
+    // Type-ahead sources. Clients come from the pipeline, the finance ledger
+    // (which the Zoho sync fills) and any link already issued, so a name only
+    // has to be typed correctly once.
+    let _acxClientDir = [];
+    async function acxFillDirectories() {
+      const [{ data: fin }, { data: shares }] = await Promise.all([
+        sb.from('fin_clients').select('name').eq('organization_id', currentOrgId).eq('archived', false),
+        sb.from('md_shares').select('label, recipient_email').eq('organization_id', currentOrgId),
+      ]);
+
+      const names = new Set();
+      _acxClients.forEach(c => c.name && names.add(c.name.trim()));
+      (fin || []).forEach(c => c.name && names.add(c.name.trim()));
+      (shares || []).forEach(s => s.label && names.add(s.label.trim()));
+      _acxClientDir = [...names].sort((a, b) => a.localeCompare(b));
+
+      const emails = new Set();
+      (shares || []).forEach(s => s.recipient_email && emails.add(s.recipient_email.trim()));
+
+      const opts = (list) => list.map(v => `<option value="${escHtml(v)}">`).join('');
+      document.getElementById('acx-client-names').innerHTML  = opts(_acxClientDir);
+      document.getElementById('acx-client-emails').innerHTML = opts([...emails].sort());
+
+      // Team: existing people plus anyone who already has a login.
+      const tNames = new Set(), tEmails = new Set();
+      _acxMembers.forEach(m => { if (m.full_name) tNames.add(m.full_name); if (m.email) tEmails.add(m.email); });
+      _acxLogins.forEach(u => { if (u.name) tNames.add(u.name); if (u.email) tEmails.add(u.email); });
+      document.getElementById('acx-team-names').innerHTML  = opts([...tNames].sort());
+      document.getElementById('acx-team-emails').innerHTML = opts([...tEmails].sort());
+    }
+
+    // Picking a known person fills their email, and warns rather than creating
+    // a duplicate row.
+    function acxTeamPicked() {
+      const v = document.getElementById('acx-new-name').value.trim();
+      const hit = _acxMembers.find(m => (m.full_name || '') === v)
+               || _acxLogins.find(u => (u.name || '') === v);
+      const err = document.getElementById('acx-team-error');
+      if (!hit) { if (err.dataset.dup) { err.textContent = ''; delete err.dataset.dup; } return; }
+      const email = document.getElementById('acx-new-email');
+      if (!email.value) email.value = hit.email || '';
+      if (_acxMembers.some(m => (m.full_name || '') === v)) {
+        err.style.color = '#EA8C00';
+        err.textContent = `${v} is already on the team — adding again would create a duplicate.`;
+        err.dataset.dup = '1';
+      }
+    }
+
+    function acxClientPicked() {
+      const v = document.getElementById('acx-cl-label').value.trim();
+      const err = document.getElementById('acx-cl-error');
+      if (!v) { err.textContent = ''; return; }
+      // If this client already has a pipeline record, preselect it for timeline links.
+      const pipe = _acxClients.find(c => c.name === v);
+      const sel = document.getElementById('acx-cl-pipeclient');
+      if (pipe && sel && sel.options.length) sel.value = pipe.id;
     }
 
     function acxKindChanged() {
