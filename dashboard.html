@@ -4898,10 +4898,16 @@
 
       // the bar always shows now — it also carries the analysis tools
       bar.style.display = 'flex';
-      bar.innerHTML = orgPlatforms.map(p => {
-        const def = PLATFORM_DEFS[p] || { label: p, icon: '📊' };
+      // Every platform is always listed. One with no accounts yet is dimmed and
+      // explains how to connect it, rather than being hidden — otherwise there
+      // is no sign the dashboard supports it at all.
+      bar.innerHTML = Object.keys(PLATFORM_DEFS).map(p => {
+        const def = PLATFORM_DEFS[p];
+        const connected = orgPlatforms.includes(p);
         const on = !_pfMode && !_alMode && currentPlatformTab === p;
-        return `<button class="platform-tab${on ? ' active' : ''}" onclick="setPlatformTab('${p}')">${def.icon} ${def.label}</button>`;
+        return `<button class="platform-tab${on ? ' active' : ''}" onclick="setPlatformTab('${p}')"
+                        style="${connected ? '' : 'opacity:.55'}"
+                        title="${connected ? '' : def.label + ' — not connected yet'}">${def.icon} ${def.label}</button>`;
       }).join('') +
       `<span class="platform-sep"></span>
        <button class="platform-tab${_pfMode ? ' active' : ''}" onclick="openProfitTab()" title="Unit economics — will this budget make money?">💰 Profitability</button>
@@ -4917,7 +4923,22 @@
       filterAccountsByAgency();
       // Reset account selection and clear content when switching platforms
       sel.value = '';
-      document.getElementById('content').innerHTML = '<div class="loading-state">Select an account above to load data.</div>';
+      const setupHint = {
+        google_ads: ['🔍 Google Ads', 'Connect with Google in Settings → Google Ads. One click imports every account under your Google login.', 'google-ads'],
+        tiktok_ads: ['🎵 TikTok Ads', 'Add an advertiser ID and access token in Settings → TikTok Ads. You will need an approved TikTok Marketing API app first.', 'tiktok-ads'],
+        meta:       ['📘 Meta Ads', 'Connect your Meta account in Settings → Meta Accounts to import your ad accounts.', 'meta'],
+      }[platform];
+
+      document.getElementById('content').innerHTML = orgPlatforms.includes(platform)
+        ? '<div class="loading-state">Select an account above to load data.</div>'
+        : `<div class="loading-state" style="line-height:1.7">
+             <div style="font-size:16px;font-weight:700;margin-bottom:6px">${escHtml(setupHint?.[0] || platform)} is not connected yet</div>
+             <div style="max-width:460px;margin:0 auto 14px">${escHtml(setupHint?.[1] || '')}</div>
+             <button onclick="openSettings('${setupHint?.[2] || 'shopify'}')"
+                     style="padding:9px 20px;background:#0573F5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+               Open settings
+             </button>
+           </div>`;
       document.getElementById('date-label').textContent = 'Select an account to start';
       const recsSection = document.getElementById('recs-section');
       if (recsSection) recsSection.style.display = 'none';
