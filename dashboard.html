@@ -222,6 +222,18 @@
     .hub-card-title { font-size: 19px; font-weight: 800; color: #0A1CA3; margin-bottom: 8px; }
     .hub-card-desc { font-size: 13px; color: #5B6472; line-height: 1.5; }
     .hub-card-badge { display: inline-block; margin-top: 14px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 20px; background: #EAF2FE; color: #0573F5; }
+    .mt-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: left; }
+    .mt-dow { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.55); text-align: center; padding: 4px 0; }
+    .mt-cell { min-height: 78px; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 6px 7px; cursor: pointer; background: rgba(255,255,255,.05); transition: background .12s, border-color .12s; }
+    .mt-cell:hover { background: rgba(255,255,255,.10); border-color: var(--brand-gold, #FCBA00); }
+    .mt-cell.mt-other { opacity: .35; }
+    .mt-cell.mt-today { border-color: var(--brand-gold, #FCBA00); }
+    .mt-cell.mt-sel { background: rgba(252,186,0,.16); border-color: var(--brand-gold, #FCBA00); }
+    .mt-num { font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .mt-pill { font-size: 10.5px; line-height: 1.35; border-radius: 5px; padding: 2px 5px; margin-bottom: 3px; background: rgba(37,99,235,.35); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mt-pill.mt-held { background: rgba(22,163,74,.35); }
+    .mt-pill.mt-cancelled { background: rgba(229,62,62,.30); text-decoration: line-through; }
+    @media (max-width: 640px) { .mt-cell { min-height: 56px; } .mt-pill { display: none; } }
     .hub-activity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; text-align: left; }
     .hub-act-col { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 16px 18px; }
     .hub-act-head { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #fff; }
@@ -2557,6 +2569,12 @@
             <div class="hub-card-desc">Who signed in and what they changed — across pipeline, media buying and finance.</div>
             <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
           </div>
+          <div class="hub-card" data-mod="meetings" onclick="hubOpen('meetings')">
+            <div class="hub-card-icon">📅</div>
+            <div class="hub-card-title">Meetings</div>
+            <div class="hub-card-desc">Calendar of client and internal meetings, with attendees, notes and follow-up tasks.</div>
+            <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
+          </div>
           <div class="hub-card" id="hub-card-access" data-mod="access" onclick="hubOpen('access')" style="display:none">
             <div class="hub-card-icon">🔐</div>
             <div class="hub-card-title">Access</div>
@@ -2592,6 +2610,22 @@
           <div class="hub-act-col"><div class="hub-act-head">📊 Media Buying</div><div id="ha-media"    class="hub-act-body"></div></div>
           <div class="hub-act-col"><div class="hub-act-head">💰 Finance</div>        <div id="ha-finance"  class="hub-act-body"></div></div>
         </div>
+      </div>
+
+      <!-- Meetings -->
+      <div id="hub-meetings-view" style="display:none">
+        <div style="position:sticky;top:0;z-index:20;background:var(--page-bg,#1B2A6B);padding:6px 0 10px">
+          <div class="hub-mod-head" style="margin-bottom:10px">
+            <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+            <h2>📅 Meetings</h2>
+            <button class="hub-mod-btn" onclick="mtPrevMonth()">‹</button>
+            <span id="mt-month-label" style="font-weight:700;min-width:150px;text-align:center"></span>
+            <button class="hub-mod-btn" onclick="mtNextMonth()">›</button>
+            <button class="hub-mod-btn" onclick="mtToday()">Today</button>
+          </div>
+        </div>
+        <div class="mt-grid" id="mt-grid"></div>
+        <div id="mt-day" style="margin-top:18px"></div>
       </div>
 
       <!-- Access module (owner only) -->
@@ -13709,6 +13743,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (av) av.style.display = v === 'activity' ? '' : 'none';
       const xv = document.getElementById('hub-access-view');
       if (xv) xv.style.display = v === 'access' ? '' : 'none';
+      const mv = document.getElementById('hub-meetings-view');
+      if (mv) mv.style.display = v === 'meetings' ? '' : 'none';
       const cv = document.getElementById('hub-client-view');
       if (cv) cv.style.display = v === 'client' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
@@ -13716,6 +13752,266 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (v === 'finance')  fnInit();
       if (v === 'activity') renderHubActivity();
       if (v === 'access')   acxInit();
+      if (v === 'meetings') mtInit();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // MEETINGS — month calendar; a day opens its meetings, attendees,
+    // notes and the two follow-up lists (agency side and client side).
+    // Dates are handled as plain YYYY-MM-DD strings throughout: building
+    // them from Date objects and toISOString() shifts a day in UTC+2.
+    // ══════════════════════════════════════════════════════════════
+    let _mtCursor = null, _mtSelected = null, _mtMeetings = [], _mtClients = [], _mtMembers = [];
+
+    const mtISO = (y, m, d) =>
+      `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+    function mtTodayISO() {
+      const n = new Date();
+      return mtISO(n.getFullYear(), n.getMonth(), n.getDate());
+    }
+
+    function mtPrevMonth() { _mtCursor.setMonth(_mtCursor.getMonth() - 1); mtLoad(); }
+    function mtNextMonth() { _mtCursor.setMonth(_mtCursor.getMonth() + 1); mtLoad(); }
+    function mtToday()     { _mtCursor = new Date(); _mtSelected = mtTodayISO(); mtLoad(); }
+
+    async function mtInit() {
+      if (!_mtCursor) { _mtCursor = new Date(); _mtSelected = mtTodayISO(); }
+      if (!await _hubWaitOrg()) {
+        document.getElementById('mt-grid').innerHTML =
+          '<div style="grid-column:1/-1;font-size:13px;color:var(--text-muted)">No organisation loaded — open the Media Buying Dashboard once, then come back.</div>';
+        return;
+      }
+      const [{ data: cs }, { data: ms }] = await Promise.all([
+        sb.from('pipeline_clients').select('id, name').eq('organization_id', currentOrgId).order('name'),
+        sb.from('cp_members').select('id, full_name, email').eq('organization_id', currentOrgId)
+          .eq('archived', false).order('full_name'),
+      ]);
+      _mtClients = cs || [];
+      _mtMembers = ms || [];
+      mtLoad();
+    }
+
+    async function mtLoad() {
+      const y = _mtCursor.getFullYear(), m = _mtCursor.getMonth();
+      const from = mtISO(y, m, 1);
+      const to   = mtISO(y, m, new Date(y, m + 1, 0).getDate());
+
+      const { data } = await sb.from('meetings')
+        .select('id, title, meets_on, starts_at, ends_at, status, client_id, notes, location')
+        .eq('organization_id', currentOrgId)
+        .gte('meets_on', from).lte('meets_on', to)
+        .order('starts_at', { nullsFirst: true });
+      _mtMeetings = data || [];
+      mtRenderGrid();
+      mtRenderDay();
+    }
+
+    function mtRenderGrid() {
+      const y = _mtCursor.getFullYear(), m = _mtCursor.getMonth();
+      document.getElementById('mt-month-label').textContent =
+        _mtCursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+      const first = new Date(y, m, 1).getDay();            // 0 = Sunday
+      const days  = new Date(y, m + 1, 0).getDate();
+      const prev  = new Date(y, m, 0).getDate();
+      const today = mtTodayISO();
+
+      const byDay = {};
+      _mtMeetings.forEach(x => (byDay[x.meets_on] ||= []).push(x));
+
+      let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+        .map(d => `<div class="mt-dow">${d}</div>`).join('');
+
+      const cell = (iso, num, other) => {
+        const list = byDay[iso] || [];
+        const cls = ['mt-cell', other ? 'mt-other' : '', iso === today ? 'mt-today' : '',
+                     iso === _mtSelected ? 'mt-sel' : ''].filter(Boolean).join(' ');
+        return `<div class="${cls}" onclick="mtPickDay('${iso}')">
+          <div class="mt-num">${num}</div>
+          ${list.slice(0, 3).map(x => `<div class="mt-pill mt-${escHtml(x.status)}" title="${escHtml(x.title)}">${x.starts_at ? escHtml(x.starts_at.slice(0, 5)) + ' ' : ''}${escHtml(x.title)}</div>`).join('')}
+          ${list.length > 3 ? `<div style="font-size:10px;color:rgba(255,255,255,.6)">+${list.length - 3} more</div>` : ''}
+        </div>`;
+      };
+
+      for (let i = first - 1; i >= 0; i--) html += cell(mtISO(y, m - 1, prev - i), prev - i, true);
+      for (let d = 1; d <= days; d++)       html += cell(mtISO(y, m, d), d, false);
+      const tail = (7 - ((first + days) % 7)) % 7;
+      for (let d = 1; d <= tail; d++)       html += cell(mtISO(y, m + 1, d), d, true);
+
+      document.getElementById('mt-grid').innerHTML = html;
+    }
+
+    function mtPickDay(iso) { _mtSelected = iso; mtRenderGrid(); mtRenderDay(); }
+
+    function mtRenderDay() {
+      const box = document.getElementById('mt-day');
+      if (!_mtSelected) { box.innerHTML = ''; return; }
+      const list = _mtMeetings.filter(x => x.meets_on === _mtSelected);
+      const nice = new Date(_mtSelected + 'T12:00:00')
+        .toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+      box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="font-size:15px;font-weight:700">${escHtml(nice)}</div>
+          <button onclick="mtAddMeeting()" class="connect-input" style="cursor:pointer;min-width:auto;padding:8px 16px">＋ Add meeting</button>
+        </div>
+        <div id="mt-list">${list.length ? '' : '<div style="font-size:13px;color:var(--text-muted)">Nothing scheduled. Add a meeting for this day.</div>'}</div>`;
+
+      const host = document.getElementById('mt-list');
+      list.forEach(mtg => host.insertAdjacentHTML('beforeend', mtCardShell(mtg)));
+      list.forEach(mtg => mtLoadDetail(mtg.id));
+    }
+
+    function mtCardShell(m) {
+      const client = _mtClients.find(c => c.id === m.client_id);
+      const when = [m.starts_at?.slice(0, 5), m.ends_at?.slice(0, 5)].filter(Boolean).join(' – ');
+      return `<div id="mt-card-${escHtml(m.id)}" style="border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:var(--card-bg,rgba(255,255,255,.05))">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">
+          <div>
+            <div style="font-size:14.5px;font-weight:700">${escHtml(m.title)}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">
+              ${when ? escHtml(when) : 'No time set'}${client ? ' · ' + escHtml(client.name) : ' · Internal'}${m.location ? ' · ' + escHtml(m.location) : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select onchange="mtSetStatus('${escHtml(m.id)}', this.value)" class="connect-input" style="min-width:auto;padding:4px 8px;font-size:11px">
+              <option value="scheduled" ${m.status === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+              <option value="held"      ${m.status === 'held'      ? 'selected' : ''}>Held</option>
+              <option value="cancelled" ${m.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+            </select>
+            <button onclick="mtDelete('${escHtml(m.id)}')" style="padding:4px 10px;font-size:11px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Delete</button>
+          </div>
+        </div>
+        ${m.notes ? `<div style="font-size:12.5px;color:var(--text-main);margin-top:8px;white-space:pre-wrap">${escHtml(m.notes)}</div>` : ''}
+        <div id="mt-detail-${escHtml(m.id)}" style="margin-top:10px;font-size:12px;color:var(--text-muted)">Loading…</div>
+      </div>`;
+    }
+
+    async function mtLoadDetail(id) {
+      const [{ data: att }, { data: tasks }] = await Promise.all([
+        sb.from('meeting_attendees').select('id, member_id, name, side').eq('meeting_id', id),
+        sb.from('meeting_tasks').select('id, side, title, done, due_on').eq('meeting_id', id).order('position'),
+      ]);
+      const box = document.getElementById('mt-detail-' + id);
+      if (!box) return;
+
+      const nameOf = a => a.name || (_mtMembers.find(m => m.id === a.member_id)?.full_name) || 'Someone';
+      const people = side => (att || []).filter(a => a.side === side).map(a =>
+        `<span style="display:inline-block;background:rgba(255,255,255,.10);border-radius:20px;padding:2px 10px;margin:0 5px 5px 0;font-size:11.5px">${escHtml(nameOf(a))}
+          <span onclick="mtDelAttendee('${escHtml(a.id)}','${escHtml(id)}')" style="cursor:pointer;opacity:.6;margin-left:4px">✕</span></span>`).join('');
+
+      const taskList = side => {
+        const rows = (tasks || []).filter(t => t.side === side);
+        return rows.map(t => `<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer">
+            <input type="checkbox" ${t.done ? 'checked' : ''} onchange="mtToggleTask('${escHtml(t.id)}', this.checked, '${escHtml(id)}')">
+            <span style="${t.done ? 'text-decoration:line-through;opacity:.6' : ''}">${escHtml(t.title)}${t.due_on ? ` <span style="opacity:.6">· due ${escHtml(t.due_on)}</span>` : ''}</span>
+            <span onclick="mtDelTask('${escHtml(t.id)}','${escHtml(id)}')" style="margin-left:auto;cursor:pointer;opacity:.5">✕</span>
+          </label>`).join('') || '<div style="opacity:.6;font-size:12px">Nothing yet.</div>';
+      };
+
+      const done = (tasks || []).filter(t => t.done).length;
+      box.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:4px">
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px">Agency</div>
+            <div>${people('agency') || '<span style="opacity:.6;font-size:12px">Nobody yet</span>'}</div>
+            <button onclick="mtAddAttendee('${escHtml(id)}','agency')" style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Add</button>
+            <div style="margin-top:10px">${taskList('agency')}</div>
+            <button onclick="mtAddTask('${escHtml(id)}','agency')" style="margin-top:6px;padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Task for us</button>
+          </div>
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px">Client</div>
+            <div>${people('client') || '<span style="opacity:.6;font-size:12px">Nobody yet</span>'}</div>
+            <button onclick="mtAddAttendee('${escHtml(id)}','client')" style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Add</button>
+            <div style="margin-top:10px">${taskList('client')}</div>
+            <button onclick="mtAddTask('${escHtml(id)}','client')" style="margin-top:6px;padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Task for client</button>
+          </div>
+        </div>
+        ${(tasks || []).length ? `<div style="margin-top:10px;font-size:11.5px">${done} of ${(tasks || []).length} tasks done</div>` : ''}`;
+    }
+
+    async function mtAddMeeting() {
+      const title = prompt('Meeting title'); if (!title) return;
+      const time  = prompt('Start time (HH:MM, 24h) — leave blank if unknown', '10:00') || null;
+      const end   = time ? (prompt('End time (HH:MM) — optional', '') || null) : null;
+      const names = _mtClients.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+      const pick  = _mtClients.length
+        ? prompt(`Which client? Enter a number, or leave blank for an internal meeting.\n\n${names}`)
+        : null;
+      const client = pick ? _mtClients[Number(pick) - 1] : null;
+      const notes  = prompt('Notes / agenda (optional)') || null;
+
+      const { error } = await sb.from('meetings').insert({
+        organization_id: currentOrgId, client_id: client?.id || null,
+        title: title.trim(), meets_on: _mtSelected,
+        starts_at: time, ends_at: end, notes, created_by: currentUser?.id,
+      });
+      if (error) { alert(error.message); return; }
+      logActivity('change', 'Scheduled a meeting', {
+        module: 'pipeline', entityType: 'meeting', label: title.trim(),
+        details: { date: _mtSelected, client: client?.name || 'internal' },
+      });
+      mtLoad();
+    }
+
+    async function mtSetStatus(id, status) {
+      await sb.from('meetings').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+      const m = _mtMeetings.find(x => x.id === id); if (m) m.status = status;
+      logActivity('change', 'Marked a meeting ' + status, { module: 'pipeline', entityType: 'meeting', entityId: id, label: m?.title });
+      mtRenderGrid();
+    }
+
+    async function mtDelete(id) {
+      const m = _mtMeetings.find(x => x.id === id);
+      if (!confirm(`Delete "${m?.title || 'this meeting'}" and its tasks?`)) return;
+      await sb.from('meetings').delete().eq('id', id);
+      logActivity('change', 'Deleted a meeting', { module: 'pipeline', entityType: 'meeting', label: m?.title });
+      mtLoad();
+    }
+
+    async function mtAddAttendee(id, side) {
+      const opts = _mtMembers.map((m, i) => `${i + 1}. ${m.full_name || m.email}`).join('\n');
+      const v = prompt(side === 'agency' && _mtMembers.length
+        ? `Enter a number to pick a team member, or type any name.\n\n${opts}`
+        : 'Name of the attendee');
+      if (!v) return;
+      const n = Number(v);
+      const member = (!isNaN(n) && _mtMembers[n - 1]) ? _mtMembers[n - 1] : null;
+      const { error } = await sb.from('meeting_attendees').insert({
+        meeting_id: id, side,
+        member_id: member?.id || null,
+        name: member ? null : v.trim(),
+      });
+      if (error) { alert(error.message); return; }
+      mtLoadDetail(id);
+    }
+
+    async function mtDelAttendee(attId, meetingId) {
+      await sb.from('meeting_attendees').delete().eq('id', attId);
+      mtLoadDetail(meetingId);
+    }
+
+    async function mtAddTask(id, side) {
+      const title = prompt(side === 'client' ? 'Task for the client' : 'Task for us'); if (!title) return;
+      const due = prompt('Due date (YYYY-MM-DD) — optional', '') || null;
+      const { error } = await sb.from('meeting_tasks').insert({
+        meeting_id: id, side, title: title.trim(), due_on: due,
+        position: Date.now() % 100000,
+      });
+      if (error) { alert(error.message); return; }
+      mtLoadDetail(id);
+    }
+
+    async function mtToggleTask(taskId, done, meetingId) {
+      await sb.from('meeting_tasks')
+        .update({ done, done_at: done ? new Date().toISOString() : null }).eq('id', taskId);
+      mtLoadDetail(meetingId);
+    }
+
+    async function mtDelTask(taskId, meetingId) {
+      await sb.from('meeting_tasks').delete().eq('id', taskId);
+      mtLoadDetail(meetingId);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -13728,6 +14024,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       ['pipeline', '🤝 Pipeline'],
       ['media',    '📊 Media buying'],
       ['finance',  '💰 Finance'],
+      ['meetings', '📅 Meetings'],
     ];
     let _acxMembers = [], _acxAccounts = [], _acxClients = [], _acxLogins = [];
 
