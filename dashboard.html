@@ -6686,6 +6686,22 @@
       gadsSelCount();
     }
 
+    // A write blocked by row-level security updates zero rows and returns NO
+    // error — which is what made "Remove" look like it did nothing. Asking for
+    // the affected ids back turns that silence into a real message.
+    async function _gadsWrite(builder, expected) {
+      const { data, error } = await builder.select('id');
+      if (error) { alert('⚠️ ' + error.message); return false; }
+      const n = (data || []).length;
+      if (n < expected) {
+        alert(`Nothing was changed (${n} of ${expected} rows).\n\n` +
+              `Only the organisation owner or an admin can edit Google Ads accounts. ` +
+              `Check which account you are signed in as — an editor login will fail here silently.`);
+        return false;
+      }
+      return true;
+    }
+
     // ── Selection helpers ──────────────────────────────────────────
     function _gadsChecks() { return Array.from(document.querySelectorAll('.gads-check')); }
 
@@ -6706,8 +6722,9 @@
       const ids = _gadsChecks().filter(b => b.checked).map(b => b.value);
       if (!ids.length) { alert('Select at least one account first.'); return; }
       if (!confirm(`Remove ${ids.length} account${ids.length > 1 ? 's' : ''}? They can be restored later.`)) return;
-      const { error } = await sb.from('google_ads_accounts').update({ is_active: false }).in('id', ids);
-      if (error) { alert('⚠️ ' + error.message); return; }
+      const ok = await _gadsWrite(
+        sb.from('google_ads_accounts').update({ is_active: false }).in('id', ids), ids.length);
+      if (!ok) return;
       logActivity('settings', `Removed ${ids.length} Google Ads account(s)`, { module: 'media' });
       loadGoogleAdsList();
       loadAccounts();
@@ -6716,25 +6733,26 @@
     async function renameGoogleAdsAccount(id, name) {
       const clean = (name || '').trim();
       // Blank falls back to null so the list shows the Customer ID again.
-      const { error } = await sb.from('google_ads_accounts')
+      const ok = await _gadsWrite(sb.from('google_ads_accounts')
         .update({ account_name: clean || null, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) { alert('⚠️ ' + error.message); return; }
+        .eq('id', id), 1);
+      if (!ok) return;
       logActivity('settings', `Renamed a Google Ads account to "${clean || '(cleared)'}"`, { module: 'media' });
       loadAccounts();
     }
 
     async function restoreGoogleAdsAccount(id) {
-      const { error } = await sb.from('google_ads_accounts').update({ is_active: true }).eq('id', id);
-      if (error) { alert('⚠️ ' + error.message); return; }
+      const ok = await _gadsWrite(
+        sb.from('google_ads_accounts').update({ is_active: true }).eq('id', id), 1);
+      if (!ok) return;
       loadGoogleAdsList();
       loadAccounts();
     }
 
     async function purgeGoogleAdsAccount(id, label) {
       if (!confirm(`Permanently delete "${label}"?\n\nThis cannot be undone. To use it again you would re-add it by Customer ID.`)) return;
-      const { error } = await sb.from('google_ads_accounts').delete().eq('id', id);
-      if (error) { alert('⚠️ ' + error.message); return; }
+      const ok = await _gadsWrite(sb.from('google_ads_accounts').delete().eq('id', id), 1);
+      if (!ok) return;
       logActivity('settings', `Permanently deleted Google Ads account "${label}"`, { module: 'media' });
       loadGoogleAdsList();
       loadAccounts();
@@ -6804,8 +6822,9 @@
 
     async function deleteGoogleAdsAccount(id) {
       if (!confirm('Remove this Google Ads account?\n\nIt is hidden, not deleted — you can restore it from "Removed accounts".')) return;
-      const { error } = await sb.from('google_ads_accounts').update({ is_active: false }).eq('id', id);
-      if (error) { alert('⚠️ ' + error.message); return; }
+      const ok = await _gadsWrite(
+        sb.from('google_ads_accounts').update({ is_active: false }).eq('id', id), 1);
+      if (!ok) return;
       logActivity('settings', 'Removed a Google Ads account', { module: 'media' });
       loadGoogleAdsList();
       loadAccounts();
