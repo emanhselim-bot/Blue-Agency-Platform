@@ -6525,6 +6525,10 @@
       }
     }
 
+    // Accounts hidden via "Remove" are kept in the database (is_active = false)
+    // so they can be restored. This toggles whether that group is on screen.
+    let _gadsShowRemoved = false;
+
     async function loadGoogleAdsList() {
       if (!currentOrgId) return;
       const el = document.getElementById('google-ads-list');
@@ -6533,19 +6537,56 @@
       const { data, error } = await sb.from('google_ads_accounts')
         .select('id, organization_id, customer_id, client_id, account_name, is_active, created_at, updated_at, login_customer_id, ga4_property_id, search_console_site')
         .eq('organization_id', currentOrgId).order('created_at');
-      if (error || !data?.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No Google Ads accounts connected yet.</div>'; return; }
+      if (error) { el.innerHTML = `<div style="color:var(--coral);font-size:13px">⚠️ ${escHtml(error.message)}</div>`; return; }
 
-      const pending = data.find(a => a.customer_id === 'SETUP_REQUIRED');
-      const active  = data.filter(a => a.customer_id !== 'SETUP_REQUIRED');
+      const rows    = data || [];
+      const pending = rows.find(a => a.customer_id === 'SETUP_REQUIRED');
+      const real    = rows.filter(a => a.customer_id !== 'SETUP_REQUIRED');
+      const active  = real.filter(a => a.is_active !== false);
+      const removed = real.filter(a => a.is_active === false);
 
-      let html = active.map(a => `
+      let html = '';
+
+      // ── Bulk actions ─────────────────────────────────────────────
+      if (active.length) {
+        html += `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;
+                    padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="gads-check-all" onchange="gadsToggleAll(this.checked)"> Select all
+          </label>
+          <span id="gads-sel-count" style="font-size:12px;color:var(--text-muted)">0 selected</span>
+          <button onclick="gadsRemoveSelected()"
+            style="margin-left:auto;padding:6px 12px;background:none;border:1px solid var(--coral);
+                   color:var(--coral);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+            ✕ Remove selected
+          </button>
+        </div>`;
+      }
+
+      html += active.map(a => `
         <div class="store-item">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-weight:600;font-size:13px">🔍 ${escHtml(a.account_name || a.customer_id)}</div>
-              <div style="font-size:11px;color:var(--text-muted)">Customer ID: ${escHtml(a.customer_id)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="display:flex;align-items:flex-start;gap:10px;min-width:0">
+              <input type="checkbox" class="gads-check" value="${a.id}" onchange="gadsSelCount()"
+                     style="margin-top:3px;flex-shrink:0">
+              <div style="min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span>🔍</span>
+                  <input id="gname-${a.id}" type="text" value="${escHtml(a.account_name || '')}"
+                         placeholder="${escHtml(a.customer_id)}"
+                         onchange="renameGoogleAdsAccount('${a.id}', this.value)"
+                         title="Click to rename this account"
+                         style="font-weight:600;font-size:13px;background:transparent;border:1px solid transparent;
+                                border-radius:4px;padding:2px 5px;color:var(--text-main);font-family:inherit;
+                                min-width:140px;max-width:230px"
+                         onfocus="this.style.borderColor='var(--border)';this.style.background='var(--bg)'"
+                         onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-left:26px">Customer ID: ${escHtml(a.customer_id)}</div>
+              </div>
             </div>
-            <button onclick="deleteGoogleAdsAccount('${a.id}')" style="background:none;border:none;color:var(--coral);cursor:pointer;font-size:13px;padding:4px 8px">✕ Remove</button>
+            <button onclick="deleteGoogleAdsAccount('${a.id}')" style="background:none;border:none;color:var(--coral);cursor:pointer;font-size:13px;padding:4px 8px;white-space:nowrap">✕ Remove</button>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
             <div style="flex:1;min-width:180px">
@@ -6564,6 +6605,58 @@
           </div>
           <div id="galinks-status-${a.id}" style="font-size:11px;margin-top:5px"></div>
         </div>`).join('');
+
+      if (!active.length) {
+        html += '<div style="color:var(--text-muted);font-size:13px">No Google Ads accounts connected yet.</div>';
+      }
+
+      // ── Add an account by Customer ID ────────────────────────────
+      html += `
+        <div class="store-item" style="margin-top:10px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">➕ Add an account</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+            Enter the Customer ID from Google Ads Manager. It reuses the Google authorisation
+            already stored, so there is nothing else to sign in to.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="gads-add-cid" type="text" placeholder="e.g. 123-456-7890"
+              onkeydown="if(event.key==='Enter')addGoogleAdsAccount()"
+              style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+                     font-size:13px;background:var(--bg);color:var(--text-main);box-sizing:border-box">
+            <button onclick="addGoogleAdsAccount()"
+              style="padding:8px 16px;background:var(--blue-light);color:#fff;border:none;border-radius:6px;
+                     font-size:13px;font-weight:700;cursor:pointer">Add</button>
+          </div>
+          <div id="gads-add-status" style="font-size:11px;margin-top:6px"></div>
+        </div>`;
+
+      // ── Removed accounts (restorable) ────────────────────────────
+      if (removed.length) {
+        html += `
+        <div style="margin-top:12px">
+          <button onclick="gadsToggleRemoved()"
+            style="background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;padding:4px 0">
+            ${_gadsShowRemoved ? '▾' : '▸'} Removed accounts (${removed.length})
+          </button>
+          ${_gadsShowRemoved ? removed.map(a => `
+            <div class="store-item" style="opacity:.7;display:flex;justify-content:space-between;
+                                           align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="min-width:0">
+                <div style="font-weight:600;font-size:13px">🔍 ${escHtml(a.account_name || a.customer_id)}</div>
+                <div style="font-size:11px;color:var(--text-muted)">Customer ID: ${escHtml(a.customer_id)}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0">
+                <button onclick="restoreGoogleAdsAccount('${a.id}')"
+                  style="padding:5px 11px;background:none;border:1px solid var(--border);color:var(--text-main);
+                         border-radius:6px;font-size:12px;cursor:pointer">↩ Restore</button>
+                <button data-label="${escHtml(a.account_name || a.customer_id)}"
+                  onclick="purgeGoogleAdsAccount('${a.id}', this.dataset.label)"
+                  style="padding:5px 11px;background:none;border:1px solid var(--coral);color:var(--coral);
+                         border-radius:6px;font-size:12px;cursor:pointer">Delete permanently</button>
+              </div>
+            </div>`).join('') : ''}
+        </div>`;
+      }
 
       if (pending) {
         html += `
@@ -6589,7 +6682,82 @@
         </div>`;
       }
 
-      el.innerHTML = html || '<div style="color:var(--text-muted);font-size:13px">No Google Ads accounts connected yet.</div>';
+      el.innerHTML = html;
+      gadsSelCount();
+    }
+
+    // ── Selection helpers ──────────────────────────────────────────
+    function _gadsChecks() { return Array.from(document.querySelectorAll('.gads-check')); }
+
+    function gadsSelCount() {
+      const boxes = _gadsChecks();
+      const n = boxes.filter(b => b.checked).length;
+      const lbl = document.getElementById('gads-sel-count');
+      if (lbl) lbl.textContent = `${n} selected`;
+      const all = document.getElementById('gads-check-all');
+      if (all) { all.checked = n > 0 && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+    }
+
+    function gadsToggleAll(on) { _gadsChecks().forEach(b => { b.checked = on; }); gadsSelCount(); }
+
+    function gadsToggleRemoved() { _gadsShowRemoved = !_gadsShowRemoved; loadGoogleAdsList(); }
+
+    async function gadsRemoveSelected() {
+      const ids = _gadsChecks().filter(b => b.checked).map(b => b.value);
+      if (!ids.length) { alert('Select at least one account first.'); return; }
+      if (!confirm(`Remove ${ids.length} account${ids.length > 1 ? 's' : ''}? They can be restored later.`)) return;
+      const { error } = await sb.from('google_ads_accounts').update({ is_active: false }).in('id', ids);
+      if (error) { alert('⚠️ ' + error.message); return; }
+      logActivity('settings', `Removed ${ids.length} Google Ads account(s)`, { module: 'media' });
+      loadGoogleAdsList();
+      loadAccounts();
+    }
+
+    async function renameGoogleAdsAccount(id, name) {
+      const clean = (name || '').trim();
+      // Blank falls back to null so the list shows the Customer ID again.
+      const { error } = await sb.from('google_ads_accounts')
+        .update({ account_name: clean || null, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) { alert('⚠️ ' + error.message); return; }
+      logActivity('settings', `Renamed a Google Ads account to "${clean || '(cleared)'}"`, { module: 'media' });
+      loadAccounts();
+    }
+
+    async function restoreGoogleAdsAccount(id) {
+      const { error } = await sb.from('google_ads_accounts').update({ is_active: true }).eq('id', id);
+      if (error) { alert('⚠️ ' + error.message); return; }
+      loadGoogleAdsList();
+      loadAccounts();
+    }
+
+    async function purgeGoogleAdsAccount(id, label) {
+      if (!confirm(`Permanently delete "${label}"?\n\nThis cannot be undone. To use it again you would re-add it by Customer ID.`)) return;
+      const { error } = await sb.from('google_ads_accounts').delete().eq('id', id);
+      if (error) { alert('⚠️ ' + error.message); return; }
+      logActivity('settings', `Permanently deleted Google Ads account "${label}"`, { module: 'media' });
+      loadGoogleAdsList();
+      loadAccounts();
+    }
+
+    async function addGoogleAdsAccount() {
+      const input  = document.getElementById('gads-add-cid');
+      const status = document.getElementById('gads-add-status');
+      const cid    = (input?.value || '').trim();
+      const say = (msg, colour) => { if (status) { status.textContent = msg; status.style.color = colour; } };
+      if (!cid) { say('⚠ Enter a Customer ID first.', 'var(--coral)'); return; }
+      say('Verifying…', 'var(--text-muted)');
+      try {
+        const result = await callEdgeFunction('google-ads-setup', { organization_id: currentOrgId, customer_id: cid });
+        if (result.error) throw new Error(result.error);
+        say(result.note ? `⚠ ${result.note}` : `✓ Added "${result.account_name || result.customer_id}"`,
+            result.note ? '#D97706' : '#16A34A');
+        if (input) input.value = '';
+        logActivity('settings', `Added Google Ads account ${result.account_name || result.customer_id}`, { module: 'media' });
+        setTimeout(() => { loadGoogleAdsList(); loadAccounts(); }, 800);
+      } catch (e) {
+        say(`⚠ ${e.message}`, 'var(--coral)');
+      }
     }
 
     async function submitGoogleAdsCID(pendingId) {
@@ -6635,8 +6803,10 @@
     }
 
     async function deleteGoogleAdsAccount(id) {
-      if (!confirm('Remove this Google Ads account?')) return;
-      await sb.from('google_ads_accounts').update({ is_active: false }).eq('id', id);
+      if (!confirm('Remove this Google Ads account?\n\nIt is hidden, not deleted — you can restore it from "Removed accounts".')) return;
+      const { error } = await sb.from('google_ads_accounts').update({ is_active: false }).eq('id', id);
+      if (error) { alert('⚠️ ' + error.message); return; }
+      logActivity('settings', 'Removed a Google Ads account', { module: 'media' });
       loadGoogleAdsList();
       loadAccounts();
     }
