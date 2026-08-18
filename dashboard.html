@@ -5444,7 +5444,7 @@
       // Also load Google Ads and TikTok Ads accounts into the map
       if (currentOrgId) {
         const [{ data: gadsAccts }, { data: ttAccts }] = await Promise.all([
-          sb.from('google_ads_accounts').select('id, customer_id, account_name').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
+          sb.from('google_ads_accounts').select('id, customer_id, account_name, clarity_project_id').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
           sb.from('tiktok_ads_accounts').select('id, advertiser_id, account_name').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
         ]);
         (gadsAccts || []).forEach(acc => {
@@ -5958,6 +5958,20 @@
           custom_to: customTo,
         }).catch(() => null);
         const g4 = (ga4 && ga4.configured && !ga4.error) ? ga4 : null;
+
+        // Microsoft Clarity — only when this account is linked to a project.
+        // Calling without a project id returns the whole organisation's sessions,
+        // which would silently mix in every other client's traffic.
+        let cl = null;
+        if (account.clarity_project_id) {
+          const clRes = await callEdgeFunction('clarity-data', {
+            numOfDays: clarityNumDays(currentPeriod),
+            orgId: currentOrgId,
+            clarityProjectId: account.clarity_project_id,
+          }).catch(() => null);
+          if (clRes && !clRes.error && clRes.configured !== false) cl = clRes;
+        }
+
         const _liveTag = '<span style="color:#16A34A;font-weight:600;font-size:9px;margin-left:5px">● live</span>';
         const t = data?.totals;
         if (!t) { document.getElementById('content').innerHTML = `<div class="no-data"><strong>No Google Ads data for this period.</strong></div>`; return; }
@@ -6098,6 +6112,21 @@
                     gaManual('c-teal solid', '🔄', 'Returning Users', 'returningUsers')}
               </div>
             </div>
+
+            ${cl ? `
+            <div class="kpi-section" data-section-id="ga-clarity">
+              <div class="section-label">Site Behaviour <span class="section-drag-handle" title="Drag to reorder section">⠿</span>${_liveTag}
+                <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Microsoft Clarity · rolling ${clarityNumDays(currentPeriod)}-day window</span>
+              </div>
+              <div class="kpi-grid" data-grid-id="ga-clarity">
+                ${gaKpi('c-blue solid', '👥', 'Sessions',   (cl.sessions  ?? 0).toLocaleString(), '● Clarity')}
+                ${gaKpi('c-teal solid', '📄', 'Page Views', (cl.pageViews ?? 0).toLocaleString(), '● Clarity')}
+                ${gaKpi('c-purple', '📊', 'Pages / Session',
+                    cl.sessions ? (cl.pageViews / cl.sessions).toFixed(2) : '—', 'Page views ÷ sessions')}
+                ${cl.addToCart != null ? gaKpi('c-gold', '🛒', 'Add to Cart', (cl.addToCart ?? 0).toLocaleString(), '● Clarity') : ''}
+                ${cl.checkout  != null ? gaKpi('c-green', '💳', 'Checkouts',  (cl.checkout  ?? 0).toLocaleString(), '● Clarity') : ''}
+              </div>
+            </div>` : ''}
 
             <div class="kpi-section" data-section-id="ga-leads-placement">
               <div class="section-label">Leads Placement <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
@@ -6515,15 +6544,33 @@
     async function saveGoogleAnalyticsLinks(id) {
       const ga4 = document.getElementById('ga4-' + id)?.value.trim() || null;
       const sc  = document.getElementById('sc-'  + id)?.value.trim() || null;
+      const cl  = document.getElementById('gclarity-' + id)?.value || '';
       const st  = document.getElementById('galinks-status-' + id);
-      const { error } = await sb.from('google_ads_accounts')
-        .update({ ga4_property_id: ga4, search_console_site: sc, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (st) {
-        st.textContent = error ? ('⚠️ ' + error.message) : '✓ Saved — reload the account to pull live Analytics data';
-        st.style.color = error ? '#F87171' : '#16A34A';
+      const { data, error } = await sb.from('google_ads_accounts')
+        .update({
+          ga4_property_id:    ga4,
+          search_console_site: sc,
+          clarity_project_id: cl || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select('id');
+      if (!st) return;
+      if (error) {
+        st.textContent = '⚠️ ' + error.message; st.style.color = '#F87171';
+      } else if (!data?.length) {
+        // Zero rows and no error means row-level security refused the write.
+        st.textContent = '⚠️ Nothing saved — only owners and admins can edit these accounts.';
+        st.style.color = '#F87171';
+      } else {
+        st.textContent = '✓ Saved — reload the account to pull live data';
+        st.style.color = '#16A34A';
       }
     }
+
+    // Clarity projects for the current org, fetched once per settings render so
+    // every account row can build its dropdown without a query each.
+    let _gadsClarityProjects = [];
 
     // Accounts hidden via "Remove" are kept in the database (is_active = false)
     // so they can be restored. This toggles whether that group is on screen.
@@ -6534,9 +6581,15 @@
       const el = document.getElementById('google-ads-list');
       el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
       // Explicit columns: secrets are revoked at the database level, so select('*') would fail.
-      const { data, error } = await sb.from('google_ads_accounts')
-        .select('id, organization_id, customer_id, client_id, account_name, is_active, created_at, updated_at, login_customer_id, ga4_property_id, search_console_site')
-        .eq('organization_id', currentOrgId).order('created_at');
+      const [{ data, error }, { data: clProjects }] = await Promise.all([
+        sb.from('google_ads_accounts')
+          .select('id, organization_id, customer_id, client_id, account_name, is_active, created_at, updated_at, login_customer_id, ga4_property_id, search_console_site, clarity_project_id')
+          .eq('organization_id', currentOrgId).order('created_at'),
+        sb.from('clarity_projects')
+          .select('id, project_name')
+          .eq('organization_id', currentOrgId).eq('is_active', true).order('project_name'),
+      ]);
+      _gadsClarityProjects = clProjects || [];
       if (error) { el.innerHTML = `<div style="color:var(--coral);font-size:13px">⚠️ ${escHtml(error.message)}</div>`; return; }
 
       const rows    = data || [];
@@ -6598,6 +6651,16 @@
               <label style="font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:3px">SEARCH CONSOLE SITE</label>
               <input id="sc-${a.id}" type="text" value="${escHtml(a.search_console_site || '')}" placeholder="https://example.com/ or sc-domain:example.com"
                 style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text-main);box-sizing:border-box">
+            </div>
+            <div style="flex:1;min-width:180px">
+              <label style="font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:3px">MICROSOFT CLARITY</label>
+              <select id="gclarity-${a.id}"
+                style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text-main);box-sizing:border-box">
+                <option value="">— not linked —</option>
+                ${_gadsClarityProjects.map(p => `
+                  <option value="${escHtml(p.id)}"${p.id === a.clarity_project_id ? ' selected' : ''}>${escHtml(p.project_name)}</option>
+                `).join('')}
+              </select>
             </div>
             <div style="display:flex;align-items:flex-end">
               <button onclick="saveGoogleAnalyticsLinks('${a.id}')" style="padding:7px 14px;background:var(--blue-light);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Save</button>
