@@ -5933,6 +5933,22 @@
           include_cities: true,
         });
         if (data?.error) throw new Error(data.error);
+        // The edge function reports per-account failures inside accounts[], not at
+        // the top level. Without this, a rejected API call (unapproved developer
+        // token, revoked OAuth grant, wrong login-customer-id) renders as a full
+        // page of zeros with nothing to explain it.
+        const _gaAccts  = data.accounts || [];
+        const _gaErrors = _gaAccts.filter(a => a.error);
+        if (_gaErrors.length && _gaErrors.length === _gaAccts.length) {
+          throw new Error(_gaErrors[0].error);
+        }
+        const _gaWarn = _gaErrors.length
+          ? `<div style="margin:0 0 14px;padding:10px 14px;border-radius:8px;background:rgba(239,68,68,.12);
+                        border:1px solid rgba(239,68,68,.35);color:var(--text-main);font-size:12px">
+               ⚠️ ${_gaErrors.length} of ${_gaAccts.length} account(s) failed to load —
+               ${escHtml(String(_gaErrors[0].account_name || ''))}: ${escHtml(String(_gaErrors[0].error).slice(0, 200))}
+             </div>`
+          : '';
         // GA4 / Search Console data (non-blocking — sections fall back to manual entry)
         const ga4 = await callEdgeFunction('google-analytics-data', {
           account_id: account.id,
@@ -6003,6 +6019,7 @@
             style="width:100%;border:none;background:transparent;outline:none;color:var(--text-main);font-size:12px;font-family:inherit;text-align:${align};padding:2px 0">`;
         _updateTemplateBtnLabel('google-ads');
         document.getElementById('content').innerHTML = `
+          ${_gaWarn}
           <div class="kpi-sections-container" id="kpi-sections-container">
 
             <div class="kpi-section" data-section-id="ga-traffic">
