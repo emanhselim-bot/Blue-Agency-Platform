@@ -3731,9 +3731,14 @@
       loadData();
     }
     function _updateTemplateBtnLabel(t) {
-      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', 'google-ads':'🔍 Google Ads' };
+      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', 'google-ads':'🔍 Google Ads', profit:'💰 Profitability' };
       const btn = document.getElementById('template-btn');
-      if (btn) btn.textContent = M[t] || '📋 Template';
+      // Keep the 📋 prefix always. Showing only the active template's name made
+      // the button unrecognisable as the template control once one was picked.
+      if (btn) {
+        btn.textContent = M[t] ? `📋 ${M[t]}` : '📋 Template';
+        btn.title = 'Switch dashboard template';
+      }
     }
     function toggleTemplatePicker(e) {
       if (e) { e.stopPropagation(); }
