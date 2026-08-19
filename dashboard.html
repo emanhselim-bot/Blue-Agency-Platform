@@ -4505,6 +4505,50 @@
       return { pct: Math.max(0, Math.min(100, pct)), rawPct: pct, remaining, exceeded, status, cls };
     }
     const _fmtTgtNum = v => v == null ? '—' : Number(v).toLocaleString('en', { maximumFractionDigits: 2 });
+
+    // ── Target date windows ───────────────────────────────────────
+    // Dates are handled as plain YYYY-MM-DD strings and parsed into LOCAL
+    // dates. toISOString() would shift back a day in Cairo (UTC+2/+3) and make
+    // a target look like it ended the evening before it actually does.
+    function _tgtTodayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    function _tgtParse(s) {
+      if (!s) return null;
+      const [y, m, d] = s.split('-').map(Number);
+      if (!y || !m || !d) return null;
+      return new Date(y, m - 1, d);
+    }
+    function _tgtDaysBetween(a, b) {
+      return Math.round((_tgtParse(b) - _tgtParse(a)) / 86400000);
+    }
+    const _tgtNice = s => {
+      const d = _tgtParse(s);
+      return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+    };
+    // Where "today" sits relative to a target's window.
+    function _tgtWindow(t) {
+      if (!t.from && !t.to) return { state: 'none' };
+      const today = _tgtTodayStr();
+      if (t.from && t.to && t.to < t.from) {
+        return { state: 'invalid', text: '⚠ End date is before the start date' };
+      }
+      if (t.from && today < t.from) {
+        const n = _tgtDaysBetween(today, t.from);
+        return { state: 'upcoming', text: `Starts ${_tgtNice(t.from)} · in ${n} day${n === 1 ? '' : 's'}` };
+      }
+      if (t.to && today > t.to) {
+        return { state: 'ended', text: `Ended ${_tgtNice(t.to)}` };
+      }
+      if (t.to) {
+        const n = _tgtDaysBetween(today, t.to);
+        const range = t.from ? `${_tgtNice(t.from)} – ${_tgtNice(t.to)}` : `Until ${_tgtNice(t.to)}`;
+        return { state: 'active', text: `${range} · ${n === 0 ? 'last day' : n + ' day' + (n === 1 ? '' : 's') + ' left'}` };
+      }
+      return { state: 'active', text: `From ${_tgtNice(t.from)} · no end date` };
+    }
+    const _TGT_WIN_COLOUR = { upcoming: '#D97706', ended: 'var(--text-muted)', invalid: '#EF4444', active: '#16A34A' };
     function _tprogHTML(t, current, compact) {
       const p = _flexProgress(t, current);
       if (!p) return '<div class="tprog-meta"><span>No live data for this KPI yet</span></div>';
@@ -4533,7 +4577,15 @@
           card.querySelector('.kpi-target')?.remove();  // remove legacy badge to avoid duplication
           const div = document.createElement('div');
           div.className = 'kpi-tprog';
-          div.innerHTML = `<div class="tprog-meta" style="margin-bottom:3px"><span>🎯 Target: ${_fmtTgtNum(t.value)}</span></div>` + _tprogHTML(t, current, true);
+          const w = _tgtWindow(t);
+          // The bar always reflects the dashboard's selected date range, which
+          // may differ from the target's window — say so rather than implying
+          // the number was measured over the target period.
+          const winTag = w.state === 'none' ? ''
+            : `<div class="tprog-meta" style="margin-bottom:2px"><span style="font-size:9.5px;opacity:.85">📅 ${escHtml(w.text)}</span></div>`;
+          div.innerHTML =
+            `<div class="tprog-meta" style="margin-bottom:3px"><span>🎯 Target: ${_fmtTgtNum(t.value)}</span></div>` +
+            winTag + _tprogHTML(t, current, true);
           card.appendChild(div);
         });
       });
@@ -4585,8 +4637,21 @@
       document.querySelectorAll('#content .kpi-card[data-card-id]').forEach(c => {
         if (currentById[c.dataset.cardId] === undefined) currentById[c.dataset.cardId] = _kpiCurrentValue(c);
       });
-      box.innerHTML = targets.map((t, i) => `
-        <div class="tgt-row">
+      const dateInput = (i, field, val) => `
+        <input type="date" value="${escHtml(val || '')}"
+          onchange="flexUpdateTarget(${i}, '${field}', this.value)"
+          style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;
+                 font-size:12px;background:var(--bg);color:var(--text-main);
+                 font-family:inherit;box-sizing:border-box">`;
+
+      box.innerHTML = targets.map((t, i) => {
+        const w = _tgtWindow(t);
+        const winLine = w.state === 'none' ? '' : `
+          <div style="font-size:11px;margin-top:6px;color:${_TGT_WIN_COLOUR[w.state] || 'var(--text-muted)'}">
+            ${escHtml(w.text)}
+          </div>`;
+        return `
+        <div class="tgt-row"${w.state === 'ended' ? ' style="opacity:.72"' : ''}>
           <div class="tgt-row-head">
             <span class="tgt-row-label">${escHtml(t.label)}</span>
             <button class="tgt-row-del" title="Remove target" onclick="flexRemoveTarget(${i})">🗑</button>
@@ -4599,8 +4664,20 @@
               <option value="down" ${t.dir === 'down' ? 'selected' : ''}>Lower = better</option>
             </select>
           </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <div style="flex:1">
+              <label style="font-size:9.5px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:3px">START DATE</label>
+              ${dateInput(i, 'from', t.from)}
+            </div>
+            <div style="flex:1">
+              <label style="font-size:9.5px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:3px">END DATE</label>
+              ${dateInput(i, 'to', t.to)}
+            </div>
+          </div>
+          ${winLine}
           <div class="tgt-row-progress">${t.value ? _tprogHTML(t, currentById[t.id] ?? null, false) : ''}</div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     }
 
     function flexAddTarget(cardId) {
@@ -4608,7 +4685,7 @@
       const k = _availableKpis().find(x => x.id === cardId);
       if (!k) return;
       const targets = getFlexTargets();
-      targets.push({ id: k.id, label: k.label, value: null, dir: _guessDir(k.label) });
+      targets.push({ id: k.id, label: k.label, value: null, dir: _guessDir(k.label), from: '', to: '' });
       setFlexTargets(targets);
       loadTargetsPanel();
     }
