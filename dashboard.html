@@ -15298,8 +15298,16 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       cards.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);font-size:13px">Loading…</div>';
 
       const url = SUPABASE_URL + '/functions/v1/md-share-data';
+      // The anon key is sent so the call still works if the function has JWT
+      // verification enabled. It grants nothing on its own — the share token,
+      // checked server-side against md_shares, is what authorises the account.
       const post = (extra) => fetch(url, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON,
+          'Authorization': 'Bearer ' + SUPABASE_ANON,
+        },
         body: JSON.stringify({ token: _mdcToken, account_db_id: accountId, period, ...extra }),
       }).then(r => r.json());
 
@@ -15321,11 +15329,43 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         ['Link clicks',     e['actions:link_click'],    'num'],
         ['Purchases',       e['actions:omni_purchase'], 'num'],
       ];
-      cards.innerHTML = defs.map(([label, val, kind]) => `
+      // Goals the agency set for this account, so the client sees the same
+      // numbers being worked towards rather than bare metrics.
+      const tgts = main.targets || [];
+      const tgtFor = (label) => tgts.find(t =>
+        (t.label || '').trim().toLowerCase() === label.trim().toLowerCase());
+
+      cards.innerHTML = defs.map(([label, val, kind]) => {
+        const t = tgtFor(label);
+        let goal = '';
+        if (t && t.value != null) {
+          const cur_ = parseFloat(String(val ?? '').replace(/[^0-9.\-]/g, ''));
+          const have = isNaN(cur_) ? null : cur_;
+          const pct = have == null ? null
+            : (t.dir === 'down' ? (have > 0 ? Math.min(100, (t.value / have) * 100) : 100)
+                                : (t.value > 0 ? (have / t.value) * 100 : 0));
+          const hit = have != null && (t.dir === 'down' ? have <= t.value : have >= t.value);
+          const colour = hit ? '#16A34A' : (pct != null && pct >= 70 ? '#0573F5' : '#EF4444');
+          const win = (t.from || t.to)
+            ? ` · ${escHtml([t.from, t.to].filter(Boolean).join(' → '))}`
+            : '';
+          goal = `
+            <div style="margin-top:8px">
+              <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden">
+                <div style="height:100%;width:${Math.max(0, Math.min(100, pct ?? 0))}%;background:${colour}"></div>
+              </div>
+              <div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">
+                🎯 Goal ${escHtml(_mdcFmt(t.value, kind, cur))}${pct == null ? '' : ' · ' + Math.round(pct) + '%'}${win}
+              </div>
+            </div>`;
+        }
+        return `
         <div style="background:var(--card-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:12px;padding:14px 16px">
           <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">${escHtml(label)}</div>
           <div style="font-size:20px;font-weight:700">${escHtml(_mdcFmt(val, kind, cur))}</div>
-        </div>`).join('');
+          ${goal}
+        </div>`;
+      }).join('');
 
       const rows = camp.campaigns || [];
       document.getElementById('mdc-campaigns').innerHTML = !rows.length ? '' : `
