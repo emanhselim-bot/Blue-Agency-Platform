@@ -7635,6 +7635,12 @@
       const msgOrders   = parseInt(_stored(_msgKey)    ?? '') || _mhNum(_mhRow?.msg_orders)  || 0;
       const msgRevenue  = parseFloat(_stored(_revKey)  ?? '') || _mhNum(_mhRow?.msg_revenue) || 0;
       const msgPieces   = parseInt(_stored(_piecesKey) ?? '') || _mhNum(_mhRow?.msg_pieces)  || 0;
+      // Returns % is typed in per period. Kept as its own value rather than
+      // derived from Shopify refunds, which only counts refunded orders and
+      // misses exchanges and returns handled outside the store.
+      const _retKey     = `returns-rate-${_periodKey}`;
+      const _storedRet  = localStorage.getItem(_retKey);
+      const returnsRate = _storedRet !== null && _storedRet !== '' ? parseFloat(_storedRet) : null;
       const _leadsKey    = `msg-leads-${_periodKey}`;
       const _dealsKey    = `msg-deals-${_periodKey}`;
       const msgLeads     = parseInt(localStorage.getItem(_leadsKey) || '0') || 0;
@@ -7924,6 +7930,15 @@
               ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
               ${kpi('c-purple solid', '🎯', 'Total Conversion Rate',  sfmt(adConversionRate, v => fmt(v,'',2) + '%'),                               sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+              <div class="kpi-card c-red solid" data-card-id="returns-rate">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">↩️</div>
+                <div class="kpi-label">Returns %</div>
+                <input id="kpi-returns-rate-input" type="number" min="0" max="100" step="0.01"
+                  value="${returnsRate !== null ? returnsRate : ''}" placeholder="0.00"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub" id="kpi-returns-rate-sub">Manual entry</div>
+              </div>
             </div>
           </div>
 
@@ -8112,6 +8127,29 @@
           });
           recalcSvc();   // initial values on load
         })();
+
+        // ── Returns % (manual, per period) ──
+        const returnsInput = document.getElementById('kpi-returns-rate-input');
+        if (returnsInput) {
+          const retSub = document.getElementById('kpi-returns-rate-sub');
+          returnsInput.addEventListener('input', () => {
+            const raw = returnsInput.value.trim();
+            if (raw === '') { localStorage.removeItem(_retKey); if (retSub) retSub.textContent = 'Manual entry'; return; }
+            let v = parseFloat(raw);
+            if (isNaN(v)) return;
+            // A return rate above 100% is a typo, not a real figure.
+            if (v > 100) { v = 100; returnsInput.value = '100'; }
+            if (v < 0)   { v = 0;   returnsInput.value = '0'; }
+            localStorage.setItem(_retKey, String(v));
+            if (retSub) {
+              const lost = (totalOrders && v) ? Math.round(totalOrders * v / 100) : null;
+              retSub.textContent = lost != null
+                ? `Manual ✎ · about ${lost.toLocaleString('en')} of ${totalOrders.toLocaleString('en')} orders`
+                : 'Manual ✎';
+            }
+          });
+          returnsInput.dispatchEvent(new Event('input'));   // show the note on load
+        }
 
         const ordersInput  = document.getElementById('kpi-msg-orders-input');
         const revenueInput = document.getElementById('kpi-msg-revenue-input');
