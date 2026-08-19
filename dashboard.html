@@ -2338,6 +2338,7 @@
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
     <button class="targets-btn" id="compare-toggle-btn" onclick="toggleComparePanel()">⇄ Compare</button>
+    <button class="targets-btn" id="history-toggle-btn" onclick="mhOpen()" title="Enter past monthly orders, pieces and revenue">📅 Monthly history</button>
     <button class="layout-edit-btn" id="layout-undo-btn" onclick="undoLayout()" style="display:none" disabled title="Undo last layout change">↩ Undo</button>
     <button class="layout-edit-btn" id="layout-reset-btn" onclick="resetToDefaultLayout()" style="display:none" title="Reset all section/card arrangements to defaults">↺ Reset</button>
     <div class="tmpl-picker-wrap">
@@ -2415,6 +2416,38 @@
   <!-- MAIN CONTENT (unchanged) -->
   <div class="content" id="content">
     <div class="loading-state">Select an account above to load data.</div>
+  </div>
+
+  <!-- MONTHLY HISTORY (manual figures for months with no live data) -->
+  <div id="mh-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(6,12,30,.72);
+       overflow-y:auto;align-items:flex-start;justify-content:center">
+    <div style="width:100%;max-width:1000px;margin:auto;padding:26px 24px;background:var(--bg-card,#16213E);
+         border:1px solid var(--border);border-radius:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:17px;font-weight:700">📅 Monthly history</div>
+          <div id="mh-scope" style="font-size:12px;color:var(--text-muted);margin-top:2px"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="mh-year" onchange="mhLoad()" class="connect-input" style="padding:6px 10px;font-size:13px;min-width:auto"></select>
+          <button onclick="mhSave()" style="padding:8px 18px;background:var(--blue-light);color:#fff;border:none;
+                  border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">💾 Save</button>
+          <button onclick="mhClose()" style="padding:8px 14px;background:transparent;color:var(--text-main);
+                  border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer">Close</button>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:var(--text-muted);margin:12px 0 10px;line-height:1.6">
+        Figures you type here are used for months with no live Shopify data. Live data always wins,
+        so the current month is never overwritten. You can paste a block straight from a spreadsheet
+        into the first cell.
+      </div>
+
+      <div style="overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:10px">
+        <table id="mh-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px"></table>
+      </div>
+      <div id="mh-status" style="font-size:12px;margin-top:10px;min-height:18px"></div>
+    </div>
   </div>
 
   <!-- COMPARE PERIODS -->
@@ -4813,6 +4846,192 @@
       applyFlexTargets();
       toggleTargetsPanel(false);
       if (period && sel.value) loadData();
+    }
+
+    // ═══ MONTHLY HISTORY ═══════════════════════════════════════
+    // Manually recorded orders / pieces / revenue for months with no live data.
+    // Keyed on the account picker's value, so a combined group is one entry.
+    const MH_FIELDS = [
+      ['web_orders',  'Orders'],  ['web_pieces',  'Pieces'],  ['web_revenue',  'Revenue'],
+      ['msg_orders',  'Orders'],  ['msg_pieces',  'Pieces'],  ['msg_revenue',  'Revenue'],
+    ];
+    const MH_MONTHS = ['January','February','March','April','May','June',
+                       'July','August','September','October','November','December'];
+    let _mhCache = {};      // { 'YYYY-MM': row }  for the year on screen
+    let _mhScopeKey = null;
+
+    // Built from parts: toISOString() would roll back a day east of Greenwich
+    // and store December as the 30th of November.
+    const mhMonthStr = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}-01`;
+
+    function mhScopeLabel() {
+      const v = sel?.value || '';
+      if (!v) return 'No account selected';
+      if (v === '__all__') return 'All accounts';
+      if (v.startsWith('__group__')) {
+        const g = _acctGroups.find(x => '__group__' + x.id === v);
+        return (g?.name || 'Combined') + ' (group)';
+      }
+      return accountMap[v]?.account_name || v;
+    }
+
+    async function mhOpen() {
+      if (!sel?.value) { alert('Pick an account first — history is stored per account.'); return; }
+      _mhScopeKey = sel.value;
+      const yearSel = document.getElementById('mh-year');
+      const thisYear = new Date().getFullYear();
+      if (!yearSel.options.length) {
+        for (let y = thisYear; y >= thisYear - 4; y--) {
+          yearSel.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
+        }
+      }
+      document.getElementById('mh-scope').textContent = mhScopeLabel();
+      document.getElementById('mh-modal').style.display = 'flex';
+      await mhLoad();
+    }
+    function mhClose() { document.getElementById('mh-modal').style.display = 'none'; }
+
+    async function mhLoad() {
+      const year = parseInt(document.getElementById('mh-year').value, 10) || new Date().getFullYear();
+      const status = document.getElementById('mh-status');
+      status.textContent = 'Loading…'; status.style.color = 'var(--text-muted)';
+      const { data, error } = await sb.from('monthly_history')
+        .select('month, web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue')
+        .eq('organization_id', currentOrgId)
+        .eq('agency_id', currentAgencyId || 'x')
+        .eq('account_key', _mhScopeKey)
+        .gte('month', `${year}-01-01`).lte('month', `${year}-12-01`);
+      if (error) { status.textContent = '⚠️ ' + error.message; status.style.color = '#F87171'; return; }
+      _mhCache = {};
+      (data || []).forEach(r => { _mhCache[String(r.month).slice(0, 7)] = r; });
+      mhRender(year);
+      status.textContent = '';
+    }
+
+    function mhRender(year) {
+      const cell = (y, m, key) => {
+        const row = _mhCache[`${year}-${String(m + 1).padStart(2, '0')}`] || {};
+        const v = row[key];
+        return `<td style="padding:3px 4px;border-bottom:1px solid var(--border)">
+          <input type="number" step="any" min="0" data-m="${m}" data-k="${key}"
+            value="${v == null ? '' : v}" onpaste="mhPaste(event, ${m}, '${key}')"
+            style="width:100%;min-width:76px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;
+                   background:var(--bg);color:var(--text-main);font-size:12px;font-family:inherit;box-sizing:border-box"></td>`;
+      };
+      const now = new Date();
+      document.getElementById('mh-table').innerHTML = `
+        <thead>
+          <tr style="position:sticky;top:0;background:var(--bg-card,#16213E);z-index:1">
+            <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
+            <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
+            <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
+          </tr>
+          <tr style="position:sticky;top:32px;background:var(--bg-card,#16213E);z-index:1">
+            ${MH_FIELDS.map(([, label]) => `<th style="padding:6px 8px;font-size:11px;color:var(--text-muted);
+                 border-bottom:1px solid var(--border);font-weight:600">${label}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${MH_MONTHS.map((name, m) => {
+            const future = year > now.getFullYear() || (year === now.getFullYear() && m > now.getMonth());
+            return `<tr style="${future ? 'opacity:.45' : ''}">
+              <td style="padding:5px 10px;border-bottom:1px solid var(--border);white-space:nowrap">
+                ${name}${future ? ' <span style="font-size:10px;color:var(--text-muted)">(future)</span>' : ''}
+              </td>
+              ${MH_FIELDS.map(([key]) => cell(year, m, key)).join('')}
+            </tr>`;
+          }).join('')}
+        </tbody>`;
+    }
+
+    // Paste a block from a spreadsheet: rows go down the months, columns across
+    // the six fields, starting at the cell that was pasted into.
+    function mhPaste(ev, startMonth, startKey) {
+      const text = (ev.clipboardData || window.clipboardData)?.getData('text') || '';
+      if (!text.includes('\t') && !text.includes('\n')) return;   // single value: let the browser handle it
+      ev.preventDefault();
+      const startCol = MH_FIELDS.findIndex(([k]) => k === startKey);
+      text.replace(/\r/g, '').split('\n').forEach((line, r) => {
+        if (!line.trim()) return;
+        line.split('\t').forEach((val, c) => {
+          const m = startMonth + r, col = startCol + c;
+          if (m > 11 || col >= MH_FIELDS.length) return;
+          const input = document.querySelector(`#mh-table input[data-m="${m}"][data-k="${MH_FIELDS[col][0]}"]`);
+          // Strip thousands separators and any currency symbol pasted along.
+          if (input) input.value = val.replace(/[^\d.\-]/g, '');
+        });
+      });
+    }
+
+    async function mhSave() {
+      const year = parseInt(document.getElementById('mh-year').value, 10);
+      const status = document.getElementById('mh-status');
+      status.textContent = 'Saving…'; status.style.color = 'var(--text-muted)';
+
+      const rows = [], emptyMonths = [];
+      for (let m = 0; m < 12; m++) {
+        const row = { organization_id: currentOrgId, agency_id: currentAgencyId || 'x',
+                      account_key: _mhScopeKey, month: mhMonthStr(year, m),
+                      currency: (accountMap[sel?.value]?.currency || null),
+                      updated_by: currentUser?.id || null, updated_at: new Date().toISOString() };
+        let any = false;
+        MH_FIELDS.forEach(([key]) => {
+          const el = document.querySelector(`#mh-table input[data-m="${m}"][data-k="${key}"]`);
+          const raw = (el?.value ?? '').trim();
+          const num = raw === '' ? null : Number(raw);
+          row[key] = (num == null || isNaN(num)) ? null : num;
+          if (row[key] != null) any = true;
+        });
+        if (any) rows.push(row); else emptyMonths.push(mhMonthStr(year, m));
+      }
+
+      try {
+        if (rows.length) {
+          const { error } = await sb.from('monthly_history')
+            .upsert(rows, { onConflict: 'organization_id,agency_id,account_key,month' });
+          if (error) throw error;
+        }
+        // A month cleared to blank should be removed, not left at its old value.
+        if (emptyMonths.length) {
+          const { error } = await sb.from('monthly_history').delete()
+            .eq('organization_id', currentOrgId).eq('agency_id', currentAgencyId || 'x')
+            .eq('account_key', _mhScopeKey).in('month', emptyMonths);
+          if (error) throw error;
+        }
+        status.textContent = `✓ Saved ${rows.length} month${rows.length === 1 ? '' : 's'} for ${year}`;
+        status.style.color = '#16A34A';
+        logActivity('change', `Saved ${year} monthly history for ${mhScopeLabel()}`, { module: 'media' });
+        _mhHistoryCache = {};   // force the dashboard to re-read
+      } catch (e) {
+        status.textContent = '⚠️ ' + (e.message || e);
+        status.style.color = '#F87171';
+      }
+    }
+
+    // ── Used by the dashboard to fill cards for a past month ──
+    let _mhHistoryCache = {};
+    async function mhForPeriod(accountKey, period) {
+      // Only whole calendar months can be matched to a stored row.
+      const now = new Date();
+      let y, m;
+      if (period === 'this_month')      { y = now.getFullYear(); m = now.getMonth(); }
+      else if (period === 'last_month') { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); y = d.getFullYear(); m = d.getMonth(); }
+      else if (period === 'custom' && customFrom && customTo) {
+        const a = _tgtParse(customFrom), b = _tgtParse(customTo);
+        if (!a || !b || a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth()) return null;
+        const last = new Date(a.getFullYear(), a.getMonth() + 1, 0).getDate();
+        if (a.getDate() !== 1 || b.getDate() !== last) return null;   // partial month
+        y = a.getFullYear(); m = a.getMonth();
+      } else return null;
+
+      const key = `${currentOrgId}|${currentAgencyId || 'x'}|${accountKey}|${y}-${m}`;
+      if (_mhHistoryCache[key] !== undefined) return _mhHistoryCache[key];
+      const { data } = await sb.from('monthly_history')
+        .select('web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue')
+        .eq('organization_id', currentOrgId).eq('agency_id', currentAgencyId || 'x')
+        .eq('account_key', accountKey).eq('month', mhMonthStr(y, m)).maybeSingle();
+      _mhHistoryCache[key] = data || null;
+      return _mhHistoryCache[key];
     }
 
     // ═══ COMPARE PERIODS (2–3 date ranges side by side) ═══
@@ -7399,9 +7618,23 @@
       const _msgKey     = `msg-orders-${_periodKey}`;
       const _revKey     = `msg-revenue-${_periodKey}`;
       const _piecesKey  = `msg-pieces-${_periodKey}`;
-      const msgOrders   = parseInt(localStorage.getItem(_msgKey)   || '0') || 0;
-      const msgRevenue  = parseFloat(localStorage.getItem(_revKey) || '0') || 0;
-      const msgPieces   = parseInt(localStorage.getItem(_piecesKey) || '0') || 0;
+      // Monthly history: figures typed in for a whole calendar month. Used only
+      // where nothing live exists, so a stored number can never overwrite real
+      // Shopify or tracker data.
+      const _mhRow = await mhForPeriod(accountDbId, currentPeriod).catch(() => null);
+      if (_mhRow) {
+        if (shopifyOrders == null && _mhRow.web_orders  != null) { shopifyOrders = Number(_mhRow.web_orders);  _webSource = 'Entered'; }
+        if (revenue       == null && _mhRow.web_revenue != null) { revenue       = Number(_mhRow.web_revenue); _webSource = 'Entered'; }
+        if (pieces        == null && _mhRow.web_pieces  != null) { pieces        = Number(_mhRow.web_pieces);  _webSource = 'Entered'; }
+      }
+
+      const _mhNum = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
+      const _stored = (k) => localStorage.getItem(k);
+      // A number typed into the card for this period wins; otherwise fall back
+      // to the month's stored history.
+      const msgOrders   = parseInt(_stored(_msgKey)    ?? '') || _mhNum(_mhRow?.msg_orders)  || 0;
+      const msgRevenue  = parseFloat(_stored(_revKey)  ?? '') || _mhNum(_mhRow?.msg_revenue) || 0;
+      const msgPieces   = parseInt(_stored(_piecesKey) ?? '') || _mhNum(_mhRow?.msg_pieces)  || 0;
       const _leadsKey    = `msg-leads-${_periodKey}`;
       const _dealsKey    = `msg-deals-${_periodKey}`;
       const msgLeads     = parseInt(localStorage.getItem(_leadsKey) || '0') || 0;
@@ -8230,6 +8463,21 @@
             totPieces = (totPieces || 0) + (parseInt(pRes.value.rows[0][0]) || 0);
           }
         }
+      }
+
+      // Same monthly-history fallback as the single-account view. The key is the
+      // picker's value, so a combined client like Nuya is stored once for the
+      // group rather than per ad account.
+      const _mhGroup = await mhForPeriod(sel?.value || '__all__', currentPeriod).catch(() => null);
+      if (_mhGroup) {
+        const web = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
+        if (totOrders  == null && web(_mhGroup.web_orders)  != null) totOrders  = web(_mhGroup.web_orders);
+        if (totRevenue == null && web(_mhGroup.web_revenue) != null) totRevenue = web(_mhGroup.web_revenue);
+        if (totPieces  == null && web(_mhGroup.web_pieces)  != null) totPieces  = web(_mhGroup.web_pieces);
+        // Messages figures add to the website ones — they are separate sources.
+        if (web(_mhGroup.msg_orders)  != null) totOrders  = (totOrders  || 0) + web(_mhGroup.msg_orders);
+        if (web(_mhGroup.msg_revenue) != null) totRevenue = (totRevenue || 0) + web(_mhGroup.msg_revenue);
+        if (web(_mhGroup.msg_pieces)  != null) totPieces  = (totPieces  || 0) + web(_mhGroup.msg_pieces);
       }
 
       const avgCostPerOrder = (totSpend && totOrders)  ? totSpend / totOrders  : null;
