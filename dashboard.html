@@ -14731,7 +14731,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         const modCells = ACX_MODULES.map(([key, label]) => `
           <div style="display:flex;align-items:center;gap:6px;margin:0 14px 6px 0">
             <span style="font-size:12px;min-width:110px">${label}</span>
-            <select ${isOwner ? 'disabled' : ''} onchange="acxSetModule(${i},'${key}',this.value)" class="connect-input" style="padding:4px 8px;font-size:12px;min-width:auto">
+            <select id="acx-mod-${i}-${key}" ${isOwner ? 'disabled' : ''} onchange="acxSetModule(${i},'${key}',this.value)" class="connect-input" style="padding:4px 8px;font-size:12px;min-width:auto">
               <option value=""       ${!roles[key]              ? 'selected' : ''}>No access</option>
               <option value="viewer" ${roles[key] === 'viewer'  ? 'selected' : ''}>Viewer</option>
               <option value="editor" ${roles[key] === 'editor'  ? 'selected' : ''}>Editor</option>
@@ -14753,11 +14753,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               ${isOwner ? '' : (login
                 ? `<button onclick="acxSetPassword(${i})" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">🔒 Reset password</button>`
                 : `<button onclick="acxCreateLogin(${i})" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Create login</button>`)}
+              ${isOwner ? '' : `<button id="acx-save-btn-${i}" onclick="acxSaveMember(${i})" style="padding:5px 14px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:var(--blue-light);color:#fff;cursor:pointer">💾 Save</button>`}
               ${isOwner ? '' : `<button onclick="acxRemoveMember(${i})" style="padding:5px 12px;font-size:12px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Remove</button>`}
             </div>
           </div>
 
           <div style="display:flex;flex-wrap:wrap;margin-top:12px">${modCells}</div>
+          <div id="acx-status-${i}" style="font-size:11.5px;min-height:16px;margin-top:2px;color:var(--text-muted)"></div>
 
           ${isOwner ? '' : (() => {
             const nameOf = (list, ids, key) => ids
@@ -14782,14 +14784,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   <button onclick="acxScopeAll(${i},'account_ids',true)"  style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">All</button>
                   <button onclick="acxScopeAll(${i},'account_ids',false)" style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">None</button>
                 </div>
-                <div>${_acxChecks(_acxAccounts, m.account_ids, `acxSetScope(${i},'account_ids',this)`, 'id', 'account_name')}</div>
+                <div id="acx-accbox-${i}">${_acxChecks(_acxAccounts, m.account_ids, `acxSetScope(${i},'account_ids',this)`, 'id', 'account_name')}</div>
 
                 <div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
                   <span style="font-size:12px;font-weight:600">Pipeline clients</span>
                   <button onclick="acxScopeAll(${i},'client_ids',true)"  style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">All</button>
                   <button onclick="acxScopeAll(${i},'client_ids',false)" style="padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">None</button>
                 </div>
-                <div>${_acxChecks(_acxClients, m.client_ids, `acxSetScope(${i},'client_ids',this)`, 'id', 'name')}</div>
+                <div id="acx-clibox-${i}">${_acxChecks(_acxClients, m.client_ids, `acxSetScope(${i},'client_ids',this)`, 'id', 'name')}</div>
               </div>
             </details>`;
           })()}
@@ -14797,18 +14799,73 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }).join('');
     }
 
+    function _acxStatus(i, text, colour) {
+      const el = document.getElementById('acx-status-' + i);
+      if (el) { el.textContent = text; el.style.color = colour || 'var(--text-muted)'; }
+    }
+
     async function _acxSave(i, patch) {
       const m = _acxMembers[i];
       Object.assign(m, patch);
-      const { error } = await sb.from('cp_members')
-        .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', m.id);
+      _acxStatus(i, 'Saving…');
+      // Ask for the row back: a write blocked by row-level security updates
+      // nothing and returns no error, which would look like success.
+      const { data, error } = await sb.from('cp_members')
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq('id', m.id).select('id');
       const err = document.getElementById('acx-team-error');
       err.textContent = error ? error.message : '';
-      if (!error) {
-        logActivity('change', 'Changed access for ' + (m.full_name || m.email), {
-          entityType: 'settings', label: 'Access', details: patch,
-        });
+      if (error) {
+        _acxStatus(i, '⚠️ ' + error.message, '#F87171');
+        return false;
       }
+      if (!data?.length) {
+        _acxStatus(i, '⚠️ Nothing saved — only the owner can change access.', '#F87171');
+        return false;
+      }
+      const t = new Date();
+      _acxStatus(i, `✓ Saved ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '#16A34A');
+      logActivity('change', 'Changed access for ' + (m.full_name || m.email), {
+        entityType: 'settings', label: 'Access', details: patch,
+      });
+      return true;
+    }
+
+    // Writes everything currently on this member's card in one go. Individual
+    // controls already save on change; this is the deliberate "commit it now"
+    // action, and confirms in one place.
+    async function acxSaveMember(i) {
+      const m = _acxMembers[i];
+      if (!m) return;
+      const btn = document.getElementById('acx-save-btn-' + i);
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+      const roles = {};
+      ACX_MODULES.forEach(([key]) => {
+        const v = document.getElementById(`acx-mod-${i}-${key}`)?.value;
+        if (v) roles[key] = v;
+      });
+
+      // All boxes ticked is stored as null, meaning "everything, including
+      // accounts added later" — not the same as a list that happens to be full.
+      const readScope = (boxId, current) => {
+        const box = document.getElementById(boxId);
+        if (!box) return current;
+        const all = [...box.querySelectorAll('input[type="checkbox"]')];
+        if (!all.length) return current;
+        const on = all.filter(c => c.checked).map(c => c.value);
+        return on.length === all.length ? null : on;
+      };
+
+      const ok = await _acxSave(i, {
+        module_roles: roles,
+        modules:      Object.keys(roles),
+        account_ids:  readScope('acx-accbox-' + i, m.account_ids),
+        client_ids:   readScope('acx-clibox-' + i, m.client_ids),
+      });
+
+      if (btn) { btn.disabled = false; btn.textContent = ok ? '💾 Saved' : '💾 Save'; }
+      if (ok) setTimeout(() => { if (btn) btn.textContent = '💾 Save'; }, 2500);
     }
 
     function acxSetModule(i, key, value) {
