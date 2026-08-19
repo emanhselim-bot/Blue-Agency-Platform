@@ -4419,7 +4419,7 @@
       const btn   = document.getElementById('targets-toggle-btn');
       const isOpen = panel.classList.contains('open');
       const shouldOpen = open !== undefined ? open : !isOpen;
-      if (shouldOpen) loadTargetsPanel();
+      if (shouldOpen) loadTargetsPanel(true);
       panel.classList.toggle('open', shouldOpen);
       if (btn) btn.classList.toggle('active', shouldOpen);
     }
@@ -4442,20 +4442,97 @@
     // Targets are stored PER ACCOUNT — each client account keeps its own
     // independent target set (accounts have different KPIs and goals).
     function _tgtAccountKey() { return sel?.value || '__none__'; }
-    function getFlexTargets() {
-      const cfg = getAgencySettings(currentOrgId, currentAgencyId);
-      const byAcct = cfg.targetsV2ByAccount || {};
-      const acct = _tgtAccountKey();
-      if (byAcct[acct]) return byAcct[acct];
-      // one-time migration: agency-wide targets become this account's starting set
-      if (cfg.targetsV2?.length) return cfg.targetsV2;
-      return [];
+
+    // Targets live in the kpi_targets table so they survive a cleared cache and
+    // are visible to the whole team. This cache keeps the render path
+    // synchronous; the server is the source of truth.
+    let _tgtCache = {};        // { [accountKey]: [target, …] }
+    let _tgtLoadedFor = null;  // org+agency the cache was filled for
+
+    function _tgtRowToTarget(r) {
+      return { id: r.card_id, label: r.label, value: r.value == null ? null : Number(r.value),
+               dir: r.dir || 'up', from: r.starts_on || '', to: r.ends_on || '' };
     }
-    function setFlexTargets(list) {
+
+    async function loadFlexTargets(force) {
+      if (!currentOrgId) return;
+      const scope = `${currentOrgId}|${currentAgencyId || 'x'}`;
+      if (!force && _tgtLoadedFor === scope) return;
+      const { data, error } = await sb.from('kpi_targets')
+        .select('account_key, card_id, label, value, dir, starts_on, ends_on')
+        .eq('organization_id', currentOrgId)
+        .eq('agency_id', currentAgencyId || 'x');
+      if (error) { console.warn('[targets] load failed', error.message); return; }
+      const byAcct = {};
+      (data || []).forEach(r => { (byAcct[r.account_key] ||= []).push(_tgtRowToTarget(r)); });
+      _tgtCache = byAcct;
+      _tgtLoadedFor = scope;
+      await _tgtMigrateLocal();
+    }
+
+    // Anything still in localStorage from before targets were stored server-side
+    // is pushed up once, then the local copy is dropped.
+    async function _tgtMigrateLocal() {
       const cfg = getAgencySettings(currentOrgId, currentAgencyId);
-      const byAcct = cfg.targetsV2ByAccount || {};
-      byAcct[_tgtAccountKey()] = list;
-      saveAgencySettings(currentOrgId, currentAgencyId, { targetsV2ByAccount: byAcct, targetsV2: [] });
+      const legacy = cfg.targetsV2ByAccount || {};
+      const pairs = Object.entries(legacy).filter(([acct, list]) =>
+        Array.isArray(list) && list.length && !(_tgtCache[acct]?.length));
+      if (cfg.targetsV2?.length && !pairs.length && !Object.keys(_tgtCache).length) {
+        pairs.push([_tgtAccountKey(), cfg.targetsV2]);
+      }
+      if (!pairs.length) return;
+      for (const [acct, list] of pairs) {
+        _tgtCache[acct] = list;
+        await _tgtPersist(acct, list);
+      }
+      saveAgencySettings(currentOrgId, currentAgencyId, { targetsV2ByAccount: {}, targetsV2: [] });
+      console.info('[targets] migrated', pairs.length, 'account(s) from local storage');
+    }
+
+    function getFlexTargets() { return _tgtCache[_tgtAccountKey()] || []; }
+
+    function setFlexTargets(list) {
+      const acct = _tgtAccountKey();
+      _tgtCache[acct] = list;
+      _tgtPersist(acct, list);
+    }
+
+    // Write the whole set for one account: upsert what is there, delete the rest.
+    async function _tgtPersist(accountKey, list) {
+      if (!currentOrgId) return;
+      const agency = currentAgencyId || 'x';
+      const rows = (list || []).map(t => ({
+        organization_id: currentOrgId, agency_id: agency, account_key: accountKey,
+        card_id: t.id, label: t.label ?? null,
+        value: (t.value === '' || t.value == null || isNaN(t.value)) ? null : Number(t.value),
+        dir: t.dir === 'down' ? 'down' : 'up',
+        starts_on: t.from || null, ends_on: t.to || null,
+        created_by: currentUser?.id || null, updated_at: new Date().toISOString(),
+      }));
+      try {
+        if (rows.length) {
+          const { error } = await sb.from('kpi_targets')
+            .upsert(rows, { onConflict: 'organization_id,agency_id,account_key,card_id' });
+          if (error) throw error;
+        }
+        let del = sb.from('kpi_targets').delete()
+          .eq('organization_id', currentOrgId).eq('agency_id', agency).eq('account_key', accountKey);
+        if (rows.length) del = del.not('card_id', 'in', `(${rows.map(r => `"${r.card_id}"`).join(',')})`);
+        const { error: delErr } = await del;
+        if (delErr) throw delErr;
+      } catch (e) {
+        // Saving targets must never break the dashboard, but silence would let
+        // an editor believe a goal was shared when it only existed locally.
+        console.error('[targets] save failed', e);
+        const box = document.getElementById('tgt-rows');
+        if (box && !document.getElementById('tgt-save-err')) {
+          box.insertAdjacentHTML('afterbegin',
+            `<div id="tgt-save-err" style="margin-bottom:10px;padding:8px 12px;border-radius:8px;
+                  background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);font-size:12px">
+               ⚠️ Could not save to the server: ${escHtml(e.message || String(e))}
+             </div>`);
+        }
+      }
     }
     // KPIs whose label suggests "lower is better" (costs, frequency, spend)
     function _guessDir(label) {
@@ -4569,6 +4646,11 @@
     function applyFlexTargets() {
       _updateTargetsBtnVisibility();
       if (!_targetsEnabled()) return;
+      // First call after a reload has an empty cache — fetch, then re-run.
+      if (_tgtLoadedFor !== `${currentOrgId}|${currentAgencyId || 'x'}`) {
+        loadFlexTargets().then(() => applyFlexTargets());
+        return;
+      }
       const targets = getFlexTargets();
       document.querySelectorAll('#content .kpi-card .kpi-tprog').forEach(el => el.remove());
       targets.forEach(t => {
@@ -4602,7 +4684,11 @@
     }
 
     // ── Targets panel UI ──
-    function loadTargetsPanel() {
+    // refetch=true only when the panel is opened. After an edit the cache is
+    // already correct and re-reading could race the in-flight save, briefly
+    // showing the previous state.
+    async function loadTargetsPanel(refetch) {
+      if (refetch) await loadFlexTargets(true); else await loadFlexTargets();
       const cfg = getAgencySettings(currentOrgId, currentAgencyId);
       document.getElementById('tgt-period').value = cfg.period ?? '';
       const agencies = getAgencies(currentOrgId);
