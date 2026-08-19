@@ -5895,6 +5895,10 @@
       // Detect which optional column groups are needed
       const hasMessages = sorted.some(c => parseNum(c.messages) > 0);
       const hasReach    = sorted.some(c => parseNum(c.reach) > 0);
+      // Meta only reports "results" for objectives that define one. Messaging
+      // campaigns report the conversation count instead, which already has its
+      // own column — so two permanently empty columns were being rendered.
+      const hasResults  = sorted.some(c => parseNum(c.results) > 0);
 
       // Totals
       const totSpend    = sorted.reduce((s, c) => s + (parseNum(c.spend)    || 0), 0);
@@ -5913,8 +5917,8 @@
         return `<tr>
           <td class="tl campaign-name-cell" title="${escHtml(c.campaign_name || c.campaign_id)}">${escHtml(c.campaign_name || c.campaign_id)}</td>
           <td class="tr">${fmtC(spend)}</td>
-          <td class="tr">${fmtN(parseNum(c.results))}</td>
-          <td class="tr">${fmtC(parseNum(c.cost_per_result))}</td>
+          ${hasResults ? `<td class="tr">${fmtN(parseNum(c.results))}</td>
+          <td class="tr">${fmtC(parseNum(c.cost_per_result))}</td>` : ''}
           <td class="tr">${fmtN(parseNum(c.reach))}</td>
           <td class="tr">${fmtN(parseNum(c.impressions))}</td>
           ${hasReach    ? `<td class="tr">${fmtC(cpr)}</td>` : ''}
@@ -5928,8 +5932,7 @@
         <thead><tr>
           <th class="tl">Campaign</th>
           <th class="tr">Spend</th>
-          <th class="tr">Results</th>
-          <th class="tr">Cost/Result</th>
+          ${hasResults ? '<th class="tr">Results</th><th class="tr">Cost/Result</th>' : ''}
           <th class="tr">Reach</th>
           <th class="tr">Impressions</th>
           ${hasReach    ? '<th class="tr">Cost/Reach</th>' : ''}
@@ -5939,8 +5942,8 @@
         <tfoot><tr>
           <td class="tl">Total (${sorted.length} campaign${sorted.length !== 1 ? 's' : ''})</td>
           <td class="tr">${fmtC(totSpend)}</td>
-          <td class="tr">${fmtN(totResults)}</td>
-          <td class="tr">${totResults ? fmtC(totSpend / totResults) : '—'}</td>
+          ${hasResults ? `<td class="tr">${fmtN(totResults)}</td>
+          <td class="tr">${totResults ? fmtC(totSpend / totResults) : '—'}</td>` : ''}
           <td class="tr">${fmtN(totReach)}</td>
           <td class="tr">${fmtN(totImp)}</td>
           ${hasReach    ? `<td class="tr">${fmtC(totCPR)}</td>` : ''}
