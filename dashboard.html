@@ -107,7 +107,9 @@
     /* ── CONTROLS BAR ── */
     .controls-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .controls-bar label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    select { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; color: var(--text-main); cursor: pointer; max-width: 230px; transition: border-color 0.15s; }
+    /* White background, so the text colour is pinned dark rather than following
+       the theme — otherwise the options vanish in dark mode. */
+    select { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: #fff; color: #16213E; color-scheme: light; cursor: pointer; max-width: 230px; transition: border-color 0.15s; }
     select:focus { outline: none; border-color: var(--blue-light); }
 
     .period-tabs { display: flex; gap: 2px; background: var(--bg); border-radius: 10px; padding: 3px; }
@@ -117,8 +119,16 @@
 
     .custom-dates { display: none; align-items: center; gap: 8px; flex-wrap: wrap; }
     .custom-dates.visible { display: flex; }
-    .date-input { padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; color: var(--text-main); }
+    /* The field is always white, so the text must be a fixed dark colour.
+       var(--text-main) turns near-white in dark mode — white on white. */
+    .date-input { padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; background: #fff; color: #16213E; color-scheme: light; }
     .date-input:focus { outline: none; border-color: var(--blue-light); }
+    .date-input::-webkit-datetime-edit-text,
+    .date-input::-webkit-datetime-edit-day-field,
+    .date-input::-webkit-datetime-edit-month-field,
+    .date-input::-webkit-datetime-edit-year-field { color: #16213E; }
+    .date-input::-webkit-calendar-picker-indicator { opacity: .75; cursor: pointer; }
+    .date-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
     .date-sep { font-size: 12px; color: var(--text-muted); font-weight: 600; }
     .date-apply-btn { padding: 7px 16px; background: var(--blue-dark); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .date-apply-btn:hover { background: var(--blue-mid); }
@@ -756,7 +766,7 @@
     /* ── SOCIAL AUTH ── */
     .auth-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 12px; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
     .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-    .auth-social-btn { width: 100%; padding: 11px 16px; background: white; color: var(--text-main); border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: background 0.15s; margin-bottom: 4px; }
+    .auth-social-btn { width: 100%; padding: 11px 16px; background: #fff; color: #16213E; border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: background 0.15s; margin-bottom: 4px; }
     .auth-social-btn:hover { background: var(--bg); border-color: #bbb; }
     .auth-social-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
