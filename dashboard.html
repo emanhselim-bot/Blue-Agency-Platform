@@ -14177,7 +14177,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const to   = mtISO(y, m, new Date(y, m + 1, 0).getDate());
 
       const { data } = await sb.from('meetings')
-        .select('id, title, meets_on, starts_at, ends_at, status, client_id, notes, location')
+        .select('id, title, meets_on, starts_at, ends_at, status, client_id, notes, location, minutes, minutes_updated_at')
         .eq('organization_id', currentOrgId)
         .gte('meets_on', from).lte('meets_on', to)
         .order('starts_at', { nullsFirst: true });
@@ -14298,10 +14298,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <button onclick="mtDelete('${escHtml(m.id)}')" style="padding:4px 10px;font-size:11px;border:1px solid #e53e3e;border-radius:6px;background:transparent;color:#e53e3e;cursor:pointer">Delete</button>
           </div>
         </div>
-        <div class="modal-label" style="margin-top:10px">Notes / agenda</div>
+        <div class="modal-label" style="margin-top:10px">📋 Agenda — before the meeting</div>
         <textarea rows="2" class="connect-input" style="width:100%;resize:vertical;font-size:12.5px"
-                  placeholder="Add notes — saved when you click away"
+                  placeholder="What needs covering — saved when you click away"
                   onchange="mtSaveNotes('${escHtml(m.id)}', this.value)">${escHtml(m.notes || '')}</textarea>
+
+        <div class="modal-label" style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span>📝 Meeting notes — after the meeting</span>
+          <span id="mt-min-stamp-${escHtml(m.id)}" style="font-weight:500;font-size:10.5px;color:var(--text-muted);text-transform:none;letter-spacing:0">
+            ${m.minutes_updated_at ? 'Last saved ' + escHtml(mtStamp(m.minutes_updated_at)) : ''}
+          </span>
+        </div>
+        <textarea rows="3" id="mt-min-${escHtml(m.id)}" class="connect-input"
+                  style="width:100%;resize:vertical;font-size:12.5px;border-color:${m.minutes ? 'rgba(22,163,74,.45)' : 'var(--border)'}"
+                  placeholder="What was decided, what was agreed, what came up — written up afterwards"
+                  onchange="mtSaveMinutes('${escHtml(m.id)}', this.value)">${escHtml(m.minutes || '')}</textarea>
+
         <div id="mt-detail-${escHtml(m.id)}" style="margin-top:10px;font-size:12px;color:var(--text-muted)">Loading…</div>
       </div>`;
     }
@@ -14390,6 +14402,35 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) { alert('Could not save notes: ' + error.message); return; }
       const m = _mtMeetings.find(x => x.id === id); if (m) m.notes = notes.trim() || null;
+    }
+
+    // Short "when it was saved" label. Built from local parts — toISOString()
+    // would render the previous day's date for anyone east of Greenwich.
+    function mtStamp(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      const day = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      return `${day}, ${time}`;
+    }
+
+    // Minutes are written after the meeting and kept separate from the agenda,
+    // so writing up what happened never overwrites what was planned.
+    async function mtSaveMinutes(id, minutes) {
+      const val = (minutes || '').trim() || null;
+      const now = new Date().toISOString();
+      const { data, error } = await sb.from('meetings')
+        .update({ minutes: val, minutes_updated_at: val ? now : null, updated_at: now })
+        .eq('id', id).select('id');
+      if (error) { alert('Could not save the meeting notes: ' + error.message); return; }
+      if (!data?.length) { alert('Nothing was saved — you may not have permission to edit this meeting.'); return; }
+      const m = _mtMeetings.find(x => x.id === id);
+      if (m) { m.minutes = val; m.minutes_updated_at = val ? now : null; }
+      const stamp = document.getElementById('mt-min-stamp-' + id);
+      if (stamp) stamp.textContent = val ? 'Last saved ' + mtStamp(now) : '';
+      const box = document.getElementById('mt-min-' + id);
+      if (box) box.style.borderColor = val ? 'rgba(22,163,74,.45)' : 'var(--border)';
+      logActivity('change', 'Wrote up meeting notes', { module: 'pipeline', entityType: 'meeting', entityId: id, label: m?.title });
     }
 
     async function mtSetStatus(id, status) {
