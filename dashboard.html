@@ -15452,7 +15452,18 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           .eq('organization_id', currentOrgId)
           .ilike('email', currentUser?.email || '')
           .maybeSingle();
-        if (!data || data.archived) { _cpModules = null; _myAccess = null; return; }  // not listed → unrestricted
+        // No readable row — either the person was archived from Access, or RLS
+        // is hiding it. This used to set null, meaning UNRESTRICTED, so removing
+        // somebody from Access silently gave them every module. Fail closed:
+        // trust only the organisation role, which cannot be hidden this way.
+        if (!data || data.archived) {
+          const privileged = currentRole === 'owner' || currentRole === 'admin';
+          _cpModules = privileged ? ACX_MODULES.map(([key]) => key) : [];
+          _myAccess  = privileged ? null : { roles: {}, accountIds: [], clientIds: [] };
+          applyModuleAccess();
+          applyScopeFilters();
+          return;
+        }
         const roles = data.module_roles && Object.keys(data.module_roles).length
           ? data.module_roles : null;
         // Owners get every module. Derived from ACX_MODULES so adding a module
@@ -15466,7 +15477,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           accountIds:  data.account_ids || null,   // null = all
           clientIds:   data.client_ids  || null,
         };
-      } catch { _cpModules = null; _myAccess = null; }
+      } catch (e) {
+        // A failed lookup must not hand out access either. Owners and admins
+        // keep everything; everyone else waits until the list can be read.
+        console.warn('[access] could not load module permissions', e);
+        const privileged = currentRole === 'owner' || currentRole === 'admin';
+        _cpModules = privileged ? ACX_MODULES.map(([key]) => key) : [];
+        _myAccess  = privileged ? null : { roles: {}, accountIds: [], clientIds: [] };
+      }
       applyModuleAccess();
       applyScopeFilters();
     }
@@ -15501,9 +15519,31 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return !_cpModules || _cpModules.includes(m);
     }
     function applyModuleAccess() {
+      let visible = 0;
       document.querySelectorAll('.hub-card[data-mod]').forEach(c => {
-        c.style.display = canOpenModule(c.dataset.mod) ? '' : 'none';
+        const ok = canOpenModule(c.dataset.mod);
+        c.style.display = ok ? '' : 'none';
+        if (ok) visible++;
       });
+      // Somebody with no modules would otherwise stare at an empty page and
+      // assume the dashboard is broken.
+      let note = document.getElementById('hub-no-access');
+      if (!visible && _cpModules && !_cpModules.length) {
+        if (!note) {
+          const host = document.querySelector('.hub-inner') || document.getElementById('home-hub');
+          if (host) {
+            note = document.createElement('div');
+            note.id = 'hub-no-access';
+            note.style.cssText = 'max-width:520px;margin:24px auto;padding:18px 22px;border-radius:12px;' +
+              'background:rgba(255,255,255,.07);border:1px solid var(--border);font-size:14px;line-height:1.6';
+            note.innerHTML = 'You do not have access to any section yet.<br>' +
+              '<span style="opacity:.75;font-size:13px">Ask the account owner to give you access under Access → My team.</span>';
+            host.appendChild(note);
+          }
+        }
+      } else if (note) {
+        note.remove();
+      }
     }
 
     function showHomeHub() {
