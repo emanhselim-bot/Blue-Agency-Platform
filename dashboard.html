@@ -14,6 +14,14 @@
     :root {
       color-scheme: light;
       --blue-dark:   #083BBF;
+      /* Aliases: these names are used around the file but were never defined,
+         so anything referencing them silently fell back to inherited colours. */
+      --accent:       var(--blue-light);
+      --blue:         var(--blue-light);
+      --card:         var(--surface);
+      --card-bg:      var(--surface);
+      --bg-card:      var(--surface);
+      --text-primary: var(--text-main);
       --blue-mid:    #0557D9;
       --blue-light:  #0573F5;
       --blue-navy:   #0A1CA3;
