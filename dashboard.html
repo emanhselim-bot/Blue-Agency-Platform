@@ -4026,6 +4026,23 @@
       _scheduleServerSave();
     }
 
+    // One-time repair: Total Conversion Rate used to be rendered twice under the
+    // same card id, so hiding it in one section hid it everywhere. The duplicate
+    // is gone; this brings the card back for anyone who had hidden it.
+    (function _unhideTotalCR() {
+      try {
+        const KEY = 'kpi-unhide-total-cr-v1';
+        if (localStorage.getItem(KEY)) return;
+        const k = _custKey();
+        const cust = JSON.parse(localStorage.getItem(k) || '{}');
+        if (Array.isArray(cust.hiddenCards) && cust.hiddenCards.includes('total-conversion-rate')) {
+          cust.hiddenCards = cust.hiddenCards.filter(id => id !== 'total-conversion-rate');
+          localStorage.setItem(k, JSON.stringify(cust));
+        }
+        localStorage.setItem(KEY, '1');
+      } catch (_) {}
+    })();
+
     // Inject CSS hiding rules immediately on page load (before any data render)
     // so hidden items never flash visible on refresh.
     (function _earlyHide() {
@@ -7928,7 +7945,6 @@
               ${kpi('c-coral solid',  '🏷️', 'Avg Cost per Piece',    sfmt(avgCostPerPiece,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Pieces'),  null, null, null, 'kpi-avg-cost-per-piece-val')}
               ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—',                   costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
               ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
-              ${kpi('c-purple solid', '🎯', 'Total Conversion Rate',  sfmt(adConversionRate, v => fmt(v,'',2) + '%'),                               sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               <div class="kpi-card c-red solid" data-card-id="returns-rate">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
