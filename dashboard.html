@@ -4634,6 +4634,9 @@
       if (sub.includes('google ads') || sect.startsWith('ga-')) return '🔍 Google Ads';
       if (sub.includes('tiktok'))                               return '🎵 TikTok Ads';
       if (sub.includes('clarity'))                              return '📈 Clarity';
+      // "Website + Messages" is a combined total, not a website metric — this
+      // must be tested before the plain "website" check below.
+      if (sub.includes('+ messages') || sect === 'totals')       return '🎯 Combined';
       if (sub.includes('shopify') || sub.includes('website') || sect.includes('website')) return '🌐 Website';
       if (sect.includes('messages') || sub.includes('manual'))  return '💬 Messages';
       if (sub.includes('meta'))                                 return '📘 Meta Ads';
