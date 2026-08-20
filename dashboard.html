@@ -4730,6 +4730,39 @@
       return { state: 'active', text: `From ${_tgtNice(t.from)} · no end date` };
     }
     const _TGT_WIN_COLOUR = { upcoming: '#D97706', ended: 'var(--text-muted)', invalid: '#EF4444', active: '#16A34A' };
+
+    // Break a target over a date range into per-period pieces: per month when
+    // the range covers whole calendar months, otherwise per day. A year is 12
+    // months rather than 365 days, because nobody plans a year in days.
+    function _tgtSplit(t) {
+      if (!t || t.value == null || isNaN(t.value) || !t.from || !t.to) return null;
+      const a = _tgtParse(t.from), b = _tgtParse(t.to);
+      if (!a || !b || b < a) return null;
+
+      const days = Math.round((b - a) / 86400000) + 1;          // inclusive
+      const startsFirst = a.getDate() === 1;
+      const endsLast    = b.getDate() === new Date(b.getFullYear(), b.getMonth() + 1, 0).getDate();
+      const months      = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+
+      // Rates only make sense for quantities. A rate target (CTR, ROAS, a cost
+      // per something) does not get divided up — a 2.5x ROAS goal is 2.5x every
+      // month, not 0.2x a month.
+      const isRate = /rate|ctr|roas|cpc|cpm|cost|frequency|%/i.test(t.label || '');
+
+      const wholeMonths = startsFirst && endsLast && months >= 1;
+      const unit  = wholeMonths ? 'month' : 'day';
+      const count = wholeMonths ? months : days;
+      const per   = isRate ? null : t.value / count;
+
+      // How far through the window we are, for a fair "expected by now".
+      const today = _tgtParse(_tgtTodayStr());
+      let elapsed = Math.round((today - a) / 86400000) + 1;
+      elapsed = Math.max(0, Math.min(days, elapsed));
+      const expected = isRate ? t.value : t.value * (elapsed / days);
+
+      return { unit, count, per, isRate, days, elapsed, expected,
+               label: `${count} ${unit}${count === 1 ? '' : 's'}` };
+    }
     function _tprogHTML(t, current, compact) {
       const p = _flexProgress(t, current);
       if (!p) return '<div class="tprog-meta"><span>No live data for this KPI yet</span></div>';
@@ -4767,8 +4800,12 @@
           // The bar always reflects the dashboard's selected date range, which
           // may differ from the target's window — say so rather than implying
           // the number was measured over the target period.
+          const sp = _tgtSplit(t);
           const winTag = w.state === 'none' ? ''
-            : `<div class="tprog-meta" style="margin-bottom:2px"><span style="font-size:9.5px;opacity:.85">📅 ${escHtml(w.text)}</span></div>`;
+            : `<div class="tprog-meta" style="margin-bottom:2px"><span style="font-size:9.5px;opacity:.85">📅 ${escHtml(w.text)}</span></div>`
+            + (sp && !sp.isRate
+                ? `<div class="tprog-meta" style="margin-bottom:2px"><span style="font-size:9.5px;opacity:.85">≈ ${_fmtTgtNum(sp.per)} / ${sp.unit}</span></div>`
+                : '');
           div.innerHTML =
             `<div class="tprog-meta" style="margin-bottom:3px"><span>🎯 Target: ${_fmtTgtNum(t.value)}</span></div>` +
             winTag + _tprogHTML(t, current, true);
@@ -4845,6 +4882,21 @@
           <div style="font-size:11px;margin-top:6px;color:${_TGT_WIN_COLOUR[w.state] || 'var(--text-muted)'}">
             ${escHtml(w.text)}
           </div>`;
+
+        // The target broken down per month or per day, plus where it should be
+        // today — a goal without a pace is hard to act on mid-period.
+        const sp = _tgtSplit(t);
+        const splitLine = !sp ? '' : `
+          <div style="font-size:11px;margin-top:4px;color:var(--text-muted);line-height:1.6">
+            ${sp.isRate
+              ? `Applies across all ${escHtml(sp.label)} — a rate is not divided up`
+              : `≈ <strong style="color:var(--text-main)">${_fmtTgtNum(sp.per)}</strong> per ${sp.unit}
+                 <span style="opacity:.7">· ${escHtml(sp.label)}</span>`}
+            ${w.state === 'active'
+              ? `<br>Should be at <strong style="color:var(--text-main)">${_fmtTgtNum(sp.expected)}</strong> by today
+                 <span style="opacity:.7">· day ${sp.elapsed} of ${sp.days}</span>`
+              : ''}
+          </div>`;
         return `
         <div class="tgt-row"${w.state === 'ended' ? ' style="opacity:.72"' : ''}>
           <div class="tgt-row-head">
@@ -4871,6 +4923,7 @@
             </div>
           </div>
           ${winLine}
+          ${splitLine}
           <div class="tgt-row-progress">${t.value ? _tprogHTML(t, currentById[t.id] ?? null, false) : ''}</div>
         </div>`;
       }).join('');
