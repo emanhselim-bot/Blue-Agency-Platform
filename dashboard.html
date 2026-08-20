@@ -4510,7 +4510,7 @@
     let _tgtLoadedFor = null;  // org+agency the cache was filled for
 
     function _tgtRowToTarget(r) {
-      return { id: r.card_id, label: r.label, value: r.value == null ? null : Number(r.value),
+      return { id: r.card_id, label: r.label, platform: r.platform || null, value: r.value == null ? null : Number(r.value),
                dir: r.dir || 'up', from: r.starts_on || '', to: r.ends_on || '' };
     }
 
@@ -4519,7 +4519,7 @@
       const scope = `${currentOrgId}|${currentAgencyId || 'x'}`;
       if (!force && _tgtLoadedFor === scope) return;
       const { data, error } = await sb.from('kpi_targets')
-        .select('account_key, card_id, label, value, dir, starts_on, ends_on')
+        .select('account_key, card_id, label, platform, value, dir, starts_on, ends_on')
         .eq('organization_id', currentOrgId)
         .eq('agency_id', currentAgencyId || 'x');
       if (error) { console.warn('[targets] load failed', error.message); return; }
@@ -4563,7 +4563,7 @@
       const agency = currentAgencyId || 'x';
       const rows = (list || []).map(t => ({
         organization_id: currentOrgId, agency_id: agency, account_key: accountKey,
-        card_id: t.id, label: t.label ?? null,
+        card_id: t.id, label: t.label ?? null, platform: t.platform ?? null,
         value: (t.value === '' || t.value == null || isNaN(t.value)) ? null : Number(t.value),
         dir: t.dir === 'down' ? 'down' : 'up',
         starts_on: t.from || null, ends_on: t.to || null,
@@ -4612,17 +4612,34 @@
     // Standard KPIs, so a goal can be set before the dashboard has rendered —
     // or for a card hidden in this layout but still worth tracking.
     const TGT_FALLBACK_KPIS = [
-      'Total Spend', 'Total Orders', 'Total Pieces', 'Total Revenue', 'ROAS',
-      'Total Conversion Rate', 'Avg Cost per Order', 'Avg Cost per Piece',
-      'Reach', 'Impressions', 'Clicks', 'CTR', 'CPC',
-      'Website Orders', 'Website Pieces', 'Website Revenue', 'Website Sessions',
-      'Number of Orders', 'Number of Pieces', 'Daily Budget', 'Ad Account Fund',
-    ].map(label => ({
+      ['📘 Meta Ads', ['Total Spend', 'Reach', 'Impressions', 'Clicks', 'CTR', 'CPC',
+                       'Daily Budget', 'Ad Account Fund']],
+      ['🎯 Combined', ['Total Orders', 'Total Pieces', 'Total Revenue', 'ROAS',
+                       'Total Conversion Rate', 'Avg Cost per Order', 'Avg Cost per Piece']],
+      ['🌐 Website',  ['Website Orders', 'Website Pieces', 'Website Revenue', 'Website Sessions']],
+      ['💬 Messages', ['Number of Orders', 'Number of Pieces']],
+    ].flatMap(([platform, labels]) => labels.map(label => ({
       // Same id rule as the kpi() helper, so a target set from this list binds
       // to the real card once the dashboard renders it.
       id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-      label,
-    }));
+      label, platform,
+    })));
+
+    // Which platform a rendered card belongs to. The same KPI name appears on
+    // several platforms — "Clicks" on Meta is not "Clicks" on Google Ads — so
+    // the picker has to say which one.
+    function _kpiPlatform(card) {
+      const sub  = (card.querySelector('.kpi-sub')?.textContent || '').toLowerCase();
+      const sect = (card.closest('.kpi-section')?.dataset.sectionId || '').toLowerCase();
+      if (sub.includes('google ads') || sect.startsWith('ga-')) return '🔍 Google Ads';
+      if (sub.includes('tiktok'))                               return '🎵 TikTok Ads';
+      if (sub.includes('clarity'))                              return '📈 Clarity';
+      if (sub.includes('shopify') || sub.includes('website') || sect.includes('website')) return '🌐 Website';
+      if (sect.includes('messages') || sub.includes('manual'))  return '💬 Messages';
+      if (sub.includes('meta'))                                 return '📘 Meta Ads';
+      const t = accountMap[sel?.value]?.type;
+      return t === 'google_ads' ? '🔍 Google Ads' : t === 'tiktok_ads' ? '🎵 TikTok Ads' : '🎯 Combined';
+    }
 
     // Every KPI currently on screen, plus the standard set as a backstop.
     function _availableKpis() {
@@ -4632,7 +4649,7 @@
         if (seen.has(id)) return;
         seen.add(id);
         const label = c.querySelector('.kpi-label')?.textContent?.trim() || id;
-        out.push({ id, label });
+        out.push({ id, label, platform: _kpiPlatform(c) });
       });
       TGT_FALLBACK_KPIS.forEach(k => { if (!seen.has(k.id)) { seen.add(k.id); out.push(k); } });
       return out;
@@ -4781,9 +4798,14 @@
       const selEl = document.getElementById('tgt-add-select');
       const existing = new Set(getFlexTargets().map(t => t.id));
       const kpis = _availableKpis().filter(k => !existing.has(k.id));
+      // Grouped by platform so identically named KPIs stay distinguishable.
+      const byPlatform = {};
+      kpis.forEach(k => { (byPlatform[k.platform || '🎯 Combined'] ||= []).push(k); });
       selEl.innerHTML = '<option value="">＋ Add a KPI target…</option>' +
         (kpis.length
-          ? kpis.map(k => `<option value="${escHtml(k.id)}">${escHtml(k.label)}</option>`).join('')
+          ? Object.entries(byPlatform).map(([plat, list]) =>
+              `<optgroup label="${escHtml(plat)}">${list
+                .map(k => `<option value="${escHtml(k.id)}">${escHtml(k.label)}</option>`).join('')}</optgroup>`).join('')
           : '<option value="" disabled>Every KPI already has a target</option>');
     }
 
@@ -4815,7 +4837,8 @@
         return `
         <div class="tgt-row"${w.state === 'ended' ? ' style="opacity:.72"' : ''}>
           <div class="tgt-row-head">
-            <span class="tgt-row-label">${escHtml(t.label)}</span>
+            <span class="tgt-row-label">${escHtml(t.label)}${t.platform
+              ? ` <span style="font-weight:500;font-size:11px;color:var(--text-muted)">· ${escHtml(t.platform)}</span>` : ''}</span>
             <button class="tgt-row-del" title="Remove target" onclick="flexRemoveTarget(${i})">🗑</button>
           </div>
           <div class="tgt-row-inputs">
@@ -4847,7 +4870,8 @@
       const k = _availableKpis().find(x => x.id === cardId);
       if (!k) return;
       const targets = getFlexTargets();
-      targets.push({ id: k.id, label: k.label, value: null, dir: _guessDir(k.label), from: '', to: '' });
+      targets.push({ id: k.id, label: k.label, platform: k.platform || null,
+                     value: null, dir: _guessDir(k.label), from: '', to: '' });
       setFlexTargets(targets);
       loadTargetsPanel();
     }
