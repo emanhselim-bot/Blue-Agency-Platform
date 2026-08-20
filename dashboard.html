@@ -903,7 +903,7 @@
     }
     #targets-panel.open { right: 0; }
     .tgt-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
-    .tgt-title { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; }
+    .tgt-title { font-size: 13px; font-weight: 700; color: var(--text-main); flex: 1; }
     .tgt-agency-name { font-size: 11px; color: var(--blue-dark); font-weight: 700; }
     .tgt-close { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; line-height: 1; }
     .tgt-body { flex: 1; overflow-y: auto; padding: 18px 20px; }
@@ -911,7 +911,7 @@
     .tgt-section-label:first-child { margin-top: 0; }
     .tgt-field { margin-bottom: 12px; }
     .tgt-field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
-    .tgt-field input { width: 100%; padding: 7px 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; box-sizing: border-box; }
+    .tgt-field input { width: 100%; padding: 7px 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; color: var(--text-main); font-size: 13px; box-sizing: border-box; }
     .tgt-field input:focus { outline: none; border-color: var(--blue-dark); }
     .tgt-note { font-size: 10px; color: var(--text-muted); margin: 4px 0 0; }
     .tgt-save { margin: 0 20px 20px; padding: 10px; background: var(--blue-dark); border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; width: calc(100% - 40px); }
@@ -919,12 +919,12 @@
     /* ── Flexible targets ── */
     .tgt-row { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
     .tgt-row-head { display: flex; align-items: center; gap: 8px; }
-    .tgt-row-label { flex: 1; font-size: 12px; font-weight: 700; color: var(--text); }
+    .tgt-row-label { flex: 1; font-size: 12px; font-weight: 700; color: var(--text-main); }
     .tgt-row-del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; }
     .tgt-row-del:hover { color: #F87171; }
     .tgt-row-inputs { display: flex; gap: 8px; margin-top: 8px; }
-    .tgt-row-inputs input { flex: 1; padding: 6px 10px; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; min-width: 0; }
-    .tgt-row-inputs select { padding: 6px 8px; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 11px; }
+    .tgt-row-inputs input { flex: 1; padding: 6px 10px; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 7px; color: var(--text-main); font-size: 13px; min-width: 0; }
+    .tgt-row-inputs select { padding: 6px 8px; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 7px; color: var(--text-main); font-size: 11px; }
     .tgt-row-progress { margin-top: 9px; }
     .tgt-add-select { width: 100%; padding: 8px 11px; background: var(--bg); border: 1.5px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 12px; margin-bottom: 14px; }
     /* progress bar (shared: panel + cards) */
@@ -2392,7 +2392,7 @@
       <div class="tgt-section-label">Default Settings</div>
       <div class="tgt-field">
         <label>Default Date Period</label>
-        <select id="tgt-period" style="width:100%;padding:7px 11px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px">
+        <select id="tgt-period" style="width:100%;padding:7px 11px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text-main);font-size:13px">
           <option value="">— Same as current —</option>
           <option value="today">Today</option>
           <option value="yesterday">Yesterday</option>
@@ -3200,8 +3200,8 @@
           <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
             <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">🔬 API Diagnostic</div>
             <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">Run this if Google Ads data shows all zeros. It reveals which customer IDs are accessible under your connected credentials and probes the API directly.</p>
-            <button class="connect-btn" onclick="runGoogleAdsDiagnostic()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);font-size:12px;padding:8px 16px">▶ Run Diagnostic</button>
-            <pre id="gads-diagnostic-output" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;color:var(--text)"></pre>
+            <button class="connect-btn" onclick="runGoogleAdsDiagnostic()" style="background:var(--surface);color:var(--text-main);border:1px solid var(--border);font-size:12px;padding:8px 16px">▶ Run Diagnostic</button>
+            <pre id="gads-diagnostic-output" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;color:var(--text-main)"></pre>
           </div>
         </div>
         </div><!-- /spanel-google-ads -->
@@ -6322,14 +6322,14 @@
         <div class="section-label" style="margin-top:18px">Best Performing Ad <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Highest Clicks</span></div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;gap:16px;align-items:flex-start">
           <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(bestAd.headline||'').replace(/"/g,'&quot;')}">${bestAd.headline || 'Ad'}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-main);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(bestAd.headline||'').replace(/"/g,'&quot;')}">${bestAd.headline || 'Ad'}</div>
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${bestAd.type || ''} ${bestAd.campaign ? '· ' + bestAd.campaign : ''}</div>
             <div style="display:flex;gap:12px;flex-wrap:wrap">
-              <span style="font-size:12px;color:var(--text-muted)">Clicks: <strong style="color:var(--text)">${bestAd.clicks?.toLocaleString()??0}</strong></span>
-              <span style="font-size:12px;color:var(--text-muted)">Impr.: <strong style="color:var(--text)">${bestAd.impressions?.toLocaleString()??0}</strong></span>
-              <span style="font-size:12px;color:var(--text-muted)">CTR: <strong style="color:var(--text)">${bestAd.ctr??0}%</strong></span>
-              <span style="font-size:12px;color:var(--text-muted)">Conv.: <strong style="color:var(--text)">${bestAd.conversions??0}</strong></span>
-              <span style="font-size:12px;color:var(--text-muted)">Spend: <strong style="color:var(--text)">$${(bestAd.spend??0).toLocaleString()}</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">Clicks: <strong style="color:var(--text-main)">${bestAd.clicks?.toLocaleString()??0}</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">Impr.: <strong style="color:var(--text-main)">${bestAd.impressions?.toLocaleString()??0}</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">CTR: <strong style="color:var(--text-main)">${bestAd.ctr??0}%</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">Conv.: <strong style="color:var(--text-main)">${bestAd.conversions??0}</strong></span>
+              <span style="font-size:12px;color:var(--text-muted)">Spend: <strong style="color:var(--text-main)">$${(bestAd.spend??0).toLocaleString()}</strong></span>
             </div>
           </div>
           <div style="background:var(--accent);border-radius:8px;padding:6px 10px;white-space:nowrap;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">🏆 Best Ad</div>
@@ -6826,14 +6826,14 @@
           <div class="section-label" style="margin-top:18px">Best Performing Ad <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● Highest Clicks</span></div>
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;gap:16px;align-items:flex-start">
             <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(bestAd.headline||'').replace(/"/g,'&quot;')}">${bestAd.headline || 'Ad'}</div>
+              <div style="font-size:14px;font-weight:700;color:var(--text-main);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(bestAd.headline||'').replace(/"/g,'&quot;')}">${bestAd.headline || 'Ad'}</div>
               <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${bestAd.type || ''} ${bestAd.campaign ? '· ' + bestAd.campaign : ''}</div>
               <div style="display:flex;gap:12px;flex-wrap:wrap">
-                <span style="font-size:12px;color:var(--text-muted)">Clicks: <strong style="color:var(--text)">${bestAd.clicks?.toLocaleString()??0}</strong></span>
-                <span style="font-size:12px;color:var(--text-muted)">Impr.: <strong style="color:var(--text)">${bestAd.impressions?.toLocaleString()??0}</strong></span>
-                <span style="font-size:12px;color:var(--text-muted)">CTR: <strong style="color:var(--text)">${bestAd.ctr??0}%</strong></span>
-                <span style="font-size:12px;color:var(--text-muted)">Conv.: <strong style="color:var(--text)">${bestAd.conversions??0}</strong></span>
-                <span style="font-size:12px;color:var(--text-muted)">Spend: <strong style="color:var(--text)">$${(bestAd.spend??0).toLocaleString()}</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">Clicks: <strong style="color:var(--text-main)">${bestAd.clicks?.toLocaleString()??0}</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">Impr.: <strong style="color:var(--text-main)">${bestAd.impressions?.toLocaleString()??0}</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">CTR: <strong style="color:var(--text-main)">${bestAd.ctr??0}%</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">Conv.: <strong style="color:var(--text-main)">${bestAd.conversions??0}</strong></span>
+                <span style="font-size:12px;color:var(--text-muted)">Spend: <strong style="color:var(--text-main)">$${(bestAd.spend??0).toLocaleString()}</strong></span>
               </div>
             </div>
             <div style="background:var(--accent);border-radius:8px;padding:6px 10px;white-space:nowrap;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">🏆 Best Ad</div>
@@ -10349,7 +10349,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;margin-bottom:6px">
             <span style="font-size:16px;width:24px;text-align:center">${a.icon || '📊'}</span>
             <input type="text" value="${escHtml(a.name)}" data-id="${a.id}"
-              style="flex:1;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--text);outline:none;padding:2px 4px;border-bottom:1px solid transparent"
+              style="flex:1;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--text-main);outline:none;padding:2px 4px;border-bottom:1px solid transparent"
               onfocus="this.style.borderBottomColor='var(--blue)'"
               onblur="this.style.borderBottomColor='transparent';renameAgencyFromSettings('${a.id}',this.value)"
               onkeydown="if(event.key==='Enter')this.blur()">
@@ -10382,9 +10382,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             const allOpt = `<option value="" ${!assigned ? 'selected' : ''}>All Agencies (unassigned)</option>`;
             const opts = agencies.map(a => `<option value="${a.id}" ${assigned===a.id?'selected':''}>${a.icon||'📊'} ${escHtml(a.name)}</option>`).join('');
             return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-              <span style="flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((acc.account_name||acc.meta_account_id||'').substring(0,40))}</span>
+              <span style="flex:1;font-size:13px;color:var(--text-main);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((acc.account_name||acc.meta_account_id||'').substring(0,40))}</span>
               <select data-acct="${acc.id}" onchange="setAccountAgencyId(currentOrgId,this.dataset.acct,this.value||null);renderAgencyNav();filterAccountsByAgency();renderAgencySettings();if(sel.value)loadData();"
-                style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
+                style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text-main);cursor:pointer">
                 ${allOpt}${opts}
               </select>
             </div>`;
@@ -10624,7 +10624,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             ${(metaAccs||[]).map(a => `
               <tr style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
                 <td style="padding:10px 8px">
-                  <div style="font-weight:600;color:var(--text)">${escHtml(a.account_name||a.meta_account_id)}</div>
+                  <div style="font-weight:600;color:var(--text-main)">${escHtml(a.account_name||a.meta_account_id)}</div>
                   <div style="color:var(--text-muted);font-size:11px">${escHtml(a.meta_account_id)} · ${escHtml(a.currency)}</div>
                 </td>
                 <td style="padding:10px 8px">
