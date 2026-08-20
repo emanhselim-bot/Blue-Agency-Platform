@@ -4609,7 +4609,22 @@
       const v = parseFloat(txt);
       return isNaN(v) ? null : v;
     }
-    // List every KPI currently rendered on the dashboard
+    // Standard KPIs, so a goal can be set before the dashboard has rendered —
+    // or for a card hidden in this layout but still worth tracking.
+    const TGT_FALLBACK_KPIS = [
+      'Total Spend', 'Total Orders', 'Total Pieces', 'Total Revenue', 'ROAS',
+      'Total Conversion Rate', 'Avg Cost per Order', 'Avg Cost per Piece',
+      'Reach', 'Impressions', 'Clicks', 'CTR', 'CPC',
+      'Website Orders', 'Website Pieces', 'Website Revenue', 'Website Sessions',
+      'Number of Orders', 'Number of Pieces', 'Daily Budget', 'Ad Account Fund',
+    ].map(label => ({
+      // Same id rule as the kpi() helper, so a target set from this list binds
+      // to the real card once the dashboard renders it.
+      id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      label,
+    }));
+
+    // Every KPI currently on screen, plus the standard set as a backstop.
     function _availableKpis() {
       const seen = new Set(); const out = [];
       document.querySelectorAll('#content .kpi-card[data-card-id]').forEach(c => {
@@ -4619,6 +4634,7 @@
         const label = c.querySelector('.kpi-label')?.textContent?.trim() || id;
         out.push({ id, label });
       });
+      TGT_FALLBACK_KPIS.forEach(k => { if (!seen.has(k.id)) { seen.add(k.id); out.push(k); } });
       return out;
     }
     // Compute progress + status for a target
@@ -4768,7 +4784,7 @@
       selEl.innerHTML = '<option value="">＋ Add a KPI target…</option>' +
         (kpis.length
           ? kpis.map(k => `<option value="${escHtml(k.id)}">${escHtml(k.label)}</option>`).join('')
-          : '<option value="" disabled>Load an account first to see available KPIs</option>');
+          : '<option value="" disabled>Every KPI already has a target</option>');
     }
 
     function renderTargetRows() {
