@@ -4871,6 +4871,7 @@
     const MH_FIELDS = [
       ['web_orders',  'Orders'],  ['web_pieces',  'Pieces'],  ['web_revenue',  'Revenue'],
       ['msg_orders',  'Orders'],  ['msg_pieces',  'Pieces'],  ['msg_revenue',  'Revenue'],
+      ['returns_pct', 'Returns %'],
     ];
     const MH_MONTHS = ['January','February','March','April','May','June',
                        'July','August','September','October','November','December'];
@@ -4913,7 +4914,7 @@
       const status = document.getElementById('mh-status');
       status.textContent = 'Loading…'; status.style.color = 'var(--text-muted)';
       const { data, error } = await sb.from('monthly_history')
-        .select('month, web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue')
+        .select('month, web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue, returns_pct')
         .eq('organization_id', currentOrgId)
         .eq('agency_id', currentAgencyId || 'x')
         .eq('account_key', _mhScopeKey)
@@ -4942,9 +4943,12 @@
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
             <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
             <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
+            <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
+            <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
           </tr>
           <tr style="position:sticky;top:32px;background:var(--bg-card,#16213E);z-index:1">
-            ${MH_FIELDS.map(([, label]) => `<th style="padding:6px 8px;font-size:11px;color:var(--text-muted);
+            ${MH_FIELDS.filter(([k]) => k !== 'returns_pct').map(([, label]) =>
+                `<th style="padding:6px 8px;font-size:11px;color:var(--text-muted);
                  border-bottom:1px solid var(--border);font-weight:600">${label}</th>`).join('')}
           </tr>
         </thead>
@@ -4956,9 +4960,36 @@
                 ${name}${future ? ' <span style="font-size:10px;color:var(--text-muted)">(future)</span>' : ''}
               </td>
               ${MH_FIELDS.map(([key]) => cell(year, m, key)).join('')}
+              <td id="mh-net-${m}" style="padding:5px 10px;border-bottom:1px solid var(--border);
+                  font-size:11.5px;color:var(--text-muted);white-space:nowrap"></td>
             </tr>`;
           }).join('')}
         </tbody>`;
+      document.querySelectorAll('#mh-table input').forEach(el =>
+        el.addEventListener('input', () => mhNet(parseInt(el.dataset.m, 10))));
+      for (let m = 0; m < 12; m++) mhNet(m);
+    }
+
+    // Gross revenue minus the returns percentage, shown per row so the
+    // deduction is visible at the point of entry.
+    function mhNet(m) {
+      const cell = document.getElementById('mh-net-' + m);
+      if (!cell) return;
+      const val = (k) => {
+        const el = document.querySelector(`#mh-table input[data-m="${m}"][data-k="${k}"]`);
+        const n = parseFloat((el?.value ?? '').trim());
+        return isNaN(n) ? null : n;
+      };
+      const gross = (val('web_revenue') || 0) + (val('msg_revenue') || 0);
+      const pct   = val('returns_pct');
+      if (!gross) { cell.textContent = ''; return; }
+      if (pct == null || pct <= 0) {
+        cell.innerHTML = `<span style="opacity:.7">Net ${gross.toLocaleString('en', {maximumFractionDigits: 2})}</span>`;
+        return;
+      }
+      const net = gross * (1 - Math.min(100, Math.max(0, pct)) / 100);
+      cell.innerHTML = `<span style="color:#34D399">Net ${net.toLocaleString('en', {maximumFractionDigits: 2})}</span>
+        <span style="opacity:.6"> · −${(gross - net).toLocaleString('en', {maximumFractionDigits: 2})}</span>`;
     }
 
     // Paste a block from a spreadsheet: rows go down the months, columns across
@@ -5044,7 +5075,7 @@
       const key = `${currentOrgId}|${currentAgencyId || 'x'}|${accountKey}|${y}-${m}`;
       if (_mhHistoryCache[key] !== undefined) return _mhHistoryCache[key];
       const { data } = await sb.from('monthly_history')
-        .select('web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue')
+        .select('web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue, returns_pct')
         .eq('organization_id', currentOrgId).eq('agency_id', currentAgencyId || 'x')
         .eq('account_key', accountKey).eq('month', mhMonthStr(y, m)).maybeSingle();
       _mhHistoryCache[key] = data || null;
@@ -7645,6 +7676,11 @@
         if (pieces        == null && _mhRow.web_pieces  != null) { pieces        = Number(_mhRow.web_pieces);  _webSource = 'Entered'; }
       }
 
+      // Returns for the month reduce revenue. Prefer the figure recorded in
+      // Monthly history; fall back to whatever was typed on the card.
+      const _mhReturnsPct = _mhRow && _mhRow.returns_pct != null && !isNaN(Number(_mhRow.returns_pct))
+        ? Number(_mhRow.returns_pct) : null;
+
       const _mhNum = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
       const _stored = (k) => localStorage.getItem(k);
       // A number typed into the card for this period wins; otherwise fall back
@@ -7657,7 +7693,9 @@
       // misses exchanges and returns handled outside the store.
       const _retKey     = `returns-rate-${_periodKey}`;
       const _storedRet  = localStorage.getItem(_retKey);
-      const returnsRate = _storedRet !== null && _storedRet !== '' ? parseFloat(_storedRet) : null;
+      const returnsRate = (_storedRet !== null && _storedRet !== '')
+        ? parseFloat(_storedRet)
+        : (typeof _mhReturnsPct !== 'undefined' ? _mhReturnsPct : null);
       const _leadsKey    = `msg-leads-${_periodKey}`;
       const _dealsKey    = `msg-deals-${_periodKey}`;
       const msgLeads     = parseInt(localStorage.getItem(_leadsKey) || '0') || 0;
@@ -7672,8 +7710,18 @@
       const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
       const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
       const totalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + msgOrders;
-      const totalRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
+      const grossRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
       const totalPieces  = (pieces         !== null ? pieces         : 0) + msgPieces;
+
+      // Revenue is reported net of returns when a rate has been recorded, so
+      // ROAS and every derived figure reflect money actually kept.
+      const _retPct        = (returnsRate != null && !isNaN(returnsRate)) ? Math.min(100, Math.max(0, returnsRate)) : null;
+      const returnedAmount = _retPct ? grossRevenue * _retPct / 100 : 0;
+      const totalRevenue   = grossRevenue - returnedAmount;
+      // Say so on the card, otherwise a net figure looks like missing revenue.
+      const _revSubLabel = returnedAmount > 0
+        ? `Net of ${fmt(returnedAmount, curr)} returns (${_retPct}%)`
+        : 'Website + Messages';
 
       const avgCostPerOrder = (spend && totalOrders)  ? spend / totalOrders  : null;
       const avgCostPerPiece = (spend && totalPieces)  ? spend / totalPieces  : null;
@@ -7762,7 +7810,7 @@
                 : (noActiveCampaigns ? '● Nothing spending right now' : 'Fund ÷ Daily Budget')
             )}
             ${includeRevenue ? `
-            ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+            ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
             ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
             ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
             ` : ''}
@@ -7931,7 +7979,7 @@
                   ? `● Fund ÷ ${fmt(dailyBudget, curr)}/day`
                   : 'Fund ÷ Daily Budget'
               )}
-              ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+              ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
               ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
             </div>
@@ -7945,7 +7993,7 @@
               ${kpi('c-coral solid',  '🏷️', 'Avg Cost per Piece',    sfmt(avgCostPerPiece,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Pieces'),  null, null, null, 'kpi-avg-cost-per-piece-val')}
               ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—',                   costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
               ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
-              ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', 'Website + Messages', totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
+              ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               <div class="kpi-card c-red solid" data-card-id="returns-rate">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
                 <div class="kpi-icon">↩️</div>
