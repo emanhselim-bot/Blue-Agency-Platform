@@ -14735,6 +14735,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         .gte('meets_on', from).lte('meets_on', to)
         .order('starts_at', { nullsFirst: true });
       _mtMeetings = data || [];
+      await bkLoad();          // offered slots and pending requests for the same view
       mtRenderGrid();
       mtRenderDay();
     }
@@ -14776,6 +14777,172 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     function mtPickDay(iso) { _mtSelected = iso; mtRenderGrid(); mtRenderDay(); }
 
+    // ═══ BOOKING: offer slots, share per-client links, approve requests ═══
+    let _bkSlots = [], _bkLinks = [], _bkRequests = [];
+
+    async function bkLoad() {
+      if (!currentOrgId) return;
+      const [{ data: slots }, { data: links }, { data: reqs }] = await Promise.all([
+        sb.from('booking_slots').select('id, slot_on, starts_at, ends_at, status, meeting_id')
+          .eq('organization_id', currentOrgId).order('slot_on').order('starts_at'),
+        sb.from('booking_links').select('id, token, client_id, client_name, title, location, revoked, created_at')
+          .eq('organization_id', currentOrgId).order('created_at', { ascending: false }),
+        sb.from('booking_requests')
+          .select('id, link_id, slot_id, requester_name, requester_email, note, status, created_at')
+          .eq('organization_id', currentOrgId).eq('status', 'pending').order('created_at'),
+      ]);
+      _bkSlots = slots || []; _bkLinks = links || []; _bkRequests = reqs || [];
+    }
+
+    const bkTime = (t) => (t || '').slice(0, 5);
+
+    function bkRenderDaySlots() {
+      const box = document.getElementById('bk-day-slots');
+      if (!box) return;
+      const mine = _bkSlots.filter(s => s.slot_on === _mtSelected && s.status !== 'cancelled');
+      if (!mine.length) { box.innerHTML = ''; return; }
+      const chip = (s) => {
+        const req = _bkRequests.find(r => r.slot_id === s.id);
+        const tone = s.status === 'booked' ? ['#16A34A', 'Booked']
+                   : s.status === 'held'   ? ['#D97706', 'Requested']
+                   : ['var(--text-muted)', 'Offered'];
+        return `<div style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);
+                    border-radius:20px;padding:5px 12px;margin:0 6px 6px 0;font-size:12px">
+          <strong>${escHtml(bkTime(s.starts_at))}–${escHtml(bkTime(s.ends_at))}</strong>
+          <span style="color:${tone[0]}">${tone[1]}</span>
+          ${req ? `<span style="opacity:.8">· ${escHtml(req.requester_name)}</span>
+                   <button onclick="bkDecide('${req.id}','accepted')" style="border:none;background:none;color:#16A34A;cursor:pointer;font-size:13px" title="Accept">✓</button>
+                   <button onclick="bkDecide('${req.id}','declined')" style="border:none;background:none;color:#e53e3e;cursor:pointer;font-size:13px" title="Decline">✕</button>`
+                : `<span onclick="bkRemoveSlot('${s.id}')" style="cursor:pointer;opacity:.55" title="Remove this slot">✕</span>`}
+        </div>`;
+      };
+      box.innerHTML = `<div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:6px">Slots offered to clients</div>${mine.map(chip).join('')}`;
+    }
+
+    async function bkOfferSlot() {
+      if (!_mtSelected) return;
+      const start = prompt('Start time for the slot (HH:MM, 24-hour)', '14:00');
+      if (!start) return;
+      if (!/^\d{1,2}:\d{2}$/.test(start)) { alert('Please enter a time like 14:00.'); return; }
+      const end = prompt('End time for the slot (HH:MM, 24-hour)', '14:30');
+      if (!end) return;
+      if (!/^\d{1,2}:\d{2}$/.test(end)) { alert('Please enter a time like 14:30.'); return; }
+      if (end <= start) { alert('The end time must be after the start time.'); return; }
+
+      const { error } = await sb.from('booking_slots').insert({
+        organization_id: currentOrgId, slot_on: _mtSelected,
+        starts_at: start, ends_at: end, created_by: currentUser?.id || null,
+      });
+      // The unique index stops the same time being offered twice.
+      if (error) { alert(error.code === '23505' ? 'That time is already offered.' : error.message); return; }
+      logActivity('change', `Offered a booking slot on ${_mtSelected}`, { module: 'pipeline' });
+      await bkLoad(); bkRenderDaySlots();
+    }
+
+    async function bkRemoveSlot(id) {
+      if (!confirm('Remove this offered slot?')) return;
+      const { error } = await sb.from('booking_slots').delete().eq('id', id);
+      if (error) { alert(error.message); return; }
+      await bkLoad(); bkRenderDaySlots();
+    }
+
+    // Accepting turns the request into a real meeting; declining frees the slot.
+    async function bkDecide(reqId, decision) {
+      const req = _bkRequests.find(r => r.id === reqId);
+      if (!req) return;
+      const slot = _bkSlots.find(s => s.id === req.slot_id);
+      const link = _bkLinks.find(l => l.id === req.link_id);
+
+      if (decision === 'accepted') {
+        const { data: mtg, error: mErr } = await sb.from('meetings').insert({
+          organization_id: currentOrgId,
+          client_id: link?.client_id || null,
+          title: `${link?.title || 'Client meeting'} — ${req.requester_name}`,
+          meets_on: slot?.slot_on, starts_at: slot?.starts_at, ends_at: slot?.ends_at,
+          location: link?.location || null,
+          notes: req.note || null,
+          status: 'scheduled', created_by: currentUser?.id || null,
+        }).select('id').single();
+        if (mErr) { alert('Could not create the meeting: ' + mErr.message); return; }
+
+        await sb.from('booking_slots').update({ status: 'booked', meeting_id: mtg.id }).eq('id', req.slot_id);
+        await sb.from('meeting_attendees').insert({
+          meeting_id: mtg.id, name: req.requester_name, side: 'client',
+        }).then(() => {}, () => {});   // an attendee failing must not undo the booking
+      } else {
+        await sb.from('booking_slots').update({ status: 'open' }).eq('id', req.slot_id);
+      }
+
+      await sb.from('booking_requests')
+        .update({ status: decision, decided_by: currentUser?.id || null, decided_at: new Date().toISOString() })
+        .eq('id', reqId);
+      logActivity('change', `${decision === 'accepted' ? 'Accepted' : 'Declined'} a booking from ${req.requester_name}`, { module: 'pipeline' });
+      await bkLoad(); await mtLoad();
+    }
+
+    function bkOpenPanel() {
+      const host = document.getElementById('bk-links-panel');
+      if (!host) return;
+      host.style.display = host.style.display === 'none' ? 'block' : 'none';
+      if (host.style.display === 'block') bkRenderLinks();
+    }
+
+    function bkRenderLinks() {
+      const host = document.getElementById('bk-links-panel');
+      if (!host) return;
+      const base = location.origin + location.pathname;
+      const pending = _bkRequests.length;
+      host.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="font-size:14px;font-weight:700">🔗 Booking links${pending ? ` <span style="font-size:11px;color:#D97706">· ${pending} awaiting your approval</span>` : ''}</div>
+          <button onclick="bkNewLink()" class="connect-input" style="cursor:pointer;min-width:auto;padding:6px 14px;font-size:12px">＋ New link for a client</button>
+        </div>
+        ${_bkLinks.length ? _bkLinks.map(l => {
+          const url = `${base}?book=${encodeURIComponent(l.token)}`;
+          return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;${l.revoked ? 'opacity:.55' : ''}">
+            <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+              <div>
+                <div style="font-size:13px;font-weight:700">${escHtml(l.client_name)}${l.revoked ? ' · revoked' : ''}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${escHtml(l.title)}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button onclick="bkCopy('${escHtml(url)}', this)" style="padding:4px 11px;font-size:11.5px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Copy link</button>
+                <button onclick="bkRevoke('${l.id}', ${l.revoked})" style="padding:4px 11px;font-size:11.5px;border:1px solid ${l.revoked ? 'var(--border)' : '#e53e3e'};border-radius:6px;background:transparent;color:${l.revoked ? 'var(--text-main)' : '#e53e3e'};cursor:pointer">${l.revoked ? 'Restore' : 'Revoke'}</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('') : '<div style="font-size:12.5px;color:var(--text-muted)">No booking links yet. Create one per client, then offer slots on the days you are free.</div>'}`;
+    }
+
+    async function bkNewLink() {
+      const name = prompt('Which client is this link for?');
+      if (!name || !name.trim()) return;
+      const title = prompt('What should the page be called?', 'Book a meeting with Blue Ad') || 'Book a meeting';
+      const place = prompt('Where will it happen? (Zoom, office, Google Meet — optional)', '') || null;
+      const match = (_mtClients || []).find(c => (c.name || '').toLowerCase() === name.trim().toLowerCase());
+      // A long random token: the link is the only thing protecting the page.
+      const token = crypto.randomUUID().replace(/-/g, '') + Math.random().toString(36).slice(2, 10);
+      const { error } = await sb.from('booking_links').insert({
+        organization_id: currentOrgId, token, client_id: match?.id || null,
+        client_name: name.trim(), title, location: place, created_by: currentUser?.id || null,
+      });
+      if (error) { alert(error.message); return; }
+      await bkLoad(); bkRenderLinks();
+    }
+
+    async function bkRevoke(id, isRevoked) {
+      const { error } = await sb.from('booking_links').update({ revoked: !isRevoked }).eq('id', id);
+      if (error) { alert(error.message); return; }
+      await bkLoad(); bkRenderLinks();
+    }
+
+    function bkCopy(url, btn) {
+      navigator.clipboard.writeText(url).then(() => {
+        const t = btn.textContent; btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.textContent = t; }, 1800);
+      }, () => prompt('Copy this link:', url));
+    }
+
     function mtRenderDay() {
       const box = document.getElementById('mt-day');
       if (!_mtSelected) { box.innerHTML = ''; return; }
@@ -14786,8 +14953,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       box.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
           <div style="font-size:15px;font-weight:700">${escHtml(nice)}</div>
-          <button onclick="mtToggleForm(true)" class="connect-input" style="cursor:pointer;min-width:auto;padding:8px 16px">＋ Add meeting</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="bkOfferSlot()" class="connect-input" style="cursor:pointer;min-width:auto;padding:8px 16px" title="Offer this time to a client for booking">🗓 Offer a slot</button>
+            <button onclick="bkOpenPanel()" class="connect-input" style="cursor:pointer;min-width:auto;padding:8px 16px">🔗 Booking links</button>
+            <button onclick="mtToggleForm(true)" class="connect-input" style="cursor:pointer;min-width:auto;padding:8px 16px">＋ Add meeting</button>
+          </div>
         </div>
+        <div id="bk-day-slots" style="margin-bottom:12px"></div>
 
         <div id="mt-form" style="display:none;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:var(--card-bg,rgba(255,255,255,.05))">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
@@ -14824,7 +14996,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           </div>
         </div>
 
+        <div id="bk-links-panel" style="display:none;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px"></div>
         <div id="mt-list">${list.length ? '' : '<div style="font-size:13px;color:var(--text-muted)">Nothing scheduled. Add a meeting for this day.</div>'}</div>`;
+
+      bkRenderDaySlots();
 
       const host = document.getElementById('mt-list');
       list.forEach(mtg => host.insertAdjacentHTML('beforeend', mtCardShell(mtg)));
@@ -16139,10 +16314,147 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (t) { document.addEventListener('DOMContentLoaded', () => mdcInit(t)); if (document.readyState !== 'loading') mdcInit(t); }
     })();
 
+    // ═══ CLIENT BOOKING PAGE (?book=<token>) ════════════════════════
+    // Same rule as the dashboard share link: the token owns the page and no
+    // sign-in ever happens. Everything is fetched through book-slot, which
+    // re-checks the token server-side on every call.
+    let _bkToken = null, _bkPageSlots = [];
+
+    async function bkPost(payload) {
+      const r = await fetch(SUPABASE_URL + '/functions/v1/book-slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON },
+        body: JSON.stringify({ token: _bkToken, ...payload }),
+      });
+      return r.json();
+    }
+
+    const _bkDay = (iso) => new Date(iso + 'T12:00:00')
+      .toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+
+    async function bkPageInit(token) {
+      _bkToken = token;
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.body.innerHTML = `
+        <div style="max-width:640px;margin:0 auto;padding:34px 20px 60px;font-family:inherit">
+          <div style="text-align:center;margin-bottom:26px">
+            <div style="font-size:22px;font-weight:800;letter-spacing:2px">BLUE AD</div>
+            <div style="font-size:10px;letter-spacing:3px;color:var(--text-muted);margin-top:2px">DIGITAL PERFORMANCE MARKETING AGENCY</div>
+          </div>
+          <div id="bk-page" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px">
+            <div style="color:var(--text-muted);font-size:13px">Loading available times…</div>
+          </div>
+        </div>`;
+
+      const d = await bkPost({});
+      const page = document.getElementById('bk-page');
+      if (d.error) {
+        page.innerHTML = `<div style="font-size:14px">${escHtml(d.error)}</div>`;
+        return;
+      }
+      _bkPageSlots = d.slots || [];
+
+      if (!_bkPageSlots.length) {
+        page.innerHTML = `
+          <div style="font-size:18px;font-weight:700;margin-bottom:6px">${escHtml(d.title)}</div>
+          <div style="font-size:13px;color:var(--text-muted)">There are no times available at the moment. Please check back shortly, or reply to the email you received.</div>`;
+        return;
+      }
+
+      // Group by day so the client reads dates, not a flat list of times.
+      const byDay = {};
+      _bkPageSlots.forEach(s => { (byDay[s.slot_on] ||= []).push(s); });
+
+      page.innerHTML = `
+        <div style="font-size:18px;font-weight:700">${escHtml(d.title)}</div>
+        <div style="font-size:13px;color:var(--text-muted);margin:4px 0 18px">
+          ${escHtml(d.client_name)}${d.location ? ' · ' + escHtml(d.location) : ''} · pick a time that suits you
+        </div>
+        ${Object.entries(byDay).map(([day, list]) => `
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">${escHtml(_bkDay(day))}</div>
+            <div>${list.map(s => `
+              <button onclick="bkPick('${s.id}')" style="border:1px solid var(--border);background:var(--bg);color:var(--text-main);
+                      border-radius:9px;padding:9px 16px;margin:0 8px 8px 0;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit">
+                ${escHtml((s.starts_at||'').slice(0,5))} – ${escHtml((s.ends_at||'').slice(0,5))}
+              </button>`).join('')}</div>
+          </div>`).join('')}
+        <div id="bk-form"></div>`;
+    }
+
+    function bkPick(slotId) {
+      const s = _bkPageSlots.find(x => x.id === slotId);
+      if (!s) return;
+      const form = document.getElementById('bk-form');
+      form.innerHTML = `
+        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:18px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px">
+            ${escHtml(_bkDay(s.slot_on))} · ${escHtml((s.starts_at||'').slice(0,5))}
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+            We will confirm by email once this is approved.
+          </div>
+          <input id="bk-name" placeholder="Your name *" maxlength="120"
+            style="width:100%;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;
+                   background:var(--bg);color:var(--text-main);font-size:13.5px;font-family:inherit;box-sizing:border-box">
+          <input id="bk-email" type="email" placeholder="Your email" maxlength="200"
+            style="width:100%;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;
+                   background:var(--bg);color:var(--text-main);font-size:13.5px;font-family:inherit;box-sizing:border-box">
+          <textarea id="bk-note" rows="3" placeholder="Anything you would like to cover? (optional)" maxlength="1000"
+            style="width:100%;padding:10px 12px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;
+                   background:var(--bg);color:var(--text-main);font-size:13.5px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+          <button id="bk-submit" onclick="bkSubmit('${slotId}')"
+            style="width:100%;padding:12px;background:var(--blue-light);color:#fff;border:none;border-radius:9px;
+                   font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Request this time</button>
+          <div id="bk-msg" style="font-size:12.5px;margin-top:10px;min-height:18px"></div>
+        </div>`;
+      form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function bkSubmit(slotId) {
+      const name = document.getElementById('bk-name').value.trim();
+      const msg  = document.getElementById('bk-msg');
+      const btn  = document.getElementById('bk-submit');
+      if (!name) { msg.textContent = 'Please enter your name.'; msg.style.color = '#F87171'; return; }
+      btn.disabled = true; btn.textContent = 'Sending…';
+
+      const r = await bkPost({
+        slot_id: slotId, name,
+        email: document.getElementById('bk-email').value.trim(),
+        note:  document.getElementById('bk-note').value.trim(),
+      });
+
+      if (r.error) {
+        msg.textContent = r.error; msg.style.color = '#F87171';
+        btn.disabled = false; btn.textContent = 'Request this time';
+        // Somebody else took it — refresh so the client sees what is left.
+        if (r.error.includes('just been taken')) setTimeout(() => bkPageInit(_bkToken), 1600);
+        return;
+      }
+      document.getElementById('bk-page').innerHTML = `
+        <div style="text-align:center;padding:14px 0">
+          <div style="font-size:34px;margin-bottom:8px">✓</div>
+          <div style="font-size:17px;font-weight:700;margin-bottom:6px">Request sent</div>
+          <div style="font-size:13.5px;color:var(--text-muted);line-height:1.7">
+            ${escHtml(_bkDay(r.slot_on))} at ${escHtml((r.starts_at||'').slice(0,5))}.<br>
+            We will confirm shortly — the time is held for you until then.
+          </div>
+        </div>`;
+    }
+
+    (function () {
+      const t = new URLSearchParams(location.search).get('book');
+      if (t) {
+        const go = () => bkPageInit(t);
+        document.addEventListener('DOMContentLoaded', go);
+        if (document.readyState !== 'loading') go();
+      }
+    })();
+
     Auth.onAuthStateChange((event, session) => {
       // a shared link owns the page — never let the auth flow redraw it
       const _qs = new URLSearchParams(location.search);
-      if (_qs.get('timeline') || _qs.get('md')) return;
+      if (_qs.get('timeline') || _qs.get('md') || _qs.get('book')) return;
       const overlay = document.getElementById('auth-overlay');
       if (session?.user) {
         currentUser = session.user;
