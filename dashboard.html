@@ -8675,16 +8675,45 @@
       // picker's value, so a combined client like Nuya is stored once for the
       // group rather than per ad account.
       const _mhGroup = await mhForPeriod(sel?.value || '__all__', currentPeriod).catch(() => null);
+      const _num = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
       if (_mhGroup) {
-        const web = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
-        if (totOrders  == null && web(_mhGroup.web_orders)  != null) totOrders  = web(_mhGroup.web_orders);
-        if (totRevenue == null && web(_mhGroup.web_revenue) != null) totRevenue = web(_mhGroup.web_revenue);
-        if (totPieces  == null && web(_mhGroup.web_pieces)  != null) totPieces  = web(_mhGroup.web_pieces);
-        // Messages figures add to the website ones — they are separate sources.
-        if (web(_mhGroup.msg_orders)  != null) totOrders  = (totOrders  || 0) + web(_mhGroup.msg_orders);
-        if (web(_mhGroup.msg_revenue) != null) totRevenue = (totRevenue || 0) + web(_mhGroup.msg_revenue);
-        if (web(_mhGroup.msg_pieces)  != null) totPieces  = (totPieces  || 0) + web(_mhGroup.msg_pieces);
+        if (totOrders  == null && _num(_mhGroup.web_orders)  != null) totOrders  = _num(_mhGroup.web_orders);
+        if (totRevenue == null && _num(_mhGroup.web_revenue) != null) totRevenue = _num(_mhGroup.web_revenue);
+        if (totPieces  == null && _num(_mhGroup.web_pieces)  != null) totPieces  = _num(_mhGroup.web_pieces);
       }
+
+      // Orders taken over messages are recorded by hand and are not in Shopify.
+      // Without them these cards say "Number of Orders" while counting only the
+      // website — a total that quietly omits a whole sales channel.
+      const _aggPeriodKey = `${currentOrgId}-${currentAgencyId}-${currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod}`;
+      const _typed = (k) => { const v = localStorage.getItem(k); return (v === null || v === '') ? null : parseFloat(v); };
+      // Typed figure for this period wins; otherwise the month's stored history.
+      const aggMsgOrders  = _typed(`msg-orders-${_aggPeriodKey}`)  ?? _num(_mhGroup?.msg_orders)  ?? 0;
+      const aggMsgPieces  = _typed(`msg-pieces-${_aggPeriodKey}`)  ?? _num(_mhGroup?.msg_pieces)  ?? 0;
+      const aggMsgRevenue = _typed(`msg-revenue-${_aggPeriodKey}`) ?? _num(_mhGroup?.msg_revenue) ?? 0;
+      const aggHasMsg = (aggMsgOrders || aggMsgPieces || aggMsgRevenue) > 0;
+
+      if (aggMsgOrders)  totOrders  = (totOrders  || 0) + aggMsgOrders;
+      if (aggMsgPieces)  totPieces  = (totPieces  || 0) + aggMsgPieces;
+      if (aggMsgRevenue) totRevenue = (totRevenue || 0) + aggMsgRevenue;
+
+      // Returns reduce revenue here too, so a monthly report reads the same
+      // whether you view one account or the whole group.
+      const aggRetPct = _num(_mhGroup?.returns_pct) ?? _typed(`returns-rate-${_aggPeriodKey}`);
+      const aggReturned = (aggRetPct && totRevenue) ? totRevenue * Math.min(100, Math.max(0, aggRetPct)) / 100 : 0;
+      if (aggReturned) totRevenue = totRevenue - aggReturned;
+
+      // Say exactly which channels a card counts, so a "total" is never assumed
+      // to include something it does not.
+      const _storeCount = uniqueStoreIds.length;
+      const _aggSourceLabel = aggHasMsg
+        ? `Website + Messages${_storeCount > 1 ? ` · ${_storeCount} stores` : ''}`
+        : (shopifyEnabled
+            ? `<span class="shopify-badge">● Shopify</span>${_storeCount > 1 ? ` · ${_storeCount} stores` : ''}`
+            : 'No website data');
+      const _aggRevenueLabel = aggReturned > 0
+        ? `Net of ${fmt(aggReturned, curr)} returns (${aggRetPct}%)`
+        : _aggSourceLabel;
 
       const avgCostPerOrder = (totSpend && totOrders)  ? totSpend / totOrders  : null;
       const avgCostPerPiece = (totSpend && totPieces)  ? totSpend / totPieces  : null;
@@ -8730,11 +8759,11 @@
         <div class="section-label">Primary KPIs · All Accounts Aggregated</div>
         <div class="kpi-grid">
           ${kpi('c-blue',   '💰', 'Total Spend',        fmt(totSpend, curr),  `${currLabel} · ${accountsWithData} account(s)`)}
-          ${kpi('c-sky',    '🛒', 'Number of Orders',    sfmt(totOrders, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-sky',    '🛒', 'Total Orders',        sfmt(totOrders, v => v.toLocaleString('en')), _aggSourceLabel)}
           ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders'))}
-          ${kpi('c-teal',   '🧮', 'Number of Pieces',    sfmt(totPieces, v => v.toLocaleString('en')), shopifySubLabel)}
+          ${kpi('c-teal',   '🧮', 'Total Pieces',        sfmt(totPieces, v => v.toLocaleString('en')), _aggSourceLabel)}
           ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Units sold'))}
-          ${kpi('c-gold',   '💵', 'Revenue',             sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), shopifySubLabel)}
+          ${kpi('c-gold',   '💵', 'Total Revenue',       sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _aggRevenueLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
           ${kpi('c-green',  '🎯', 'Impressions',         fmt(totImpressions,'',0), `Reach: ${fmt(totReach,'',0)}`)}
           ${totSessions !== null ? kpi('c-purple', '👁', 'Website Sessions', fmt(totSessions,'',0),
