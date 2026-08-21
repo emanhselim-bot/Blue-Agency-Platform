@@ -11194,15 +11194,23 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!confirm(`Disconnect ${accountName}?\n\nThis will stop syncing ad data. You can reconnect via Connect Meta Account.`)) return;
       const row = document.getElementById(`meta-row-${accountId}`);
       if (row) row.style.opacity = '0.5';
-      const { error } = await sb
+      // There is no `status` column on this table — writing to one made every
+      // disconnect fail. is_active is what the account list and pickers read.
+      const { data, error } = await sb
         .from('meta_ad_accounts')
-        .update({ status: 'disconnected', is_active: false })
+        .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('id', accountId)
-        .eq('organization_id', currentOrgId);
-      if (error) {
+        .eq('organization_id', currentOrgId)
+        .select('id');
+      const _st = document.getElementById('meta-status');
+      if (error || !data?.length) {
         if (row) row.style.opacity = '1';
-        document.getElementById('meta-status').className = 'modal-status error';
-        document.getElementById('meta-status').textContent = error.message;
+        _st.className = 'modal-status error';
+        // A write refused by row-level security returns no error and no rows.
+        _st.textContent = error ? error.message
+          : 'Nothing changed — only owners and admins can disconnect accounts.';
+        _st.scrollIntoView({ block: 'nearest' });
+        alert(_st.textContent);
       } else {
         await refreshSettingsData();
         await loadAccounts();
