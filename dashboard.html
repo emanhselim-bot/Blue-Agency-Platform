@@ -7715,7 +7715,10 @@
         periodLabel + (dateStr ? '  ·  ' + dateStr : '') + '  ·  ' + (d.name || account.meta_account_id);
 
       // ── Meta values ──
-      const spend          = parseNum(d.amount_spent);
+      // Not const: a recorded past month can supply spend when Meta no longer
+      // serves insights that far back.
+      let spend            = parseNum(d.amount_spent);
+      let _spendFromHistory = false;
       // Meta's `balance` is unbilled spend (what you owe), NOT the money available.
       // For prepaid accounts the real fund sits in the funding source string,
       // e.g. "Available balance (EGP4,508.19)". Prefer that when present.
@@ -7778,6 +7781,14 @@
         if (shopifyOrders == null && _mhRow.web_orders  != null) { shopifyOrders = Number(_mhRow.web_orders);  _webSource = 'Entered'; }
         if (revenue       == null && _mhRow.web_revenue != null) { revenue       = Number(_mhRow.web_revenue); _webSource = 'Entered'; }
         if (pieces        == null && _mhRow.web_pieces  != null) { pieces        = Number(_mhRow.web_pieces);  _webSource = 'Entered'; }
+      }
+
+      // Meta stops serving insights for older months, which would leave a
+      // recorded month with revenue but no spend — and therefore no ROAS. The
+      // spend recorded alongside the figures fills that gap.
+      if (_mhRow && !(spend > 0)) {
+        const _histSpend = (Number(_mhRow.web_spend) || 0) + (Number(_mhRow.msg_spend) || 0);
+        if (_histSpend > 0) { spend = _histSpend; _spendFromHistory = true; }
       }
 
       // Returns for the month reduce revenue. Prefer the figure recorded in
@@ -7894,7 +7905,7 @@
         <div class="kpi-section" data-section-id="spending">
           <div class="section-label">${includeRevenue ? 'Spending / Revenue' : 'Spending / Budget'} <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
           <div class="kpi-grid" data-grid-id="spending">
-            ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), 'Meta Ads', spend, _t.spend, false)}
+            ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), _spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads', spend, _t.spend, false)}
             ${kpi('c-green', '💳', 'Ad Account Fund',
               accountBalance !== null ? fmt(accountBalance, curr) : '—',
               accountBalance !== null
@@ -8063,7 +8074,7 @@
           <div class="kpi-section" data-section-id="spending">
             <div class="section-label">Spending / Revenue <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="spending">
-              ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), 'Meta Ads', spend, _t.spend, false)}
+              ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), _spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads', spend, _t.spend, false)}
               ${kpi('c-green', '💳', 'Ad Account Fund',
                 accountBalance !== null ? fmt(accountBalance, curr) : '—',
                 accountBalance !== null
