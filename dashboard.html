@@ -5020,7 +5020,6 @@
       const { data, error } = await sb.from('monthly_history')
         .select('month, web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue, returns_pct')
         .eq('organization_id', currentOrgId)
-        .eq('agency_id', currentAgencyId || 'x')
         .eq('account_key', _mhScopeKey)
         .gte('month', `${year}-01-01`).lte('month', `${year}-12-01`);
       if (error) { status.textContent = '⚠️ ' + error.message; status.style.color = '#F87171'; return; }
@@ -5140,13 +5139,13 @@
       try {
         if (rows.length) {
           const { error } = await sb.from('monthly_history')
-            .upsert(rows, { onConflict: 'organization_id,agency_id,account_key,month' });
+            .upsert(rows, { onConflict: 'organization_id,account_key,month' });
           if (error) throw error;
         }
         // A month cleared to blank should be removed, not left at its old value.
         if (emptyMonths.length) {
           const { error } = await sb.from('monthly_history').delete()
-            .eq('organization_id', currentOrgId).eq('agency_id', currentAgencyId || 'x')
+            .eq('organization_id', currentOrgId)
             .eq('account_key', _mhScopeKey).in('month', emptyMonths);
           if (error) throw error;
         }
@@ -5176,13 +5175,18 @@
         y = a.getFullYear(); m = a.getMonth();
       } else return null;
 
-      const key = `${currentOrgId}|${currentAgencyId || 'x'}|${accountKey}|${y}-${m}`;
+      const key = `${currentOrgId}|${accountKey}|${y}-${m}`;
       if (_mhHistoryCache[key] !== undefined) return _mhHistoryCache[key];
+      // Deliberately not filtered by agency_id. Which workspace an account
+      // belongs to lives in browser storage, so a row saved under one workspace
+      // would be invisible from another — and an account only ever belongs to
+      // one anyway, so the account key alone identifies it.
       const { data } = await sb.from('monthly_history')
-        .select('web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue, returns_pct')
-        .eq('organization_id', currentOrgId).eq('agency_id', currentAgencyId || 'x')
-        .eq('account_key', accountKey).eq('month', mhMonthStr(y, m)).maybeSingle();
-      _mhHistoryCache[key] = data || null;
+        .select('web_orders, web_pieces, web_revenue, web_spend, msg_orders, msg_pieces, msg_revenue, msg_spend, returns_pct')
+        .eq('organization_id', currentOrgId)
+        .eq('account_key', accountKey).eq('month', mhMonthStr(y, m))
+        .order('updated_at', { ascending: false }).limit(1);
+      _mhHistoryCache[key] = data?.[0] || null;
       return _mhHistoryCache[key];
     }
 
