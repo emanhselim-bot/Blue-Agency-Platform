@@ -5161,6 +5161,35 @@
 
     // ── Used by the dashboard to fill cards for a past month ──
     let _mhHistoryCache = {};
+    let _mhPartial = null;   // set when the range sits inside a recorded month
+
+    // Offer a one-click fix when recorded figures exist but the chosen range
+    // stops short of the full month.
+    async function mhPartialNotice() {
+      const bar = document.getElementById('date-label');
+      document.getElementById('mh-partial-note')?.remove();
+      if (!_mhPartial || !bar) return;
+      const { y, m, last, accountKey } = _mhPartial;
+      const { data } = await sb.from('monthly_history').select('month')
+        .eq('organization_id', currentOrgId).eq('account_key', accountKey)
+        .eq('month', mhMonthStr(y, m)).limit(1);
+      if (!data?.length) return;
+      const name = MH_MONTHS[m];
+      bar.insertAdjacentHTML('afterend', `
+        <div id="mh-partial-note" style="margin:8px 0;padding:9px 14px;border-radius:8px;font-size:12.5px;
+             background:rgba(217,119,6,.14);border:1px solid rgba(217,119,6,.4)">
+          Recorded figures exist for ${escHtml(name)} ${y}, but this range ends on day ${_tgtParse(customTo).getDate()} of ${last}.
+          <button onclick="mhUseFullMonth(${y},${m},${last})"
+            style="margin-left:8px;padding:3px 11px;font-size:12px;border:1px solid var(--border);border-radius:6px;
+                   background:transparent;color:var(--text-main);cursor:pointer">Use the full month</button>
+        </div>`);
+    }
+
+    function mhUseFullMonth(y, m, last) {
+      document.getElementById('date-from').value = mhMonthStr(y, m);
+      document.getElementById('date-to').value   = `${y}-${String(m + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+      document.getElementById('date-apply')?.click();
+    }
     async function mhForPeriod(accountKey, period) {
       // Only whole calendar months can be matched to a stored row.
       const now = new Date();
@@ -5171,9 +5200,16 @@
         const a = _tgtParse(customFrom), b = _tgtParse(customTo);
         if (!a || !b || a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth()) return null;
         const last = new Date(a.getFullYear(), a.getMonth() + 1, 0).getDate();
-        if (a.getDate() !== 1 || b.getDate() !== last) return null;   // partial month
+        if (a.getDate() !== 1 || b.getDate() !== last) {
+          // Partial month: recorded figures cover a whole month, so applying
+          // them here would overstate a shorter range. Say so rather than
+          // silently showing nothing.
+          _mhPartial = { y: a.getFullYear(), m: a.getMonth(), last, accountKey };
+          return null;
+        }
+        _mhPartial = null;
         y = a.getFullYear(); m = a.getMonth();
-      } else return null;
+      } else { _mhPartial = null; return null; }
 
       const key = `${currentOrgId}|${accountKey}|${y}-${m}`;
       if (_mhHistoryCache[key] !== undefined) return _mhHistoryCache[key];
@@ -7781,6 +7817,7 @@
       // where nothing live exists, so a stored number can never overwrite real
       // Shopify or tracker data.
       const _mhRow = await mhForPeriod(accountDbId, currentPeriod).catch(() => null);
+      mhPartialNotice();   // flags a range that stops short of a recorded month
       if (_mhRow) {
         if (shopifyOrders == null && _mhRow.web_orders  != null) { shopifyOrders = Number(_mhRow.web_orders);  _webSource = 'Entered'; }
         if (revenue       == null && _mhRow.web_revenue != null) { revenue       = Number(_mhRow.web_revenue); _webSource = 'Entered'; }
