@@ -7861,9 +7861,17 @@
         const _o = _mhWeb('web_orders',  'web_orders_confirmed');
         const _r = _mhWeb('web_revenue', 'web_revenue_confirmed');
         const _p = _mhWeb('web_pieces',  'web_pieces_confirmed');
-        if (shopifyOrders == null && _o != null) { shopifyOrders = _o; _webSource = 'Recorded'; }
-        if (revenue       == null && _r != null) { revenue       = _r; _webSource = 'Recorded'; }
-        if (pieces        == null && _p != null) { pieces        = _p; _webSource = 'Recorded'; }
+
+        // A tracker installed later still answers for earlier months — with
+        // zeros. Zero orders AND zero sessions means nothing was measured, not
+        // that nothing sold; zero orders with real sessions is a true zero and
+        // must be left alone.
+        const _nothingMeasured = !sessions;
+        const _missing = (v) => v == null || (v === 0 && _nothingMeasured);
+
+        if (_missing(shopifyOrders) && _o != null) { shopifyOrders = _o; _webSource = 'Recorded'; }
+        if (_missing(revenue)       && _r != null) { revenue       = _r; _webSource = 'Recorded'; }
+        if (_missing(pieces)        && _p != null) { pieces        = _p; _webSource = 'Recorded'; }
       }
 
       // Meta stops serving insights for older months, which would leave a
