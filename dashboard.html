@@ -4976,6 +4976,7 @@
       ['web_orders',  'Orders'],  ['web_pieces',  'Pieces'],  ['web_revenue',  'Revenue'],
       // Confirmed figures replace the Shopify ones in the totals when filled.
       ['web_orders_confirmed',  'Confirmed orders'],
+      ['web_pieces_confirmed',  'Confirmed pieces'],
       ['web_revenue_confirmed', 'Confirmed revenue'],
       ['msg_orders',  'Orders'],  ['msg_pieces',  'Pieces'],  ['msg_revenue',  'Revenue'],
       ['returns_pct', 'Returns %'],
@@ -5021,7 +5022,7 @@
       const status = document.getElementById('mh-status');
       status.textContent = 'Loading…'; status.style.color = 'var(--text-muted)';
       const { data, error } = await sb.from('monthly_history')
-        .select('month, web_orders, web_pieces, web_revenue, web_orders_confirmed, web_revenue_confirmed, msg_orders, msg_pieces, msg_revenue, returns_pct')
+        .select('month, web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, msg_orders, msg_pieces, msg_revenue, returns_pct')
         .eq('organization_id', currentOrgId)
         .eq('account_key', _mhScopeKey)
         .gte('month', `${year}-01-01`).lte('month', `${year}-12-01`);
@@ -5047,7 +5048,7 @@
         <thead>
           <tr style="position:sticky;top:0;background:var(--bg-card,#16213E);z-index:1">
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
-            <th colspan="5" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
+            <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
             <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
@@ -8234,6 +8235,21 @@
                   ? `Used in totals · Shopify says ${revenue != null ? fmt(revenue, curr) : '—'}`
                   : 'Manual · blank uses Shopify'}</div>
               </div>
+              <div class="kpi-card c-green" data-card-id="confirmed-pieces">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-label">Confirmed Pieces</div>
+                <input id="kpi-confirmed-pieces-input" type="number" min="0" step="any"
+                  value="${confirmedPieces != null ? confirmedPieces : ''}"
+                  placeholder="${pieces != null ? pieces : '0'}"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub" id="kpi-confirmed-pieces-sub">${confirmedPieces != null
+                  ? `Used in totals · Shopify says ${pieces != null ? pieces.toLocaleString('en') : '—'}`
+                  : 'Manual · blank uses Shopify'}</div>
+              </div>
+              ${kpi('c-coral', '🏷️', 'Cost per Confirmed Piece',
+                  (confirmedPieces && spend) ? fmt(spend / confirmedPieces, curr) : '—',
+                  'Spend ÷ Confirmed Pieces')}
               ${kpi('c-blue', '📉', 'Confirmation Rate',
                   (confirmedOrders != null && shopifyOrders) ? fmt(confirmedOrders / shopifyOrders * 100, '', 1) + '%' : '—',
                   (confirmedOrders != null && shopifyOrders)
@@ -8418,7 +8434,9 @@
         // Saving reloads so every derived figure — totals, ROAS, cost per
         // order — is recomputed from the confirmed number rather than only the
         // two cards changing.
-        [['kpi-confirmed-orders-input', _cfmKeyO], ['kpi-confirmed-revenue-input', _cfmKeyR]].forEach(([id, key]) => {
+        [['kpi-confirmed-orders-input',  _cfmKeyO],
+         ['kpi-confirmed-revenue-input', _cfmKeyR],
+         ['kpi-confirmed-pieces-input',  _cfmKeyP]].forEach(([id, key]) => {
           const el = document.getElementById(id);
           if (!el) return;
           el.addEventListener('change', () => {
