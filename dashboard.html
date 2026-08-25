@@ -7849,9 +7849,21 @@
       const _mhRow = await mhForPeriod(accountDbId, currentPeriod).catch(() => null);
       mhPartialNotice();   // flags a range that stops short of a recorded month
       if (_mhRow) {
-        if (shopifyOrders == null && _mhRow.web_orders  != null) { shopifyOrders = Number(_mhRow.web_orders);  _webSource = 'Entered'; }
-        if (revenue       == null && _mhRow.web_revenue != null) { revenue       = Number(_mhRow.web_revenue); _webSource = 'Entered'; }
-        if (pieces        == null && _mhRow.web_pieces  != null) { pieces        = Number(_mhRow.web_pieces);  _webSource = 'Entered'; }
+        // No live store for this month — show what was recorded rather than a
+        // zero that reads as "no sales". The confirmed figure is used when the
+        // plain one is absent, since for older months that is all there is.
+        const _mhWeb = (plain, confirmed) => {
+          const p = _mhRow[plain], c = _mhRow[confirmed];
+          if (p != null && !isNaN(Number(p))) return Number(p);
+          if (c != null && !isNaN(Number(c))) return Number(c);
+          return null;
+        };
+        const _o = _mhWeb('web_orders',  'web_orders_confirmed');
+        const _r = _mhWeb('web_revenue', 'web_revenue_confirmed');
+        const _p = _mhWeb('web_pieces',  'web_pieces_confirmed');
+        if (shopifyOrders == null && _o != null) { shopifyOrders = _o; _webSource = 'Recorded'; }
+        if (revenue       == null && _r != null) { revenue       = _r; _webSource = 'Recorded'; }
+        if (pieces        == null && _p != null) { pieces        = _p; _webSource = 'Recorded'; }
       }
 
       // Meta stops serving insights for older months, which would leave a
