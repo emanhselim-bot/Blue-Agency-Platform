@@ -4009,6 +4009,16 @@
       if (!saved || !Array.isArray(saved)) return;
       const container = document.getElementById('kpi-sections-container');
       if (!container) return;
+
+      // The order the sections were written in. A section added since the last
+      // save is absent from `saved`, and because every saved section is then
+      // appended after it, it would be shoved to the top. Remember its intended
+      // neighbours so it can be put back where it belongs.
+      const defaultOrder = [...container.querySelectorAll('.kpi-section[data-section-id]')]
+        .map(el => el.dataset.sectionId);
+      const savedIds = new Set(saved.map(s => s.id));
+      const newIds = defaultOrder.filter(id => !savedIds.has(id));
+
       saved.forEach(({ id, cards }) => {
         const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
         if (sec) container.appendChild(sec);
@@ -4020,6 +4030,22 @@
           if (card) grid.appendChild(card);
         });
       });
+
+      // Put any section the saved layout predates back after whichever
+      // neighbour it was designed to follow.
+      newIds.forEach(id => {
+        const sec = container.querySelector(`.kpi-section[data-section-id="${id}"]`);
+        if (!sec) return;
+        const idx = defaultOrder.indexOf(id);
+        let placed = false;
+        for (let i = idx - 1; i >= 0; i--) {          // nearest earlier neighbour still on the page
+          const prev = container.querySelector(`.kpi-section[data-section-id="${defaultOrder[i]}"]`);
+          if (prev) { prev.after(sec); placed = true; break; }
+        }
+        if (!placed) container.prepend(sec);
+        console.log('[Layout] placed new section', id, 'after', defaultOrder[idx - 1] || '(start)');
+      });
+      if (newIds.length) saveLayout();   // remember the position from now on
     }
 
     // ── Dashboard Customization: hide/rename cards & sections ────────────────
