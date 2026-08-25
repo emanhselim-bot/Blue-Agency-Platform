@@ -8196,6 +8196,20 @@
               ${kpi('c-orange solid', '📦', 'Cost per Website Order',  sfmt(shopifyOrders && spend ? spend / shopifyOrders : null, v => fmt(v, curr)),                           sfmtSub('Spend ÷ Website Orders'))}
               ${kpi('c-coral solid',  '🏷️', 'Cost per Website Piece', sfmt(pieces && spend ? spend / pieces : null, v => fmt(v, curr)),                                         sfmtSub('Spend ÷ Website Pieces'))}
               ${kpi('c-gold solid',   '💵', 'Website Revenue',         sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})),      shopifySubLabel, revenue, _t.revenue, true)}
+              ${(() => {
+                const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
+                const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
+                const _crSub      = (shopifyConversionRate != null && shopifyConversionRate > 0) ? sfmtSub(crSubLabel) : (sessionsFromClarity ? '● Orders ÷ Clarity Sessions' : sfmtSub(crSubLabel));
+                return kpi('c-teal', '🛍️', (_webSource ? _webSource + ' Conversion Rate' : 'Shopify Conversion Rate'), _crDisplay != null ? fmt(_crDisplay,'',2)+'%' : '—', _crSub);
+              })()}
+            </div>
+          </div>
+
+          <div class="kpi-section" data-section-id="confirmed-results">
+            <div class="section-label">Confirmed Results <span class="section-drag-handle" title="Drag to reorder section">⠿</span>
+              <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Used in the totals when filled</span>
+            </div>
+            <div class="kpi-grid" data-grid-id="confirmed-results">
               <div class="kpi-card c-green" data-card-id="confirmed-orders">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
                 <div class="kpi-icon">✅</div>
@@ -8220,12 +8234,14 @@
                   ? `Used in totals · Shopify says ${revenue != null ? fmt(revenue, curr) : '—'}`
                   : 'Manual · blank uses Shopify'}</div>
               </div>
-              ${(() => {
-                const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
-                const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
-                const _crSub      = (shopifyConversionRate != null && shopifyConversionRate > 0) ? sfmtSub(crSubLabel) : (sessionsFromClarity ? '● Orders ÷ Clarity Sessions' : sfmtSub(crSubLabel));
-                return kpi('c-teal', '🛍️', (_webSource ? _webSource + ' Conversion Rate' : 'Shopify Conversion Rate'), _crDisplay != null ? fmt(_crDisplay,'',2)+'%' : '—', _crSub);
-              })()}
+              ${kpi('c-blue', '📉', 'Confirmation Rate',
+                  (confirmedOrders != null && shopifyOrders) ? fmt(confirmedOrders / shopifyOrders * 100, '', 1) + '%' : '—',
+                  (confirmedOrders != null && shopifyOrders)
+                    ? `${confirmedOrders.toLocaleString('en')} of ${shopifyOrders.toLocaleString('en')} Shopify orders`
+                    : 'Confirmed ÷ Shopify orders')}
+              ${kpi('c-coral', '💸', 'Cost per Confirmed Order',
+                  (confirmedOrders && spend) ? fmt(spend / confirmedOrders, curr) : '—',
+                  'Spend ÷ Confirmed Orders')}
             </div>
           </div>
 
