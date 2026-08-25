@@ -5005,6 +5005,7 @@
       ['web_pieces_confirmed',  'Confirmed pieces'],
       ['web_revenue_confirmed', 'Confirmed revenue'],
       ['msg_orders',  'Orders'],  ['msg_pieces',  'Pieces'],  ['msg_revenue',  'Revenue'],
+      ['branding_spend', 'Branding spend'],
       ['returns_pct', 'Returns %'],
     ];
     const MH_MONTHS = ['January','February','March','April','May','June',
@@ -5048,7 +5049,7 @@
       const status = document.getElementById('mh-status');
       status.textContent = 'Loading…'; status.style.color = 'var(--text-muted)';
       const { data, error } = await sb.from('monthly_history')
-        .select('month, web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, msg_orders, msg_pieces, msg_revenue, returns_pct')
+        .select('month, web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, msg_orders, msg_pieces, msg_revenue, branding_spend, returns_pct')
         .eq('organization_id', currentOrgId)
         .eq('account_key', _mhScopeKey)
         .gte('month', `${year}-01-01`).lte('month', `${year}-12-01`);
@@ -5076,6 +5077,7 @@
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
             <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
             <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
+            <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#C4B5FD">📣 Branding spend</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
           </tr>
@@ -5248,7 +5250,7 @@
       // would be invisible from another — and an account only ever belongs to
       // one anyway, so the account key alone identifies it.
       const { data } = await sb.from('monthly_history')
-        .select('web_orders, web_pieces, web_revenue, web_spend, web_orders_confirmed, web_revenue_confirmed, web_pieces_confirmed, msg_orders, msg_pieces, msg_revenue, msg_spend, returns_pct')
+        .select('web_orders, web_pieces, web_revenue, web_spend, web_orders_confirmed, web_revenue_confirmed, web_pieces_confirmed, msg_orders, msg_pieces, msg_revenue, msg_spend, branding_spend, returns_pct')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey).eq('month', mhMonthStr(y, m))
         .order('updated_at', { ascending: false }).limit(1);
@@ -7915,6 +7917,24 @@
       const _autoMsgsBase = _storedNumMsg !== null ? parseInt(_storedNumMsg) : (numMessages != null ? Math.round(numMessages) : 0);
       const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
       const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
+      // ── Branding vs conversion spend ──
+      // Engagement and follower campaigns buy no orders. Leaving them in the
+      // denominator makes ROAS and cost per order look worse than the selling
+      // campaigns actually performed, so they are split out here and every
+      // performance figure below is calculated from conversion spend alone.
+      const _brandKey = `branding-spend-${_periodKey}`;
+      const _brandTyped = (() => {
+        const v = localStorage.getItem(_brandKey);
+        if (v === null || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      })();
+      const brandingSpend = _brandTyped ?? _mhNum(_mhRow?.branding_spend) ?? 0;
+      // Never let branding exceed what was actually spent.
+      const _brandCapped  = Math.min(Math.max(0, brandingSpend), spend || 0);
+      const conversionSpend = Math.max(0, (spend || 0) - _brandCapped);
+      const _spendForMetrics = conversionSpend > 0 ? conversionSpend : spend;
+
       // ── Confirmed website figures ──
       // Shopify counts an order when it is placed; some are never confirmed.
       // A confirmed figure, typed for this period or recorded for the month,
@@ -7952,9 +7972,10 @@
         ? `Net of ${fmt(returnedAmount, curr)} returns (${_retPct}%)`
         : 'Website + Messages';
 
-      const avgCostPerOrder = (spend && totalOrders)  ? spend / totalOrders  : null;
-      const avgCostPerPiece = (spend && totalPieces)  ? spend / totalPieces  : null;
-      const roas            = (totalRevenue && spend) ? totalRevenue / spend : null;
+      // Conversion spend only — branding buys no orders.
+      const avgCostPerOrder = (_spendForMetrics && totalOrders)  ? _spendForMetrics / totalOrders  : null;
+      const avgCostPerPiece = (_spendForMetrics && totalPieces)  ? _spendForMetrics / totalPieces  : null;
+      const roas            = (totalRevenue && _spendForMetrics) ? totalRevenue / _spendForMetrics : null;
       const adConversionRate = (totalOrders && numLinkClicks) ? (totalOrders / numLinkClicks) * 100 : null;
       // sessions & conversionRate come from Shopify Analytics (ShopifyQL)
       // conversionRate is already a decimal from Shopify (e.g. 0.045 = 4.5%) × 100 = 4.5
@@ -8091,8 +8112,8 @@
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
               <div class="kpi-sub">Manual entry</div>
             </div>
-            ${kpi('c-orange solid', '📦', 'Cost per Order (Messages)', spend && msgOrders ? fmt(spend / msgOrders, curr) : '—', 'Spend ÷ Orders from Messages', null, null, null, 'kpi-msg-cost-per-order-val')}
-            ${kpi('c-coral solid',  '🏷️', 'Cost per Piece (Messages)', spend && msgPieces ? fmt(spend / msgPieces, curr) : '—', 'Spend ÷ Pieces from Messages', null, null, null, 'kpi-msg-cost-per-piece-val')}
+            ${kpi('c-orange solid', '📦', 'Cost per Order (Messages)', _spendForMetrics && msgOrders ? fmt(_spendForMetrics / msgOrders, curr) : '—', 'Spend ÷ Orders from Messages', null, null, null, 'kpi-msg-cost-per-order-val')}
+            ${kpi('c-coral solid',  '🏷️', 'Cost per Piece (Messages)', _spendForMetrics && msgPieces ? fmt(_spendForMetrics / msgPieces, curr) : '—', 'Spend ÷ Pieces from Messages', null, null, null, 'kpi-msg-cost-per-piece-val')}
           </div>
         </div>`;
 
@@ -8189,6 +8210,20 @@
             <div class="section-label">Spending / Revenue <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="spending">
               ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), _spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads', spend, _t.spend, false)}
+              <div class="kpi-card c-purple" data-card-id="branding-spend">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">📣</div>
+                <div class="kpi-label">Branding Spend</div>
+                <input id="kpi-branding-spend-input" type="number" min="0" step="any"
+                  value="${brandingSpend || ''}" placeholder="0.00"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub">Engagement, follows, awareness</div>
+              </div>
+              ${kpi('c-teal solid', '🎯', 'Conversion Spend',
+                  fmt(conversionSpend, curr),
+                  _brandCapped > 0
+                    ? `Total − ${fmt(_brandCapped, curr)} branding · used for ROAS`
+                    : 'All spend is conversion')}
               ${kpi('c-green', '💳', 'Ad Account Fund',
                 accountBalance !== null ? fmt(accountBalance, curr) : '—',
                 accountBalance !== null
@@ -8240,8 +8275,8 @@
             <div class="kpi-grid" data-grid-id="website-results">
               ${kpi('c-sky',          '🛒', 'Website Orders',          sfmt(shopifyOrders, v => v.toLocaleString('en')),                                                         shopifySubLabel, shopifyOrders, _t.orders, true)}
               ${kpi('c-teal',         '🧮', 'Website Pieces',          sfmt(pieces,        v => v.toLocaleString('en')),                                                         shopifySubLabel)}
-              ${kpi('c-orange solid', '📦', 'Cost per Website Order',  sfmt(shopifyOrders && spend ? spend / shopifyOrders : null, v => fmt(v, curr)),                           sfmtSub('Spend ÷ Website Orders'))}
-              ${kpi('c-coral solid',  '🏷️', 'Cost per Website Piece', sfmt(pieces && spend ? spend / pieces : null, v => fmt(v, curr)),                                         sfmtSub('Spend ÷ Website Pieces'))}
+              ${kpi('c-orange solid', '📦', 'Cost per Website Order',  sfmt(shopifyOrders && _spendForMetrics ? _spendForMetrics / shopifyOrders : null, v => fmt(v, curr)),                           sfmtSub('Spend ÷ Website Orders'))}
+              ${kpi('c-coral solid',  '🏷️', 'Cost per Website Piece', sfmt(pieces && _spendForMetrics ? _spendForMetrics / pieces : null, v => fmt(v, curr)),                                         sfmtSub('Spend ÷ Website Pieces'))}
               ${kpi('c-gold solid',   '💵', 'Website Revenue',         sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})),      shopifySubLabel, revenue, _t.revenue, true)}
               ${(() => {
                 const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
@@ -8294,7 +8329,7 @@
                   : 'Manual · blank uses Shopify'}</div>
               </div>
               ${kpi('c-coral', '🏷️', 'Cost per Confirmed Piece',
-                  (confirmedPieces && spend) ? fmt(spend / confirmedPieces, curr) : '—',
+                  (confirmedPieces && _spendForMetrics) ? fmt(_spendForMetrics / confirmedPieces, curr) : '—',
                   'Spend ÷ Confirmed Pieces')}
               ${kpi('c-blue', '📉', 'Confirmation Rate',
                   (confirmedOrders != null && shopifyOrders) ? fmt(confirmedOrders / shopifyOrders * 100, '', 1) + '%' : '—',
@@ -8302,7 +8337,7 @@
                     ? `${confirmedOrders.toLocaleString('en')} of ${shopifyOrders.toLocaleString('en')} Shopify orders`
                     : 'Confirmed ÷ Shopify orders')}
               ${kpi('c-coral', '💸', 'Cost per Confirmed Order',
-                  (confirmedOrders && spend) ? fmt(spend / confirmedOrders, curr) : '—',
+                  (confirmedOrders && _spendForMetrics) ? fmt(_spendForMetrics / confirmedOrders, curr) : '—',
                   'Spend ÷ Confirmed Orders')}
             </div>
           </div>
@@ -8482,7 +8517,8 @@
         // two cards changing.
         [['kpi-confirmed-orders-input',  _cfmKeyO],
          ['kpi-confirmed-revenue-input', _cfmKeyR],
-         ['kpi-confirmed-pieces-input',  _cfmKeyP]].forEach(([id, key]) => {
+         ['kpi-confirmed-pieces-input',  _cfmKeyP],
+         ['kpi-branding-spend-input',    _brandKey]].forEach(([id, key]) => {
           const el = document.getElementById(id);
           if (!el) return;
           el.addEventListener('change', () => {
