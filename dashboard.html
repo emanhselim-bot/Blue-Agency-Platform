@@ -4974,6 +4974,9 @@
     // Keyed on the account picker's value, so a combined group is one entry.
     const MH_FIELDS = [
       ['web_orders',  'Orders'],  ['web_pieces',  'Pieces'],  ['web_revenue',  'Revenue'],
+      // Confirmed figures replace the Shopify ones in the totals when filled.
+      ['web_orders_confirmed',  'Confirmed orders'],
+      ['web_revenue_confirmed', 'Confirmed revenue'],
       ['msg_orders',  'Orders'],  ['msg_pieces',  'Pieces'],  ['msg_revenue',  'Revenue'],
       ['returns_pct', 'Returns %'],
     ];
@@ -5018,7 +5021,7 @@
       const status = document.getElementById('mh-status');
       status.textContent = 'Loading…'; status.style.color = 'var(--text-muted)';
       const { data, error } = await sb.from('monthly_history')
-        .select('month, web_orders, web_pieces, web_revenue, msg_orders, msg_pieces, msg_revenue, returns_pct')
+        .select('month, web_orders, web_pieces, web_revenue, web_orders_confirmed, web_revenue_confirmed, msg_orders, msg_pieces, msg_revenue, returns_pct')
         .eq('organization_id', currentOrgId)
         .eq('account_key', _mhScopeKey)
         .gte('month', `${year}-01-01`).lte('month', `${year}-12-01`);
@@ -5044,7 +5047,7 @@
         <thead>
           <tr style="position:sticky;top:0;background:var(--bg-card,#16213E);z-index:1">
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
-            <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
+            <th colspan="5" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
             <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
@@ -5218,7 +5221,7 @@
       // would be invisible from another — and an account only ever belongs to
       // one anyway, so the account key alone identifies it.
       const { data } = await sb.from('monthly_history')
-        .select('web_orders, web_pieces, web_revenue, web_spend, msg_orders, msg_pieces, msg_revenue, msg_spend, returns_pct')
+        .select('web_orders, web_pieces, web_revenue, web_spend, web_orders_confirmed, web_revenue_confirmed, web_pieces_confirmed, msg_orders, msg_pieces, msg_revenue, msg_spend, returns_pct')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey).eq('month', mhMonthStr(y, m))
         .order('updated_at', { ascending: false }).limit(1);
@@ -7865,9 +7868,32 @@
       const _autoMsgsBase = _storedNumMsg !== null ? parseInt(_storedNumMsg) : (numMessages != null ? Math.round(numMessages) : 0);
       const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
       const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
-      const totalOrders  = (shopifyOrders !== null ? shopifyOrders : 0) + msgOrders;
-      const grossRevenue = (revenue        !== null ? revenue        : 0) + msgRevenue;
-      const totalPieces  = (pieces         !== null ? pieces         : 0) + msgPieces;
+      // ── Confirmed website figures ──
+      // Shopify counts an order when it is placed; some are never confirmed.
+      // A confirmed figure, typed for this period or recorded for the month,
+      // replaces the Shopify number in the totals. Left blank, Shopify stands.
+      const _cfmKeyO = `web-confirmed-orders-${_periodKey}`;
+      const _cfmKeyR = `web-confirmed-revenue-${_periodKey}`;
+      const _cfmKeyP = `web-confirmed-pieces-${_periodKey}`;
+      const _cfmTyped = (k) => {
+        const v = localStorage.getItem(k);
+        if (v === null || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+      const confirmedOrders  = _cfmTyped(_cfmKeyO) ?? _mhNum(_mhRow?.web_orders_confirmed);
+      const confirmedRevenue = _cfmTyped(_cfmKeyR) ?? _mhNum(_mhRow?.web_revenue_confirmed);
+      const confirmedPieces  = _cfmTyped(_cfmKeyP) ?? _mhNum(_mhRow?.web_pieces_confirmed);
+
+      // What the totals count for the website side.
+      const webOrdersForTotal  = confirmedOrders  != null ? confirmedOrders  : (shopifyOrders !== null ? shopifyOrders : 0);
+      const webRevenueForTotal = confirmedRevenue != null ? confirmedRevenue : (revenue        !== null ? revenue        : 0);
+      const webPiecesForTotal  = confirmedPieces  != null ? confirmedPieces  : (pieces         !== null ? pieces         : 0);
+      const _usingConfirmed    = confirmedOrders != null || confirmedRevenue != null || confirmedPieces != null;
+
+      const totalOrders  = webOrdersForTotal  + msgOrders;
+      const grossRevenue = webRevenueForTotal + msgRevenue;
+      const totalPieces  = webPiecesForTotal  + msgPieces;
 
       // Revenue is reported net of returns when a rate has been recorded, so
       // ROAS and every derived figure reflect money actually kept.
@@ -8170,6 +8196,30 @@
               ${kpi('c-orange solid', '📦', 'Cost per Website Order',  sfmt(shopifyOrders && spend ? spend / shopifyOrders : null, v => fmt(v, curr)),                           sfmtSub('Spend ÷ Website Orders'))}
               ${kpi('c-coral solid',  '🏷️', 'Cost per Website Piece', sfmt(pieces && spend ? spend / pieces : null, v => fmt(v, curr)),                                         sfmtSub('Spend ÷ Website Pieces'))}
               ${kpi('c-gold solid',   '💵', 'Website Revenue',         sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})),      shopifySubLabel, revenue, _t.revenue, true)}
+              <div class="kpi-card c-green" data-card-id="confirmed-orders">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-label">Confirmed Orders</div>
+                <input id="kpi-confirmed-orders-input" type="number" min="0" step="any"
+                  value="${confirmedOrders != null ? confirmedOrders : ''}"
+                  placeholder="${shopifyOrders != null ? shopifyOrders : '0'}"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub" id="kpi-confirmed-orders-sub">${confirmedOrders != null
+                  ? `Used in totals · Shopify says ${shopifyOrders != null ? shopifyOrders.toLocaleString('en') : '—'}`
+                  : 'Manual · blank uses Shopify'}</div>
+              </div>
+              <div class="kpi-card c-green" data-card-id="confirmed-revenue">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-label">Confirmed Revenue</div>
+                <input id="kpi-confirmed-revenue-input" type="number" min="0" step="any"
+                  value="${confirmedRevenue != null ? confirmedRevenue : ''}"
+                  placeholder="${revenue != null ? revenue.toFixed(2) : '0.00'}"
+                  style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
+                <div class="kpi-sub" id="kpi-confirmed-revenue-sub">${confirmedRevenue != null
+                  ? `Used in totals · Shopify says ${revenue != null ? fmt(revenue, curr) : '—'}`
+                  : 'Manual · blank uses Shopify'}</div>
+              </div>
               ${(() => {
                 const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
                 const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
@@ -8347,6 +8397,25 @@
           });
           recalcSvc();   // initial values on load
         })();
+
+        // ── Confirmed website orders and revenue (manual, per period) ──
+        // Saving reloads so every derived figure — totals, ROAS, cost per
+        // order — is recomputed from the confirmed number rather than only the
+        // two cards changing.
+        [['kpi-confirmed-orders-input', _cfmKeyO], ['kpi-confirmed-revenue-input', _cfmKeyR]].forEach(([id, key]) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('change', () => {
+            const raw = el.value.trim();
+            if (raw === '') localStorage.removeItem(key);
+            else {
+              const n = parseFloat(raw);
+              if (isNaN(n) || n < 0) { el.value = ''; localStorage.removeItem(key); }
+              else localStorage.setItem(key, String(n));
+            }
+            loadData();
+          });
+        });
 
         // ── Returns % (manual, per period) ──
         const returnsInput = document.getElementById('kpi-returns-rate-input');
