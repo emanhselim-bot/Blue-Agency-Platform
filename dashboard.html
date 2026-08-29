@@ -8356,6 +8356,10 @@
 
         </div>`;
 
+      // The funnel is a website journey — view content, add to cart, checkout.
+      // On the messages templates there is no such journey, so the section was
+      // showing empty or misleading stages.
+      if (_curTmpl !== 'messages' && _curTmpl !== 'messages-service') {
       document.getElementById('content').innerHTML += `
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
         ${(()=>{
@@ -8439,6 +8443,7 @@
         ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
 
         `;
+      }
 
       // ── Manual inputs — live update handlers ──
       {
