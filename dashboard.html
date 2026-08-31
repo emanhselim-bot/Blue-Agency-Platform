@@ -10917,6 +10917,26 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
     }
 
+    // Filter the linked-accounts table by account name or id. Group headers are
+    // hidden when every account beneath them is filtered out.
+    function linkedFilter(term) {
+      const q = (term || '').trim().toLowerCase();
+      const table = document.getElementById('linked-accounts-table');
+      if (!table) return;
+      let currentHead = null, shownInGroup = 0;
+      table.querySelectorAll('tbody tr').forEach(tr => {
+        if (tr.classList.contains('linked-group-head')) {
+          if (currentHead) currentHead.style.display = shownInGroup ? '' : 'none';
+          currentHead = tr; shownInGroup = 0;
+          return;
+        }
+        const hit = !q || (tr.textContent || '').toLowerCase().includes(q);
+        tr.style.display = hit ? '' : 'none';
+        if (hit) shownInGroup++;
+      });
+      if (currentHead) currentHead.style.display = shownInGroup ? '' : 'none';
+    }
+
     async function loadLinkedAccountsTab() {
       const container = document.getElementById('linked-accounts-table');
       container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
@@ -10953,6 +10973,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
           <span style="font-size:12px;color:var(--text-muted);flex:1">
             Pick a Shopify store and Clarity project for each ad account, then save.</span>
+          <input type="search" id="linked-filter" placeholder="Filter accounts…" oninput="linkedFilter(this.value)"
+            style="width:190px;padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;
+                   background:var(--bg);color:var(--text-main);box-sizing:border-box">
           <button class="cpm-btn" id="linked-save-btn" disabled onclick="saveLinkedAccounts()">Save changes</button>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -10966,7 +10989,29 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             </tr>
           </thead>
           <tbody>
-            ${(metaAccs||[]).map(a => `
+            ${(() => {
+              // Group by agency workspace. Which agency an account belongs to is
+              // a browser-side setting, so accounts with none fall into a final
+              // "Unassigned" group rather than disappearing.
+              const agencies = getAgencies(currentOrgId) || [];
+              const nameOf = {}; agencies.forEach(g => { nameOf[g.id] = g.name; });
+              const groups = {};
+              (metaAccs||[]).forEach(a => {
+                const gid = getAccountAgencyId(currentOrgId, a.id) || '__none__';
+                (groups[gid] ||= []).push(a);
+              });
+              const order = [...agencies.map(g => g.id).filter(id => groups[id]),
+                             ...(groups['__none__'] ? ['__none__'] : [])];
+              return order.map(gid => {
+                const list = groups[gid];
+                const label = gid === '__none__' ? 'Unassigned' : (nameOf[gid] || 'Agency');
+                return `
+                <tr class="linked-group-head" data-agency="${escHtml(label)}">
+                  <td colspan="5" style="padding:14px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.8px;
+                      text-transform:uppercase;color:#60A5FA;border-bottom:1px solid var(--border)">
+                    ${escHtml(label)} <span style="color:var(--text-muted);font-weight:500">· ${list.length} account${list.length === 1 ? '' : 's'}</span>
+                  </td>
+                </tr>` + list.map(a => `
               <tr style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
                 <td style="padding:10px 8px">
                   <div style="font-weight:600;color:var(--text-main)">${escHtml(a.account_name||a.meta_account_id)}</div>
@@ -10995,7 +11040,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                     placeholder="e.g. 493812345" value="${escHtml(a.ga4_property_id || '')}"
                     onchange="stageLinkedAccount('${escHtml(a.id)}', 'ga4_property_id', this.value.trim())">
                 </td>
-              </tr>`).join('')}
+              </tr>`).join('');
+              }).join('');
+            })()}
           </tbody>
         </table>`;
 
