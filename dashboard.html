@@ -8115,6 +8115,9 @@
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
               <div class="kpi-sub">Manual entry</div>
             </div>
+            ${kpi('c-teal solid', '🧾', 'Avg Order Value (Messages)',
+                (msgRevenue && msgOrders) ? fmt(msgRevenue / msgOrders, curr) : '—',
+                'Revenue ÷ Orders from Messages')}
             ${kpi('c-orange solid', '📦', 'Cost per Order (Messages)', _spendForMetrics && msgOrders ? fmt(_spendForMetrics / msgOrders, curr) : '—', 'Spend ÷ Orders from Messages', null, null, null, 'kpi-msg-cost-per-order-val')}
             ${kpi('c-coral solid',  '🏷️', 'Cost per Piece (Messages)', _spendForMetrics && msgPieces ? fmt(_spendForMetrics / msgPieces, curr) : '—', 'Spend ÷ Pieces from Messages', null, null, null, 'kpi-msg-cost-per-piece-val')}
           </div>
@@ -8283,6 +8286,9 @@
               ${kpi('c-teal',         '🧮', 'Website Pieces',          sfmt(pieces,        v => v.toLocaleString('en')),                                                         shopifySubLabel)}
               ${kpi('c-orange solid', '📦', 'Cost per Website Order',  sfmt(shopifyOrders && _spendForMetrics ? _spendForMetrics / shopifyOrders : null, v => fmt(v, curr)),                           sfmtSub('Spend ÷ Website Orders'))}
               ${kpi('c-coral solid',  '🏷️', 'Cost per Website Piece', sfmt(pieces && _spendForMetrics ? _spendForMetrics / pieces : null, v => fmt(v, curr)),                                         sfmtSub('Spend ÷ Website Pieces'))}
+              ${kpi('c-teal solid',   '🧾', 'Avg Order Value (Website)',
+                  (webRevenueForTotal && webOrdersForTotal) ? fmt(webRevenueForTotal / webOrdersForTotal, curr) : '—',
+                  confirmedOrders != null || confirmedRevenue != null ? 'Confirmed revenue ÷ confirmed orders' : 'Website revenue ÷ website orders')}
               ${kpi('c-gold solid',   '💵', 'Website Revenue',         sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})),      shopifySubLabel, revenue, _t.revenue, true)}
               ${(() => {
                 const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
