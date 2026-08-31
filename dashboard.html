@@ -10917,6 +10917,69 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
     }
 
+    // ── Linked accounts: collapse and reorder agency groups ──
+    // Order and collapsed state are per organisation and kept in this browser,
+    // like the rest of the layout preferences.
+    const _linkedOrderKey    = () => `linked-agency-order-${currentOrgId || 'x'}`;
+    const _linkedCollapseKey = () => `linked-agency-collapsed-${currentOrgId || 'x'}`;
+    function _linkedOrder() {
+      try { return JSON.parse(localStorage.getItem(_linkedOrderKey()) || '[]'); } catch (_) { return []; }
+    }
+    function _linkedCollapsed() {
+      try { return JSON.parse(localStorage.getItem(_linkedCollapseKey()) || '[]'); } catch (_) { return []; }
+    }
+
+    function linkedToggleGroup(gid) {
+      const collapsed = new Set(_linkedCollapsed());
+      collapsed.has(gid) ? collapsed.delete(gid) : collapsed.add(gid);
+      try { localStorage.setItem(_linkedCollapseKey(), JSON.stringify([...collapsed])); } catch (_) {}
+      linkedApplyCollapse();
+    }
+
+    function linkedApplyCollapse() {
+      const collapsed = new Set(_linkedCollapsed());
+      document.querySelectorAll('#linked-accounts-table .linked-acct-row').forEach(tr => {
+        if (collapsed.has(tr.dataset.gid)) tr.style.display = 'none';
+      });
+      document.querySelectorAll('#linked-accounts-table .linked-caret').forEach(c => {
+        c.textContent = collapsed.has(c.dataset.gid) ? '▸' : '▾';
+      });
+    }
+
+    let _linkedDragGid = null;
+    function linkedDragStart(e, gid) {
+      _linkedDragGid = gid;
+      e.dataTransfer.effectAllowed = 'move';
+      // Firefox needs data set for a drag to start at all.
+      try { e.dataTransfer.setData('text/plain', gid); } catch (_) {}
+      e.currentTarget.style.opacity = '0.5';
+    }
+    function linkedDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+    function linkedDragEnd(e) { e.currentTarget.style.opacity = ''; }
+
+    function linkedDrop(e, targetGid) {
+      e.preventDefault();
+      const from = _linkedDragGid;
+      if (!from || from === targetGid) return;
+
+      const tbody = e.currentTarget.parentNode;
+      // A group is its header plus every row tagged with the same id — they have
+      // to move together or the table falls apart.
+      const block = (gid) => {
+        const head = tbody.querySelector(`.linked-group-head[data-gid="${CSS.escape(gid)}"]`);
+        const rows = [...tbody.querySelectorAll(`.linked-acct-row[data-gid="${CSS.escape(gid)}"]`)];
+        return head ? [head, ...rows] : [];
+      };
+      const moving = block(from);
+      const target = tbody.querySelector(`.linked-group-head[data-gid="${CSS.escape(targetGid)}"]`);
+      if (!moving.length || !target) return;
+      moving.forEach(el => tbody.insertBefore(el, target));
+
+      const order = [...tbody.querySelectorAll('.linked-group-head')].map(h => h.dataset.gid);
+      try { localStorage.setItem(_linkedOrderKey(), JSON.stringify(order)); } catch (_) {}
+      _linkedDragGid = null;
+    }
+
     // Filter the linked-accounts table by account name or id. Group headers are
     // hidden when every account beneath them is filtered out.
     function linkedFilter(term) {
@@ -11000,19 +11063,33 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 const gid = getAccountAgencyId(currentOrgId, a.id) || '__none__';
                 (groups[gid] ||= []).push(a);
               });
-              const order = [...agencies.map(g => g.id).filter(id => groups[id]),
-                             ...(groups['__none__'] ? ['__none__'] : [])];
+              let order = [...agencies.map(g => g.id).filter(id => groups[id]),
+                           ...(groups['__none__'] ? ['__none__'] : [])];
+              // A saved drag order wins; any group it predates keeps its place.
+              const saved = _linkedOrder();
+              if (saved.length) {
+                order = [...saved.filter(id => groups[id]),
+                         ...order.filter(id => !saved.includes(id))];
+              }
               return order.map(gid => {
                 const list = groups[gid];
                 const label = gid === '__none__' ? 'Unassigned' : (nameOf[gid] || 'Agency');
                 return `
-                <tr class="linked-group-head" data-agency="${escHtml(label)}">
+                <tr class="linked-group-head" data-gid="${escHtml(gid)}" data-agency="${escHtml(label)}"
+                    draggable="true" ondragstart="linkedDragStart(event,'${escHtml(gid)}')"
+                    ondragover="linkedDragOver(event)" ondrop="linkedDrop(event,'${escHtml(gid)}')"
+                    ondragend="linkedDragEnd(event)"
+                    style="cursor:grab">
                   <td colspan="5" style="padding:14px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.8px;
                       text-transform:uppercase;color:#60A5FA;border-bottom:1px solid var(--border)">
-                    ${escHtml(label)} <span style="color:var(--text-muted);font-weight:500">· ${list.length} account${list.length === 1 ? '' : 's'}</span>
+                    <span onclick="linkedToggleGroup('${escHtml(gid)}')" style="cursor:pointer;user-select:none">
+                      <span class="linked-caret" data-gid="${escHtml(gid)}">▾</span>
+                      ${escHtml(label)} <span style="color:var(--text-muted);font-weight:500">· ${list.length} account${list.length === 1 ? '' : 's'}</span>
+                    </span>
+                    <span style="float:right;color:var(--text-muted);font-weight:500;opacity:.6" title="Drag to reorder">⠿</span>
                   </td>
                 </tr>` + list.map(a => `
-              <tr style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
+              <tr class="linked-acct-row" data-gid="${escHtml(gid)}" style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
                 <td style="padding:10px 8px">
                   <div style="font-weight:600;color:var(--text-main)">${escHtml(a.account_name||a.meta_account_id)}</div>
                   <div style="color:var(--text-muted);font-size:11px">${escHtml(a.meta_account_id)} · ${escHtml(a.currency)}</div>
@@ -11046,6 +11123,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           </tbody>
         </table>`;
 
+      linkedApplyCollapse();
       await renderCombinedAccountsBlock(metaAccs || []);
     }
 
