@@ -8063,6 +8063,9 @@
             ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
             ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
             ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
+              ${kpi('c-teal solid', '🧾', 'Average Order Value',
+                  (totalRevenue && totalOrders) ? fmt(totalRevenue / totalOrders, curr) : '—',
+                  'Total Revenue ÷ Total Orders', (totalRevenue && totalOrders) ? totalRevenue / totalOrders : null, _t.aov, true, 'kpi-aov-val')}
             ` : ''}
           </div>
         </div>`;
@@ -8246,6 +8249,9 @@
               ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
               ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
+              ${kpi('c-teal solid', '🧾', 'Average Order Value',
+                  (totalRevenue && totalOrders) ? fmt(totalRevenue / totalOrders, curr) : '—',
+                  'Total Revenue ÷ Total Orders', (totalRevenue && totalOrders) ? totalRevenue / totalOrders : null, _t.aov, true, 'kpi-aov-val')}
             </div>
           </div>
 
@@ -9007,6 +9013,7 @@
           ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Units sold'))}
           ${kpi('c-gold',   '💵', 'Total Revenue',       sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _aggRevenueLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
+          ${kpi('c-teal',   '🧾', 'Average Order Value', (totRevenue && totOrders) ? fmt(totRevenue / totOrders, curr) : '—', 'Total Revenue ÷ Total Orders')}
           ${kpi('c-green',  '🎯', 'Impressions',         fmt(totImpressions,'',0), `Reach: ${fmt(totReach,'',0)}`)}
           ${totSessions !== null ? kpi('c-purple', '👁', 'Website Sessions', fmt(totSessions,'',0),
               `● Clarity · ${claritySourceCount} project${claritySourceCount === 1 ? '' : 's'}`) : ''}
