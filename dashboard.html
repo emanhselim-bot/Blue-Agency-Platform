@@ -141,6 +141,79 @@
     .date-apply-btn { padding: 7px 16px; background: var(--blue-dark); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .date-apply-btn:hover { background: var(--blue-mid); }
 
+    /* ── RANGE CALENDAR ──
+       Two native date inputs can only show one month each and never show the
+       span between them, so picking "day to day" meant reading two separate
+       pickers and holding the range in your head. This is one popover: two
+       months side by side, click a start day then an end day. */
+    .rc-wrap { position: relative; }
+    .rc-trigger { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1.5px solid var(--border);
+      border-radius: 8px; background: #fff; color: #16213E; font-size: 13px; font-weight: 600; font-family: inherit;
+      cursor: pointer; white-space: nowrap; }
+    .rc-trigger:hover  { border-color: var(--blue-light); }
+    .rc-trigger.active { border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(5,115,245,.13); }
+    .rc-trigger .rc-caret { color: var(--text-muted); font-size: 10px; }
+
+    .rc-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 4000; display: flex;
+      background: #fff; border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 18px 48px rgba(16,24,40,.18); overflow: hidden; }
+    .rc-pop[hidden] { display: none; }
+    .rc-presets { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border-right: 1px solid var(--border);
+      background: #FAFBFD; min-width: 132px; }
+    .rc-presets button { text-align: left; padding: 7px 10px; border: none; background: none; border-radius: 7px;
+      font-size: 12px; font-weight: 600; font-family: inherit; color: #334155; cursor: pointer; white-space: nowrap; }
+    .rc-presets button:hover { background: #EAF2FE; color: var(--blue-mid); }
+
+    .rc-main   { padding: 12px 14px 10px; }
+    .rc-head   { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .rc-nav    { width: 28px; height: 28px; border: 1px solid var(--border); background: #fff; border-radius: 7px;
+      cursor: pointer; font-size: 13px; color: #334155; font-family: inherit; line-height: 1; }
+    .rc-nav:hover:not(:disabled) { background: #EAF2FE; border-color: var(--blue-light); color: var(--blue-mid); }
+    .rc-nav:disabled { opacity: .35; cursor: not-allowed; }
+    .rc-months { display: flex; gap: 22px; }
+    .rc-mtitle { text-align: center; font-size: 12.5px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
+    .rc-grid   { display: grid; grid-template-columns: repeat(7, 32px); gap: 1px 0; }
+    .rc-dow    { font-size: 10px; font-weight: 700; color: var(--text-muted); text-align: center; padding-bottom: 4px;
+      text-transform: uppercase; letter-spacing: .4px; }
+
+    /* The pill sits on the cell so a continuous range reads as one bar. */
+    .rc-cell { position: relative; height: 30px; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600; color: #1F2937; cursor: pointer; background: none; border: none;
+      font-family: inherit; padding: 0; }
+    .rc-cell.empty    { visibility: hidden; cursor: default; }
+    .rc-cell:disabled { color: #CBD5E1; cursor: not-allowed; }
+    .rc-cell span     { position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; }
+    .rc-cell:not(:disabled):hover span { background: #EAF2FE; }
+    .rc-cell.in-range::before { content: ''; position: absolute; inset: 2px 0; background: #EAF2FE; }
+    .rc-cell.range-start::before { border-radius: 999px 0 0 999px; left: 3px; }
+    .rc-cell.range-end::before   { border-radius: 0 999px 999px 0; right: 3px; }
+    .rc-cell.range-start.range-end::before { border-radius: 999px; }
+    .rc-cell.edge span { background: var(--blue-light); color: #fff; font-weight: 700; }
+    .rc-cell.edge:hover span { background: var(--blue-mid); }
+    .rc-cell.today:not(.edge) span { box-shadow: inset 0 0 0 1.5px var(--blue-light); }
+
+    .rc-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      border-top: 1px solid var(--border); margin-top: 8px; padding-top: 10px; }
+    .rc-readout { font-size: 12px; font-weight: 600; color: var(--text-main); white-space: nowrap; }
+    .rc-readout em { font-style: normal; color: var(--text-muted); font-weight: 600; }
+    .rc-hint  { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+    .rc-acts  { display: flex; gap: 8px; }
+    .rc-cancel { padding: 7px 14px; background: #fff; color: #334155; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .rc-cancel:hover { background: #F1F5F9; }
+    .rc-ok { padding: 7px 18px; background: var(--blue-dark); color: #fff; border: none; border-radius: 8px;
+      font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .rc-ok:hover:not(:disabled) { background: var(--blue-mid); }
+    .rc-ok:disabled { background: #CBD5E1; cursor: not-allowed; }
+
+    @media (max-width: 760px) {
+      .rc-pop     { flex-direction: column; position: fixed; left: 8px; right: 8px; top: 64px; overflow: auto; max-height: 78vh; }
+      .rc-presets { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); min-width: 0; }
+      .rc-months  { flex-direction: column; gap: 14px; }
+      .rc-grid    { grid-template-columns: repeat(7, 1fr); }
+    }
+
     .refresh-btn { padding: 8px 18px; background: var(--blue-light); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px; font-family: inherit; transition: background 0.15s; white-space: nowrap; }
     .refresh-btn:hover { background: var(--blue-mid); }
     .refresh-btn:disabled { background: #ccc; cursor: not-allowed; }
@@ -2338,10 +2411,18 @@
       <button class="period-btn" data-period="custom">Custom</button>
     </div>
     <div class="custom-dates" id="custom-dates">
-      <input type="date" id="date-from" class="date-input">
-      <span class="date-sep">→</span>
-      <input type="date" id="date-to" class="date-input">
-      <button class="date-apply-btn" id="date-apply">Apply</button>
+      <!-- The two date inputs and Apply are kept, hidden, because a lot of code
+           reads and writes them. The calendar drives them and then clicks Apply,
+           so the existing range-change path stays the only one. -->
+      <input type="date" id="date-from" class="date-input" style="display:none">
+      <input type="date" id="date-to"   class="date-input" style="display:none">
+      <button class="date-apply-btn" id="date-apply" style="display:none">Apply</button>
+      <div class="rc-wrap">
+        <button type="button" class="rc-trigger" id="rc-trigger" onclick="rcToggle(event)">
+          📅 <span id="rc-label">Pick dates</span> <span class="rc-caret">▾</span>
+        </button>
+        <div class="rc-pop" id="rc-pop" hidden></div>
+      </div>
     </div>
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
@@ -5996,6 +6077,7 @@
           document.getElementById('custom-dates').classList.add('visible');
           if (customFrom) document.getElementById('date-from').value = customFrom;
           if (customTo)   document.getElementById('date-to').value   = customTo;
+          rcSyncLabel();
         } else {
           document.getElementById('custom-dates').classList.remove('visible');
         }
@@ -6151,6 +6233,7 @@
     // ─────────────────────────────────────────────────────────────
     if (customFrom) document.getElementById('date-from').value = customFrom;
     if (customTo)   document.getElementById('date-to').value   = customTo;
+    rcSyncLabel();
 
     document.querySelectorAll('.period-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.period === currentPeriod);
@@ -6173,9 +6256,218 @@
       else { customEl.classList.remove('visible'); loadData(); }
     });
 
+    // ── Range calendar ────────────────────────────────────────────
+    // Two native date inputs show one month each and never show the span
+    // between them, so picking a range meant reading two pickers and holding
+    // the middle in your head. This is one popover with two months side by
+    // side: click the first day, click the last. It writes the same two
+    // inputs and clicks the same Apply, so nothing downstream changes.
+    //
+    // Dates are built and formatted from local Y/M/D parts throughout —
+    // toISOString() would shift a Cairo date back a day.
+    const RC_DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const RC_MON = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+    const rcYmd   = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const rcParse = s => {
+      const p = String(s || '').split('-').map(Number);
+      return (p.length === 3 && p.every(n => !isNaN(n))) ? new Date(p[0], p[1] - 1, p[2]) : null;
+    };
+    const rcToday = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); };
+    const rcNice  = d => `${d.getDate()} ${RC_MON[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
+
+    let _rcStart = null, _rcEnd = null, _rcHover = null, _rcLeft = null, _rcOpen = false;
+
+    // Whole calendar months matter here: a stored monthly_history row only
+    // matches a range covering the entire month.
+    const RC_PRESETS = [
+      ['Last 7 days',  () => { const t = rcToday(); return [new Date(t.getFullYear(), t.getMonth(), t.getDate() - 6), t]; }],
+      ['Last 14 days', () => { const t = rcToday(); return [new Date(t.getFullYear(), t.getMonth(), t.getDate() - 13), t]; }],
+      ['Last 30 days', () => { const t = rcToday(); return [new Date(t.getFullYear(), t.getMonth(), t.getDate() - 29), t]; }],
+      ['This month',   () => { const t = rcToday(); return [new Date(t.getFullYear(), t.getMonth(), 1), t]; }],
+      ['Last month',   () => { const t = rcToday(); return [new Date(t.getFullYear(), t.getMonth() - 1, 1), new Date(t.getFullYear(), t.getMonth(), 0)]; }],
+      ['This year',    () => { const t = rcToday(); return [new Date(t.getFullYear(), 0, 1), t]; }],
+    ];
+
+    function rcMonthHtml(first) {
+      const y = first.getFullYear(), m = first.getMonth();
+      const lead = new Date(y, m, 1).getDay();          // 0 = Sunday
+      const days = new Date(y, m + 1, 0).getDate();
+      const today = rcToday();
+      let cells = '';
+      for (let i = 0; i < lead; i++) cells += '<button class="rc-cell empty" disabled tabindex="-1"></button>';
+      for (let d = 1; d <= days; d++) {
+        const cur = new Date(y, m, d);
+        // Future days hold no ad data; offering them only invites empty ranges.
+        cells += `<button class="rc-cell" data-d="${rcYmd(cur)}"${cur > today ? ' disabled' : ''}><span>${d}</span></button>`;
+      }
+      return `<div><div class="rc-mtitle">${RC_MON[m]} ${y}</div>
+        <div class="rc-grid">${RC_DOW.map(x => `<div class="rc-dow">${x}</div>`).join('')}${cells}</div></div>`;
+    }
+
+    function rcRender() {
+      const pop = document.getElementById('rc-pop');
+      if (!pop) return;
+      const today = rcToday();
+      if (!_rcLeft) _rcLeft = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const right = new Date(_rcLeft.getFullYear(), _rcLeft.getMonth() + 1, 1);
+      const atEnd = right.getFullYear() > today.getFullYear()
+        || (right.getFullYear() === today.getFullYear() && right.getMonth() >= today.getMonth());
+
+      pop.innerHTML = `
+        <div class="rc-presets">
+          ${RC_PRESETS.map((p, i) => `<button type="button" data-preset="${i}">${p[0]}</button>`).join('')}
+        </div>
+        <div class="rc-main">
+          <div class="rc-head">
+            <button type="button" class="rc-nav" data-nav="-1" title="Previous month">‹</button>
+            <span class="rc-hint">Click the first day, then the last</span>
+            <button type="button" class="rc-nav" data-nav="1"${atEnd ? ' disabled' : ''} title="Next month">›</button>
+          </div>
+          <div class="rc-months">${rcMonthHtml(_rcLeft)}${rcMonthHtml(right)}</div>
+          <div class="rc-foot">
+            <div class="rc-readout" id="rc-readout"></div>
+            <div class="rc-acts">
+              <button type="button" class="rc-cancel" data-act="cancel">Cancel</button>
+              <button type="button" class="rc-ok" id="rc-ok" data-act="ok">Apply</button>
+            </div>
+          </div>
+        </div>`;
+      rcPaint();
+    }
+
+    // Repaints range classes on the existing cells. Hovering re-runs this
+    // rather than rcRender() so the pointer never lands on a replaced node.
+    function rcPaint() {
+      const today = rcToday();
+      const endRef = _rcEnd || (_rcStart && _rcHover ? _rcHover : null);
+      let a = null, b = null;
+      if (_rcStart && endRef)  { a = _rcStart <= endRef ? _rcStart : endRef; b = _rcStart <= endRef ? endRef : _rcStart; }
+      else if (_rcStart)       { a = b = _rcStart; }
+
+      document.querySelectorAll('#rc-pop .rc-cell[data-d]').forEach(el => {
+        const cur = rcParse(el.dataset.d);
+        const inR = !!(a && cur >= a && cur <= b);
+        el.classList.toggle('today',       +cur === +today);
+        el.classList.toggle('in-range',    inR);
+        el.classList.toggle('range-start', !!(a && +cur === +a));
+        el.classList.toggle('range-end',   !!(b && +cur === +b));
+        el.classList.toggle('edge',        !!(a && (+cur === +a || +cur === +b)));
+      });
+
+      const ro = document.getElementById('rc-readout');
+      const ok = document.getElementById('rc-ok');
+      if (ro) {
+        if (_rcStart && _rcEnd) {
+          const n = Math.round((_rcEnd - _rcStart) / 86400000) + 1;
+          ro.innerHTML = `${rcNice(_rcStart)} → ${rcNice(_rcEnd)} <em>· ${n} day${n > 1 ? 's' : ''}</em>`;
+        } else if (_rcStart) {
+          ro.innerHTML = `${rcNice(_rcStart)} → <em>pick the last day</em>`;
+        } else {
+          ro.innerHTML = '<em>Pick the first day</em>';
+        }
+      }
+      if (ok) ok.disabled = !(_rcStart && _rcEnd);
+    }
+
+    function rcSyncLabel() {
+      const el = document.getElementById('rc-label');
+      if (!el) return;
+      const a = rcParse(document.getElementById('date-from')?.value);
+      const b = rcParse(document.getElementById('date-to')?.value);
+      el.textContent = (a && b) ? `${rcNice(a)} → ${rcNice(b)}` : 'Pick dates';
+    }
+
+    function rcOpen() {
+      const pop = document.getElementById('rc-pop');
+      if (!pop) return;
+      _rcOpen  = true;
+      _rcStart = rcParse(document.getElementById('date-from')?.value);
+      _rcEnd   = rcParse(document.getElementById('date-to')?.value);
+      _rcHover = null;
+      const today  = rcToday();
+      const anchor = _rcEnd || _rcStart || today;
+      // Put the anchor month on the right, but never scroll past this month.
+      const maxLeft = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      _rcLeft = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+      if (_rcLeft > maxLeft) _rcLeft = maxLeft;
+      pop.hidden = false;
+      document.getElementById('rc-trigger')?.classList.add('active');
+      rcRender();
+    }
+
+    function rcClose() {
+      _rcOpen = false;
+      const pop = document.getElementById('rc-pop');
+      if (pop) pop.hidden = true;
+      document.getElementById('rc-trigger')?.classList.remove('active');
+    }
+
+    function rcToggle(e) {
+      e?.stopPropagation();
+      _rcOpen ? rcClose() : rcOpen();
+    }
+
+    function rcApply() {
+      if (!_rcStart || !_rcEnd) return;
+      document.getElementById('date-from').value = rcYmd(_rcStart);
+      document.getElementById('date-to').value   = rcYmd(_rcEnd);
+      rcClose();
+      document.getElementById('date-apply').click();
+    }
+
+    document.getElementById('rc-pop')?.addEventListener('click', e => {
+      const nav = e.target.closest('[data-nav]');
+      if (nav) {
+        _rcLeft = new Date(_rcLeft.getFullYear(), _rcLeft.getMonth() + Number(nav.dataset.nav), 1);
+        rcRender();
+        return;
+      }
+      const pre = e.target.closest('[data-preset]');
+      if (pre) {
+        const [s, en] = RC_PRESETS[Number(pre.dataset.preset)][1]();
+        _rcStart = s; _rcEnd = en; _rcHover = null;
+        const t = rcToday();
+        const maxLeft = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+        _rcLeft = new Date(en.getFullYear(), en.getMonth() - 1, 1);
+        if (_rcLeft > maxLeft) _rcLeft = maxLeft;
+        rcRender();
+        return;
+      }
+      const act = e.target.closest('[data-act]');
+      if (act) { act.dataset.act === 'ok' ? rcApply() : rcClose(); return; }
+
+      const cell = e.target.closest('.rc-cell[data-d]');
+      if (!cell || cell.disabled) return;
+      const d = rcParse(cell.dataset.d);
+      if (!_rcStart || _rcEnd)      { _rcStart = d; _rcEnd = null; }   // start a fresh range
+      else if (d < _rcStart)        { _rcEnd = _rcStart; _rcStart = d; }
+      else                          { _rcEnd = d; }
+      _rcHover = null;
+      rcPaint();
+    });
+
+    document.getElementById('rc-pop')?.addEventListener('mouseover', e => {
+      if (!_rcStart || _rcEnd) return;                 // only while picking the end
+      const cell = e.target.closest('.rc-cell[data-d]');
+      if (!cell || cell.disabled) return;
+      const d = rcParse(cell.dataset.d);
+      if (_rcHover && +_rcHover === +d) return;
+      _rcHover = d;
+      rcPaint();
+    });
+
+    document.addEventListener('click', e => {
+      if (!_rcOpen) return;
+      if (e.target.closest('#rc-pop') || e.target.closest('#rc-trigger')) return;
+      rcClose();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && _rcOpen) rcClose(); });
+
     document.getElementById('date-apply').addEventListener('click', () => {
       customFrom = document.getElementById('date-from').value;
       customTo   = document.getElementById('date-to').value;
+      rcSyncLabel();
       if (!customFrom || !customTo) return;
       localStorage.setItem('dash_custom_from', customFrom);
       localStorage.setItem('dash_custom_to', customTo);
