@@ -6233,7 +6233,9 @@
     // ─────────────────────────────────────────────────────────────
     if (customFrom) document.getElementById('date-from').value = customFrom;
     if (customTo)   document.getElementById('date-to').value   = customTo;
-    rcSyncLabel();
+    // rcSyncLabel() is called once the range calendar below is defined — calling
+    // it here would reach its `const` helpers before they initialise, and the
+    // resulting ReferenceError kills the whole script, sign-in included.
 
     document.querySelectorAll('.period-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.period === currentPeriod);
@@ -6268,13 +6270,18 @@
     const RC_DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     const RC_MON = ['January','February','March','April','May','June',
                     'July','August','September','October','November','December'];
-    const rcYmd   = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const rcParse = s => {
+    // Declared as functions, not const arrows, so they hoist. An arrow assigned
+    // to a const is in the temporal dead zone until this line runs, and any
+    // earlier caller throws a ReferenceError that takes the whole script down.
+    function rcYmd(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    function rcParse(s) {
       const p = String(s || '').split('-').map(Number);
       return (p.length === 3 && p.every(n => !isNaN(n))) ? new Date(p[0], p[1] - 1, p[2]) : null;
-    };
-    const rcToday = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); };
-    const rcNice  = d => `${d.getDate()} ${RC_MON[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
+    }
+    function rcToday() { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+    function rcNice(d) { return `${d.getDate()} ${RC_MON[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`; }
 
     let _rcStart = null, _rcEnd = null, _rcHover = null, _rcLeft = null, _rcOpen = false;
 
@@ -6463,6 +6470,9 @@
       rcClose();
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && _rcOpen) rcClose(); });
+
+    // Safe here: everything the label needs is defined above.
+    rcSyncLabel();
 
     document.getElementById('date-apply').addEventListener('click', () => {
       customFrom = document.getElementById('date-from').value;
