@@ -6014,8 +6014,14 @@
     async function loadAccounts(triggerDataLoad = true) {
       // Prefer DB-persisted account over localStorage
       const dbSettings   = await Auth.getDashboardSettings(currentUser?.id, currentOrgId);
-      const savedAccount = dbSettings?.default_account_id
+      // default_account_key holds the picker's value verbatim. localStorage is
+      // preferred over the legacy uuid column because rows written before the
+      // text column existed can hold a stale account — this browser's own last
+      // choice is the better guess. The uuid column is the cross-device
+      // fallback for a browser that has never made a choice.
+      const savedAccount = dbSettings?.default_account_key
         || localStorage.getItem('dash_account')
+        || dbSettings?.default_account_id
         || '';
 
       accountMap = {};
@@ -6081,7 +6087,20 @@
       renderPlatformTabs();
       filterAccountsByAgency();
 
-      // Restore saved account selection
+      // Restore saved account selection.
+      // A saved account on a different platform tab has no <option> here, so
+      // the restore below would quietly do nothing and the dashboard would
+      // open on something else. Switch to its tab first.
+      if (savedAccount && !savedAccount.startsWith('__')
+          && !sel.querySelector(`option[value="${CSS.escape(savedAccount)}"]`)) {
+        const _acc = accountMap[savedAccount];
+        const _pf  = _acc && (_acc.type || 'meta');
+        if (_pf && orgPlatforms.includes(_pf) && _pf !== currentPlatformTab) {
+          currentPlatformTab = _pf;
+          renderPlatformTabs();
+          filterAccountsByAgency();
+        }
+      }
       if (savedAccount && sel.querySelector(`option[value="${CSS.escape(savedAccount)}"]`)) {
         sel.value = savedAccount;
       }
@@ -6103,11 +6122,22 @@
 
     sel.addEventListener('change', () => {
       localStorage.setItem('dash_account', sel.value);
-      // Persist selected account to dashboard_settings
+      // Persist selected account to dashboard_settings.
+      // default_account_id is a uuid column but the picker's value is not
+      // always a uuid — "All Accounts" is __all__ and a saved combination is
+      // __group__<id>. Sending those raised invalid-input-syntax, nothing
+      // checked the result, and the row silently kept its previous account,
+      // which is what reloading then restored. The raw value goes to the text
+      // column; the uuid column only gets a real uuid.
       if (currentUser && currentOrgId && sel.value) {
+        const _isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sel.value);
         Auth.saveDashboardSettings(currentUser.id, currentOrgId, {
-          default_account_id: sel.value,
-        });
+          default_account_key: sel.value,
+          default_account_id:  _isUuid ? sel.value : null,
+        }).then(({ error }) => {
+          // Don't leave a failed write silent a second time.
+          if (error) console.warn('[dashboard_settings] account not saved:', error.message);
+        }).catch(e => console.warn('[dashboard_settings] account not saved:', e));
       }
       if (sel.value) {
         const label = sel.options[sel.selectedIndex]?.textContent?.trim() || sel.value;
