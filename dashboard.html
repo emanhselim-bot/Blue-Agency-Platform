@@ -7691,8 +7691,33 @@
       const dailySalesRows = getShopifyRows('daily_sales');
 
       let pieces = null, revenue = null, shopifyOrders = null, conversionRate = null, sessions = null, returns = null;
+      // Shopify's own headline "Total sales" — line items − discounts + shipping
+      // + tax. `revenue` below is net sales, which excludes shipping and tax, so
+      // the two never match. Both are carried so the card can show the bridge.
+      let revenueTotalSales = null;
       const salesRows = getShopifyRows('sales');
-      if (salesRows?.[0]) { shopifyOrders = parseInt(salesRows[0][0]); revenue = parseFloat(salesRows[0][1]); }
+      if (salesRows?.[0]) {
+        shopifyOrders = parseInt(salesRows[0][0]);
+        revenue       = parseFloat(salesRows[0][1]);
+        const _ts     = parseFloat(salesRows[0][2]);
+        if (!isNaN(_ts)) revenueTotalSales = _ts;
+      }
+      // Orders cancelled inside the window. Excluded from every sales figure
+      // (Shopify Analytics excludes them too) but shown so the cancellation
+      // rate is visible rather than silently swallowed.
+      let cancelledOrders = null, cancelledValue = null, cancelledUnits = null;
+      const cancelledRows = getShopifyRows('cancelled');
+      if (cancelledRows?.[0]) {
+        const _c = parseInt(cancelledRows[0][0]);
+        const _v = parseFloat(cancelledRows[0][1]);
+        const _u = parseInt(cancelledRows[0][2]);
+        if (!isNaN(_c)) cancelledOrders = _c;
+        if (!isNaN(_v)) cancelledValue  = _v;
+        if (!isNaN(_u)) cancelledUnits  = _u;
+      }
+      // Shopify cut the fetch short: what follows is a floor, not a total.
+      const shopifyPartial       = shopifyBatch?.partial === true;
+      const shopifyPartialReason = shopifyBatch?.partialReason ?? null;
       const piecesRows = getShopifyRows('inventory');
       if (piecesRows?.[0]) pieces = parseInt(piecesRows[0][0]);
       const sessionsRows = getShopifyRows('sessions');
@@ -7990,7 +8015,15 @@
       const crSubLabel = (shopifyEnabled && analyticsError)
         ? `<span title="${analyticsError.replace(/"/g,'&quot;')}" style="font-size:10px;color:var(--text-muted);font-weight:600;cursor:help">Analytics N/A ⓘ</span>`
         : (_webSource ? '● ' + _webSource : 'Shopify Analytics');
-      const shopifySubLabel = _webSource
+      // When Shopify cut the order fetch short, every figure derived from it is
+      // a floor. Say so on the cards rather than presenting a short count as
+      // the month's total — that silent undercount is unfalsifiable otherwise.
+      const _partialBadge = shopifyPartial
+        ? `<span title="${String(shopifyPartialReason || 'Shopify stopped responding mid-fetch').replace(/"/g,'&quot;')}" style="font-size:10px;color:#F59E0B;font-weight:700;cursor:help">⚠ Incomplete ⓘ</span>`
+        : null;
+      const shopifySubLabel = _partialBadge
+        ? _partialBadge
+        : _webSource
         ? `<span class="shopify-badge">● ${_webSource}</span>`
         : !shopifyEnabled
         ? '<span style="font-size:10px;color:var(--text-muted);font-weight:600">Non-e-commerce</span>'
@@ -8289,7 +8322,19 @@
               ${kpi('c-teal solid',   '🧾', 'Avg Order Value (Website)',
                   (webRevenueForTotal && webOrdersForTotal) ? fmt(webRevenueForTotal / webOrdersForTotal, curr) : '—',
                   confirmedOrders != null || confirmedRevenue != null ? 'Confirmed revenue ÷ confirmed orders' : 'Website revenue ÷ website orders')}
-              ${kpi('c-gold solid',   '💵', 'Website Revenue',         sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})),      shopifySubLabel, revenue, _t.revenue, true)}
+              ${(() => {
+                // Shopify Admin's headline is Total sales, which adds shipping
+                // and tax on top of net sales. Showing the bridge here stops the
+                // gap reading as an error every time the two are compared.
+                const _gap = (revenueTotalSales != null && revenue != null) ? revenueTotalSales - revenue : null;
+                const _sub = (_gap != null && Math.abs(_gap) >= 0.01)
+                  ? `Net sales · Shopify total ${fmt(revenueTotalSales, curr)} (+${fmt(_gap, curr)} shipping & tax)`
+                  : shopifySubLabel;
+                return kpi('c-gold solid', '💵', 'Website Revenue', sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _sub, revenue, _t.revenue, true);
+              })()}
+              ${cancelledOrders != null && cancelledOrders > 0 ? kpi('c-coral', '🚫', 'Cancelled Orders',
+                  cancelledOrders.toLocaleString('en'),
+                  `${fmt(cancelledValue || 0, curr)} · ${shopifyOrders ? fmt(cancelledOrders / (cancelledOrders + shopifyOrders) * 100, '', 1) + '% of orders' : 'excluded from revenue'}`) : ''}
               ${(() => {
                 const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
                 const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
