@@ -6401,6 +6401,18 @@
       pop.hidden = false;
       document.getElementById('rc-trigger')?.classList.add('active');
       rcRender();
+      // The trigger sits far right on a wide toolbar, where a left-anchored
+      // panel runs off screen and takes the second month and Apply with it.
+      // Measured after render, because the width depends on the content.
+      // Below 760px the stylesheet pins it to the viewport instead.
+      if (window.innerWidth > 760) {
+        pop.style.left = '0'; pop.style.right = 'auto';
+        if (pop.getBoundingClientRect().right > window.innerWidth - 12) {
+          pop.style.left = 'auto'; pop.style.right = '0';
+        }
+      } else {
+        pop.style.left = ''; pop.style.right = '';
+      }
     }
 
     function rcClose() {
