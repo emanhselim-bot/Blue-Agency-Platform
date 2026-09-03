@@ -9326,22 +9326,33 @@
       } catch {}
 
       let totRevenue = null, totOrders = null, totPieces = null;
+      // Cancelled orders totalled across every store, so the all-accounts view
+      // can qualify its figures the same way a single account does.
+      let totCxOrders = 0, totCxUnits = 0, totCxValue = 0, cxStores = 0;
       if (shopifyEnabled) {
+        // One `FROM all` per store rather than separate sales and inventory
+        // calls: server-side that is a single pass over the orders instead of
+        // two, and it carries the cancelled figures the totals need.
         const shopifyFetches = await Promise.allSettled(
-          uniqueStoreIds.flatMap(storeId => [
-            callEdgeFunction('shopify-data', { store_id: storeId, query: `FROM sales SHOW orders, net_sales ${dr}` }),
-            callEdgeFunction('shopify-data', { store_id: storeId, query: `FROM inventory SHOW inventory_units_sold ${dr}` }),
-          ])
+          uniqueStoreIds.map(storeId =>
+            callEdgeFunction('shopify-data', { store_id: storeId, query: `FROM all SHOW orders ${dr}` }))
         );
-        for (let i = 0; i < uniqueStoreIds.length; i++) {
-          const sRes = shopifyFetches[i * 2];
-          const pRes = shopifyFetches[i * 2 + 1];
-          if (sRes.status === 'fulfilled' && sRes.value?.rows?.[0]) {
-            totOrders  = (totOrders  || 0) + (parseInt(sRes.value.rows[0][0])  || 0);
-            totRevenue = (totRevenue || 0) + (parseFloat(sRes.value.rows[0][1]) || 0);
+        for (const r of shopifyFetches) {
+          if (r.status !== 'fulfilled' || !r.value || r.value.error) continue;
+          const v = r.value;
+          const s = v.sales?.rows?.[0];
+          if (s) {
+            totOrders  = (totOrders  || 0) + (parseInt(s[0])   || 0);
+            totRevenue = (totRevenue || 0) + (parseFloat(s[1]) || 0);
           }
-          if (pRes.status === 'fulfilled' && pRes.value?.rows?.[0]) {
-            totPieces = (totPieces || 0) + (parseInt(pRes.value.rows[0][0]) || 0);
+          const p = v.inventory?.rows?.[0];
+          if (p) totPieces = (totPieces || 0) + (parseInt(p[0]) || 0);
+          const c = v.cancelled?.rows?.[0];
+          if (c) {
+            totCxOrders += parseInt(c[0])   || 0;
+            totCxUnits  += parseInt(c[2])   || 0;
+            totCxValue  += parseFloat(c[1]) || 0;
+            cxStores++;
           }
         }
       }
@@ -9394,6 +9405,24 @@
       const avgCostPerPiece = (totSpend && totPieces)  ? totSpend / totPieces  : null;
       const roas            = (totRevenue && totSpend) ? totRevenue / totSpend : null;
 
+      // ── Cancelled-order share, all accounts ──
+      // Same measure as the single-account view: cancelled against everything
+      // placed, since that is what the ads bought. Pooled across stores, so a
+      // client with one bad store is not hidden by the others — the note reads
+      // as the portfolio rate, which is what this view is for.
+      const _aggCxOrderRate = (totCxOrders + (totOrders || 0)) > 0
+        ? totCxOrders / (totCxOrders + (totOrders || 0)) : null;
+      const _aggCxUnitRate  = (totCxUnits + (totPieces || 0)) > 0
+        ? totCxUnits / (totCxUnits + (totPieces || 0)) : null;
+      const _aggCxPct  = r => (r * 100).toFixed(1) + '%';
+      const _aggCxLine = html => `<div class="kpi-cancel">${html}</div>`;
+      const _aggCxOrdersNote = (_aggCxOrderRate && totCxOrders > 0)
+        ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxOrderRate)} cancelled · ${totCxOrders.toLocaleString('en')} orders`) : '';
+      const _aggCxPiecesNote = (_aggCxUnitRate && totCxUnits > 0)
+        ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxUnitRate)} cancelled · ${totCxUnits.toLocaleString('en')} pieces`) : '';
+      const _aggCxSpendNote  = (_aggCxOrderRate && totSpend > 0)
+        ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxOrderRate)} on cancelled · ${fmt(totSpend * _aggCxOrderRate, curr)}`) : '';
+
       const allCampaigns = campaignResults.flatMap(r =>
         (r.status === 'fulfilled' && !r.value?.error) ? (r.value?.campaigns || []) : []
       );
@@ -9433,10 +9462,10 @@
         </div>` : ''}
         <div class="section-label">Primary KPIs · All Accounts Aggregated</div>
         <div class="kpi-grid">
-          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(totSpend, curr),  `${currLabel} · ${accountsWithData} account(s)`)}
-          ${kpi('c-sky',    '🛒', 'Total Orders',        sfmt(totOrders, v => v.toLocaleString('en')), _aggSourceLabel)}
+          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(totSpend, curr),  `${currLabel} · ${accountsWithData} account(s)` + _aggCxSpendNote)}
+          ${kpi('c-sky',    '🛒', 'Total Orders',        sfmt(totOrders, v => v.toLocaleString('en')), _aggSourceLabel + _aggCxOrdersNote)}
           ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders'))}
-          ${kpi('c-teal',   '🧮', 'Total Pieces',        sfmt(totPieces, v => v.toLocaleString('en')), _aggSourceLabel)}
+          ${kpi('c-teal',   '🧮', 'Total Pieces',        sfmt(totPieces, v => v.toLocaleString('en')), _aggSourceLabel + _aggCxPiecesNote)}
           ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Units sold'))}
           ${kpi('c-gold',   '💵', 'Total Revenue',       sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _aggRevenueLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
