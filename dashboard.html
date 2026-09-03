@@ -141,6 +141,12 @@
     .date-apply-btn { padding: 7px 16px; background: var(--blue-dark); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .date-apply-btn:hover { background: var(--blue-mid); }
 
+    /* Cancelled-order share, shown under a card's own sub-label. Deliberately
+       small and muted-red: it qualifies the number above it rather than
+       competing with it, and reads on both the light and dark themes. */
+    .kpi-cancel { font-size: 10px; font-weight: 700; color: var(--coral); margin-top: 3px;
+      letter-spacing: .1px; line-height: 1.3; }
+
     /* ── RANGE CALENDAR ──
        Two native date inputs can only show one month each and never show the
        span between them, so picking "day to day" meant reading two separate
@@ -8330,6 +8336,29 @@
       const webPiecesForTotal  = confirmedPieces  != null ? confirmedPieces  : (pieces         !== null ? pieces         : 0);
       const _usingConfirmed    = confirmedOrders != null || confirmedRevenue != null || confirmedPieces != null;
 
+      // ── Cancelled-order share ──
+      // Shopify reports the orders cancelled inside the period. They are left
+      // out of revenue, orders and pieces, so on their own the cards show only
+      // what survived and the loss is invisible. The rate is measured against
+      // everything placed — kept plus cancelled — because that is what the ads
+      // actually bought. Spend carries the same rate applied to it, since the
+      // money that bought a cancelled order still left the account.
+      // Shopify-only: manual months and non-Shopify accounts show nothing.
+      const _cxPlacedOrders = (cancelledOrders != null) ? cancelledOrders + webOrdersForTotal : null;
+      const _cxPlacedUnits  = (cancelledUnits  != null) ? cancelledUnits  + webPiecesForTotal : null;
+      const _cxOrderRate = (_cxPlacedOrders > 0) ? cancelledOrders / _cxPlacedOrders : null;
+      const _cxUnitRate  = (_cxPlacedUnits  > 0) ? cancelledUnits  / _cxPlacedUnits  : null;
+      const _cxPct  = r => (r * 100).toFixed(1) + '%';
+      const _cxLine = html => `<div class="kpi-cancel">${html}</div>`;
+      // Each note is blank unless there is something to report, so accounts
+      // without a Shopify store are untouched.
+      const _cxOrdersNote = (_cxOrderRate && cancelledOrders > 0)
+        ? _cxLine(`🚫 ${_cxPct(_cxOrderRate)} cancelled · ${cancelledOrders.toLocaleString('en')} orders`) : '';
+      const _cxPiecesNote = (_cxUnitRate && cancelledUnits > 0)
+        ? _cxLine(`🚫 ${_cxPct(_cxUnitRate)} cancelled · ${cancelledUnits.toLocaleString('en')} pieces`) : '';
+      const _cxSpendNote  = (_cxOrderRate && spend > 0)
+        ? _cxLine(`🚫 ${_cxPct(_cxOrderRate)} on cancelled · ${fmt(spend * _cxOrderRate, curr)}`) : '';
+
       const totalOrders  = webOrdersForTotal  + msgOrders;
       const grossRevenue = webRevenueForTotal + msgRevenue;
       const totalPieces  = webPiecesForTotal  + msgPieces;
@@ -8420,7 +8449,7 @@
         <div class="kpi-section" data-section-id="spending">
           <div class="section-label">${includeRevenue ? 'Spending / Revenue' : 'Spending / Budget'} <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
           <div class="kpi-grid" data-grid-id="spending">
-            ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), _spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads', spend, _t.spend, false)}
+            ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), (_spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads') + _cxSpendNote, spend, _t.spend, false)}
             ${kpi('c-green', '💳', 'Ad Account Fund',
               accountBalance !== null ? fmt(accountBalance, curr) : '—',
               accountBalance !== null
@@ -8595,7 +8624,7 @@
           <div class="kpi-section" data-section-id="spending">
             <div class="section-label">Spending / Revenue <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="spending">
-              ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), _spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads', spend, _t.spend, false)}
+              ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), (_spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads') + _cxSpendNote, spend, _t.spend, false)}
               <div class="kpi-card c-purple" data-card-id="branding-spend">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
                 <div class="kpi-icon">📣</div>
@@ -8641,8 +8670,8 @@
           <div class="kpi-section" data-section-id="totals">
             <div class="section-label">Total / Cost <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="totals">
-              ${kpi('c-green solid',  '📊', 'Total Orders',           (webEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—',    'Website + Messages',             totalOrders, _t.orders, true, 'kpi-total-orders-val')}
-              ${kpi('c-teal solid',   '📦', 'Total Pieces',           (webEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—',    'Website + Messages',             null, null, null, 'kpi-total-pieces-val')}
+              ${kpi('c-green solid',  '📊', 'Total Orders',           (webEnabled || msgOrders > 0) ? totalOrders.toLocaleString('en') : '—',    'Website + Messages' + _cxOrdersNote, totalOrders, _t.orders, true, 'kpi-total-orders-val')}
+              ${kpi('c-teal solid',   '📦', 'Total Pieces',           (webEnabled || msgPieces > 0) ? totalPieces.toLocaleString('en') : '—',    'Website + Messages' + _cxPiecesNote, null, null, null, 'kpi-total-pieces-val')}
               ${kpi('c-coral solid',  '🏷️', 'Avg Cost per Piece',    sfmt(avgCostPerPiece,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Pieces'),  null, null, null, 'kpi-avg-cost-per-piece-val')}
               ${kpi('c-orange solid', '🛍️', 'Avg Cost per Purchase', costPerPurchase !== null ? fmt(costPerPurchase, curr) : '—',                   costPerPurchase !== null ? '● Meta Ads · Avg' : 'Meta Ads', null, null, null, 'kpi-avg-cost-per-purchase-val')}
               ${kpi('c-sky solid',    '📦', 'Avg Cost per Order',     sfmt(avgCostPerOrder,  v => fmt(v, curr)),                                     sfmtSub('Spend ÷ Total Orders'),  null, null, null, 'kpi-avg-cost-per-order-val')}
@@ -8662,8 +8691,8 @@
           <div class="kpi-section" data-section-id="website-results">
             <div class="section-label">Website Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="website-results">
-              ${kpi('c-sky',          '🛒', 'Website Orders',          sfmt(shopifyOrders, v => v.toLocaleString('en')),                                                         shopifySubLabel, shopifyOrders, _t.orders, true)}
-              ${kpi('c-teal',         '🧮', 'Website Pieces',          sfmt(pieces,        v => v.toLocaleString('en')),                                                         shopifySubLabel)}
+              ${kpi('c-sky',          '🛒', 'Website Orders',          sfmt(shopifyOrders, v => v.toLocaleString('en')),                                                         shopifySubLabel + _cxOrdersNote, shopifyOrders, _t.orders, true)}
+              ${kpi('c-teal',         '🧮', 'Website Pieces',          sfmt(pieces,        v => v.toLocaleString('en')),                                                         shopifySubLabel + _cxPiecesNote)}
               ${kpi('c-orange solid', '📦', 'Cost per Website Order',  sfmt(shopifyOrders && _spendForMetrics ? _spendForMetrics / shopifyOrders : null, v => fmt(v, curr)),                           sfmtSub('Spend ÷ Website Orders'))}
               ${kpi('c-coral solid',  '🏷️', 'Cost per Website Piece', sfmt(pieces && _spendForMetrics ? _spendForMetrics / pieces : null, v => fmt(v, curr)),                                         sfmtSub('Spend ÷ Website Pieces'))}
               ${kpi('c-teal solid',   '🧾', 'Avg Order Value (Website)',
