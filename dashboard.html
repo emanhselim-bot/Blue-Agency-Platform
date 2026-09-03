@@ -8336,27 +8336,27 @@
       const webPiecesForTotal  = confirmedPieces  != null ? confirmedPieces  : (pieces         !== null ? pieces         : 0);
       const _usingConfirmed    = confirmedOrders != null || confirmedRevenue != null || confirmedPieces != null;
 
-      // ── Cancelled-order share ──
-      // Shopify reports the orders cancelled inside the period. They are left
-      // out of revenue, orders and pieces, so on their own the cards show only
-      // what survived and the loss is invisible. The rate is measured against
-      // everything placed — kept plus cancelled — because that is what the ads
-      // actually bought. Spend carries the same rate applied to it, since the
-      // money that bought a cancelled order still left the account.
-      // Shopify-only: manual months and non-Shopify accounts show nothing.
-      const _cxPlacedOrders = (cancelledOrders != null) ? cancelledOrders + webOrdersForTotal : null;
-      const _cxPlacedUnits  = (cancelledUnits  != null) ? cancelledUnits  + webPiecesForTotal : null;
-      const _cxOrderRate = (_cxPlacedOrders > 0) ? cancelledOrders / _cxPlacedOrders : null;
-      const _cxUnitRate  = (_cxPlacedUnits  > 0) ? cancelledUnits  / _cxPlacedUnits  : null;
+      // ── Cancellation ──
+      // These stores almost never cancel an order inside Shopify, so its
+      // cancelled_at figure is near-always zero and says nothing useful. The
+      // real loss is the gap between what Shopify recorded and what was
+      // confirmed: an order placed and never confirmed is money spent for
+      // nothing. Measured against what Shopify recorded, because that is what
+      // the ads bought. Needs both numbers, so it stays blank until a
+      // confirmed figure exists for the period.
+      const _cxOrdersLost = (shopifyOrders != null && confirmedOrders != null && shopifyOrders > 0)
+        ? Math.max(0, shopifyOrders - confirmedOrders) : null;
+      const _cxOrderRate  = (_cxOrdersLost != null) ? _cxOrdersLost / shopifyOrders : null;
+      const _cxPiecesLost = (pieces != null && confirmedPieces != null && pieces > 0)
+        ? Math.max(0, pieces - confirmedPieces) : null;
+      const _cxUnitRate   = (_cxPiecesLost != null) ? _cxPiecesLost / pieces : null;
       const _cxPct  = r => (r * 100).toFixed(1) + '%';
       const _cxLine = html => `<div class="kpi-cancel">${html}</div>`;
-      // Each note is blank unless there is something to report, so accounts
-      // without a Shopify store are untouched.
-      const _cxOrdersNote = (_cxOrderRate && cancelledOrders > 0)
-        ? _cxLine(`🚫 ${_cxPct(_cxOrderRate)} cancelled · ${cancelledOrders.toLocaleString('en')} orders`) : '';
-      const _cxPiecesNote = (_cxUnitRate && cancelledUnits > 0)
-        ? _cxLine(`🚫 ${_cxPct(_cxUnitRate)} cancelled · ${cancelledUnits.toLocaleString('en')} pieces`) : '';
-      const _cxSpendNote  = (_cxOrderRate && spend > 0)
+      const _cxOrdersNote = (_cxOrdersLost > 0)
+        ? _cxLine(`🚫 ${_cxPct(_cxOrderRate)} cancelled · ${_cxOrdersLost.toLocaleString('en')} of ${shopifyOrders.toLocaleString('en')}`) : '';
+      const _cxPiecesNote = (_cxPiecesLost > 0)
+        ? _cxLine(`🚫 ${_cxPct(_cxUnitRate)} cancelled · ${_cxPiecesLost.toLocaleString('en')} of ${pieces.toLocaleString('en')}`) : '';
+      const _cxSpendNote  = (_cxOrderRate > 0 && spend > 0)
         ? _cxLine(`🚫 ${_cxPct(_cxOrderRate)} on cancelled · ${fmt(spend * _cxOrderRate, curr)}`) : '';
 
       const totalOrders  = webOrdersForTotal  + msgOrders;
@@ -8708,9 +8708,9 @@
                   : shopifySubLabel;
                 return kpi('c-gold solid', '💵', 'Website Revenue', sfmt(revenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _sub, revenue, _t.revenue, true);
               })()}
-              ${cancelledOrders != null && cancelledOrders > 0 ? kpi('c-coral', '🚫', 'Cancelled Orders',
+              ${cancelledOrders != null && cancelledOrders > 0 ? kpi('c-coral', '🚫', 'Cancelled in Shopify',
                   cancelledOrders.toLocaleString('en'),
-                  `${fmt(cancelledValue || 0, curr)} · ${shopifyOrders ? fmt(cancelledOrders / (cancelledOrders + shopifyOrders) * 100, '', 1) + '% of orders' : 'excluded from revenue'}`) : ''}
+                  `${fmt(cancelledValue || 0, curr)} · marked cancelled in the store itself, not the confirmation gap`) : ''}
               ${(() => {
                 const _crFromData = (totalOrders > 0 && displaySessions > 0) ? (totalOrders / displaySessions * 100) : null;
                 const _crDisplay  = (shopifyConversionRate != null && shopifyConversionRate > 0) ? shopifyConversionRate : _crFromData;
@@ -9368,6 +9368,12 @@
         if (totPieces  == null && _num(_mhGroup.web_pieces)  != null) totPieces  = _num(_mhGroup.web_pieces);
       }
 
+      // Website-only counts, captured before message orders are folded in
+      // below. The cancellation rate compares Shopify against confirmed, and
+      // messages are neither.
+      const _aggWebOrders = totOrders;
+      const _aggWebPieces = totPieces;
+
       // Orders taken over messages are recorded by hand and are not in Shopify.
       // Without them these cards say "Number of Orders" while counting only the
       // website — a total that quietly omits a whole sales channel.
@@ -9417,24 +9423,27 @@
         (r.status === 'fulfilled' && !r.value?.error) ? (r.value?.campaigns || []) : []
       );
 
-      // ── Cancelled-order share, all accounts ──
-      // Same measure as the single-account view: cancelled against everything
-      // placed, since that is what the ads bought. Pooled across stores, so a
-      // client with one bad store is not hidden by the others — the note reads
-      // as the portfolio rate, which is what this view is for.
+      // ── Cancellation, all accounts ──
+      // Same measure as the single-account view: what Shopify recorded minus
+      // what was confirmed, over what Shopify recorded. Needs a confirmed
+      // figure for the group, so it stays blank on a selection that has none.
       // Must sit below `curr`: the spend note formats currency, and reading a
       // const before its declaration throws and takes the whole render down.
-      const _aggCxOrderRate = (totCxOrders + (totOrders || 0)) > 0
-        ? totCxOrders / (totCxOrders + (totOrders || 0)) : null;
-      const _aggCxUnitRate  = (totCxUnits + (totPieces || 0)) > 0
-        ? totCxUnits / (totCxUnits + (totPieces || 0)) : null;
+      const _aggCfmOrders = _num(_mhGroup?.web_orders_confirmed);
+      const _aggCfmPieces = _num(_mhGroup?.web_pieces_confirmed);
+      const _aggCxOrdersLost = (_aggWebOrders > 0 && _aggCfmOrders != null)
+        ? Math.max(0, _aggWebOrders - _aggCfmOrders) : null;
+      const _aggCxOrderRate  = (_aggCxOrdersLost != null) ? _aggCxOrdersLost / _aggWebOrders : null;
+      const _aggCxPiecesLost = (_aggWebPieces > 0 && _aggCfmPieces != null)
+        ? Math.max(0, _aggWebPieces - _aggCfmPieces) : null;
+      const _aggCxUnitRate   = (_aggCxPiecesLost != null) ? _aggCxPiecesLost / _aggWebPieces : null;
       const _aggCxPct  = r => (r * 100).toFixed(1) + '%';
       const _aggCxLine = html => `<div class="kpi-cancel">${html}</div>`;
-      const _aggCxOrdersNote = (_aggCxOrderRate && totCxOrders > 0)
-        ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxOrderRate)} cancelled · ${totCxOrders.toLocaleString('en')} orders`) : '';
-      const _aggCxPiecesNote = (_aggCxUnitRate && totCxUnits > 0)
-        ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxUnitRate)} cancelled · ${totCxUnits.toLocaleString('en')} pieces`) : '';
-      const _aggCxSpendNote  = (_aggCxOrderRate && totSpend > 0)
+      const _aggCxOrdersNote = (_aggCxOrdersLost > 0)
+        ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxOrderRate)} cancelled · ${_aggCxOrdersLost.toLocaleString('en')} of ${_aggWebOrders.toLocaleString('en')}`) : '';
+      const _aggCxPiecesNote = (_aggCxPiecesLost > 0)
+        ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxUnitRate)} cancelled · ${_aggCxPiecesLost.toLocaleString('en')} of ${_aggWebPieces.toLocaleString('en')}`) : '';
+      const _aggCxSpendNote  = (_aggCxOrderRate > 0 && totSpend > 0)
         ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxOrderRate)} on cancelled · ${fmt(totSpend * _aggCxOrderRate, curr)}`) : '';
 
       const webEnabled = shopifyEnabled || !!_webSource;
