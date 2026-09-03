@@ -9389,6 +9389,14 @@
       const aggReturned = (aggRetPct && totRevenue) ? totRevenue * Math.min(100, Math.max(0, aggRetPct)) / 100 : 0;
       if (aggReturned) totRevenue = totRevenue - aggReturned;
 
+      // Currency is resolved before anything that formats money. It used to be
+      // declared further down, below the revenue label that formats the returns
+      // figure — so any group with a returns % recorded threw "Cannot access
+      // 'curr' before initialization" and the whole all-accounts view died.
+      const currencies  = [...new Set(allAccounts.map(a => a.currency).filter(Boolean))];
+      const curr        = currencies.length === 1 ? currencies[0] + ' ' : '';
+      const currLabel   = currencies.length === 1 ? currencies[0] : 'Mixed';
+
       // Say exactly which channels a card counts, so a "total" is never assumed
       // to include something it does not.
       const _storeCount = uniqueStoreIds.length;
@@ -9405,11 +9413,17 @@
       const avgCostPerPiece = (totSpend && totPieces)  ? totSpend / totPieces  : null;
       const roas            = (totRevenue && totSpend) ? totRevenue / totSpend : null;
 
+      const allCampaigns = campaignResults.flatMap(r =>
+        (r.status === 'fulfilled' && !r.value?.error) ? (r.value?.campaigns || []) : []
+      );
+
       // ── Cancelled-order share, all accounts ──
       // Same measure as the single-account view: cancelled against everything
       // placed, since that is what the ads bought. Pooled across stores, so a
       // client with one bad store is not hidden by the others — the note reads
       // as the portfolio rate, which is what this view is for.
+      // Must sit below `curr`: the spend note formats currency, and reading a
+      // const before its declaration throws and takes the whole render down.
       const _aggCxOrderRate = (totCxOrders + (totOrders || 0)) > 0
         ? totCxOrders / (totCxOrders + (totOrders || 0)) : null;
       const _aggCxUnitRate  = (totCxUnits + (totPieces || 0)) > 0
@@ -9422,14 +9436,6 @@
         ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxUnitRate)} cancelled · ${totCxUnits.toLocaleString('en')} pieces`) : '';
       const _aggCxSpendNote  = (_aggCxOrderRate && totSpend > 0)
         ? _aggCxLine(`🚫 ${_aggCxPct(_aggCxOrderRate)} on cancelled · ${fmt(totSpend * _aggCxOrderRate, curr)}`) : '';
-
-      const allCampaigns = campaignResults.flatMap(r =>
-        (r.status === 'fulfilled' && !r.value?.error) ? (r.value?.campaigns || []) : []
-      );
-
-      const currencies  = [...new Set(allAccounts.map(a => a.currency).filter(Boolean))];
-      const curr        = currencies.length === 1 ? currencies[0] + ' ' : '';
-      const currLabel   = currencies.length === 1 ? currencies[0] : 'Mixed';
 
       const webEnabled = shopifyEnabled || !!_webSource;
       const sfmt = (val, fn) => !webEnabled ? 'N/A' : (val !== null && !isNaN(val) ? fn(val) : '—');
