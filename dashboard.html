@@ -2256,7 +2256,8 @@
 
     .cp-stat-edit { right: 26px; }
     .cp-deliv-del { flex-shrink: 0; }
-    .pf-wrap { max-width: 900px; margin: 0 auto; }
+    /* Eleven columns need the room; the planner this page used to carry did not. */
+    .pf-wrap { max-width: 1280px; margin: 0 auto; }
     .pf-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
     .pf-title { font-size: 22px; font-weight: 800; color: var(--brand-ink); }
     .pf-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
@@ -9676,112 +9677,18 @@
     }
     function _pfNum(n) { return (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
 
+    // The planner that used to live here (products, shared costs, expected
+    // result) was removed at the user's request — only the recorded-months
+    // table remains. Its helpers below are left in place and unused so the
+    // planner can be restored without rebuilding it.
     function _pfRender() {
-      const v = _pfLoad(), r = _pfCalc(v);
-      const ro = _pfReadonly;
-
-      const cell = (i, key, kind) => ro
-        ? `<td class="pf-c">${kind === 'money' ? _pfMoney(v.products[i][key]) : (kind === 'pct' ? v.products[i][key] + '%' : escHtml(String(v.products[i][key])))}</td>`
-        : `<td class="pf-c"><input class="${kind === 'text' ? 'pf-name' : ''}" type="${kind === 'text' ? 'text' : 'number'}" ${kind === 'text' ? '' : 'step="any" min="0"'}
-             value="${escHtml(String(v.products[i][key]))}" oninput="pfSetProduct(${i}, '${key}', this.value)"></td>`;
-
-      const productRows = v.products.map((pr, i) => {
-        const row = r.rows[i];
-        return `<tr>
-          ${PF_PRODUCT_COLS.map(([k, , kind]) => cell(i, k, kind)).join('')}
-          <td class="pf-c out">${_pfMoney(row.budget)}</td>
-          <td class="pf-c out">${_pfNum(row.orders)}</td>
-          <td class="pf-c out">${_pfNum(row.delivered)}</td>
-          <td class="pf-c out">${_pfMoney(row.revenue)}</td>
-          <td class="pf-c out ${row.contribution >= 0 ? 'pos' : 'neg'}">${_pfMoney(row.contribution)}</td>
-          ${ro ? '' : `<td class="pf-c"><button class="pf-x" title="Remove" onclick="pfRemoveProduct(${i})">✕</button></td>`}
-        </tr>`;
-      }).join('');
-
-      const sharedRow = ([k, label, , kind]) => `<tr>
-        <td class="pf-label">${label}${kind === 'pct' ? ' (%)' : ''}</td>
-        <td class="pf-val">${ro
-          ? `<span class="out">${kind === 'pct' ? v[k] + '%' : (kind === 'num' ? v[k] : _pfMoney(v[k]))}</span>`
-          : `<input type="number" step="any" min="0" value="${v[k]}" oninput="pfSetShared('${k}', this.value)">`}</td>
-      </tr>`;
-      const outRow = (label, val, cls = '') => `<tr class="${cls}"><td class="pf-label">${label}</td><td class="pf-val out">${val}</td></tr>`;
-
-      document.getElementById('content').innerHTML = `
-        <div class="pf-wrap">
-          <div class="pf-head">
-            <div>
-              <div class="pf-title">Profitability</div>
-              <div class="pf-sub">${escHtml(_pfAccountName)} — one row per product. Every figure recalculates as you type.</div>
-            </div>
-            ${ro ? '' : `<div class="pf-actions">
-              <button class="cp-chipbtn" onclick="pfAddProduct()">＋ Product</button>
-              <button class="cp-chipbtn" onclick="pfShare()">🔗 Share</button>
-              <button class="cp-chipbtn" onclick="pfDownload()">⬇ Download</button>
-              <button class="cp-chipbtn" onclick="pfReset()">↺ Reset</button>
-            </div>`}
-          </div>
-
-          <div class="pf-scroll">
-            <table class="pf-table pf-products">
-              <thead>
-                <tr><th colspan="${PF_PRODUCT_COLS.length}">Products — your assumptions</th>
-                    <th colspan="${ro ? 5 : 6}">Results for each product</th></tr>
-                <tr class="pf-sub-head">
-                  ${PF_PRODUCT_COLS.map(([, l]) => `<th>${l}</th>`).join('')}
-                  <th>Budget</th><th>Orders</th><th>Delivered</th><th>Sales</th><th>Contribution</th>${ro ? '' : '<th></th>'}
-                </tr>
-              </thead>
-              <tbody>${productRows}</tbody>
-              <tfoot><tr>
-                <td colspan="7" class="pf-label">Total</td>
-                <td class="pf-c ${Math.round(r.totalAlloc) === 100 ? '' : 'warn'}">${_pfNum(r.totalAlloc)}%</td>
-                <td class="pf-c out">${_pfMoney(v.budget)}</td>
-                <td class="pf-c out">${_pfNum(r.orders)}</td>
-                <td class="pf-c out">${_pfNum(r.delivered)}</td>
-                <td class="pf-c out">${_pfMoney(r.revenue)}</td>
-                <td class="pf-c out">${_pfMoney(r.rows.reduce((n, x) => n + x.contribution, 0))}</td>
-                ${ro ? '' : '<td></td>'}
-              </tr></tfoot>
-            </table>
-          </div>
-          ${Math.round(r.totalAlloc) === 100 ? '' : `<div class="pf-warn">Budget shares add up to ${_pfNum(r.totalAlloc)}% — the budget is split in that proportion. Set them to total 100% for a clean split.</div>`}
-
-          <table class="pf-table">
-            <thead><tr><th colspan="2">Shared costs</th></tr></thead>
-            <tbody>
-              ${PF_SHARED.map(sharedRow).join('')}
-              ${outRow('Video / UGC production cost', _pfMoney(r.content))}
-              ${outRow('Ads tax', _pfMoney(r.adTax))}
-              ${outRow('Cost of goods sold', _pfMoney(r.cogs))}
-              ${outRow('Shipping for all orders', _pfMoney(r.shipping))}
-              ${outRow('Total dead stock cost', _pfMoney(r.deadStock))}
-              ${outRow('Total costs', _pfMoney(r.costs), 'pf-total')}
-            </tbody>
-
-            <thead><tr><th colspan="2">Expected result</th></tr></thead>
-            <tbody>
-              ${outRow('Expected number of purchases', _pfNum(r.orders))}
-              ${outRow('Purchases after returns', _pfNum(r.delivered))}
-              ${outRow('Blended selling price', _pfMoney(r.blendedPrice))}
-              ${outRow('Total sales at the delivery rate', _pfMoney(r.revenue))}
-              ${outRow('ROAS', r.roas.toFixed(2) + '×')}
-              ${outRow('Profit before overheads and income tax', _pfMoney(r.profit), r.profit >= 0 ? 'pf-good' : 'pf-bad')}
-              ${outRow('Margin before overheads and income tax', r.margin.toFixed(2) + '%', r.profit >= 0 ? 'pf-good' : 'pf-bad')}
-            </tbody>
-          </table>
-
-          <div class="pf-note">${r.profit >= 0
-            ? `At this budget the plan clears <strong>${_pfMoney(r.profit)}</strong> before overheads — a ${r.margin.toFixed(1)}% margin.`
-            : `At this budget the plan loses <strong>${_pfMoney(Math.abs(r.profit))}</strong>. Shift budget toward the products with the strongest contribution, raise prices, or improve the delivery rate.`}</div>
-
-          ${_pfYearlyHTML()}
-        </div>`;
+      document.getElementById('content').innerHTML =
+        `<div class="pf-wrap">${_pfYearlyHTML()}</div>`;
     }
 
     // ── Yearly analysis ──────────────────────────────────────────
-    // Every account's recorded month, added up, one row per month. The planner
-    // above asks "will this budget work"; this asks "what did the money
-    // actually do". Reads monthly_history, which is the same source the
+    // Every account's recorded month, added up, one row per month — what the
+    // money actually did. Reads monthly_history, which is the same source the
     // dashboard's totals come from.
     const PF_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     let _pfYear = new Date().getFullYear();
@@ -9901,10 +9808,10 @@
           ${years.map(y => `<option value="${y}"${y === _pfYear ? ' selected' : ''}>${y}</option>`).join('')}
         </select>`;
 
-      const head = `<div class="pf-head" style="margin-top:34px">
+      const head = `<div class="pf-head">
           <div>
             <div class="pf-title">Total cost</div>
-            <div class="pf-sub">What every recorded month actually cost, against what it brought in.</div>
+            <div class="pf-sub">Every recorded month across all accounts — what it cost against what it brought in.</div>
           </div>
           <div class="pf-actions">${picker}</div>
         </div>`;
