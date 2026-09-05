@@ -2313,6 +2313,11 @@
     .pf-costval.pos { color: #15803D; }
     .pf-costval.neg { color: var(--coral); }
     .pf-year-table th { white-space: nowrap; }
+    .pf-costin { width: 68px; padding: 4px 6px; text-align: right; border: 1px solid var(--border);
+      border-radius: 6px; background: var(--bg); color: var(--text-main); font-size: 12px;
+      font-weight: 700; font-family: inherit; font-variant-numeric: tabular-nums; }
+    .pf-costin:focus { outline: none; border-color: var(--blue-light);
+      box-shadow: 0 0 0 2px rgba(5,115,245,.18); }
     .pf-year-table td.pf-label { font-weight: 700; }
     .pf-dim { color: var(--text-muted); }
 
@@ -9767,7 +9772,7 @@
       const { data, error } = await sb.from('monthly_history')
         .select('account_key, month, msg_orders, msg_pieces, msg_revenue, msg_spend, '
               + 'web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, '
-              + 'web_revenue_confirmed, web_spend, branding_spend, total_revenue, returns_pct')
+              + 'web_revenue_confirmed, web_spend, branding_spend, total_revenue, returns_pct, cost_pct')
         .eq('organization_id', currentOrgId)
         .gte('month', `${_pfYear}-01-01`).lte('month', `${_pfYear}-12-31`);
 
@@ -9782,6 +9787,7 @@
       const months = PF_MONTHS.map(() => ({
         spend: 0, orders: 0, pieces: 0, revenue: 0,
         retWeighted: 0, retBase: 0, accounts: 0,
+        costWeighted: 0, costBase: 0,   // cost % weighted by revenue, as returns are
         cfmByStore: {},          // confirmed orders per Shopify store, for cancellation
       }));
 
@@ -9809,6 +9815,8 @@
         // small account's 30% cannot outweigh a large one's 5%.
         const rp = _pfN(r.returns_pct);
         if (rp != null && revenue > 0) { m.retWeighted += rp * revenue; m.retBase += revenue; }
+        const cp = _pfN(r.cost_pct);
+        if (cp != null && revenue > 0) { m.costWeighted += cp * revenue; m.costBase += revenue; }
       });
 
       _pfYearRows = months;
@@ -9852,6 +9860,38 @@
       if (_pfMode) _pfRender();
     }
 
+    // Cost % is stored on the account's own month row, so it can only be typed
+    // when a single account or combined client is selected. Under "All
+    // accounts" the column shows a revenue-weighted average and is read-only —
+    // there is no single row to write it to.
+    async function pfSetCostPct(i, value) {
+      const scope = _pfScope();
+      if (scope.keys.size !== 1) return;
+      const key = [...scope.keys][0];
+      const raw = String(value).trim();
+      const v = raw === '' ? null : Math.min(100, Math.max(0, Number(raw)));
+      if (raw !== '' && isNaN(v)) return;
+      const month = `${_pfYear}-${String(i + 1).padStart(2, '0')}-01`;
+
+      // .select() and a row count, because an RLS-blocked update returns no
+      // error and no rows — it would silently look like it saved.
+      const { data, error } = await sb.from('monthly_history')
+        .update({ cost_pct: v, updated_at: new Date().toISOString() })
+        .eq('organization_id', currentOrgId).eq('account_key', key).eq('month', month)
+        .select('id');
+      if (error) { alert('⚠️ ' + error.message); return; }
+      if (!(data || []).length) {
+        alert('Nothing was saved — there is no recorded month for ' + PF_MONTHS[i] + ' to attach a cost % to.');
+        return;
+      }
+      const m = _pfYearRows?.[i];
+      if (m) {
+        if (v == null) { m.costWeighted = 0; m.costBase = 0; }
+        else { m.costWeighted = v * m.revenue; m.costBase = m.revenue; }
+      }
+      _pfRender();
+    }
+
     function _pfYearlyHTML() {
       const yearsFromData = _pfYearsAvail.length ? _pfYearsAvail : [_pfYear];
       const years = [...new Set([...yearsFromData, new Date().getFullYear()])].sort((a, b) => b - a);
@@ -9876,7 +9916,20 @@
       const tot = _pfYearRows.reduce((a, m) => ({
         spend: a.spend + m.spend, orders: a.orders + m.orders, pieces: a.pieces + m.pieces,
         revenue: a.revenue + m.revenue, retWeighted: a.retWeighted + m.retWeighted, retBase: a.retBase + m.retBase,
-      }), { spend: 0, orders: 0, pieces: 0, revenue: 0, retWeighted: 0, retBase: 0 });
+        costWeighted: a.costWeighted + m.costWeighted, costBase: a.costBase + m.costBase,
+      }), { spend: 0, orders: 0, pieces: 0, revenue: 0, retWeighted: 0, retBase: 0, costWeighted: 0, costBase: 0 });
+
+      // Profit runs on revenue after returns: goods that came back earned
+      // nothing, so charging cost against their revenue would flatter the
+      // figure — on an account returning a third of orders, heavily.
+      const profitOf = m => {
+        const ret  = m.retBase  ? m.retWeighted  / m.retBase  : 0;
+        const cost = m.costBase ? m.costWeighted / m.costBase : null;
+        if (cost == null) return null;                     // no cost % entered
+        const net = m.revenue * (1 - ret / 100);
+        return { net, cost, cogs: net * cost / 100, profit: net - net * cost / 100 - m.spend };
+      };
+      const totProfit = profitOf(tot);
 
       // Cost as a share of revenue — the inverse of ROAS, and the figure that
       // says how much of every pound earned went back into ads.
@@ -9906,18 +9959,26 @@
       const mny  = v => !v ? '—' : _pfMoney(v);
       const rat  = v => v == null ? '—' : v.toFixed(2) + '×';
 
+      const totMargin = (totProfit && totProfit.net) ? totProfit.profit / totProfit.net * 100 : null;
       const summary = `<div class="pf-costgrid">
-          ${[['Total cost % of revenue', pct(costPct), costPct != null && costPct <= 25 ? 'pos' : 'neg'],
+          ${[['Ad spend % of revenue', pct(costPct), costPct != null && costPct <= 25 ? 'pos' : 'neg'],
              ['Total spend',   mny(tot.spend),   ''],
              ['Total revenue', mny(tot.revenue), ''],
              ['ROAS',          rat(roasAll),     roasAll != null && roasAll >= 4 ? 'pos' : 'neg'],
              ['Returns %',     pct(retAll),      ''],
+             ['Profit',        totProfit ? mny(totProfit.profit) : '—',
+                               totProfit ? (totProfit.profit >= 0 ? 'pos' : 'neg') : ''],
+             ['Margin',        totMargin == null ? '—' : pct(totMargin),
+                               totMargin == null ? '' : (totMargin >= 0 ? 'pos' : 'neg')],
             ].map(([l, v, c]) => `<div class="pf-costcard">
                 <div class="pf-costlabel">${l}</div>
                 <div class="pf-costval ${c}">${v}</div>
               </div>`).join('')}
         </div>`;
 
+      // Only typeable against a single account or combined client: under "All
+      // accounts" there is no single row to write the figure to.
+      const editable = _pfScope().keys.size === 1;
       const row = (m, i) => {
         if (!m.accounts) return '';
         const cpo  = m.orders  ? m.spend / m.orders  : null;
@@ -9925,6 +9986,9 @@
         const aov  = m.orders  ? m.revenue / m.orders : null;
         const roas = m.spend   ? m.revenue / m.spend  : null;
         const ret  = m.retBase ? m.retWeighted / m.retBase : null;
+        const cost = m.costBase ? m.costWeighted / m.costBase : null;
+        const p    = profitOf(m);
+        const margin = (p && p.net) ? p.profit / p.net * 100 : null;
         const c = cxFor(m, i);
         const cxCell = (cx && cx[i] !== undefined)
           ? (c ? pct(c.pct) : '—')
@@ -9939,7 +10003,15 @@
           <td class="pf-c">${mny(aov)}</td>
           <td class="pf-c">${cxCell}</td>
           <td class="pf-c">${pct(ret)}</td>
+          <td class="pf-c">${editable
+            ? `<input class="pf-costin" type="number" step="any" min="0" max="100"
+                 value="${cost == null ? '' : cost}" placeholder="—"
+                 onchange="pfSetCostPct(${i}, this.value)">`
+            : pct(cost)}</td>
           <td class="pf-c out">${mny(m.revenue)}</td>
+          <td class="pf-c out">${p ? mny(p.net) : '—'}</td>
+          <td class="pf-c out ${p ? (p.profit >= 0 ? 'pos' : 'neg') : ''}">${p ? mny(p.profit) : '—'}</td>
+          <td class="pf-c out ${margin == null ? '' : (margin >= 0 ? 'pos' : 'neg')}">${margin == null ? '—' : pct(margin)}</td>
           <td class="pf-c out ${roas != null && roas >= 4 ? 'pos' : 'neg'}">${rat(roas)}</td>
         </tr>`;
       };
@@ -9964,7 +10036,13 @@
               <th title="Spend ÷ orders">CPO</th><th title="Spend ÷ pieces">CPC</th>
               <th title="Revenue ÷ orders">AOV</th>
               <th title="Shopify orders minus confirmed, over Shopify orders">Cancellation %</th>
-              <th>Returns %</th><th>Revenue</th><th>ROAS</th>
+              <th>Returns %</th>
+              <th title="Cost of goods as % of revenue — type it in">Cost %</th>
+              <th>Revenue</th>
+              <th title="Revenue after returns">Net revenue</th>
+              <th title="Net revenue − cost of goods − ad spend">Profit</th>
+              <th title="Profit ÷ net revenue">Margin</th>
+              <th>ROAS</th>
             </tr></thead>
             <tbody>${_pfYearRows.map(row).join('')}</tbody>
             <tfoot><tr>
@@ -9977,14 +10055,20 @@
               <td class="pf-c out">${mny(totAov)}</td>
               <td class="pf-c out">${cxLoading ? '<span class="pf-dim">…</span>' : pct(totCx)}</td>
               <td class="pf-c out">${pct(retAll)}</td>
+              <td class="pf-c out">${totProfit ? pct(totProfit.cost) : '—'}</td>
               <td class="pf-c out">${mny(tot.revenue)}</td>
+              <td class="pf-c out">${totProfit ? mny(totProfit.net) : '—'}</td>
+              <td class="pf-c out ${totProfit ? (totProfit.profit >= 0 ? 'pos' : 'neg') : ''}">${totProfit ? mny(totProfit.profit) : '—'}</td>
+              <td class="pf-c out ${totMargin == null ? '' : (totMargin >= 0 ? 'pos' : 'neg')}">${totMargin == null ? '—' : pct(totMargin)}</td>
               <td class="pf-c out ${roasAll != null && roasAll >= 4 ? 'pos' : 'neg'}">${rat(roasAll)}</td>
             </tr></tfoot>
           </table>
         </div>
         <div class="pf-note">
-          Spend includes branding. Revenue is gross — the returns column is recorded per account and
-          weighted by that account's revenue, not deducted here.
+          Spend includes branding. Profit is net revenue − cost of goods − ad spend, where net revenue
+          is after returns. ${editable
+            ? 'Type a cost % into any month to get its profit.'
+            : 'Cost % is a revenue-weighted average here — select a single account to edit it.'}
           ${cxLoading ? ' Cancellation figures are still loading from Shopify.' : ''}
         </div>`;
     }
