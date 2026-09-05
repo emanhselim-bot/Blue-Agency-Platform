@@ -9694,9 +9694,54 @@
     let _pfYear = new Date().getFullYear();
     let _pfYearRows = null;      // aggregated months for the selected year
     let _pfYearsAvail = [];
-    const _pfCxCache = {};       // { year: { monthIndex: rate|null } } — Shopify is slow, ask once
+    let _pfScopeLabel = '';
+    // Keyed by year AND scope: switching account must not show the last one's
+    // Shopify figures. { `${year}|${scopeId}`: { monthIndex: { storeId: placed } } }
+    const _pfCxCache = {};
 
     const _pfN = v => (v == null || isNaN(Number(v))) ? null : Number(v);
+
+    // The table follows whatever is selected above, so its figures always
+    // belong to the account named on the page rather than the whole business.
+    function _pfScope() {
+      const v = sel?.value || '__all__';
+      if (v.startsWith('__group__')) {
+        const g = (_acctGroups || []).find(x => '__group__' + x.id === v);
+        return { keys: new Set([v]), accountIds: (g?.account_ids || []),
+                 label: g ? g.name : 'Combined accounts', id: v };
+      }
+      if (v && v !== '__all__') {
+        return { keys: new Set([v]), accountIds: [v],
+                 label: accountMap[v]?.account_name || 'Account', id: v };
+      }
+      // All accounts, narrowed to the active agency exactly as the picker is.
+      const ids = Object.values(accountMap).filter(acc => {
+        if (currentAgencyId === 'all') return true;
+        const assigned = getAccountAgencyId(currentOrgId, acc.id);
+        return !assigned || assigned === currentAgencyId;
+      }).map(a => a.id);
+      const keys = new Set(ids);
+      (_acctGroups || []).forEach(g => {
+        if ((g.account_ids || []).some(id => keys.has(id))) keys.add('__group__' + g.id);
+      });
+      const agency = getAgencies(currentOrgId).find(a => a.id === currentAgencyId);
+      return { keys, accountIds: ids, id: '__all__|' + currentAgencyId,
+               label: currentAgencyId === 'all' ? 'All accounts' : (agency?.name || 'All accounts') };
+    }
+
+    // Which Shopify store sits behind a key. A group counts only when all its
+    // members share one store — otherwise its confirmed figure cannot be
+    // attributed to a single store's order count.
+    function _pfStoreMap() {
+      const m = {};
+      Object.values(accountMap).forEach(a => { if (a.shopify_store_id) m[a.id] = a.shopify_store_id; });
+      (_acctGroups || []).forEach(g => {
+        const stores = [...new Set((g.account_ids || [])
+          .map(id => accountMap[id]?.shopify_store_id).filter(Boolean))];
+        if (stores.length === 1) m['__group__' + g.id] = stores[0];
+      });
+      return m;
+    }
 
     // A client running two ad accounts is recorded twice: once under the group
     // key and once under each member account. Counting both doubles that
@@ -9704,7 +9749,7 @@
     function _pfDedupe(rows) {
       const groupMembers = {};
       (_acctGroups || []).forEach(g => { groupMembers['__group__' + g.id] = (g.account_ids || []); });
-      const covered = new Set();          // `${month}|${memberAccountId}` claimed by a group row
+      const covered = new Set();
       rows.forEach(r => {
         const members = groupMembers[r.account_key];
         if (members) members.forEach(id => covered.add(r.month + '|' + id));
@@ -9715,7 +9760,9 @@
     async function pfLoadYear(year) {
       _pfYear = Number(year) || _pfYear;
       _pfYearRows = null;
-      _pfRender();                                    // show the spinner immediately
+      const scope = _pfScope();
+      _pfScopeLabel = scope.label;
+      _pfRender();
 
       const { data, error } = await sb.from('monthly_history')
         .select('account_key, month, msg_orders, msg_pieces, msg_revenue, msg_spend, '
@@ -9726,31 +9773,29 @@
 
       if (error) { _pfYearRows = { error: error.message }; _pfRender(); return; }
 
-      const rows = _pfDedupe((data || []).map(r => ({ ...r, month: String(r.month).slice(0, 7) })));
+      const inScope = (data || [])
+        .map(r => ({ ...r, month: String(r.month).slice(0, 7) }))
+        .filter(r => scope.keys.has(r.account_key));
+      const rows = _pfDedupe(inScope);
+      const storeOf = _pfStoreMap();
 
-      const months = PF_MONTHS.map((_, i) => ({
+      const months = PF_MONTHS.map(() => ({
         spend: 0, orders: 0, pieces: 0, revenue: 0,
         retWeighted: 0, retBase: 0, accounts: 0,
-        cfmOrders: 0,                                  // confirmed orders on Shopify-linked accounts
+        cfmByStore: {},          // confirmed orders per Shopify store, for cancellation
       }));
-
-      // Which accounts sit behind a Shopify store — only those can be compared
-      // against Shopify's own order count.
-      const storeBacked = new Set(Object.values(accountMap)
-        .filter(a => a.shopify_store_id).map(a => a.id));
 
       rows.forEach(r => {
         const i = Number(r.month.slice(5, 7)) - 1;
         if (i < 0 || i > 11) return;
         const m = months[i];
-        const webOrders  = _pfN(r.web_orders_confirmed) ?? _pfN(r.web_orders)  ?? 0;
-        const webPieces  = _pfN(r.web_pieces_confirmed) ?? _pfN(r.web_pieces)  ?? 0;
-        const webRev     = _pfN(r.web_revenue_confirmed) ?? _pfN(r.web_revenue) ?? 0;
-        const msgRev     = _pfN(r.msg_revenue) ?? 0;
-        const revenue    = _pfN(r.total_revenue) ?? (msgRev + webRev);
-        // Branding is spend too — it is excluded from performance ratios on the
-        // dashboard, but the money still left the account, so a cost table has
-        // to carry it.
+        const webOrders = _pfN(r.web_orders_confirmed) ?? _pfN(r.web_orders)  ?? 0;
+        const webPieces = _pfN(r.web_pieces_confirmed) ?? _pfN(r.web_pieces)  ?? 0;
+        const webRev    = _pfN(r.web_revenue_confirmed) ?? _pfN(r.web_revenue) ?? 0;
+        const msgRev    = _pfN(r.msg_revenue) ?? 0;
+        const revenue   = _pfN(r.total_revenue) ?? (msgRev + webRev);
+        // Branding is spend too — performance ratios exclude it, but the money
+        // still left the account, so a cost table has to carry it.
         const spend = (_pfN(r.msg_spend) ?? 0) + (_pfN(r.web_spend) ?? 0) + (_pfN(r.branding_spend) ?? 0);
 
         m.spend   += spend;
@@ -9758,7 +9803,8 @@
         m.pieces  += (_pfN(r.msg_pieces) ?? 0) + webPieces;
         m.revenue += revenue;
         m.accounts++;
-        if (storeBacked.has(r.account_key)) m.cfmOrders += webOrders;
+        const st = storeOf[r.account_key];
+        if (st && webOrders > 0) m.cfmByStore[st] = (m.cfmByStore[st] || 0) + webOrders;
         // Returns are a rate per account; weight by that account's revenue so a
         // small account's 30% cannot outweigh a large one's 5%.
         const rp = _pfN(r.returns_pct);
@@ -9767,37 +9813,42 @@
 
       _pfYearRows = months;
       _pfRender();
-      pfLoadCancellations(_pfYear);                    // fills in behind the table
+      pfLoadCancellations(_pfYear, scope);
     }
 
     // Cancellation is not stored: monthly_history holds confirmed orders but no
     // placed count. Shopify has the placed count, one call per store per month,
-    // so it loads after the table is already on screen and is cached per year.
-    async function pfLoadCancellations(year) {
-      if (_pfCxCache[year]) { _pfRender(); return; }
-      const storeIds = [...new Set(Object.values(accountMap)
-        .map(a => a.shopify_store_id).filter(Boolean))];
-      if (!storeIds.length) { _pfCxCache[year] = {}; _pfRender(); return; }
+    // so it loads after the table is on screen and is cached per year+scope.
+    // Kept per store rather than totalled, because a store's order count is
+    // only comparable against a confirmed figure from that same store.
+    async function pfLoadCancellations(year, scope) {
+      const cacheId = year + '|' + scope.id;
+      const cached = _pfCxCache[cacheId];
+      if (cached && !cached._loading) { _pfRender(); return; }
+      const storeIds = [...new Set(scope.accountIds
+        .map(id => accountMap[id]?.shopify_store_id).filter(Boolean))];
+      if (!storeIds.length) { _pfCxCache[cacheId] = {}; _pfRender(); return; }
 
-      _pfCxCache[year] = { _loading: true };
+      _pfCxCache[cacheId] = { _loading: true };
       _pfRender();
       const out = {};
       for (let i = 0; i < 12; i++) {
-        const first = `${year}-${String(i + 1).padStart(2, '0')}-01`;
-        const last  = `${year}-${String(i + 1).padStart(2, '0')}-${new Date(Date.UTC(year, i + 1, 0)).getUTCDate()}`;
+        const mm = String(i + 1).padStart(2, '0');
+        const first = `${year}-${mm}-01`;
+        const last  = `${year}-${mm}-${new Date(Date.UTC(year, i + 1, 0)).getUTCDate()}`;
         const res = await Promise.allSettled(storeIds.map(id =>
           callEdgeFunction('shopify-data', { store_id: id, query: `FROM sales SHOW orders SINCE ${first} UNTIL ${last}` })));
-        let placed = 0, any = false;
-        res.forEach(r => {
+        const byStore = {};
+        res.forEach((r, k) => {
           if (r.status !== 'fulfilled' || !r.value || r.value.error) return;
           const kept = parseInt(r.value.rows?.[0]?.[0]);
-          if (!isNaN(kept)) { placed += kept; any = true; }
+          if (!isNaN(kept)) byStore[storeIds[k]] = kept;
         });
-        out[i] = any ? placed : null;
-        _pfCxCache[year] = { ...out, _loading: i < 11 };
-        if (_pfMode) _pfRender();                       // progressive fill
+        out[i] = byStore;
+        _pfCxCache[cacheId] = { ...out, _loading: i < 11 };
+        if (_pfMode) _pfRender();
       }
-      _pfCxCache[year] = { ...out };
+      _pfCxCache[cacheId] = { ...out };
       if (_pfMode) _pfRender();
     }
 
@@ -9811,7 +9862,7 @@
       const head = `<div class="pf-head">
           <div>
             <div class="pf-title">Total cost</div>
-            <div class="pf-sub">Every recorded month across all accounts — what it cost against what it brought in.</div>
+            <div class="pf-sub">${escHtml(_pfScopeLabel || 'All accounts')} — every recorded month, what it cost against what it brought in.</div>
           </div>
           <div class="pf-actions">${picker}</div>
         </div>`;
@@ -9825,16 +9876,30 @@
       const tot = _pfYearRows.reduce((a, m) => ({
         spend: a.spend + m.spend, orders: a.orders + m.orders, pieces: a.pieces + m.pieces,
         revenue: a.revenue + m.revenue, retWeighted: a.retWeighted + m.retWeighted, retBase: a.retBase + m.retBase,
-        cfmOrders: a.cfmOrders + m.cfmOrders,
-      }), { spend: 0, orders: 0, pieces: 0, revenue: 0, retWeighted: 0, retBase: 0, cfmOrders: 0 });
+      }), { spend: 0, orders: 0, pieces: 0, revenue: 0, retWeighted: 0, retBase: 0 });
 
       // Cost as a share of revenue — the inverse of ROAS, and the figure that
       // says how much of every pound earned went back into ads.
       const costPct = tot.revenue > 0 ? tot.spend / tot.revenue * 100 : null;
       const roasAll = tot.spend   > 0 ? tot.revenue / tot.spend : null;
       const retAll  = tot.retBase > 0 ? tot.retWeighted / tot.retBase : null;
-      const cx      = _pfCxCache[_pfYear] || null;
+      const cx      = _pfCxCache[_pfYear + '|' + _pfScope().id] || null;
       const cxLoading = !!(cx && cx._loading);
+
+      // Cancellation compares a store's placed orders against the confirmed
+      // figure from that same store. A store with only one of the two is left
+      // out entirely — counting it produced rates that climbed from 0% to 83%
+      // purely as more accounts got a confirmed figure recorded.
+      const cxFor = (m, i) => {
+        const placedByStore = cx ? cx[i] : undefined;
+        if (!placedByStore) return null;
+        let placed = 0, confirmed = 0;
+        Object.keys(placedByStore).forEach(sid => {
+          const p = placedByStore[sid], c = m.cfmByStore[sid] || 0;
+          if (p > 0 && c > 0) { placed += p; confirmed += c; }
+        });
+        return placed > 0 ? { placed, confirmed, pct: Math.max(0, (placed - confirmed) / placed * 100) } : null;
+      };
 
       const pct  = v => v == null ? '—' : v.toFixed(2) + '%';
       const nnum = v => !v ? '—' : Number(v).toLocaleString('en');
@@ -9860,12 +9925,10 @@
         const aov  = m.orders  ? m.revenue / m.orders : null;
         const roas = m.spend   ? m.revenue / m.spend  : null;
         const ret  = m.retBase ? m.retWeighted / m.retBase : null;
-        const placed = cx ? cx[i] : undefined;
-        const cxPct = (placed != null && placed > 0 && m.cfmOrders > 0)
-          ? Math.max(0, (placed - m.cfmOrders) / placed * 100) : null;
-        const cxCell = placed === undefined
-          ? (cxLoading ? '<span class="pf-dim">…</span>' : '—')
-          : pct(cxPct);
+        const c = cxFor(m, i);
+        const cxCell = (cx && cx[i] !== undefined)
+          ? (c ? pct(c.pct) : '—')
+          : (cxLoading ? '<span class="pf-dim">…</span>' : '—');
         return `<tr>
           <td class="pf-label">${PF_MONTHS[i]}</td>
           <td class="pf-c">${mny(m.spend)}</td>
@@ -9884,6 +9947,14 @@
       const totCpo = tot.orders ? tot.spend / tot.orders : null;
       const totCpc = tot.pieces ? tot.spend / tot.pieces : null;
       const totAov = tot.orders ? tot.revenue / tot.orders : null;
+      // Year cancellation over the months that actually have both sides, so a
+      // half-loaded year is not reported as if it were complete.
+      const cxYear = _pfYearRows.reduce((a, m, i) => {
+        const c = cxFor(m, i);
+        return c ? { placed: a.placed + c.placed, confirmed: a.confirmed + c.confirmed } : a;
+      }, { placed: 0, confirmed: 0 });
+      const totCx = cxYear.placed > 0
+        ? Math.max(0, (cxYear.placed - cxYear.confirmed) / cxYear.placed * 100) : null;
 
       return head + summary + `
         <div class="pf-scroll">
@@ -9904,7 +9975,7 @@
               <td class="pf-c out">${mny(totCpo)}</td>
               <td class="pf-c out">${mny(totCpc)}</td>
               <td class="pf-c out">${mny(totAov)}</td>
-              <td class="pf-c out">—</td>
+              <td class="pf-c out">${cxLoading ? '<span class="pf-dim">…</span>' : pct(totCx)}</td>
               <td class="pf-c out">${pct(retAll)}</td>
               <td class="pf-c out">${mny(tot.revenue)}</td>
               <td class="pf-c out ${roasAll != null && roasAll >= 4 ? 'pos' : 'neg'}">${rat(roasAll)}</td>
