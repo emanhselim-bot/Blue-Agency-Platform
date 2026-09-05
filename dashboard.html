@@ -9931,6 +9931,21 @@
       };
       const totProfit = profitOf(tot);
 
+      // Break-even ROAS — the ROAS at which profit is exactly zero.
+      // profit = revenue×(1−returns)×(1−cost) − spend = 0
+      //   ⇒ revenue/spend = 1 / ((1−returns)(1−cost))
+      // Expressed on gross revenue so it can be read straight against the ROAS
+      // column next to it. Undefined once cost reaches 100%: no amount of
+      // revenue breaks even when the goods cost everything they sell for.
+      const beRoasOf = m => {
+        const ret  = m.retBase  ? m.retWeighted  / m.retBase  : 0;
+        const cost = m.costBase ? m.costWeighted / m.costBase : null;
+        if (cost == null) return null;
+        const denom = (1 - ret / 100) * (1 - cost / 100);
+        return denom > 0 ? 1 / denom : null;
+      };
+      const totBeRoas = beRoasOf(tot);
+
       // Cost as a share of revenue — the inverse of ROAS, and the figure that
       // says how much of every pound earned went back into ads.
       const costPct = tot.revenue > 0 ? tot.spend / tot.revenue * 100 : null;
@@ -9954,9 +9969,12 @@
         return placed > 0 ? { placed, confirmed, pct: Math.max(0, (placed - confirmed) / placed * 100) } : null;
       };
 
-      const pct  = v => v == null ? '—' : v.toFixed(2) + '%';
-      const nnum = v => !v ? '—' : Number(v).toLocaleString('en');
-      const mny  = v => !v ? '—' : _pfMoney(v);
+      // Dash only for "no value" — never for zero. A month that broke even
+      // exactly has a profit of 0, and showing that as "—" reads as missing
+      // data rather than the answer.
+      const pct  = v => (v == null || isNaN(v)) ? '—' : v.toFixed(2) + '%';
+      const nnum = v => (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString('en');
+      const mny  = v => (v == null || isNaN(v)) ? '—' : _pfMoney(v);
       const rat  = v => v == null ? '—' : v.toFixed(2) + '×';
 
       const totMargin = (totProfit && totProfit.net) ? totProfit.profit / totProfit.net * 100 : null;
@@ -9964,7 +9982,11 @@
           ${[['Ad spend % of revenue', pct(costPct), costPct != null && costPct <= 25 ? 'pos' : 'neg'],
              ['Total spend',   mny(tot.spend),   ''],
              ['Total revenue', mny(tot.revenue), ''],
-             ['ROAS',          rat(roasAll),     roasAll != null && roasAll >= 4 ? 'pos' : 'neg'],
+             ['ROAS',          rat(roasAll),
+                               (totBeRoas != null && roasAll != null)
+                                 ? (roasAll >= totBeRoas ? 'pos' : 'neg')
+                                 : (roasAll != null && roasAll >= 4 ? 'pos' : 'neg')],
+             ['Break-even ROAS', rat(totBeRoas), ''],
              ['Returns %',     pct(retAll),      ''],
              ['Profit',        totProfit ? mny(totProfit.profit) : '—',
                                totProfit ? (totProfit.profit >= 0 ? 'pos' : 'neg') : ''],
@@ -9989,6 +10011,10 @@
         const cost = m.costBase ? m.costWeighted / m.costBase : null;
         const p    = profitOf(m);
         const margin = (p && p.net) ? p.profit / p.net * 100 : null;
+        const be   = beRoasOf(m);
+        // Once break-even is known it is the honest test of the ROAS beside it,
+        // rather than a fixed threshold that means nothing to a given account.
+        const roasOk = (be != null && roas != null) ? roas >= be : (roas != null && roas >= 4);
         const c = cxFor(m, i);
         const cxCell = (cx && cx[i] !== undefined)
           ? (c ? pct(c.pct) : '—')
@@ -10012,7 +10038,8 @@
           <td class="pf-c out">${p ? mny(p.net) : '—'}</td>
           <td class="pf-c out ${p ? (p.profit >= 0 ? 'pos' : 'neg') : ''}">${p ? mny(p.profit) : '—'}</td>
           <td class="pf-c out ${margin == null ? '' : (margin >= 0 ? 'pos' : 'neg')}">${margin == null ? '—' : pct(margin)}</td>
-          <td class="pf-c out ${roas != null && roas >= 4 ? 'pos' : 'neg'}">${rat(roas)}</td>
+          <td class="pf-c out ${roasOk ? 'pos' : 'neg'}">${rat(roas)}</td>
+          <td class="pf-c ${be == null ? '' : 'pf-dim'}">${rat(be)}</td>
         </tr>`;
       };
 
@@ -10043,6 +10070,7 @@
               <th title="Net revenue − cost of goods − ad spend">Profit</th>
               <th title="Profit ÷ net revenue">Margin</th>
               <th>ROAS</th>
+              <th title="ROAS needed to break even: 1 ÷ ((1 − returns) × (1 − cost %))">BE-ROAS</th>
             </tr></thead>
             <tbody>${_pfYearRows.map(row).join('')}</tbody>
             <tfoot><tr>
@@ -10060,7 +10088,8 @@
               <td class="pf-c out">${totProfit ? mny(totProfit.net) : '—'}</td>
               <td class="pf-c out ${totProfit ? (totProfit.profit >= 0 ? 'pos' : 'neg') : ''}">${totProfit ? mny(totProfit.profit) : '—'}</td>
               <td class="pf-c out ${totMargin == null ? '' : (totMargin >= 0 ? 'pos' : 'neg')}">${totMargin == null ? '—' : pct(totMargin)}</td>
-              <td class="pf-c out ${roasAll != null && roasAll >= 4 ? 'pos' : 'neg'}">${rat(roasAll)}</td>
+              <td class="pf-c out ${(totBeRoas != null && roasAll != null) ? (roasAll >= totBeRoas ? 'pos' : 'neg') : (roasAll != null && roasAll >= 4 ? 'pos' : 'neg')}">${rat(roasAll)}</td>
+              <td class="pf-c out">${rat(totBeRoas)}</td>
             </tr></tfoot>
           </table>
         </div>
