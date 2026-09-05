@@ -2297,6 +2297,24 @@
     .pf-products .pf-sub-head th { background: var(--brand-mid); font-size: 9.5px; letter-spacing: .6px; padding: 7px 8px; text-align: right; }
     .pf-products .pf-sub-head th:first-child { text-align: left; }
     .pf-products td { padding: 5px 8px; }
+    /* Yearly analysis under the planner */
+    .pf-year { padding: 6px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+      background: var(--surface); color: var(--text-main); font-size: 13px; font-weight: 700;
+      font-family: inherit; cursor: pointer; }
+    .pf-year:focus { outline: none; border-color: var(--blue-light); }
+    .pf-costgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px; margin: 14px 0 18px; }
+    .pf-costcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; }
+    .pf-costlabel { font-size: 10.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 5px; }
+    .pf-costval { font-size: 20px; font-weight: 800; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
+    .pf-costval.pos { color: #15803D; }
+    .pf-costval.neg { color: var(--coral); }
+    .pf-year-table th { white-space: nowrap; }
+    .pf-year-table td.pf-label { font-weight: 700; }
+    .pf-dim { color: var(--text-muted); }
+
     .pf-c { text-align: right; font-variant-numeric: tabular-nums; }
     .pf-c.out { font-weight: 700; color: var(--brand-ink); }
     .pf-c.out.pos { color: #15803D; }
@@ -9642,6 +9660,15 @@
       _pfAccountName = account?.name || account?.account_name || 'Account';
       _pfCurrency = (account?.currency || 'EGP') + ' ';
       _pfRender();
+      // Which years actually have data, so the picker offers only those.
+      sb.from('monthly_history').select('month').eq('organization_id', currentOrgId)
+        .then(({ data }) => {
+          const ys = [...new Set((data || []).map(r => Number(String(r.month).slice(0, 4))))]
+            .filter(y => y > 2000).sort((a, b) => b - a);
+          if (ys.length) { _pfYearsAvail = ys; if (!ys.includes(_pfYear)) _pfYear = ys[0]; }
+          pfLoadYear(_pfYear);
+        })
+        .catch(() => pfLoadYear(_pfYear));
     }
 
     function _pfMoney(n) {
@@ -9746,6 +9773,241 @@
           <div class="pf-note">${r.profit >= 0
             ? `At this budget the plan clears <strong>${_pfMoney(r.profit)}</strong> before overheads — a ${r.margin.toFixed(1)}% margin.`
             : `At this budget the plan loses <strong>${_pfMoney(Math.abs(r.profit))}</strong>. Shift budget toward the products with the strongest contribution, raise prices, or improve the delivery rate.`}</div>
+
+          ${_pfYearlyHTML()}
+        </div>`;
+    }
+
+    // ── Yearly analysis ──────────────────────────────────────────
+    // Every account's recorded month, added up, one row per month. The planner
+    // above asks "will this budget work"; this asks "what did the money
+    // actually do". Reads monthly_history, which is the same source the
+    // dashboard's totals come from.
+    const PF_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let _pfYear = new Date().getFullYear();
+    let _pfYearRows = null;      // aggregated months for the selected year
+    let _pfYearsAvail = [];
+    const _pfCxCache = {};       // { year: { monthIndex: rate|null } } — Shopify is slow, ask once
+
+    const _pfN = v => (v == null || isNaN(Number(v))) ? null : Number(v);
+
+    // A client running two ad accounts is recorded twice: once under the group
+    // key and once under each member account. Counting both doubles that
+    // client. The group row wins for any month it covers.
+    function _pfDedupe(rows) {
+      const groupMembers = {};
+      (_acctGroups || []).forEach(g => { groupMembers['__group__' + g.id] = (g.account_ids || []); });
+      const covered = new Set();          // `${month}|${memberAccountId}` claimed by a group row
+      rows.forEach(r => {
+        const members = groupMembers[r.account_key];
+        if (members) members.forEach(id => covered.add(r.month + '|' + id));
+      });
+      return rows.filter(r => !covered.has(r.month + '|' + r.account_key));
+    }
+
+    async function pfLoadYear(year) {
+      _pfYear = Number(year) || _pfYear;
+      _pfYearRows = null;
+      _pfRender();                                    // show the spinner immediately
+
+      const { data, error } = await sb.from('monthly_history')
+        .select('account_key, month, msg_orders, msg_pieces, msg_revenue, msg_spend, '
+              + 'web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, '
+              + 'web_revenue_confirmed, web_spend, branding_spend, total_revenue, returns_pct')
+        .eq('organization_id', currentOrgId)
+        .gte('month', `${_pfYear}-01-01`).lte('month', `${_pfYear}-12-31`);
+
+      if (error) { _pfYearRows = { error: error.message }; _pfRender(); return; }
+
+      const rows = _pfDedupe((data || []).map(r => ({ ...r, month: String(r.month).slice(0, 7) })));
+
+      const months = PF_MONTHS.map((_, i) => ({
+        spend: 0, orders: 0, pieces: 0, revenue: 0,
+        retWeighted: 0, retBase: 0, accounts: 0,
+        cfmOrders: 0,                                  // confirmed orders on Shopify-linked accounts
+      }));
+
+      // Which accounts sit behind a Shopify store — only those can be compared
+      // against Shopify's own order count.
+      const storeBacked = new Set(Object.values(accountMap)
+        .filter(a => a.shopify_store_id).map(a => a.id));
+
+      rows.forEach(r => {
+        const i = Number(r.month.slice(5, 7)) - 1;
+        if (i < 0 || i > 11) return;
+        const m = months[i];
+        const webOrders  = _pfN(r.web_orders_confirmed) ?? _pfN(r.web_orders)  ?? 0;
+        const webPieces  = _pfN(r.web_pieces_confirmed) ?? _pfN(r.web_pieces)  ?? 0;
+        const webRev     = _pfN(r.web_revenue_confirmed) ?? _pfN(r.web_revenue) ?? 0;
+        const msgRev     = _pfN(r.msg_revenue) ?? 0;
+        const revenue    = _pfN(r.total_revenue) ?? (msgRev + webRev);
+        // Branding is spend too — it is excluded from performance ratios on the
+        // dashboard, but the money still left the account, so a cost table has
+        // to carry it.
+        const spend = (_pfN(r.msg_spend) ?? 0) + (_pfN(r.web_spend) ?? 0) + (_pfN(r.branding_spend) ?? 0);
+
+        m.spend   += spend;
+        m.orders  += (_pfN(r.msg_orders) ?? 0) + webOrders;
+        m.pieces  += (_pfN(r.msg_pieces) ?? 0) + webPieces;
+        m.revenue += revenue;
+        m.accounts++;
+        if (storeBacked.has(r.account_key)) m.cfmOrders += webOrders;
+        // Returns are a rate per account; weight by that account's revenue so a
+        // small account's 30% cannot outweigh a large one's 5%.
+        const rp = _pfN(r.returns_pct);
+        if (rp != null && revenue > 0) { m.retWeighted += rp * revenue; m.retBase += revenue; }
+      });
+
+      _pfYearRows = months;
+      _pfRender();
+      pfLoadCancellations(_pfYear);                    // fills in behind the table
+    }
+
+    // Cancellation is not stored: monthly_history holds confirmed orders but no
+    // placed count. Shopify has the placed count, one call per store per month,
+    // so it loads after the table is already on screen and is cached per year.
+    async function pfLoadCancellations(year) {
+      if (_pfCxCache[year]) { _pfRender(); return; }
+      const storeIds = [...new Set(Object.values(accountMap)
+        .map(a => a.shopify_store_id).filter(Boolean))];
+      if (!storeIds.length) { _pfCxCache[year] = {}; _pfRender(); return; }
+
+      _pfCxCache[year] = { _loading: true };
+      _pfRender();
+      const out = {};
+      for (let i = 0; i < 12; i++) {
+        const first = `${year}-${String(i + 1).padStart(2, '0')}-01`;
+        const last  = `${year}-${String(i + 1).padStart(2, '0')}-${new Date(Date.UTC(year, i + 1, 0)).getUTCDate()}`;
+        const res = await Promise.allSettled(storeIds.map(id =>
+          callEdgeFunction('shopify-data', { store_id: id, query: `FROM sales SHOW orders SINCE ${first} UNTIL ${last}` })));
+        let placed = 0, any = false;
+        res.forEach(r => {
+          if (r.status !== 'fulfilled' || !r.value || r.value.error) return;
+          const kept = parseInt(r.value.rows?.[0]?.[0]);
+          if (!isNaN(kept)) { placed += kept; any = true; }
+        });
+        out[i] = any ? placed : null;
+        _pfCxCache[year] = { ...out, _loading: i < 11 };
+        if (_pfMode) _pfRender();                       // progressive fill
+      }
+      _pfCxCache[year] = { ...out };
+      if (_pfMode) _pfRender();
+    }
+
+    function _pfYearlyHTML() {
+      const yearsFromData = _pfYearsAvail.length ? _pfYearsAvail : [_pfYear];
+      const years = [...new Set([...yearsFromData, new Date().getFullYear()])].sort((a, b) => b - a);
+      const picker = `<select class="pf-year" onchange="pfLoadYear(this.value)">
+          ${years.map(y => `<option value="${y}"${y === _pfYear ? ' selected' : ''}>${y}</option>`).join('')}
+        </select>`;
+
+      const head = `<div class="pf-head" style="margin-top:34px">
+          <div>
+            <div class="pf-title">Total cost</div>
+            <div class="pf-sub">What every recorded month actually cost, against what it brought in.</div>
+          </div>
+          <div class="pf-actions">${picker}</div>
+        </div>`;
+
+      if (_pfYearRows === null) return head + `<div class="pf-note">Loading ${_pfYear}…</div>`;
+      if (_pfYearRows.error)   return head + `<div class="pf-warn">Could not load ${_pfYear}: ${escHtml(_pfYearRows.error)}</div>`;
+
+      const live = _pfYearRows.filter(m => m.accounts > 0);
+      if (!live.length) return head + `<div class="pf-note">No months recorded for ${_pfYear} yet.</div>`;
+
+      const tot = _pfYearRows.reduce((a, m) => ({
+        spend: a.spend + m.spend, orders: a.orders + m.orders, pieces: a.pieces + m.pieces,
+        revenue: a.revenue + m.revenue, retWeighted: a.retWeighted + m.retWeighted, retBase: a.retBase + m.retBase,
+        cfmOrders: a.cfmOrders + m.cfmOrders,
+      }), { spend: 0, orders: 0, pieces: 0, revenue: 0, retWeighted: 0, retBase: 0, cfmOrders: 0 });
+
+      // Cost as a share of revenue — the inverse of ROAS, and the figure that
+      // says how much of every pound earned went back into ads.
+      const costPct = tot.revenue > 0 ? tot.spend / tot.revenue * 100 : null;
+      const roasAll = tot.spend   > 0 ? tot.revenue / tot.spend : null;
+      const retAll  = tot.retBase > 0 ? tot.retWeighted / tot.retBase : null;
+      const cx      = _pfCxCache[_pfYear] || null;
+      const cxLoading = !!(cx && cx._loading);
+
+      const pct  = v => v == null ? '—' : v.toFixed(2) + '%';
+      const nnum = v => !v ? '—' : Number(v).toLocaleString('en');
+      const mny  = v => !v ? '—' : _pfMoney(v);
+      const rat  = v => v == null ? '—' : v.toFixed(2) + '×';
+
+      const summary = `<div class="pf-costgrid">
+          ${[['Total cost % of revenue', pct(costPct), costPct != null && costPct <= 25 ? 'pos' : 'neg'],
+             ['Total spend',   mny(tot.spend),   ''],
+             ['Total revenue', mny(tot.revenue), ''],
+             ['ROAS',          rat(roasAll),     roasAll != null && roasAll >= 4 ? 'pos' : 'neg'],
+             ['Returns %',     pct(retAll),      ''],
+            ].map(([l, v, c]) => `<div class="pf-costcard">
+                <div class="pf-costlabel">${l}</div>
+                <div class="pf-costval ${c}">${v}</div>
+              </div>`).join('')}
+        </div>`;
+
+      const row = (m, i) => {
+        if (!m.accounts) return '';
+        const cpo  = m.orders  ? m.spend / m.orders  : null;
+        const cpc  = m.pieces  ? m.spend / m.pieces  : null;
+        const aov  = m.orders  ? m.revenue / m.orders : null;
+        const roas = m.spend   ? m.revenue / m.spend  : null;
+        const ret  = m.retBase ? m.retWeighted / m.retBase : null;
+        const placed = cx ? cx[i] : undefined;
+        const cxPct = (placed != null && placed > 0 && m.cfmOrders > 0)
+          ? Math.max(0, (placed - m.cfmOrders) / placed * 100) : null;
+        const cxCell = placed === undefined
+          ? (cxLoading ? '<span class="pf-dim">…</span>' : '—')
+          : pct(cxPct);
+        return `<tr>
+          <td class="pf-label">${PF_MONTHS[i]}</td>
+          <td class="pf-c">${mny(m.spend)}</td>
+          <td class="pf-c">${nnum(m.orders)}</td>
+          <td class="pf-c">${nnum(m.pieces)}</td>
+          <td class="pf-c">${mny(cpo)}</td>
+          <td class="pf-c">${mny(cpc)}</td>
+          <td class="pf-c">${mny(aov)}</td>
+          <td class="pf-c">${cxCell}</td>
+          <td class="pf-c">${pct(ret)}</td>
+          <td class="pf-c out">${mny(m.revenue)}</td>
+          <td class="pf-c out ${roas != null && roas >= 4 ? 'pos' : 'neg'}">${rat(roas)}</td>
+        </tr>`;
+      };
+
+      const totCpo = tot.orders ? tot.spend / tot.orders : null;
+      const totCpc = tot.pieces ? tot.spend / tot.pieces : null;
+      const totAov = tot.orders ? tot.revenue / tot.orders : null;
+
+      return head + summary + `
+        <div class="pf-scroll">
+          <table class="pf-table pf-year-table">
+            <thead><tr>
+              <th>Month</th><th>Total spending</th><th>Orders</th><th>Pieces</th>
+              <th title="Spend ÷ orders">CPO</th><th title="Spend ÷ pieces">CPC</th>
+              <th title="Revenue ÷ orders">AOV</th>
+              <th title="Shopify orders minus confirmed, over Shopify orders">Cancellation %</th>
+              <th>Returns %</th><th>Revenue</th><th>ROAS</th>
+            </tr></thead>
+            <tbody>${_pfYearRows.map(row).join('')}</tbody>
+            <tfoot><tr>
+              <td class="pf-label">Total</td>
+              <td class="pf-c out">${mny(tot.spend)}</td>
+              <td class="pf-c out">${nnum(tot.orders)}</td>
+              <td class="pf-c out">${nnum(tot.pieces)}</td>
+              <td class="pf-c out">${mny(totCpo)}</td>
+              <td class="pf-c out">${mny(totCpc)}</td>
+              <td class="pf-c out">${mny(totAov)}</td>
+              <td class="pf-c out">—</td>
+              <td class="pf-c out">${pct(retAll)}</td>
+              <td class="pf-c out">${mny(tot.revenue)}</td>
+              <td class="pf-c out ${roasAll != null && roasAll >= 4 ? 'pos' : 'neg'}">${rat(roasAll)}</td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div class="pf-note">
+          Spend includes branding. Revenue is gross — the returns column is recorded per account and
+          weighted by that account's revenue, not deducted here.
+          ${cxLoading ? ' Cancellation figures are still loading from Shopify.' : ''}
         </div>`;
     }
 
