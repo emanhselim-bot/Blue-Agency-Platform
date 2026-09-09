@@ -2561,6 +2561,9 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <select id="mh-year" onchange="mhLoad()" class="connect-input" style="padding:6px 10px;font-size:13px;min-width:auto"></select>
+          <button id="mh-fill-btn" onclick="mhFillFromLive()" title="Pull spend, orders, pieces, revenue and messages from Meta and Shopify for any cell still empty"
+                  style="padding:8px 14px;background:transparent;color:var(--text-main);border:1px solid var(--border);
+                         border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">⤓ Fill blanks from live data</button>
           <button onclick="mhSave()" style="padding:8px 18px;background:var(--blue-light);color:#fff;border:none;
                   border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">💾 Save</button>
           <button onclick="mhClose()" style="padding:8px 14px;background:transparent;color:var(--text-main);
@@ -5121,13 +5124,18 @@
     // ═══ MONTHLY HISTORY ═══════════════════════════════════════
     // Manually recorded orders / pieces / revenue for months with no live data.
     // Keyed on the account picker's value, so a combined group is one entry.
+    // Spend was always stored but never editable here, so a recorded month
+    // could carry revenue with no cost — which is what the Total cost table
+    // reads. Both spend columns are now on the sheet.
     const MH_FIELDS = [
       ['web_orders',  'Orders'],  ['web_pieces',  'Pieces'],  ['web_revenue',  'Revenue'],
+      ['web_spend',   'Spend'],
       // Confirmed figures replace the Shopify ones in the totals when filled.
       ['web_orders_confirmed',  'Confirmed orders'],
       ['web_pieces_confirmed',  'Confirmed pieces'],
       ['web_revenue_confirmed', 'Confirmed revenue'],
       ['msg_orders',  'Orders'],  ['msg_pieces',  'Pieces'],  ['msg_revenue',  'Revenue'],
+      ['msg_spend',   'Spend'],
       ['branding_spend', 'Branding spend'],
       ['returns_pct', 'Returns %'],
     ];
@@ -5198,14 +5206,18 @@
         <thead>
           <tr style="position:sticky;top:0;background:var(--bg-card,#16213E);z-index:1">
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
-            <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
-            <th colspan="3" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
+            <th colspan="7" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
+            <th colspan="4" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#C4B5FD">📣 Branding spend</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
           </tr>
           <tr style="position:sticky;top:32px;background:var(--bg-card,#16213E);z-index:1">
-            ${MH_FIELDS.filter(([k]) => k !== 'returns_pct').map(([, label]) =>
+            ${/* Only the columns sitting under the Website and Messages spans.
+                  Branding, Returns and Net revenue each own a rowspan header of
+                  their own, so listing them here pushed this row one cell wide
+                  and shifted every label off its column. */''}
+            ${MH_FIELDS.filter(([k]) => k.startsWith('web_') || k.startsWith('msg_')).map(([, label]) =>
                 `<th style="padding:6px 8px;font-size:11px;color:var(--text-muted);
                  border-bottom:1px solid var(--border);font-weight:600">${label}</th>`).join('')}
           </tr>
@@ -5267,6 +5279,117 @@
           if (input) input.value = val.replace(/[^\d.\-]/g, '');
         });
       });
+    }
+
+    // ── Fill blanks from live data ────────────────────────────────
+    // Pulls each month straight from Meta and Shopify and drops the figures
+    // into cells that are still empty. Anything already typed is left exactly
+    // as it is — the confirmed columns in particular are deliberate overrides
+    // of what Shopify reports, and replacing them would erase the
+    // placed-versus-confirmed gap the dashboard is built to show.
+    //
+    // Writes into the inputs rather than the database, so nothing is committed
+    // until Save is pressed and a wrong pull can simply be discarded.
+    async function mhFillFromLive() {
+      const btn    = document.getElementById('mh-fill-btn');
+      const status = document.getElementById('mh-status');
+      const year   = parseInt(document.getElementById('mh-year').value, 10) || new Date().getFullYear();
+      const acct   = accountMap[_mhScopeKey];
+      if (!acct) {
+        status.textContent = 'Pick a single account first — live data cannot be pulled for a combined selection.';
+        status.style.color = '#F59E0B';
+        return;
+      }
+
+      const now = new Date();
+      const months = [];
+      for (let m = 0; m < 12; m++) {
+        if (year > now.getFullYear() || (year === now.getFullYear() && m > now.getMonth())) continue;
+        // A cell is a candidate only when its input is blank.
+        const blanks = MH_FIELDS.filter(([k]) =>
+          (document.querySelector(`#mh-table input[data-m="${m}"][data-k="${k}"]`)?.value ?? '') === '');
+        if (blanks.length) months.push(m);
+      }
+      if (!months.length) {
+        status.textContent = 'Nothing to fill — every cell for ' + year + ' already has a value.';
+        status.style.color = 'var(--text-muted)';
+        return;
+      }
+
+      const originalLabel = btn.textContent;
+      btn.disabled = true;
+      let filled = 0;
+      const unsplitSpend = [];   // months where Meta's spend could not be apportioned
+
+      const setIfBlank = (m, key, value) => {
+        if (value == null || isNaN(value)) return;
+        const el = document.querySelector(`#mh-table input[data-m="${m}"][data-k="${key}"]`);
+        if (!el || el.value !== '') return;             // never overwrite
+        el.value = Math.round(Number(value) * 100) / 100;
+        el.style.background = 'rgba(74,222,128,.14)';   // show what was just filled
+        filled++;
+      };
+
+      try {
+        for (let i = 0; i < months.length; i++) {
+          const m = months[i];
+          const last  = new Date(Date.UTC(year, m + 1, 0)).getUTCDate();
+          const from  = `${year}-${String(m + 1).padStart(2, '0')}-01`;
+          const to    = `${year}-${String(m + 1).padStart(2, '0')}-${last}`;
+          btn.textContent = `⤓ ${MH_MONTHS[m].slice(0, 3)} (${i + 1}/${months.length})…`;
+
+          const [metaRes, shopRes] = await Promise.allSettled([
+            callEdgeFunction('meta-data', { account_db_id: acct.id, period: 'custom', custom_from: from, custom_to: to }),
+            acct.shopify_store_id
+              ? callEdgeFunction('shopify-data', { store_id: acct.shopify_store_id, query: `FROM all SHOW orders SINCE ${from} UNTIL ${to}` })
+              : Promise.resolve(null),
+          ]);
+
+          if (metaRes.status === 'fulfilled' && metaRes.value && !metaRes.value.error) {
+            const total = parseFloat(metaRes.value.ad_entity?.amount_spent);
+            // Meta reports one spend figure for the account; it does not say how
+            // much went to the website versus messages. So it is only safe to
+            // fill a spend cell when the other channel's is already known — the
+            // remainder is then exact rather than a guess. If both are blank,
+            // neither is filled and the month is reported below.
+            const val = k => {
+              const el = document.querySelector(`#mh-table input[data-m="${m}"][data-k="${k}"]`);
+              const n = parseFloat(el?.value);
+              return (el && el.value !== '' && !isNaN(n)) ? n : null;
+            };
+            if (!isNaN(total)) {
+              const web = val('web_spend'), msg = val('msg_spend');
+              if (web != null && msg == null)      setIfBlank(m, 'msg_spend', Math.max(0, total - web));
+              else if (msg != null && web == null) setIfBlank(m, 'web_spend', Math.max(0, total - msg));
+              else if (web == null && msg == null) unsplitSpend.push(`${MH_MONTHS[m].slice(0,3)} (${fmt(total, '')})`);
+            }
+          }
+
+          if (shopRes.status === 'fulfilled' && shopRes.value && !shopRes.value.error) {
+            const s = shopRes.value.sales?.rows?.[0];
+            const u = shopRes.value.inventory?.rows?.[0];
+            if (s) {
+              setIfBlank(m, 'web_orders',  parseInt(s[0]));
+              setIfBlank(m, 'web_revenue', parseFloat(s[1]));
+            }
+            if (u) setIfBlank(m, 'web_pieces', parseInt(u[0]));
+          }
+        }
+
+        const note = unsplitSpend.length
+          ? `<div style="margin-top:6px;color:#F59E0B">Spend left blank for ${unsplitSpend.join(', ')} — Meta reports one figure per account and cannot say how much went to website versus messages. Type one of the two and run this again; the other will be filled exactly.</div>`
+          : '';
+        status.innerHTML = (filled
+          ? `Filled <strong>${filled}</strong> empty cell${filled === 1 ? '' : 's'} across ${months.length} month${months.length === 1 ? '' : 's'}. Nothing you had typed was changed — press Save to keep them.`
+          : 'No live figures were available for the empty cells.') + note;
+        status.style.color = filled ? '#16A34A' : 'var(--text-muted)';
+      } catch (err) {
+        status.textContent = '⚠️ ' + (err?.message || 'Could not reach Meta or Shopify.');
+        status.style.color = '#F87171';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
     }
 
     async function mhSave() {
