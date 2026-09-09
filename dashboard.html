@@ -2348,7 +2348,25 @@
     .pf-warn { font-size: 12px; color: #B45309; margin: 4px 0 14px; text-align: center; }
     [data-theme="dark"] .pf-warn { color: #FCBA00; }
     .al-wrap { max-width: 1200px; margin: 0 auto; }
-    .al-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    .al-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+
+    /* Saved competitors strip */
+    .al-comps { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px;
+      background: var(--surface); }
+    .al-comps-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .al-comps-title { font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase;
+      color: var(--text-muted); }
+    .al-comps-add { display: flex; gap: 8px; flex-wrap: wrap; }
+    .al-comps-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 11px; }
+    .al-comps-empty { font-size: 12px; color: var(--text-muted); margin-top: 9px; line-height: 1.5; }
+    .al-comp { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px;
+      overflow: hidden; background: var(--bg); }
+    .al-comp-run { border: none; background: none; padding: 6px 12px; font-size: 12.5px; font-weight: 700;
+      font-family: inherit; color: var(--text-main); cursor: pointer; }
+    .al-comp-run:hover { background: rgba(5,115,245,.16); color: var(--blue-light); }
+    .al-comp-x { border: none; background: none; padding: 6px 9px 6px 4px; font-size: 11px; cursor: pointer;
+      color: var(--text-muted); font-family: inherit; }
+    .al-comp-x:hover { color: var(--coral); }
     .al-input { flex: 1; min-width: 200px; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px;
       background: var(--surface); color: var(--text-main); font-family: inherit; font-size: 13px; }
     .al-input.al-sm { flex: 0 0 auto; min-width: 140px; }
@@ -6394,6 +6412,9 @@
         const label = sel.options[sel.selectedIndex]?.textContent?.trim() || sel.value;
         logView('ad account "' + label + '"', { entityType: 'ad_account', entityId: sel.value, label });
       }
+      // Saved competitors belong to the account, so switching account inside the
+      // Ads Library swaps the list rather than dropping back to the dashboard.
+      if (_alMode) { _alResults = null; openAdsLibraryTab(); return; }
       loadData();
     });
 
@@ -10479,9 +10500,97 @@
     // ═══════════════════════════════════════════════════════════
     let _alMode = false, _alResults = null, _alQuery = { terms: '', country: 'EG', status: 'ACTIVE', media: 'ALL' };
 
-    function openAdsLibraryTab() {
+    // ── Saved competitors ────────────────────────────────────────
+    // Kept per account so the Ads Library opens on the brands that matter to
+    // that client rather than being searched again every time.
+    let _alComps = [], _alCompsKey = null;
+
+    // Accepts a pasted Ad Library link, a plain page id, or a brand name.
+    // A link is the useful case: view_all_page_id pins the exact page, which a
+    // name search cannot promise.
+    function _alParseTarget(raw) {
+      const s = String(raw || '').trim();
+      if (!s) return null;
+      if (/^\d{6,}$/.test(s)) return { page_id: s, name: s };
+      if (/^https?:\/\//i.test(s)) {
+        let u; try { u = new URL(s); } catch { return null; }
+        const p = u.searchParams;
+        const id = p.get('view_all_page_id') || p.get('page_ids') || p.get('id');
+        if (id && /^\d{6,}$/.test(id)) return { page_id: id, name: p.get('q') || id, source_url: s };
+        const q = p.get('q');
+        if (q) return { search_term: q, name: q, source_url: s };
+        // A page URL like facebook.com/BrandName — the handle is the best we get.
+        const handle = u.pathname.split('/').filter(Boolean)[0];
+        if (handle && !/^(ads|pages|profile\.php)$/i.test(handle)) {
+          return { search_term: handle, name: handle, source_url: s };
+        }
+        return null;
+      }
+      return { search_term: s, name: s };
+    }
+
+    async function alLoadCompetitors() {
+      _alCompsKey = sel?.value || '__all__';
+      if (!currentOrgId) { _alComps = []; return; }
+      const { data, error } = await sb.from('account_competitors')
+        .select('id, name, page_id, search_term, country, source_url')
+        .eq('organization_id', currentOrgId)
+        .eq('account_key', _alCompsKey)
+        .order('created_at');
+      _alComps = error ? [] : (data || []);
+    }
+
+    async function alAddCompetitor() {
+      const input = document.getElementById('al-comp-input');
+      const parsed = _alParseTarget(input?.value);
+      if (!parsed) { alert('Paste an Ad Library link, a page ID, or a brand name.'); return; }
+      const country = document.getElementById('al-country')?.value || 'EG';
+      const { data, error } = await sb.from('account_competitors').insert({
+        organization_id: currentOrgId,
+        account_key: _alCompsKey,
+        name: parsed.name, page_id: parsed.page_id ?? null,
+        search_term: parsed.search_term ?? null,
+        country, source_url: parsed.source_url ?? null,
+        created_by: currentUser?.id ?? null,
+      }).select('id');
+      if (error) {
+        // 23505 is the unique index: the competitor is already saved here.
+        alert(error.code === '23505'
+          ? 'That competitor is already saved for this account.'
+          : '⚠️ ' + error.message);
+        return;
+      }
+      if (!(data || []).length) { alert('Nothing was saved — you may not have permission to edit this account.'); return; }
+      input.value = '';
+      await alLoadCompetitors();
+      _alRender();
+    }
+
+    async function alRemoveCompetitor(id) {
+      const c = _alComps.find(x => x.id === id);
+      if (!confirm(`Remove ${c?.name || 'this competitor'} from this account?`)) return;
+      const { data, error } = await sb.from('account_competitors').delete().eq('id', id).select('id');
+      if (error) { alert('⚠️ ' + error.message); return; }
+      if (!(data || []).length) { alert('Nothing was removed — you may not have permission to edit this account.'); return; }
+      await alLoadCompetitors();
+      _alRender();
+    }
+
+    // Runs a saved competitor without retyping anything.
+    async function alRunCompetitor(id) {
+      const c = _alComps.find(x => x.id === id);
+      if (!c) return;
+      _alQuery = { terms: c.page_id || c.search_term, country: c.country || 'EG',
+                   status: _alQuery.status, media: _alQuery.media };
+      _alRender('loading');
+      await _alRunQuery(c.page_id ? { page_ids: c.page_id } : { search_terms: c.search_term });
+    }
+
+    async function openAdsLibraryTab() {
       _alMode = true; _pfMode = false;
       renderPlatformTabs();
+      _alRender();
+      await alLoadCompetitors();
       _alRender();
     }
     function leaveAdsLibrary() { if (_alMode) { _alMode = false; renderPlatformTabs(); } }
@@ -10526,7 +10635,45 @@
             <button class="refresh-btn" onclick="alSearch()">Search</button>
           </div>
 
+          ${_alCompetitorsHTML()}
+
           <div id="al-body">${body}</div>
+        </div>`;
+    }
+
+    function _alCompetitorsHTML() {
+      const scopeName = (sel?.value === '__all__' || !sel?.value)
+        ? 'All accounts'
+        : (accountMap[sel.value]?.account_name
+           || (_acctGroups.find(g => '__group__' + g.id === sel?.value)?.name)
+           || 'this account');
+      // Viewers can open a saved competitor but not change the list, matching
+      // how targets and monthly history already behave.
+      const canEdit = currentRole === 'owner' || currentRole === 'admin' || currentRole === 'editor';
+      return `
+        <div class="al-comps">
+          <div class="al-comps-head">
+            <span class="al-comps-title">⭐ Saved competitors · ${escHtml(scopeName)}</span>
+            ${canEdit ? `
+              <div class="al-comps-add">
+                <input class="al-input al-sm" id="al-comp-input" style="min-width:260px"
+                       placeholder="Paste an Ad Library link, page ID, or brand name"
+                       onkeydown="if(event.key==='Enter')alAddCompetitor()">
+                <button class="cp-chipbtn" onclick="alAddCompetitor()">＋ Save</button>
+              </div>` : ''}
+          </div>
+          ${_alComps.length
+            ? `<div class="al-comps-list">${_alComps.map(c => `
+                <span class="al-comp">
+                  <button class="al-comp-run" onclick="alRunCompetitor('${c.id}')"
+                          title="${c.page_id ? 'Page ID ' + escHtml(c.page_id) : 'Search: ' + escHtml(c.search_term || '')}">
+                    ${escHtml(c.name)}${c.page_id ? '' : ' <span style="opacity:.6">(by name)</span>'}
+                  </button>
+                  ${canEdit ? `<button class="al-comp-x" title="Remove" onclick="alRemoveCompetitor('${c.id}')">✕</button>` : ''}
+                </span>`).join('')}</div>`
+            : `<div class="al-comps-empty">${canEdit
+                 ? 'Nothing saved yet — paste a competitor’s Ad Library link above and it will be here every time you open this account.'
+                 : 'No competitors saved for this account yet.'}</div>`}
         </div>`;
     }
 
@@ -10540,11 +10687,16 @@
       if (!_alQuery.terms) return alert('Type a brand name first.');
       _alResults = null;
       _alRender('loading');
-
       const isIds = /^[0-9,\s]+$/.test(_alQuery.terms);
+      await _alRunQuery(isIds ? { page_ids: _alQuery.terms } : { search_terms: _alQuery.terms });
+    }
+
+    // One place that talks to the Ad Library, so a saved competitor and a typed
+    // search behave identically.
+    async function _alRunQuery(target) {
       const res = await callEdgeFunction('meta-ads-library', {
         organization_id: currentOrgId,
-        [isIds ? 'page_ids' : 'search_terms']: _alQuery.terms,
+        ...target,
         country: _alQuery.country, status: _alQuery.status, media_type: _alQuery.media, limit: 30,
       });
 
