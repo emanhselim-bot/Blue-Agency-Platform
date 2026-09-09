@@ -6591,7 +6591,9 @@
     }
 
     // ── Analysis section HTML ────────────────────────────────────
-    function renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel) {
+    // adSpendForProducts: conversion spend for the period. Products carry no
+    // spend of their own, so per-product cost and ROAS are attributed from it.
+    function renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel, adSpendForProducts) {
       const p = n => parseFloat(n) || 0;
       const fmtN = (v, c, d) => fmt(v, c ?? '', d ?? 2);
 
@@ -6613,6 +6615,26 @@
         </table>`;
       }
 
+      // What Meta actually counted as a "result" for a given row. Purchases and
+      // conversations need no explanation; a landing page view or a link click
+      // does, because a cost per click sitting in a Cost/Result column reads as
+      // a cost per sale and is roughly thirty times smaller.
+      const RESULT_LABEL = {
+        omni_purchase: 'purchase',
+        'offsite_conversion.fb_pixel_purchase': 'purchase',
+        'onsite_conversion.messaging_conversation_started_7d': 'conversation',
+        lead: 'lead',
+        'onsite_conversion.lead_grouped': 'lead',
+        complete_registration: 'registration',
+        add_to_cart: 'add to cart',
+        landing_page_view: 'landing page view',
+        link_click: 'link click',
+      };
+      const SOFT_RESULT = new Set(['add_to_cart', 'landing_page_view', 'link_click']);
+      const basisTag = b => (b && SOFT_RESULT.has(b))
+        ? `<div style="font-size:9px;color:var(--text-muted);font-weight:700;letter-spacing:.2px">per ${RESULT_LABEL[b]}</div>`
+        : '';
+
       // ── Best Creatives (ads) ─────────────────────────────────
       const adsByResults = [...ads].filter(a => a.results).sort((a,b) => p(b.results) - p(a.results)).slice(0, 5);
       const adsByCost    = [...ads].filter(a => a.cost_per_result).sort((a,b) => p(a.cost_per_result) - p(b.cost_per_result)).slice(0, 5);
@@ -6628,7 +6650,7 @@
         ),
         analysisCard('💸 Best Creatives — by Cost per Result',
           miniTable(adCostHeaders,
-            adsByCost.map(a => [escHtml((a.ad_name||'').substring(0,40)||a.ad_id), fmt(p(a.cost_per_result), curr), fmt(p(a.spend), curr)]),
+            adsByCost.map(a => [escHtml((a.ad_name||'').substring(0,40)||a.ad_id), fmt(p(a.cost_per_result), curr) + basisTag(a.result_basis), fmt(p(a.spend), curr)]),
             'No ad-level data for this period'
           ), true
         )
@@ -6640,7 +6662,7 @@
         fmt(p(pl.spend), curr),
         fmt(p(pl.impressions),'',0),
         fmt(p(pl.results),'',0),
-        pl.cost_per_result ? fmt(p(pl.cost_per_result), curr) : '—',
+        pl.cost_per_result ? fmt(p(pl.cost_per_result), curr) + basisTag(pl.result_basis) : '—',
       ]);
       const platformSection = analysisCard('📱 Best Platform',
         miniTable(
@@ -6651,13 +6673,43 @@
       );
 
       // ── Best Seller Product ──────────────────────────────────
+      // Spend is only known for the account as a whole, so it is charged per
+      // UNIT sold: every unit costs the same to acquire, and ROAS then shows
+      // which products earn most against that flat cost.
+      //
+      // Apportioning by revenue instead was the obvious first choice and is
+      // useless here: dividing a product's revenue by a spend share that is
+      // itself proportional to revenue cancels out, so every product returns
+      // the identical ROAS. Per unit, one degree of freedom remains and the
+      // ranking is real.
+      const _prodSpend     = p(adSpendForProducts);
+      const _prodUnitTotal = topProductRows.reduce((s, r) => s + p(r[1]), 0);
+      const _costPerUnit   = (_prodUnitTotal > 0 && _prodSpend > 0) ? _prodSpend / _prodUnitTotal : null;
       const productSection = analysisCard('🏆 Best Seller Product',
         topProductRows.length
           ? miniTable(
-              [{label:'Product'},{label:'Units Sold',right:true},{label:'Revenue',right:true}],
-              topProductRows.slice(0,8).map(r => [escHtml((r[0]||'').substring(0,40)), r[1], fmt(parseFloat(r[2]||0), curr)]),
+              [{label:'Product'},{label:'Units Sold',right:true},{label:'Revenue',right:true},
+               {label:'Cost/Unit',right:true},{label:'ROAS',right:true}],
+              topProductRows.slice(0,8).map(r => {
+                const units = p(r[1]), rev = p(r[2]);
+                const cost  = (_costPerUnit != null) ? _costPerUnit * units : null;
+                const roas  = (cost != null && cost > 0) ? rev / cost : null;
+                return [
+                  escHtml((r[0]||'').substring(0,40)),
+                  r[1],
+                  fmt(rev, curr),
+                  _costPerUnit != null ? fmt(_costPerUnit, curr) : '—',
+                  roas != null
+                    ? `<span style="color:${roas >= 1 ? '#4ADE80' : 'var(--coral)'}">${fmt(roas, '', 2)}×</span>`
+                    : '—',
+                ];
+              }),
               ''
-            )
+            ) + (_costPerUnit != null
+                  ? `<div style="font-size:9px;color:var(--text-muted);font-weight:700;margin-top:6px">
+                       Estimated — ${fmt(_prodSpend, curr)} spend spread across ${fmt(_prodUnitTotal,'',0)} units.
+                       Cost per unit is therefore the same for every product; ROAS is what separates them.
+                     </div>` : '')
           : `<div style="padding:12px 0;color:var(--text-muted);font-size:12px">Connect Shopify to see product rankings</div>`,
         true
       );
@@ -6668,7 +6720,7 @@
         escHtml((r.region||'Unknown').replace(' Governorate','').replace(' Province','')),
         fmt(p(r.spend), curr),
         r.results ? fmt(p(r.results),'',0) : '—',
-        r.cost_per_result ? fmt(p(r.cost_per_result), curr) : '—',
+        r.cost_per_result ? fmt(p(r.cost_per_result), curr) + basisTag(r.result_basis) : '—',
       ]);
       const regionsSection = grid2(
         analysisCard('🗺️ Best Regions — Top 5',
@@ -8934,7 +8986,7 @@
           ${metric('Number of Messages',      (_storedNumMsg !== null ? parseInt(_storedNumMsg).toLocaleString('en') : fmt(numMessages,'',0)) + (_storedNumMsg !== null ? ' ✎' : ''), true)}
         </div>
 
-        ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
+        ${(() => { try { return renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel, _spendForMetrics); } catch(e) { console.error('[Analysis section error]', e); return ''; } })()}
 
         `;
       }
