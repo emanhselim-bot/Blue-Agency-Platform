@@ -5423,7 +5423,10 @@
       const e = d?.ad_entity || {};
       const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
       const spend = num(e.amount_spent) ?? 0;
-      const results = num(e.page_messages) ?? num(e.results) ?? num(e.messages);
+      // The objective's own result leads, so a sales account compares purchases
+      // rather than conversations. Messages only stand in where Meta reports no
+      // result — which is what a messaging account's objective is anyway.
+      const results = num(e.results) ?? num(e.page_messages) ?? num(e.messages);
       return {
         currency: (account.currency || 'USD') + ' ',
         spend,
@@ -5432,7 +5435,8 @@
         clicks: num(e.clicks) ?? 0,
         ctr: num(e.ctr), cpc: num(e.cpc), cpm: num(e.cpm),
         results,
-        costPerResult: results && spend ? spend / results : num(e.cost_per_message),
+        costPerResult: num(e.cost_per_result)
+          ?? (results && spend ? spend / results : num(e.cost_per_message)),
       };
     }
 
@@ -6591,6 +6595,29 @@
     }
 
     // ── Analysis section HTML ────────────────────────────────────
+    // ── What a "result" counted ──────────────────────────────────
+    // Shared by every view that shows a cost per result. Purchases and
+    // conversations need no explanation; a landing page view or a link click
+    // does, because a cost per click sitting in a Cost/Result column reads as
+    // a cost per sale and is roughly thirty times smaller.
+    const RESULT_LABEL = {
+      omni_purchase: 'purchase',
+      'offsite_conversion.fb_pixel_purchase': 'purchase',
+      'onsite_conversion.messaging_conversation_started_7d': 'conversation',
+      lead: 'lead',
+      'onsite_conversion.lead_grouped': 'lead',
+      complete_registration: 'registration',
+      add_to_cart: 'add to cart',
+      landing_page_view: 'landing page view',
+      link_click: 'link click',
+    };
+    const SOFT_RESULT = new Set(['add_to_cart', 'landing_page_view', 'link_click']);
+    function basisTag(b) {
+      return (b && SOFT_RESULT.has(b))
+        ? `<div style="font-size:9px;color:var(--text-muted);font-weight:700;letter-spacing:.2px">per ${RESULT_LABEL[b]}</div>`
+        : '';
+    }
+
     // adSpendForProducts: conversion spend for the period. Products carry no
     // spend of their own, so per-product cost and ROAS are attributed from it.
     function renderAnalysisSection(campaigns, ads, platforms, regions, topProductRows, curr, periodLabel, adSpendForProducts) {
@@ -6614,26 +6641,6 @@
           <tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'tl' : 'tr'}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${c}</td>`).join('')}</tr>`).join('')}</tbody>
         </table>`;
       }
-
-      // What Meta actually counted as a "result" for a given row. Purchases and
-      // conversations need no explanation; a landing page view or a link click
-      // does, because a cost per click sitting in a Cost/Result column reads as
-      // a cost per sale and is roughly thirty times smaller.
-      const RESULT_LABEL = {
-        omni_purchase: 'purchase',
-        'offsite_conversion.fb_pixel_purchase': 'purchase',
-        'onsite_conversion.messaging_conversation_started_7d': 'conversation',
-        lead: 'lead',
-        'onsite_conversion.lead_grouped': 'lead',
-        complete_registration: 'registration',
-        add_to_cart: 'add to cart',
-        landing_page_view: 'landing page view',
-        link_click: 'link click',
-      };
-      const SOFT_RESULT = new Set(['add_to_cart', 'landing_page_view', 'link_click']);
-      const basisTag = b => (b && SOFT_RESULT.has(b))
-        ? `<div style="font-size:9px;color:var(--text-muted);font-weight:700;letter-spacing:.2px">per ${RESULT_LABEL[b]}</div>`
-        : '';
 
       // ── Best Creatives (ads) ─────────────────────────────────
       const adsByResults = [...ads].filter(a => a.results).sort((a,b) => p(b.results) - p(a.results)).slice(0, 5);
@@ -6732,20 +6739,20 @@
       );
 
       // ── Best Campaign by Results ─────────────────────────────
-      const campByResults = [...campaigns].filter(c => c['actions:link_click']).sort((a,b) => p(b['actions:link_click']) - p(a['actions:link_click'])).slice(0,5);
-      const campByCost    = [...campaigns].filter(c => c['cost_per_action_type:link_click']).sort((a,b) => p(a['cost_per_action_type:link_click']) - p(b['cost_per_action_type:link_click'])).slice(0,5);
+      const campByResults = [...campaigns].filter(c => c.results).sort((a,b) => p(b.results) - p(a.results)).slice(0,5);
+      const campByCost    = [...campaigns].filter(c => c.cost_per_result).sort((a,b) => p(a.cost_per_result) - p(b.cost_per_result)).slice(0,5);
       const campSection = grid2(
         analysisCard('🏅 Best Campaign — by Results',
           miniTable(
-            [{label:'Campaign'},{label:'Link Clicks',right:true},{label:'Spend',right:true}],
-            campByResults.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c['actions:link_click']),'',0), fmt(p(c.spend), curr)]),
+            [{label:'Campaign'},{label:'Results',right:true},{label:'Spend',right:true}],
+            campByResults.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c.results),'',0) + basisTag(c.result_basis), fmt(p(c.spend), curr)]),
             'No campaign result data for this period'
           ), true
         ),
         analysisCard('💰 Best Campaign — by Cost per Result',
           miniTable(
-            [{label:'Campaign'},{label:'Cost/Click',right:true},{label:'Spend',right:true}],
-            campByCost.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c['cost_per_action_type:link_click']), curr), fmt(p(c.spend), curr)]),
+            [{label:'Campaign'},{label:'Cost/Result',right:true},{label:'Spend',right:true}],
+            campByCost.map(c => [escHtml((c.campaign_name||c.campaign_id||'').substring(0,40)), fmt(p(c.cost_per_result), curr) + basisTag(c.result_basis), fmt(p(c.spend), curr)]),
             'No campaign cost data for this period'
           ), true
         )
@@ -6827,7 +6834,7 @@
           <td class="tl campaign-name-cell" title="${escHtml(c.campaign_name || c.campaign_id)}">${escHtml(c.campaign_name || c.campaign_id)}</td>
           <td class="tr">${fmtC(spend)}</td>
           ${hasResults ? `<td class="tr">${fmtN(parseNum(c.results))}</td>
-          <td class="tr">${fmtC(parseNum(c.cost_per_result))}</td>` : ''}
+          <td class="tr">${fmtC(parseNum(c.cost_per_result))}${basisTag(c.result_basis)}</td>` : ''}
           <td class="tr">${fmtN(parseNum(c.reach))}</td>
           <td class="tr">${fmtN(parseNum(c.impressions))}</td>
           ${hasReach    ? `<td class="tr">${fmtC(cpr)}</td>` : ''}
