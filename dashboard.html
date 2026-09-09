@@ -6724,13 +6724,20 @@
       document.querySelectorAll('[data-camp-wrap]').forEach(el => {
         const saved = localStorage.getItem(_campHeightKey(el.dataset.campWrap));
         if (saved && !isNaN(parseInt(saved))) el.style.height = parseInt(saved) + 'px';
-        if (el._campObs) return;                       // one observer per element
+        if (el._campBound) return;                     // bind once per element
+        el._campBound = true;
+        const save = () => {
+          const h = Math.round(el.getBoundingClientRect().height);
+          if (h > 0) localStorage.setItem(_campHeightKey(el.dataset.campWrap), String(h));
+        };
+        // Releasing the grip is the moment the drag ends, and it fires whether
+        // or not the tab is painting. ResizeObserver alone would miss a drag
+        // that ended after switching away, since it only runs before a paint.
+        el.addEventListener('pointerup', save);
+        el.addEventListener('mouseup', save);
         el._campObs = new ResizeObserver(() => {
           clearTimeout(el._campT);
-          el._campT = setTimeout(() => {
-            const h = Math.round(el.getBoundingClientRect().height);
-            if (h > 0) localStorage.setItem(_campHeightKey(el.dataset.campWrap), String(h));
-          }, 250);                                     // settle before writing
+          el._campT = setTimeout(save, 250);           // settle before writing
         });
         el._campObs.observe(el);
       });
