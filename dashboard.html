@@ -2312,6 +2312,15 @@
     .pf-costval { font-size: 20px; font-weight: 800; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
     .pf-costval.pos { color: #15803D; }
     .pf-costval.neg { color: var(--coral); }
+    /* Campaign breakdown — draggable height. Dashboards re-render on refresh
+       and on every period change, so the height is remembered rather than
+       snapping back each time. */
+    .camp-wrap { overflow: auto; resize: vertical; height: 320px; min-height: 120px; max-height: 85vh;
+      border: 1px solid var(--border); border-radius: 10px; position: relative; }
+    .camp-wrap table { margin: 0; }
+    .camp-wrap thead th { position: sticky; top: 0; z-index: 2; }
+    @media (max-width: 760px) { .camp-wrap { resize: none; height: auto; max-height: 60vh; } }
+
     .pf-year-table th { white-space: nowrap; }
     .pf-costin { width: 68px; padding: 4px 6px; text-align: right; border: 1px solid var(--border);
       border-radius: 6px; background: var(--bg); color: var(--text-main); font-size: 12px;
@@ -6706,6 +6715,27 @@
     }
 
     // ── Campaign table HTML ──────────────────────────────────────
+    // ── Campaign table height ──
+    // CSS resize gives the drag handle, but the dashboard rebuilds this markup
+    // on every refresh and period change, which would throw the height away.
+    // Restore it after each render and record it while dragging.
+    const _campHeightKey = which => `camp-h-${which}`;
+    function restoreCampHeights() {
+      document.querySelectorAll('[data-camp-wrap]').forEach(el => {
+        const saved = localStorage.getItem(_campHeightKey(el.dataset.campWrap));
+        if (saved && !isNaN(parseInt(saved))) el.style.height = parseInt(saved) + 'px';
+        if (el._campObs) return;                       // one observer per element
+        el._campObs = new ResizeObserver(() => {
+          clearTimeout(el._campT);
+          el._campT = setTimeout(() => {
+            const h = Math.round(el.getBoundingClientRect().height);
+            if (h > 0) localStorage.setItem(_campHeightKey(el.dataset.campWrap), String(h));
+          }, 250);                                     // settle before writing
+        });
+        el._campObs.observe(el);
+      });
+    }
+
     function renderCampaignTableHTML(campaigns, curr) {
       if (!campaigns?.length) {
         return '<div class="no-campaign-data" style="padding:28px;text-align:center;color:var(--text-muted);font-size:13px">No campaign data returned for this period.</div>';
@@ -8875,8 +8905,8 @@
           }).join('') + '</div>';
         })()}
 
-        <div class="section-label">Campaign Breakdown</div>
-        <div class="table-wrapper">${renderCampaignTableHTML(campaigns, curr)}</div>
+        <div class="section-label">Campaign Breakdown <span style="font-size:10px;color:var(--text-muted);font-weight:600">· active campaigns · drag the corner to resize</span></div>
+        <div class="table-wrapper camp-wrap" data-camp-wrap="single">${renderCampaignTableHTML(campaigns, curr)}</div>
 
         <div class="section-label">Analysis Factors</div>
         <div class="metrics-grid">
@@ -9150,6 +9180,7 @@
       await _syncLayoutFromServer(); // pull server record → localStorage (cross-device sync)
       applyCustomizations(); // render custom sections into DOM FIRST so restoreLayout sees them
       restoreLayout();       // restore saved order from localStorage (already has server data)
+      restoreCampHeights();  // the campaign table keeps the height it was dragged to
 
       // One-time migration: enforce section order spending → totals → website-results → messages-analysis (full template only)
       if (_curTmpl === 'full') {
@@ -9514,8 +9545,8 @@
               `● Clarity · ${claritySourceCount} project${claritySourceCount === 1 ? '' : 's'}`) : ''}
         </div>
 
-        <div class="section-label">Campaign Breakdown · All Accounts</div>
-        <div class="table-wrapper">${renderCampaignTableHTML(allCampaigns, curr)}</div>
+        <div class="section-label">Campaign Breakdown · All Accounts <span style="font-size:10px;color:var(--text-muted);font-weight:600">· active campaigns · drag the corner to resize</span></div>
+        <div class="table-wrapper camp-wrap" data-camp-wrap="all">${renderCampaignTableHTML(allCampaigns, curr)}</div>
 
         <div class="section-label">Analysis Factors</div>
         <div class="metrics-grid">
@@ -9534,6 +9565,7 @@
           ${metric('Accounts w/ Data',     String(accountsWithData))}
         </div>`;
 
+      restoreCampHeights();   // keep the height this table was dragged to
       btn.disabled = false; btn.textContent = '↻ Refresh';
       } catch (allErr) {
         console.error('[loadAllAccounts error]', allErr);
