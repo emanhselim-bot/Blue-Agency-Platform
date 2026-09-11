@@ -1340,7 +1340,9 @@
       border-radius: 9px; font-size: 12.5px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; }
     .pwa-install-x   { background: none; border: none; color: var(--text-muted); font-size: 17px;
       cursor: pointer; padding: 2px 4px; line-height: 1; font-family: inherit; }
-    @media (min-width: 820px) { .pwa-install { left: auto; width: 380px; right: 18px; bottom: 18px; } }
+    /* Clears the floating theme button, which sits in the same corner. */
+    @media (min-width: 820px) { .pwa-install { left: auto; width: 380px; right: 96px; bottom: 18px; } }
+    @media (max-width: 819px) { .pwa-install { bottom: calc(74px + env(safe-area-inset-bottom)); } }
 
     /* ── DRAG & DROP LAYOUT ── */
     .layout-edit-btn { padding: 5px 11px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; white-space: nowrap; }
