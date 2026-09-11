@@ -979,6 +979,26 @@
     .an-card { background: var(--surface); border-radius: 12px; padding: 16px 18px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06); min-width: 0; }
     .mini-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* ── PER-MODULE SETTINGS ── */
+    .msx-sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.6; }
+    .msx-row { border: 1px solid var(--border); border-radius: 11px; padding: 11px 13px; margin-bottom: 9px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .msx-row-main { flex: 1; min-width: 160px; }
+    .msx-name { font-size: 13.5px; font-weight: 700; }
+    .msx-mail { font-size: 12px; color: var(--text-muted); }
+    .msx-pill { font-size: 10px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+      padding: 3px 9px; border-radius: 20px; background: var(--bg); color: var(--text-muted); white-space: nowrap; }
+    .msx-pill.on { background: rgba(22,163,74,.16); color: #15803D; }
+    [data-theme="dark"] .msx-pill.on { color: #86EFAC; }
+    .msx-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; min-height: 16px; }
+    .msx-act { display: flex; gap: 9px; align-items: flex-start; padding: 8px 2px;
+      border-bottom: 1px solid var(--border); font-size: 12.5px; }
+    .msx-act:last-child { border-bottom: none; }
+    .msx-act-who { font-weight: 700; }
+    .msx-act-when { margin-left: auto; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .msx-empty { font-size: 13px; color: var(--text-muted); padding: 14px 0; }
+    @media (max-width: 768px) { .msx-row { gap: 8px; } .msx-act-when { margin-left: 0; width: 100%; } }
     @media (max-width: 768px) {
       .an-grid2, .an-grid2-wide { grid-template-columns: 1fr; gap: 10px; margin-bottom: 16px; }
       .an-card { padding: 13px 13px; }
@@ -2659,6 +2679,46 @@
     </div>
     <button class="layout-edit-btn" id="layout-edit-btn" onclick="toggleLayoutEdit()">⠿ Edit Layout</button>
     <button class="layout-edit-btn" id="md-share-btn" onclick="openMdShare()" style="display:none;margin-left:8px">🔗 Share with client</button>
+    <button class="layout-edit-btn" id="md-modset-btn" onclick="openModuleSettings('media')" style="display:none;margin-left:8px">⚙ Module settings</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PER-MODULE SETTINGS — who may open this module, and what has
+       happened inside it. Owner only. One modal serves every module.
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="msx-modal">
+    <div class="modal" style="max-width:760px">
+      <div class="modal-header">
+        <h2 id="msx-title">Module settings</h2>
+        <button class="modal-close" onclick="closeModuleSettings()">✕</button>
+      </div>
+      <div class="cpm-tabs" style="margin:0 24px">
+        <button class="cpm-tab active" id="msx-tab-team" onclick="msxTab('team')">👥 Team access</button>
+        <button class="cpm-tab"        id="msx-tab-act"  onclick="msxTab('act')">🕘 Activity</button>
+      </div>
+      <div class="modal-body" style="overflow:auto">
+        <div id="msx-panel-team">
+          <div class="msx-sub" id="msx-team-sub"></div>
+          <div id="msx-team-list"></div>
+          <div class="msx-note" id="msx-team-note"></div>
+        </div>
+        <div id="msx-panel-act" style="display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <select id="msx-range" class="connect-input" onchange="msxRenderActivity()" style="min-width:140px">
+              <option value="1">Today</option>
+              <option value="7" selected>Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <select id="msx-person" class="connect-input" onchange="msxRenderActivity()" style="min-width:160px">
+              <option value="">Everyone</option>
+            </select>
+            <button class="connect-input" onclick="msxRenderActivity()" style="cursor:pointer;min-width:auto;padding:9px 16px">↻ Refresh</button>
+          </div>
+          <div id="msx-act-list"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- AGENCY TARGETS PANEL -->
@@ -2924,6 +2984,7 @@
         <div class="hub-mod-head">
           <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
           <h2>🕘 Team Activity</h2>
+          <button class="hub-mod-btn msx-open" onclick="openModuleSettings('activity')" style="display:none">⚙ Settings</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:18px">
           <select id="ha-range" onchange="renderHubActivity()" class="connect-input" style="min-width:150px">
@@ -2955,6 +3016,7 @@
             <span id="mt-month-label" style="font-weight:700;min-width:150px;text-align:center"></span>
             <button class="hub-mod-btn" onclick="mtNextMonth()">›</button>
             <button class="hub-mod-btn" onclick="mtToday()">Today</button>
+            <button class="hub-mod-btn msx-open" onclick="openModuleSettings('meetings')" style="display:none">⚙ Settings</button>
           </div>
         </div>
         <div class="mt-grid" id="mt-grid"></div>
@@ -2969,6 +3031,7 @@
           <div class="hub-mod-head" style="margin-bottom:10px">
             <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
             <h2>🔐 Access</h2>
+            <button class="hub-mod-btn msx-open" onclick="openModuleSettings('access')" style="display:none">⚙ Settings</button>
           </div>
           <div class="cpm-tabs" style="margin:0">
             <button class="cpm-tab active" id="acx-tab-team"    onclick="acxTab('team')">👥 My team</button>
@@ -3042,6 +3105,7 @@
           <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
           <h2>🤝 Clients Pipeline</h2>
           <span class="cpm-badge" id="cpm-rolebadge"></span>
+          <button class="hub-mod-btn msx-open" onclick="openModuleSettings('pipeline')" style="display:none">⚙ Settings</button>
         </div>
         <div class="cpm-tabs" id="cpm-tabs"></div>
         <div id="cpm-content"></div>
@@ -3062,6 +3126,7 @@
             <button class="hub-mod-btn" onclick="fnOpenPayment()">＋ Payment</button>
             <button class="hub-mod-btn" onclick="fnOpenExpense()">＋ Expense</button>
             <button class="hub-mod-btn" id="fn-sync-btn" onclick="fnSyncZoho()">⟳ Sync Zoho</button>
+            <button class="hub-mod-btn msx-open" onclick="openModuleSettings('finance')" style="display:none">⚙ Settings</button>
           </div>
           <div id="fn-sync-status" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -11581,10 +11646,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (t === 'client')     return 'pipeline';
       if (t === 'ad_account') return 'media';
       if (t === 'invoice' || t === 'payment') return 'finance';
+      if (t === 'meeting') return 'meetings';
+      if (t === 'access')  return 'access';
       if (t === 'settings' || t === 'shopify_app') return 'settings';
       if (_hubView === 'pipeline' || _hubView === 'client') return 'pipeline';
       if (_hubView === 'finance') return 'finance';
       if (_hubView === 'media')   return 'media';
+      // Meetings had no case at all, so everything done in the calendar was
+      // filed under 'account' and never showed up as meetings activity.
+      if (_hubView === 'meetings') return 'meetings';
+      if (_hubView === 'activity') return 'activity';
+      if (_hubView === 'access')   return 'access';
       return 'account';
     }
 
@@ -17157,6 +17229,172 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function acxGate() {
       const c = document.getElementById('hub-card-access');
       if (c) c.style.display = currentRole === 'owner' ? '' : 'none';
+      // The per-module gear appears for the owner only, on every module.
+      const show = currentRole === 'owner' ? '' : 'none';
+      document.querySelectorAll('.msx-open').forEach(b => { b.style.display = show; });
+      const md = document.getElementById('md-modset-btn');
+      if (md) md.style.display = show;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // PER-MODULE SETTINGS
+    // Every module gets the same two answers: who can open it, and what
+    // has happened inside it. The org-wide Access and Team Activity
+    // pages still exist — this is the same data narrowed to one module.
+    // ══════════════════════════════════════════════════════════════
+    const MSX_MODULES = {
+      media:    { icon: '📊', name: 'Media Buying Dashboard', logs: ['media'] },
+      pipeline: { icon: '🤝', name: 'Clients Pipeline',       logs: ['pipeline'] },
+      finance:  { icon: '💰', name: 'Finance',                logs: ['finance'] },
+      meetings: { icon: '📅', name: 'Meetings',               logs: ['meetings'] },
+      // These two are the administration of the app itself. Handing them to
+      // someone else would hand over every other module with them, so they
+      // stay with the owner and the team tab says so rather than pretending.
+      activity: { icon: '🕘', name: 'Team Activity', logs: ['activity'],        ownerOnly: true },
+      access:   { icon: '🔐', name: 'Access',        logs: ['access','settings'], ownerOnly: true },
+    };
+
+    let _msxMod = null, _msxMembers = [], _msxRows = null;
+
+    function openModuleSettings(mod) {
+      if (currentRole !== 'owner') { alert('Only the owner can change a module’s settings.'); return; }
+      const m = MSX_MODULES[mod];
+      if (!m) return;
+      _msxMod = mod; _msxRows = null;
+      document.getElementById('msx-title').textContent = `${m.icon} ${m.name} — settings`;
+      document.getElementById('msx-modal').classList.remove('hidden');
+      msxTab('team');
+      msxLoadTeam();
+    }
+
+    function closeModuleSettings() {
+      document.getElementById('msx-modal').classList.add('hidden');
+    }
+
+    function msxTab(t) {
+      document.getElementById('msx-tab-team').classList.toggle('active', t === 'team');
+      document.getElementById('msx-tab-act').classList.toggle('active',  t === 'act');
+      document.getElementById('msx-panel-team').style.display = t === 'team' ? '' : 'none';
+      document.getElementById('msx-panel-act').style.display  = t === 'act'  ? '' : 'none';
+      if (t === 'act') msxRenderActivity();
+    }
+
+    async function msxLoadTeam() {
+      const list = document.getElementById('msx-team-list');
+      list.innerHTML = '<div class="msx-empty">Loading…</div>';
+      const { data, error } = await sb.from('cp_members')
+        .select('id, full_name, email, role, modules, module_roles')
+        .eq('organization_id', currentOrgId).eq('archived', false).order('full_name');
+      if (error) { list.innerHTML = `<div class="msx-empty">⚠️ ${escHtml(error.message)}</div>`; return; }
+      _msxMembers = data || [];
+      msxRenderTeam();
+    }
+
+    function msxRenderTeam() {
+      const cfg  = MSX_MODULES[_msxMod];
+      const list = document.getElementById('msx-team-list');
+      const sub  = document.getElementById('msx-team-sub');
+
+      sub.innerHTML = cfg.ownerOnly
+        ? `This section manages the whole workspace, so it can’t be handed to anyone else —
+           giving it away would give away every other module with it. Owners only.`
+        : `Who may open ${escHtml(cfg.name)}, and what they can do once they’re in.
+           Changes save as you make them. Account and client scoping lives on the
+           <strong>Access</strong> page.`;
+
+      if (!_msxMembers.length) { list.innerHTML = '<div class="msx-empty">No team members yet.</div>'; return; }
+
+      list.innerHTML = _msxMembers.map((m, i) => {
+        const isOwner = m.role === 'owner';
+        const role    = (m.module_roles || {})[_msxMod] || '';
+        const control = (cfg.ownerOnly || isOwner)
+          ? `<span class="msx-pill ${isOwner ? 'on' : ''}">${isOwner ? 'Owner · full access' : 'No access'}</span>`
+          : `<select class="connect-input" style="padding:5px 9px;font-size:12.5px;min-width:auto"
+                     onchange="msxSetRole(${i}, this.value)">
+               <option value=""       ${!role             ? 'selected' : ''}>No access</option>
+               <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Viewer</option>
+               <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+             </select>`;
+        return `<div class="msx-row">
+          <div class="msx-row-main">
+            <div class="msx-name">${escHtml(m.full_name || m.email || '—')}</div>
+            <div class="msx-mail">${escHtml(m.email || '')}</div>
+          </div>
+          ${control}
+        </div>`;
+      }).join('');
+    }
+
+    async function msxSetRole(i, value) {
+      const m = _msxMembers[i];
+      if (!m) return;
+      const note  = document.getElementById('msx-team-note');
+      const roles = { ...(m.module_roles || {}) };
+      if (value) roles[_msxMod] = value; else delete roles[_msxMod];
+
+      note.style.color = 'var(--text-muted)';
+      note.textContent = 'Saving…';
+      // Ask for the row back — a write blocked by row-level security changes
+      // nothing and reports no error, which reads as success.
+      const { data, error } = await sb.from('cp_members')
+        .update({ module_roles: roles, modules: Object.keys(roles), updated_at: new Date().toISOString() })
+        .eq('id', m.id).select('id');
+
+      if (error)            { note.style.color = 'var(--coral)'; note.textContent = '⚠️ ' + error.message; return; }
+      if (!(data || []).length) { note.style.color = 'var(--coral)'; note.textContent = '⚠️ Nothing saved — only the owner can change access.'; return; }
+
+      m.module_roles = roles; m.modules = Object.keys(roles);
+      note.style.color = '#16A34A';
+      note.textContent = `✓ ${m.full_name || m.email}: ${value || 'no access'}`;
+      logActivity('change', `Set ${m.full_name || m.email} to ${value || 'no access'} on ${MSX_MODULES[_msxMod].name}`,
+                  { module: _msxMod, entityType: 'access', label: MSX_MODULES[_msxMod].name });
+      // The Access page holds its own copy of the same rows.
+      const twin = _acxMembers.find(x => x.id === m.id);
+      if (twin) { twin.module_roles = roles; twin.modules = m.modules; }
+    }
+
+    async function msxRenderActivity() {
+      const el  = document.getElementById('msx-act-list');
+      const cfg = MSX_MODULES[_msxMod];
+      const days   = parseInt(document.getElementById('msx-range').value, 10) || 7;
+      const person = document.getElementById('msx-person').value;
+      el.innerHTML = '<div class="msx-empty">Loading…</div>';
+
+      let q = sb.from('activity_log')
+        .select('user_id, user_name, user_email, action, entity_label, module, category, created_at')
+        .eq('organization_id', currentOrgId)
+        .in('module', cfg.logs)
+        .gte('created_at', new Date(Date.now() - days * 864e5).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (person) q = q.eq('user_id', person);
+
+      const { data, error } = await q;
+      if (error) { el.innerHTML = `<div class="msx-empty">⚠️ ${escHtml(error.message)}</div>`; return; }
+      _msxRows = data || [];
+
+      // Fill the people picker from whoever shows up in this module's log.
+      const psel = document.getElementById('msx-person');
+      if (psel && !person) {
+        const seen = new Map();
+        _msxRows.forEach(r => { if (r.user_id && !seen.has(r.user_id)) seen.set(r.user_id, r.user_name || r.user_email || r.user_id); });
+        psel.innerHTML = '<option value="">Everyone</option>' +
+          [...seen].map(([id, n]) => `<option value="${escHtml(id)}">${escHtml(n)}</option>`).join('');
+      }
+
+      if (!_msxRows.length) {
+        el.innerHTML = `<div class="msx-empty">Nothing recorded in ${escHtml(cfg.name)} for this period.</div>`;
+        return;
+      }
+      el.innerHTML = _msxRows.map(r => {
+        const who  = (r.user_name || r.user_email || 'Someone').split('@')[0];
+        const what = r.action + (r.entity_label ? ' · ' + r.entity_label : '');
+        return `<div class="msx-act">
+          <span>${AL_ICON[r.category] || '•'}</span>
+          <span><span class="msx-act-who">${escHtml(who)}</span> ${escHtml(what)}</span>
+          <span class="msx-act-when" title="${escHtml(new Date(r.created_at).toLocaleString())}">${escHtml(_alWhen(r.created_at))}</span>
+        </div>`;
+      }).join('');
     }
 
     function acxTab(t) {
@@ -17435,7 +17673,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const t = new Date();
       _acxStatus(i, `✓ Saved ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '#16A34A');
       logActivity('change', 'Changed access for ' + (m.full_name || m.email), {
-        entityType: 'settings', label: 'Access', details: patch,
+        module: 'access', entityType: 'access', label: 'Access', details: patch,
       });
       return true;
     }
@@ -17525,7 +17763,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (error) { err.textContent = error.message; return; }
 
       logActivity('change', 'Added a team member', {
-        entityType: 'settings', label: name, details: { login: !!pass },
+        module: 'access', entityType: 'access', label: name, details: { login: !!pass },
       });
       ['acx-new-name','acx-new-email','acx-new-user','acx-new-pass'].forEach(id => document.getElementById(id).value = '');
       err.style.color = '#16A34A';
