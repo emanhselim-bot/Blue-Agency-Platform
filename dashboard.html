@@ -2660,6 +2660,11 @@
         <div class="rc-pop" id="rc-pop" hidden></div>
       </div>
     </div>
+    <!-- Picking an account or a period stages the choice; this loads it. It
+         also stops every half-made selection firing a round of Meta, Google
+         and Shopify calls. -->
+    <button class="refresh-btn" id="view-apply" onclick="applyViewChange()"
+            style="display:none;background:var(--brand-gold);color:#26210A">▶ Apply</button>
     <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
     <button class="targets-btn" id="targets-toggle-btn" onclick="toggleTargetsPanel()">🎯 Targets</button>
     <button class="targets-btn" id="compare-toggle-btn" onclick="toggleComparePanel()">⇄ Compare</button>
@@ -6698,11 +6703,34 @@
         const label = sel.options[sel.selectedIndex]?.textContent?.trim() || sel.value;
         logView('ad account "' + label + '"', { entityType: 'ad_account', entityId: sel.value, label });
       }
-      // Saved competitors belong to the account, so switching account inside the
-      // Ads Library swaps the list rather than dropping back to the dashboard.
+      // Staged. Apply loads it.
+      _markViewPending();
+    });
+
+    // ── Staged view changes ──
+    // The dashboard used to reload on every account or period change, firing a
+    // full round of Meta, Google and Shopify calls each time.
+    let _viewPending = false;
+
+    function _markViewPending() {
+      _viewPending = true;
+      const b = document.getElementById('view-apply');
+      if (b) { b.style.display = ''; b.textContent = '▶ Apply'; }
+    }
+
+    function _clearViewPending() {
+      _viewPending = false;
+      const b = document.getElementById('view-apply');
+      if (b) b.style.display = 'none';
+    }
+
+    function applyViewChange() {
+      _clearViewPending();
+      // Saved competitors belong to the account, so applying inside the Ads
+      // Library swaps the list rather than dropping back to the dashboard.
       if (_alMode) { _alResults = null; openAdsLibraryTab(); return; }
       loadData();
-    });
+    }
 
     // ─────────────────────────────────────────────────────────────
     // PERIOD / DATE CONTROLS (unchanged logic)
@@ -6731,7 +6759,7 @@
       }
       const customEl = document.getElementById('custom-dates');
       if (currentPeriod === 'custom') { customEl.classList.add('visible'); }
-      else { customEl.classList.remove('visible'); loadData(); }
+      else { customEl.classList.remove('visible'); _markViewPending(); }
     });
 
     // ── Range calendar ────────────────────────────────────────────
@@ -8473,6 +8501,8 @@
     let _loadDataActive = false;
     async function loadData() {
       if (_loadDataActive) return; // prevent overlapping calls
+      // Whatever route got here, the staged selection is now being loaded.
+      _clearViewPending();
       _loadDataActive = true;
       try { await _loadDataInner(); } finally { _loadDataActive = false; }
     }
@@ -8506,6 +8536,8 @@
       _webSource = null;
       const accountDbId = sel.value;
       if (!accountDbId) return;
+      // Must land before anything renders — the cards read these figures.
+      await mkLoad(_mkPeriodKey());
       if (accountDbId === '__all__') return loadAllAccounts();
       if (accountDbId.startsWith('__group__')) {
         const g = _acctGroups.find(x => '__group__' + x.id === accountDbId);
@@ -8775,7 +8807,7 @@
                       : 'Meta Ads';
 
       // ── Manual entries (persisted per period in localStorage) ──
-      const _periodKey  = `${currentOrgId}-${currentAgencyId}-${currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod}`;
+      const _periodKey  = _mkPeriodKey();
       const _msgKey     = `msg-orders-${_periodKey}`;
       const _revKey     = `msg-revenue-${_periodKey}`;
       const _piecesKey  = `msg-pieces-${_periodKey}`;
@@ -8834,20 +8866,20 @@
       // derived from Shopify refunds, which only counts refunded orders and
       // misses exchanges and returns handled outside the store.
       const _retKey     = `returns-rate-${_periodKey}`;
-      const _storedRet  = localStorage.getItem(_retKey);
+      const _storedRet  = _mkGet(_retKey);
       const returnsRate = (_storedRet !== null && _storedRet !== '')
         ? parseFloat(_storedRet)
         : (typeof _mhReturnsPct !== 'undefined' ? _mhReturnsPct : null);
       const _leadsKey    = `msg-leads-${_periodKey}`;
       const _dealsKey    = `msg-deals-${_periodKey}`;
-      const msgLeads     = parseInt(localStorage.getItem(_leadsKey) || '0') || 0;
-      const msgDeals     = parseInt(localStorage.getItem(_dealsKey) || '0') || 0;
+      const msgLeads     = parseInt(_mkGet(_leadsKey) || '0') || 0;
+      const msgDeals     = parseInt(_mkGet(_dealsKey) || '0') || 0;
       const _numMsgKey   = `num-messages-${_periodKey}`;
       const _cpmKey      = `cost-per-msg-${_periodKey}`;
       const _cpmManualKey = `cost-per-msg-manual-${_periodKey}`;
-      const _storedNumMsg = localStorage.getItem(_numMsgKey);
-      const _storedCpm    = localStorage.getItem(_cpmKey);
-      const _cpmIsManual  = localStorage.getItem(_cpmManualKey) === 'true';
+      const _storedNumMsg = _mkGet(_numMsgKey);
+      const _storedCpm    = _mkGet(_cpmKey);
+      const _cpmIsManual  = _mkGet(_cpmManualKey) === 'true';
       const _autoMsgsBase = _storedNumMsg !== null ? parseInt(_storedNumMsg) : (numMessages != null ? Math.round(numMessages) : 0);
       const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
       const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
@@ -8858,7 +8890,7 @@
       // performance figure below is calculated from conversion spend alone.
       const _brandKey = `branding-spend-${_periodKey}`;
       const _brandTyped = (() => {
-        const v = localStorage.getItem(_brandKey);
+        const v = _mkGet(_brandKey);
         if (v === null || v === '') return null;
         const n = parseFloat(v);
         return isNaN(n) ? null : n;
@@ -9491,15 +9523,15 @@
           };
 
           msgIn?.addEventListener('input', () => {
-            localStorage.setItem(_numMsgKey, msgIn.value.trim() === '' ? '' : String(parseInt(msgIn.value) || 0));
+            _mkSet(_numMsgKey, msgIn.value.trim() === '' ? '' : String(parseInt(msgIn.value) || 0));
             recalcSvc();
           });
           leadsIn?.addEventListener('input', () => {
-            localStorage.setItem(_leadsKey, String(parseInt(leadsIn.value) || 0));
+            _mkSet(_leadsKey, String(parseInt(leadsIn.value) || 0));
             recalcSvc();
           });
           dealsIn?.addEventListener('input', () => {
-            localStorage.setItem(_dealsKey, String(parseInt(dealsIn.value) || 0));
+            _mkSet(_dealsKey, String(parseInt(dealsIn.value) || 0));
             recalcSvc();
           });
           recalcSvc();   // initial values on load
@@ -9539,7 +9571,7 @@
             // A return rate above 100% is a typo, not a real figure.
             if (v > 100) { v = 100; returnsInput.value = '100'; }
             if (v < 0)   { v = 0;   returnsInput.value = '0'; }
-            localStorage.setItem(_retKey, String(v));
+            _mkSet(_retKey, String(v));
             if (retSub) {
               const lost = (totalOrders && v) ? Math.round(totalOrders * v / 100) : null;
               retSub.textContent = lost != null
@@ -9556,23 +9588,23 @@
 
         if (ordersInput) ordersInput.addEventListener('input', () => {
           _curMsgOrders = parseInt(ordersInput.value) || 0;
-          localStorage.setItem(_msgKey, String(_curMsgOrders));
+          _mkSet(_msgKey, String(_curMsgOrders));
           recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
         });
         if (revenueInput) revenueInput.addEventListener('input', () => {
           _curMsgRevenue = parseFloat(revenueInput.value) || 0;
-          localStorage.setItem(_revKey, String(_curMsgRevenue));
+          _mkSet(_revKey, String(_curMsgRevenue));
           recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
         });
         if (piecesInput) piecesInput.addEventListener('input', () => {
           _curMsgPieces = parseInt(piecesInput.value) || 0;
-          localStorage.setItem(_piecesKey, String(_curMsgPieces));
+          _mkSet(_piecesKey, String(_curMsgPieces));
           recalcDerived(_curMsgOrders, _curMsgRevenue, _curMsgPieces);
         });
 
         const numMsgInput = document.getElementById('kpi-num-messages-input');
         const cpmInput    = document.getElementById('kpi-cost-per-message-input');
-        let _cpmManualFlag = localStorage.getItem(_cpmManualKey) === 'true';
+        let _cpmManualFlag = _mkGet(_cpmManualKey) === 'true';
 
         const getAutoCpm = () => {
           const msgs = parseInt(numMsgInput?.value) || 0;
@@ -9597,13 +9629,13 @@
         };
 
         if (numMsgInput) numMsgInput.addEventListener('input', () => {
-          localStorage.setItem(_numMsgKey, String(parseInt(numMsgInput.value) || 0));
+          _mkSet(_numMsgKey, String(parseInt(numMsgInput.value) || 0));
           // Auto-update CPM when messages changes, unless user manually set it
           if (!_cpmManualFlag && cpmInput) {
             const auto = getAutoCpm();
             if (auto !== null) {
               cpmInput.value = auto.toFixed(2);
-              localStorage.setItem(_cpmKey, String(auto));
+              _mkSet(_cpmKey, String(auto));
             }
           }
           updateTotalsCpm();
@@ -9616,12 +9648,12 @@
             localStorage.removeItem(_cpmManualKey);
             localStorage.removeItem(_cpmKey);
             const auto = getAutoCpm();
-            if (auto !== null) { cpmInput.value = auto.toFixed(2); localStorage.setItem(_cpmKey, String(auto)); }
+            if (auto !== null) { cpmInput.value = auto.toFixed(2); _mkSet(_cpmKey, String(auto)); }
           } else {
             // User typed a value → mark as manual
             _cpmManualFlag = true;
-            localStorage.setItem(_cpmManualKey, 'true');
-            localStorage.setItem(_cpmKey, String(parseFloat(cpmInput.value) || 0));
+            _mkSet(_cpmManualKey, 'true');
+            _mkSet(_cpmKey, String(parseFloat(cpmInput.value) || 0));
           }
           setCpmSubLabel();
           updateTotalsCpm();
@@ -11820,6 +11852,61 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3} more` : '');
       },
     };
+
+    // ══════════════════════════════════════════════════════════════
+    // MANUAL KPI FIGURES
+    // Confirmed orders, messages, leads, deals, branding spend and
+    // returns % used to be written to localStorage only. They looked
+    // saved, survived a reload on that machine, and were invisible to
+    // everyone else — and gone for good if the browser was cleared.
+    // They now live in manual_kpis, keyed exactly as before so what is
+    // already typed carries over untouched.
+    // ══════════════════════════════════════════════════════════════
+    let _mkValues = {}, _mkLoadedFor = null;
+
+    // One definition of the key, so the loader and the renderer can't drift.
+    function _mkPeriodKey() {
+      return `${currentOrgId}-${currentAgencyId}-` +
+             (currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod);
+    }
+
+    async function mkLoad(periodKey) {
+      if (!currentOrgId || !periodKey) return;
+      _mkLoadedFor = periodKey;
+      const { data, error } = await sb.from('manual_kpis')
+        .select('values').eq('organization_id', currentOrgId).eq('period_key', periodKey).maybeSingle();
+      _mkValues = (!error && data?.values) ? data.values : {};
+    }
+
+    // The browser copy is still read, so nothing typed before this existed
+    // disappears — the shared value simply wins once there is one.
+    function _mkGet(key) {
+      if (Object.prototype.hasOwnProperty.call(_mkValues, key)) {
+        const v = _mkValues[key];
+        return v == null ? null : String(v);
+      }
+      return localStorage.getItem(key);
+    }
+
+    function _mkSet(key, value) {
+      _mkValues[key] = value;
+      // Keep writing locally too: the figures on screen recalculate from this
+      // immediately, and it is the fallback if the save never happens.
+      try { localStorage.setItem(key, String(value)); } catch (e) {}
+      if (!_mkLoadedFor) return;
+      const periodKey = _mkLoadedFor;
+      Pending.stage('kpi', 'manual:' + periodKey, 'Manual figures', async () => {
+        const res = await sb.from('manual_kpis').upsert({
+          organization_id: currentOrgId, period_key: periodKey,
+          values: _mkValues, updated_by: currentUser?.id || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'organization_id,period_key' }).select('id');
+        if (!res.error && res.data?.length) {
+          logActivity('change', 'Saved manual figures', { module: 'media', entityType: 'ad_account' });
+        }
+        return res;
+      });
+    }
 
     // Closing the tab with edits waiting would lose them silently.
     window.addEventListener('beforeunload', (e) => {
