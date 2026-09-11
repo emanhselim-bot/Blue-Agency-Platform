@@ -15,11 +15,18 @@ const mime = {
   '.js':   'text/javascript',
   '.css':  'text/css',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
   '.png':  'image/png',
   '.jpg':  'image/jpeg',
   '.svg':  'image/svg+xml',
-  '.ico':  'image/x-icon'
+  '.ico':  'image/x-icon',
+  '.woff2': 'font/woff2'
 };
+
+// Anything not on this list is read as a Buffer. Reading a PNG as UTF-8 text
+// replaces every invalid byte with U+FFFD, which silently corrupts the icons
+// the install prompt depends on.
+const TEXT_EXT = new Set(['.html', '.js', '.css', '.json', '.webmanifest', '.svg']);
 
 // 1. Remove Google Sign-In button + divider
 const GOOGLE_BTN = [
@@ -164,10 +171,19 @@ http.createServer((req, res) => {
   }
 
   if (urlPath === '/' || urlPath === '') urlPath = '/dashboard.html';
+  try { urlPath = decodeURIComponent(urlPath); } catch { /* leave it as-is */ }
+
   const filePath = path.join(__dirname, urlPath);
+  // path.join resolves "..", so a crafted URL could otherwise read files above
+  // the app directory.
+  if (filePath !== __dirname && !filePath.startsWith(__dirname + path.sep)) {
+    res.writeHead(403); return res.end('403 Forbidden');
+  }
+
   const ext = path.extname(filePath);
   const contentType = mime[ext] || 'text/plain';
-  fs.readFile(filePath, 'utf8', (err, data) => {
+  const isText = TEXT_EXT.has(ext);
+  fs.readFile(filePath, isText ? 'utf8' : null, (err, data) => {
     if (err) { res.writeHead(404); res.end('404 Not Found'); return; }
     if (ext === '.html') {
       if (SUPABASE_URL) {
@@ -183,11 +199,16 @@ http.createServer((req, res) => {
       data = data.replace(AUTH_DEADLOCK_OLD, AUTH_DEADLOCK_NEW);
       data = data.replace(CREATE_CLIENT_OLD, CREATE_CLIENT_NEW);
     }
-    res.writeHead(200, {
+    const headers = {
       'Content-Type': contentType,
       // Allow Shopify Admin to embed this page in an iframe
       'Content-Security-Policy': "frame-ancestors https://admin.shopify.com https://*.myshopify.com 'self'",
-    });
+    };
+    // The service worker decides what every other file caches, so it must never
+    // be served stale itself — otherwise a bad version outlives the deploy.
+    if (urlPath === '/sw.js') headers['Cache-Control'] = 'no-cache, max-age=0';
+    else if (ext === '.png' || ext === '.ico' || ext === '.woff2') headers['Cache-Control'] = 'public, max-age=604800';
+    res.writeHead(200, headers);
     res.end(data);
   });
 }).listen(port, () => console.log('Listening on port ' + port));

@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta id="theme-color-meta" name="theme-color" content="#0573F5">
   <title>Blue Ad · Performance Dashboard</title>
+
+  <!-- Installable app: home-screen icon, standalone window, offline shell. -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <!-- iOS reads these instead of the manifest. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Blue Ad">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1233,6 +1243,38 @@
       /* Analysis section */
       .analysis-grid { grid-template-columns: 1fr !important; }
       .platform-grid { grid-template-columns: repeat(2,1fr) !important; }
+
+      /* Wide tables scroll inside their own box. Without this the page itself
+         scrolls sideways and the header drifts off screen. */
+      .pf-scroll, .camp-wrap { border-radius: 10px; }
+      .pf-scroll { -webkit-overflow-scrolling: touch; }
+      .pf-year-table { min-width: 900px; }
+      .pf-year-table th, .pf-year-table td { padding: 7px 9px; font-size: 11.5px; }
+      /* Month column stays put so a figure far to the right still has a label. */
+      .pf-year-table thead th:first-child,
+      .pf-year-table td:first-child { position: sticky; left: 0; z-index: 1; }
+      .pf-year-table td:first-child { background: var(--surface); }
+      .pf-year-table tr.pf-total td:first-child,
+      .pf-year-table tr.pf-good  td:first-child,
+      .pf-year-table tr.pf-bad   td:first-child { background: var(--bg); }
+      .pf-title { font-size: 18px; }
+      .pf-costin { width: 56px; }
+
+      /* Monthly history sheet — the modal filled the screen edge to edge. */
+      #mh-modal > div { padding: 16px 12px calc(16px + env(safe-area-inset-bottom)) !important;
+                        border-radius: 0 !important; min-height: 100%; }
+      #mh-modal table { font-size: 11.5px !important; }
+
+      /* Ads Library */
+      .al-bar .al-input { flex: 1 1 100%; }
+      .al-bar .al-input.al-sm { flex: 1 1 30%; min-width: 0; }
+      .al-comps-add { width: 100%; }
+      .al-comps-add #al-comp-input { flex: 1; min-width: 0 !important; }
+
+      /* iOS zooms the page whenever a focused input is under 16px, and never
+         zooms back out. This lifts the plain fields only — anything with its
+         own class keeps the size it was given, so dense tables are untouched. */
+      input, select, textarea { font-size: 16px; }
     }
 
     /* ═══════════════════════════════════════════════════
@@ -1260,6 +1302,46 @@
       .funnel-step { min-width: 80px; }
       .funnel-step-value { font-size: 13px; }
     }
+
+    /* ═══════════════════════════════════════════════════
+       INSTALLED APP  (home-screen / standalone window)
+       On iOS the web view runs under the status bar and the home
+       indicator, so anything anchored top or bottom needs the safe-area
+       inset added or the notch eats it.
+       ═══════════════════════════════════════════════════ */
+    @media (display-mode: standalone), (display-mode: fullscreen) {
+      .header      { padding-top: calc(14px + env(safe-area-inset-top)); }
+      .auth-overlay,
+      .home-hub    { padding-top: env(safe-area-inset-top); }
+      .content     { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
+      .hub-inner   { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
+      .modal       { padding-bottom: env(safe-area-inset-bottom); }
+      .ai-panel    { padding-bottom: env(safe-area-inset-bottom); }
+      /* No browser chrome to pull down on, so a stray vertical drag on a
+         wide table shouldn't bounce the whole app. */
+      body { overscroll-behavior-y: contain; }
+    }
+    @media (display-mode: standalone) and (max-width: 768px) {
+      .header { padding-top: calc(10px + env(safe-area-inset-top)); }
+    }
+
+    /* ── INSTALL PROMPT ── */
+    .pwa-install { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+      z-index: 9998; display: flex; align-items: center; gap: 12px; padding: 13px 14px;
+      background: var(--surface); color: var(--text-main); border: 1px solid var(--border);
+      border-radius: 14px; box-shadow: 0 10px 34px rgba(0,0,0,.22); font-size: 13px; line-height: 1.45;
+      animation: pwaUp .28s ease-out; }
+    @keyframes pwaUp { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .pwa-install img  { width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0; }
+    .pwa-install-txt  { flex: 1; min-width: 0; }
+    .pwa-install-txt strong { display: block; font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+    .pwa-install-txt span   { color: var(--text-muted); font-size: 12px; }
+    .pwa-install-btn { padding: 8px 15px; background: var(--blue-light); color: #fff; border: none;
+      border-radius: 9px; font-size: 12.5px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .pwa-install-x   { background: none; border: none; color: var(--text-muted); font-size: 17px;
+      cursor: pointer; padding: 2px 4px; line-height: 1; font-family: inherit; }
+    @media (min-width: 820px) { .pwa-install { left: auto; width: 380px; right: 18px; bottom: 18px; } }
+
     /* ── DRAG & DROP LAYOUT ── */
     .layout-edit-btn { padding: 5px 11px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; white-space: nowrap; }
     .layout-edit-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -18409,6 +18491,84 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       btn.addEventListener('touchmove', onMove, { passive: false });
       btn.addEventListener('touchend', onEnd);
     }, { passive: true });
+  })();
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       INSTALLABLE APP
+       Registers the service worker and offers to install. Kept in its
+       own script so a failure here can never take the dashboard down.
+       ═══════════════════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    var DISMISS_KEY = 'pwa_prompt_dismissed';
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').then(function (reg) {
+          // A deploy lands while the app is open: take the new worker as soon
+          // as it's ready rather than waiting for every tab to close.
+          reg.addEventListener('updatefound', function () {
+            var sw = reg.installing;
+            if (!sw) return;
+            sw.addEventListener('statechange', function () {
+              if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+                sw.postMessage('skip-waiting');
+              }
+            });
+          });
+        }).catch(function (e) { console.warn('[pwa] service worker not registered:', e); });
+      });
+    }
+
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                  || window.navigator.standalone === true;
+    if (standalone) return;                                   // already installed
+    if (localStorage.getItem(DISMISS_KEY) === '1') return;    // they said no once
+
+    function card(html) {
+      var el = document.createElement('div');
+      el.className = 'pwa-install';
+      el.innerHTML = html;
+      el.querySelector('.pwa-install-x').onclick = function () {
+        localStorage.setItem(DISMISS_KEY, '1');
+        el.remove();
+      };
+      document.body.appendChild(el);
+      return el;
+    }
+
+    // ── Android / desktop Chrome: a real one-tap install ──
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      var deferred = e;
+      var el = card(
+        '<img src="/icons/icon-192.png" alt="">' +
+        '<div class="pwa-install-txt"><strong>Install Blue Ad</strong>' +
+        '<span>Open the dashboard straight from your home screen.</span></div>' +
+        '<button class="pwa-install-btn">Install</button>' +
+        '<button class="pwa-install-x" aria-label="Not now">✕</button>');
+      el.querySelector('.pwa-install-btn').onclick = function () {
+        el.remove();
+        deferred.prompt();
+        deferred.userChoice.then(function (c) {
+          if (c.outcome === 'accepted') localStorage.setItem(DISMISS_KEY, '1');
+        });
+      };
+    });
+
+    // ── iOS: no install API exists, so show the Share-sheet steps once ──
+    var ua  = navigator.userAgent;
+    var ios = /iPad|iPhone|iPod/.test(ua)
+           || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+    if (ios && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)) {
+      setTimeout(function () {
+        card('<img src="/icons/icon-192.png" alt="">' +
+             '<div class="pwa-install-txt"><strong>Add Blue Ad to your Home Screen</strong>' +
+             '<span>Tap the Share button, then “Add to Home Screen”.</span></div>' +
+             '<button class="pwa-install-x" aria-label="Not now">✕</button>');
+      }, 4000);
+    }
   })();
   </script>
 </body>
