@@ -1015,6 +1015,41 @@
       padding: 7px 13px; font-weight: 700; font-size: 12.5px; cursor: pointer; font-family: inherit; }
     /* Anything edited but not yet written gets a gold edge. */
     .pend-dirty { box-shadow: inset 3px 0 0 var(--brand-gold); border-radius: 6px; }
+
+    /* ── PROPOSAL ── */
+    .pp-wrap { max-width: 1100px; margin: 0 auto; }
+    .pp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .pp-q { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .pp-q label { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); }
+    .pp-q.off { opacity: .45; }
+    .pp-q .connect-input { width: 100%; }
+    .pp-hint { font-size: 13px; color: var(--text-muted); line-height: 1.6; background: var(--surface);
+      border: 1px dashed var(--border); border-radius: 12px; padding: 16px 18px; }
+    .pp-warn { font-size: 12.5px; font-weight: 700; color: #B45309; background: rgba(252,186,0,.14);
+      border-radius: 10px; padding: 9px 13px; margin-bottom: 12px; }
+    .pp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .pp-card { background: var(--surface); border-radius: 12px; padding: 15px 17px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06); border-left: 4px solid var(--blue-light); min-width: 0; }
+    .pp-card.good { border-left-color: #16A34A; }
+    .pp-card.bad  { border-left-color: var(--coral); }
+    .pp-card-l { font-size: 10px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: var(--text-muted); }
+    .pp-card-v { font-size: 25px; font-weight: 800; letter-spacing: -.6px; margin: 5px 0 3px; }
+    .pp-card-s { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+    .pp-basis { margin-top: 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.65;
+      border-top: 1px solid var(--border); padding-top: 12px; }
+    .pp-save { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 18px; }
+    .pp-untagged { margin-top: 24px; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .pp-untagged-h { font-size: 12.5px; font-weight: 800; }
+    .pp-untagged-s { font-size: 12px; color: var(--text-muted); margin: 3px 0 11px; line-height: 1.5; }
+    .pp-untagged-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      font-size: 13px; padding: 6px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .pp-saved-list { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 18px; overflow: hidden; }
+    .pp-saved-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 11px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .pp-saved-row:last-child { border-bottom: none; }
+    .pp-saved-name { font-size: 13.5px; font-weight: 700; }
+    .pp-saved-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; }
+    @media (max-width: 768px) { .pp-grid { grid-template-columns: 1fr; } .pp-card-v { font-size: 21px; } }
     @media (max-width: 820px) { .pend-bar { flex-wrap: wrap; } .pend-btn, .pend-ghost { flex: 1; } }
     @media (max-width: 768px) { .msx-row { gap: 8px; } .msx-act-when { margin-left: 0; width: 100%; } }
     @media (max-width: 768px) {
@@ -6024,8 +6059,8 @@
 
       nav.innerHTML = agencies.map(a => {
         const count = countForAgency(a.id);
-        const isActive = !_pfMode && !_alMode && currentAgencyId === a.id;
-        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="leaveProfitTab();leaveAdsLibrary();setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
+        const isActive = !_pfMode && !_alMode && !_ppMode && currentAgencyId === a.id;
+        return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="leaveProfitTab();leaveAdsLibrary();leaveProposalTab();setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
           ${a.icon ? `<span class="agency-tab-icon">${a.icon}</span>` : ''}
           <span class="agency-tab-name">${escHtml(a.name)}</span>
           ${count > 0 ? `<span class="agency-tab-count">${count}</span>` : ''}
@@ -6086,18 +6121,19 @@
       bar.innerHTML = Object.keys(PLATFORM_DEFS).map(p => {
         const def = PLATFORM_DEFS[p];
         const connected = orgPlatforms.includes(p);
-        const on = !_pfMode && !_alMode && currentPlatformTab === p;
+        const on = !_pfMode && !_alMode && !_ppMode && currentPlatformTab === p;
         return `<button class="platform-tab${on ? ' active' : ''}" onclick="setPlatformTab('${p}')"
                         style="${connected ? '' : 'opacity:.55'}"
                         title="${connected ? '' : def.label + ' — not connected yet'}">${def.icon} ${def.label}</button>`;
       }).join('') +
       `<span class="platform-sep"></span>
        <button class="platform-tab${_pfMode ? ' active' : ''}" onclick="openProfitTab()" title="Unit economics — will this budget make money?">💰 Profitability</button>
-       <button class="platform-tab${_alMode ? ' active' : ''}" onclick="openAdsLibraryTab()" title="Competitor ads from Meta's Ad Library">🔎 Ads Library</button>`;
+       <button class="platform-tab${_alMode ? ' active' : ''}" onclick="openAdsLibraryTab()" title="Competitor ads from Meta's Ad Library">🔎 Ads Library</button>
+       <button class="platform-tab${_ppMode ? ' active' : ''}" onclick="openProposalTab()" title="Estimate results for a new client from what similar accounts actually did">📝 Proposal</button>`;
     }
 
     function setPlatformTab(platform) {
-      _pfMode = false; _alMode = false;
+      _pfMode = false; _alMode = false; _ppMode = false;
       currentPlatformTab = platform;
       localStorage.setItem(`dash_platform_${currentOrgId}`, platform);
       saveAgencySettings(currentOrgId, currentAgencyId, { platform });
@@ -10234,7 +10270,7 @@
     let _pfAccountName = '', _pfCurrency = 'EGP ', _pfMode = false, _pfReadonly = false;
 
     function openProfitTab() {
-      _pfMode = true; _alMode = false;
+      _pfMode = true; _alMode = false; _ppMode = false;
       renderPlatformTabs();
       renderProfitability(accountMap[sel?.value] || {});
     }
@@ -10931,13 +10967,394 @@
     }
 
     async function openAdsLibraryTab() {
-      _alMode = true; _pfMode = false;
+      _alMode = true; _pfMode = false; _ppMode = false;
       renderPlatformTabs();
       _alRender();
       await alLoadCompetitors();
       _alRender();
     }
     function leaveAdsLibrary() { if (_alMode) { _alMode = false; renderPlatformTabs(); } }
+
+    // ═══════════════════════════════════════════════════════════
+    // PROPOSAL
+    // Answer six questions about a prospect and get an estimate built
+    // from what comparable accounts actually did, not from a guess.
+    // Every figure traces back to real months in monthly_history.
+    // ═══════════════════════════════════════════════════════════
+    let _ppMode = false;
+    let _ppRows = null;          // monthly history joined to its account
+    let _ppSaved = [];
+    const _pp = { platform: 'meta', business: '', objective: '', metric: '', cprBasis: '', cpr: null, budget: null };
+
+    const PP_BUSINESS = [
+      ['fashion',    '👗 Fashion & apparel'],
+      ['beauty',     '💄 Skincare, beauty & personal care'],
+      ['pharma',     '💊 Pharma & medical products'],
+      ['clinic',     '🏥 Clinics & healthcare services'],
+      ['education',  '🎓 Education & academies'],
+      ['automotive', '🚗 Automotive'],
+      ['food',       '🍽 Food & beverage'],
+      ['home',       '🏠 Home & lifestyle'],
+      ['services',   '🛠 Other services'],
+      ['other',      '📦 Something else'],
+    ];
+    const PP_BUSINESS_LABEL = Object.fromEntries(PP_BUSINESS);
+
+    // Each objective decides which half of the month's figures to read.
+    // 'web' is website/Shopify selling; 'msg' is conversations on Meta.
+    const PP_OBJECTIVES = [
+      ['sales',    '🛒 Online sales',        'web', [['purchase', 'Purchases (orders)'], ['piece', 'Pieces sold']]],
+      ['messages', '💬 Messages & DMs',      'msg', [['message', 'Conversations started'], ['msg_order', 'Orders closed from messages']]],
+    ];
+    const PP_OBJ = Object.fromEntries(PP_OBJECTIVES.map(o => [o[0], { label: o[1], side: o[2], metrics: o[3] }]));
+
+    async function openProposalTab() {
+      _ppMode = true; _pfMode = false; _alMode = false;
+      renderPlatformTabs();
+      _ppRender('loading');
+      await ppLoad();
+      _ppRender();
+    }
+    function leaveProposalTab() { if (_ppMode) { _ppMode = false; renderPlatformTabs(); } }
+
+    async function ppLoad() {
+      const [{ data: hist }, { data: accts }, { data: saved }] = await Promise.all([
+        sb.from('monthly_history')
+          .select('account_key, month, web_spend, web_orders, web_pieces, web_revenue, msg_spend, msg_count, msg_orders, msg_pieces, msg_revenue, currency')
+          .eq('organization_id', currentOrgId),
+        sb.from('meta_ad_accounts_safe')
+          .select('id, account_name, business_type, currency').eq('organization_id', currentOrgId),
+        sb.from('proposals').select('*').eq('organization_id', currentOrgId)
+          .order('created_at', { ascending: false }).limit(30),
+      ]);
+      const byId = Object.fromEntries((accts || []).map(a => [a.id, a]));
+      // Combination keys repeat the same months as the accounts inside them,
+      // so counting both would weight those clients twice.
+      _ppRows = (hist || [])
+        .filter(h => !String(h.account_key).startsWith('__') && byId[h.account_key])
+        .map(h => ({ ...h, acct: byId[h.account_key] }));
+      _ppAccounts = accts || [];
+      _ppSaved = saved || [];
+    }
+    let _ppAccounts = [];
+
+    // One month of one account, reduced to the figures a proposal needs.
+    function _ppMonth(row, side) {
+      const n = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+      if (side === 'web') {
+        const spend = n(row.web_spend), res = n(row.web_orders);
+        return { spend, results: res, pieces: n(row.web_pieces), orders: res, revenue: n(row.web_revenue) };
+      }
+      const spend = n(row.msg_spend), res = n(row.msg_count);
+      return { spend, results: res, pieces: n(row.msg_pieces), orders: n(row.msg_orders), revenue: n(row.msg_revenue) };
+    }
+
+    // Months that are comparable: same industry, the right side of the
+    // business, and actually spending and producing.
+    function _ppSample() {
+      const objective = PP_OBJ[_pp.objective];
+      if (!_ppRows || !objective) return [];
+      return _ppRows
+        .filter(r => !_pp.business || r.acct.business_type === _pp.business)
+        .map(r => ({ ...(_ppMonth(r, objective.side)), name: r.acct.account_name, month: r.month }))
+        .filter(m => m.spend > 0 && m.results > 0);
+    }
+
+    function _ppPct(sorted, p) {
+      if (!sorted.length) return null;
+      const i = (sorted.length - 1) * p;
+      const lo = Math.floor(i), hi = Math.ceil(i);
+      return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+    }
+
+    // Cost per result across the sample, as three honest bands rather than a
+    // single number that hides how much the accounts varied.
+    function _ppBands(sample) {
+      if (!sample.length) return null;
+      const cprs = sample.map(m => m.spend / m.results).sort((a, b) => a - b);
+      return {
+        best:         _ppPct(cprs, 0.25),
+        typical:      _ppPct(cprs, 0.50),
+        conservative: _ppPct(cprs, 0.75),
+        accounts: new Set(sample.map(m => m.name)).size,
+        months: sample.length,
+      };
+    }
+
+    function _ppEstimate() {
+      const sample = _ppSample();
+      const bands  = _ppBands(sample);
+      const cpr    = _pp.cpr, budget = _pp.budget;
+      if (!bands || !cpr || cpr <= 0 || !budget || budget <= 0) return null;
+
+      const totSpend   = sample.reduce((s, m) => s + m.spend, 0);
+      const totResults = sample.reduce((s, m) => s + m.results, 0);
+      const totOrders  = sample.reduce((s, m) => s + m.orders, 0);
+      const totRevenue = sample.reduce((s, m) => s + m.revenue, 0);
+      const totPieces  = sample.reduce((s, m) => s + m.pieces, 0);
+
+      const results   = budget / cpr;
+      // For messages the result is a conversation, and only some become orders.
+      const orderRate = totResults > 0 ? totOrders / totResults : 0;
+      const orders    = _pp.objective === 'sales' ? results : results * orderRate;
+      const aov       = totOrders > 0 ? totRevenue / totOrders : 0;
+      const revenue   = orders * aov;
+      const pieces    = totOrders > 0 ? orders * (totPieces / totOrders) : 0;
+
+      return {
+        results, orders, revenue, pieces, aov,
+        roas: budget > 0 ? revenue / budget : 0,
+        orderRate,
+        benchRoas: totSpend > 0 ? totRevenue / totSpend : 0,
+        bands, sample: sample.length,
+        accounts: bands.accounts,
+      };
+    }
+
+    function _ppMoney(v) {
+      return 'EGP ' + Math.round(v || 0).toLocaleString('en');
+    }
+    function _ppNum(v, d = 0) {
+      return (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString('en', { maximumFractionDigits: d });
+    }
+
+    // ── The six questions ──
+    function ppSet(field, value) {
+      _pp[field] = value === '' ? '' : value;
+      if (field === 'objective') { _pp.metric = ''; _pp.cpr = null; _pp.cprBasis = ''; }
+      if (field === 'business')  { _pp.cpr = null; _pp.cprBasis = ''; }
+      _ppRender();
+    }
+    function ppSetCpr(basis) {
+      const bands = _ppBands(_ppSample());
+      _pp.cprBasis = basis;
+      if (bands && bands[basis] != null) _pp.cpr = bands[basis];
+      _ppRender();
+    }
+    function ppSetCustomCpr(v) {
+      const n = parseFloat(v);
+      _pp.cpr = isNaN(n) ? null : n;
+      _pp.cprBasis = 'custom';
+      _ppRenderResult();
+    }
+    function ppSetBudget(v) {
+      const n = parseFloat(v);
+      _pp.budget = isNaN(n) ? null : n;
+      _ppRenderResult();
+    }
+
+    async function ppSetAccountType(id, type) {
+      const a = _ppAccounts.find(x => x.id === id);
+      if (a) a.business_type = type || null;
+      const r = _ppRows?.find(x => x.account_key === id);
+      Pending.rerender.proposal = () => _ppRender();
+      Pending.stage('proposal', 'type:' + id, `${a?.account_name || 'Account'} industry`, async () =>
+        await sb.from('meta_ad_accounts')
+          .update({ business_type: type || null, updated_at: new Date().toISOString() })
+          .eq('id', id).select('id'));
+      _ppRender();
+    }
+
+    function _ppRenderResult() {
+      const box = document.getElementById('pp-result');
+      if (box) box.innerHTML = _ppResultHTML();
+    }
+
+    function _ppResultHTML() {
+      const sample = _ppSample();
+      const bands  = _ppBands(sample);
+      if (!_pp.objective) return `<div class="pp-hint">Pick an objective to see what comparable accounts achieved.</div>`;
+      if (!bands) {
+        return `<div class="pp-hint">No comparable months yet${_pp.business ? ' for ' + escHtml(PP_BUSINESS_LABEL[_pp.business] || _pp.business) : ''}.
+          Either tag more accounts with their industry below, or choose <em>All industries</em>.</div>`;
+      }
+      const e = _ppEstimate();
+      if (!e) return `<div class="pp-hint">Choose a cost per result and a budget to see the estimate.
+        Based on <strong>${bands.accounts}</strong> account${bands.accounts === 1 ? '' : 's'} over <strong>${bands.months}</strong> month${bands.months === 1 ? '' : 's'}.</div>`;
+
+      const metricLabel = (PP_OBJ[_pp.objective].metrics.find(m => m[0] === _pp.metric) || [, 'results'])[1];
+      const warn = e.sample < 3
+        ? `<div class="pp-warn">Only ${e.sample} comparable month${e.sample === 1 ? '' : 's'} — treat this as a rough indication, not a promise.</div>` : '';
+
+      return `
+        ${warn}
+        <div class="pp-cards">
+          <div class="pp-card"><div class="pp-card-l">${escHtml(metricLabel)}</div>
+            <div class="pp-card-v">${_ppNum(e.results)}</div>
+            <div class="pp-card-s">at ${_ppMoney(_pp.cpr)} each</div></div>
+          <div class="pp-card"><div class="pp-card-l">Orders</div>
+            <div class="pp-card-v">${_ppNum(e.orders)}</div>
+            <div class="pp-card-s">${_pp.objective === 'messages' ? _ppNum(e.orderRate * 100, 1) + '% of conversations close' : 'one per purchase'}</div></div>
+          <div class="pp-card"><div class="pp-card-l">Revenue</div>
+            <div class="pp-card-v">${_ppMoney(e.revenue)}</div>
+            <div class="pp-card-s">${_ppMoney(e.aov)} average order</div></div>
+          <div class="pp-card ${e.roas >= 1 ? 'good' : 'bad'}"><div class="pp-card-l">ROAS</div>
+            <div class="pp-card-v">${e.roas.toFixed(2)}×</div>
+            <div class="pp-card-s">these accounts averaged ${e.benchRoas.toFixed(2)}×</div></div>
+        </div>
+        <div class="pp-basis">
+          Built from <strong>${e.accounts}</strong> account${e.accounts === 1 ? '' : 's'} over
+          <strong>${e.sample}</strong> month${e.sample === 1 ? '' : 's'} of real spend.
+          Cost per result across them ranged
+          ${_ppMoney(bands.best)} (best quarter) to ${_ppMoney(bands.conservative)} (worst quarter),
+          with a middle of ${_ppMoney(bands.typical)}.
+        </div>`;
+    }
+
+    function _ppRender(state) {
+      if (state === 'loading') {
+        document.getElementById('content').innerHTML =
+          '<div class="loading-state"><div class="spinner"></div>Reading your past results…</div>';
+        return;
+      }
+      const objective = PP_OBJ[_pp.objective];
+      const bands = _ppBands(_ppSample());
+      // Named q, not sel — sel is the global account picker and shadowing it
+      // here would be a trap for whoever edits this next.
+      const q = (id, label, value, opts, onchange, disabled) => `
+        <div class="pp-q ${disabled ? 'off' : ''}">
+          <label>${label}</label>
+          <select class="connect-input" ${disabled ? 'disabled' : ''} onchange="${onchange}">${opts}</select>
+        </div>`;
+
+      const o = (v, l, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`;
+
+      const cprOpts = bands ? `
+        ${o('', '— choose —', _pp.cprBasis)}
+        ${o('best',         `Best case · ${_ppMoney(bands.best)}`,         _pp.cprBasis)}
+        ${o('typical',      `Typical · ${_ppMoney(bands.typical)}`,        _pp.cprBasis)}
+        ${o('conservative', `Conservative · ${_ppMoney(bands.conservative)}`, _pp.cprBasis)}
+        ${o('custom',       'My own figure…',                              _pp.cprBasis)}` : o('', 'No comparable data yet', '');
+
+      // Accounts with history that still have no industry set — they're
+      // excluded from every industry-matched estimate until they do.
+      const withHistory = new Set((_ppRows || []).map(r => r.account_key));
+      const untagged = _ppAccounts.filter(a => withHistory.has(a.id) && !a.business_type);
+
+      document.getElementById('content').innerHTML = `
+        <div class="pp-wrap">
+          <div class="pf-head">
+            <div>
+              <div class="pf-title">📝 Proposal</div>
+              <div class="pf-sub">What can this budget realistically deliver? Answered from what comparable accounts actually did.</div>
+            </div>
+            ${_ppSaved.length ? `<div class="pf-actions"><button class="cp-chipbtn" onclick="ppToggleSaved()">📂 Saved (${_ppSaved.length})</button></div>` : ''}
+          </div>
+
+          <div id="pp-saved" style="display:none"></div>
+
+          <div class="pp-grid">
+            ${q('pp-platform', '1 · Platform', _pp.platform,
+                  o('meta', '📘 Meta Ads', _pp.platform) + o('google_ads', '🔍 Google Ads', _pp.platform) + o('tiktok_ads', '🎵 TikTok Ads', _pp.platform),
+                  "ppSet('platform', this.value)")}
+
+            ${q('pp-business', '2 · Type of business', _pp.business,
+                  o('', 'All industries', _pp.business) + PP_BUSINESS.map(([v, l]) => o(v, l, _pp.business)).join(''),
+                  "ppSet('business', this.value)")}
+
+            ${q('pp-objective', '3 · Objective', _pp.objective,
+                  o('', '— choose —', _pp.objective) + PP_OBJECTIVES.map(x => o(x[0], x[1], _pp.objective)).join(''),
+                  "ppSet('objective', this.value)")}
+
+            ${q('pp-metric', '4 · Metric', _pp.metric,
+                  o('', '— choose —', _pp.metric) + (objective ? objective.metrics.map(m => o(m[0], m[1], _pp.metric)).join('') : ''),
+                  "ppSet('metric', this.value)", !objective)}
+
+            ${q('pp-cpr', '5 · Cost per result', _pp.cprBasis, cprOpts,
+                  "ppSetCpr(this.value)", !objective)}
+
+            <div class="pp-q">
+              <label>6 · Client budget (EGP)</label>
+              <input class="connect-input" type="number" min="0" step="100" placeholder="e.g. 50000"
+                     value="${_pp.budget ?? ''}" oninput="ppSetBudget(this.value)">
+            </div>
+          </div>
+
+          ${_pp.cprBasis === 'custom' ? `
+            <div class="pp-q" style="max-width:280px;margin-bottom:16px">
+              <label>Your cost per result (EGP)</label>
+              <input class="connect-input" type="number" min="0" step="0.5" placeholder="e.g. 85"
+                     value="${_pp.cpr ?? ''}" oninput="ppSetCustomCpr(this.value)">
+            </div>` : ''}
+
+          <div id="pp-result">${_ppResultHTML()}</div>
+
+          ${_ppEstimate() ? `
+            <div class="pp-save">
+              <input class="connect-input" id="pp-client" placeholder="Client or prospect name" style="flex:1;min-width:180px">
+              <button class="refresh-btn" onclick="ppSave()">💾 Save this proposal</button>
+            </div>` : ''}
+
+          ${untagged.length ? `
+            <div class="pp-untagged">
+              <div class="pp-untagged-h">${untagged.length} account${untagged.length === 1 ? '' : 's'} with history have no industry set</div>
+              <div class="pp-untagged-s">They are left out of any industry-matched estimate until you say what they are.</div>
+              ${untagged.map(a => `
+                <div class="pp-untagged-row">
+                  <span>${escHtml(a.account_name)}</span>
+                  <select class="connect-input" style="min-width:auto;padding:5px 9px;font-size:12.5px"
+                          onchange="ppSetAccountType('${a.id}', this.value)">
+                    <option value="">— set industry —</option>
+                    ${PP_BUSINESS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+                  </select>
+                </div>`).join('')}
+            </div>` : ''}
+        </div>`;
+    }
+
+    function ppToggleSaved() {
+      const box = document.getElementById('pp-saved');
+      if (!box) return;
+      const showing = box.style.display !== 'none';
+      box.style.display = showing ? 'none' : '';
+      if (showing) return;
+      box.innerHTML = `<div class="pp-saved-list">${_ppSaved.map(p => `
+        <div class="pp-saved-row">
+          <div>
+            <div class="pp-saved-name">${escHtml(p.client_name || p.title || 'Untitled')}</div>
+            <div class="pp-saved-sub">${escHtml(PP_BUSINESS_LABEL[p.business_type] || 'All industries')} ·
+              ${escHtml(PP_OBJ[p.objective]?.label || p.objective || '')} ·
+              ${_ppMoney(p.budget)} → ${_ppNum(p.estimate?.results)} results ·
+              ${new Date(p.created_at).toLocaleDateString('en-GB')}</div>
+          </div>
+          <button class="cp-chipbtn" onclick="ppOpenSaved('${p.id}')">Open</button>
+        </div>`).join('')}</div>`;
+    }
+
+    function ppOpenSaved(id) {
+      const p = _ppSaved.find(x => x.id === id);
+      if (!p) return;
+      Object.assign(_pp, {
+        platform: p.platform || 'meta', business: p.business_type || '',
+        objective: p.objective || '', metric: p.metric || '',
+        cprBasis: p.cpr_basis || 'custom', cpr: p.cpr != null ? Number(p.cpr) : null,
+        budget: p.budget != null ? Number(p.budget) : null,
+      });
+      _ppRender();
+    }
+
+    async function ppSave() {
+      const e = _ppEstimate();
+      if (!e) return;
+      const name = document.getElementById('pp-client')?.value.trim();
+      if (!name) { alert('Give the proposal a client name first.'); return; }
+      const { data, error } = await sb.from('proposals').insert({
+        organization_id: currentOrgId, client_name: name,
+        platform: _pp.platform, business_type: _pp.business || null,
+        objective: _pp.objective, metric: _pp.metric,
+        cpr: _pp.cpr, cpr_basis: _pp.cprBasis, budget: _pp.budget, currency: 'EGP',
+        estimate: { results: e.results, orders: e.orders, revenue: e.revenue, pieces: e.pieces, roas: e.roas, aov: e.aov },
+        basis: { accounts: e.accounts, months: e.sample, bands: e.bands, benchRoas: e.benchRoas },
+        created_by: currentUser?.id || null,
+      }).select('*');
+      if (error) { alert('Could not save: ' + error.message); return; }
+      if (!data?.length) { alert('Nothing was saved — you may not have permission.'); return; }
+      _ppSaved.unshift(data[0]);
+      logActivity('change', 'Saved a proposal for ' + name,
+        { module: 'media', entityType: 'proposal', label: name, details: { budget: _pp.budget } });
+      _ppRender();
+      alert('✓ Saved. Reopen it any time from “Saved”.');
+    }
 
     const AL_COUNTRIES = [['EG','Egypt'],['SA','Saudi Arabia'],['AE','UAE'],['KW','Kuwait'],['QA','Qatar'],
       ['US','United States'],['GB','United Kingdom'],['DE','Germany'],['FR','France'],['ES','Spain'],['IT','Italy'],['NL','Netherlands']];
