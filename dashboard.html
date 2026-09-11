@@ -998,6 +998,24 @@
     .msx-act-who { font-weight: 700; }
     .msx-act-when { margin-left: auto; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
     .msx-empty { font-size: 13px; color: var(--text-muted); padding: 14px 0; }
+
+    /* ── UNSAVED CHANGES BAR ──
+       Same gold bar the client timeline already uses, so "you have edits
+       waiting" looks the same everywhere in the app. */
+    .pend-bar { position: sticky; top: 8px; z-index: 70; display: flex; align-items: center; gap: 10px;
+      background: var(--brand-gold); color: #26210A; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+      box-shadow: 0 6px 22px rgba(252,186,0,.32); font-size: 13px; font-weight: 700; }
+    .pend-bar[hidden] { display: none; }
+    .pend-dot { width: 8px; height: 8px; border-radius: 50%; background: #26210A; flex-shrink: 0; animation: cpPulse 1.6s infinite; }
+    .pend-txt { flex: 1; }
+    .pend-btn { background: #0A1CA3; color: #fff; border: none; border-radius: 8px; padding: 8px 16px;
+      font-weight: 800; font-size: 12.5px; cursor: pointer; font-family: inherit; }
+    .pend-btn:disabled { opacity: .6; cursor: default; }
+    .pend-ghost { background: transparent; border: 1px solid rgba(38,33,10,.35); color: #26210A; border-radius: 8px;
+      padding: 7px 13px; font-weight: 700; font-size: 12.5px; cursor: pointer; font-family: inherit; }
+    /* Anything edited but not yet written gets a gold edge. */
+    .pend-dirty { box-shadow: inset 3px 0 0 var(--brand-gold); border-radius: 6px; }
+    @media (max-width: 820px) { .pend-bar { flex-wrap: wrap; } .pend-btn, .pend-ghost { flex: 1; } }
     @media (max-width: 768px) { .msx-row { gap: 8px; } .msx-act-when { margin-left: 0; width: 100%; } }
     @media (max-width: 768px) {
       .an-grid2, .an-grid2-wide { grid-template-columns: 1fr; gap: 10px; margin-bottom: 16px; }
@@ -4900,6 +4918,9 @@
       const btn   = document.getElementById('targets-toggle-btn');
       const isOpen = panel.classList.contains('open');
       const shouldOpen = open !== undefined ? open : !isOpen;
+      // Closing the panel with targets still staged would lose them.
+      if (isOpen && !shouldOpen && Pending.has('targets')
+          && !confirmLeaveUnsaved('the targets panel')) return;
       if (shouldOpen) loadTargetsPanel(true);
       panel.classList.toggle('open', shouldOpen);
       if (btn) btn.classList.toggle('active', shouldOpen);
@@ -4972,10 +4993,16 @@
 
     function getFlexTargets() { return _tgtCache[_tgtAccountKey()] || []; }
 
+    // The panel's "Save Agency Targets" button used to save only the period —
+    // the targets themselves were written on every edit. Now the edit stays in
+    // the local cache and the button is what reaches the database.
     function setFlexTargets(list) {
       const acct = _tgtAccountKey();
       _tgtCache[acct] = list;
-      _tgtPersist(acct, list);
+      Pending.stage('targets', acct, 'KPI targets', async () => {
+        await _tgtPersist(acct, _tgtCache[acct]);
+        return { data: [1] };   // _tgtPersist surfaces its own errors in the panel
+      });
     }
 
     // Write the whole set for one account: upsert what is there, delete the rest.
@@ -5368,7 +5395,9 @@
       applyFlexTargets();
     }
 
-    function saveTargets() {
+    async function saveTargets() {
+      // Commit the targets first — this button is what the panel promises.
+      await Pending.save('targets');
       const period = document.getElementById('tgt-period').value || null;
       if (period) {
         saveAgencySettings(currentOrgId, currentAgencyId, { period });
@@ -8294,15 +8323,18 @@
       loadAccounts();
     }
 
-    async function renameGoogleAdsAccount(id, name) {
+    function renameGoogleAdsAccount(id, name) {
       const clean = (name || '').trim();
-      // Blank falls back to null so the list shows the Customer ID again.
-      const ok = await _gadsWrite(sb.from('google_ads_accounts')
-        .update({ account_name: clean || null, updated_at: new Date().toISOString() })
-        .eq('id', id), 1);
-      if (!ok) return;
-      logActivity('settings', `Renamed a Google Ads account to "${clean || '(cleared)'}"`, { module: 'media' });
-      loadAccounts();
+      Pending.stage('gads', 'name:' + id, `Google Ads name · ${clean || '(cleared)'}`, async () => {
+        // Blank falls back to null so the list shows the Customer ID again.
+        const ok = await _gadsWrite(sb.from('google_ads_accounts')
+          .update({ account_name: clean || null, updated_at: new Date().toISOString() })
+          .eq('id', id), 1);
+        if (!ok) return { error: { message: 'the rename was rejected' } };
+        logActivity('settings', `Renamed a Google Ads account to "${clean || '(cleared)'}"`, { module: 'media' });
+        loadAccounts();
+        return { data: [1] };
+      });
     }
 
     async function restoreGoogleAdsAccount(id) {
@@ -10366,7 +10398,7 @@
     // when a single account or combined client is selected. Under "All
     // accounts" the column shows a revenue-weighted average and is read-only —
     // there is no single row to write it to.
-    async function pfSetCostPct(i, value) {
+    function pfSetCostPct(i, value) {
       const scope = _pfScope();
       if (scope.keys.size !== 1) return;
       const key = [...scope.keys][0];
@@ -10375,22 +10407,26 @@
       if (raw !== '' && isNaN(v)) return;
       const month = `${_pfYear}-${String(i + 1).padStart(2, '0')}-01`;
 
-      // .select() and a row count, because an RLS-blocked update returns no
-      // error and no rows — it would silently look like it saved.
-      const { data, error } = await sb.from('monthly_history')
-        .update({ cost_pct: v, updated_at: new Date().toISOString() })
-        .eq('organization_id', currentOrgId).eq('account_key', key).eq('month', month)
-        .select('id');
-      if (error) { alert('⚠️ ' + error.message); return; }
-      if (!(data || []).length) {
-        alert('Nothing was saved — there is no recorded month for ' + PF_MONTHS[i] + ' to attach a cost % to.');
-        return;
-      }
+      // Recalculate profit, margin and BE-ROAS straight away so the figures
+      // respond as you type — but hold the write until Save.
       const m = _pfYearRows?.[i];
       if (m) {
         if (v == null) { m.costWeighted = 0; m.costBase = 0; }
         else { m.costWeighted = v * m.revenue; m.costBase = m.revenue; }
       }
+
+      Pending.stage('profit', key + ':' + month, `Cost % · ${PF_MONTHS[i]}`, async () => {
+        // .select() and a row count, because an RLS-blocked update returns no
+        // error and no rows — it would silently look like it saved.
+        const res = await sb.from('monthly_history')
+          .update({ cost_pct: v, updated_at: new Date().toISOString() })
+          .eq('organization_id', currentOrgId).eq('account_key', key).eq('month', month)
+          .select('id');
+        if (!res.error && !(res.data || []).length) {
+          return { error: { message: `there is no recorded month for ${PF_MONTHS[i]} to attach a cost % to` } };
+        }
+        return res;
+      });
       _pfRender();
     }
 
@@ -11489,6 +11525,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       await refreshSettingsData();
     });
     function closeSettingsModal() {
+      if (!confirmLeaveUnsaved('Settings')) return;
       document.getElementById('settings-modal').classList.add('hidden');
       renderAgencyNav();
       filterAccountsByAgency();
@@ -11658,6 +11695,147 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (_hubView === 'activity') return 'activity';
       if (_hubView === 'access')   return 'access';
       return 'account';
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // PENDING CHANGES
+    // Nothing writes to the database the moment a control moves. Edits
+    // are staged here, one bar says how many are waiting, and the write
+    // happens when Save is pressed.
+    //
+    // A screen converts a control by replacing its write with:
+    //   Pending.stage(scope, key, label, () => sb.from(...).update(...)
+    //                                            .eq('id', id).select('id'))
+    // and optionally registering Pending.rerender[scope] so Discard can
+    // put the controls back the way they were.
+    // ══════════════════════════════════════════════════════════════
+    const Pending = {
+      _items: new Map(),          // "scope::key" → { scope, key, label, write }
+      rerender: {},               // scope → function to redraw that screen
+
+      _id(scope, key) { return scope + '::' + key; },
+
+      // Staging the same control twice replaces the first edit rather than
+      // queuing both, so Save writes each field once with its final value.
+      stage(scope, key, label, write) {
+        this._items.set(this._id(scope, key), { scope, key, label, write });
+        this._paint();
+      },
+
+      unstage(scope, key) { this._items.delete(this._id(scope, key)); this._paint(); },
+
+      list(scope) {
+        return [...this._items.values()].filter(i => !scope || i.scope === scope);
+      },
+      count(scope) { return this.list(scope).length; },
+      has(scope)   { return this.count(scope) > 0; },
+
+      discard(scope) {
+        this.list(scope).forEach(i => this._items.delete(this._id(i.scope, i.key)));
+        this._paint();
+        const scopes = scope ? [scope] : Object.keys(this.rerender);
+        scopes.forEach(s => { try { this.rerender[s]?.(); } catch (e) {} });
+      },
+
+      // For screens that keep their own per-row Save button.
+      async saveOne(scope, key) {
+        const item = this._items.get(this._id(scope, key));
+        if (!item) return true;
+        try {
+          const res = await item.write();
+          if (res && res.error) { alert('Could not save: ' + res.error.message); return false; }
+          if (res && Array.isArray(res.data) && res.data.length === 0) {
+            alert('Nothing was saved — you may not have permission.');
+            return false;
+          }
+        } catch (e) { alert('Could not save: ' + (e?.message || 'unknown error')); return false; }
+        this._items.delete(this._id(scope, key));
+        this._paint();
+        return true;
+      },
+
+      async save(scope) {
+        const items = this.list(scope);
+        if (!items.length) return true;
+        const bar = document.getElementById('pend-bar');
+        const btn = document.getElementById('pend-save');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+        const failed = [];
+        for (const item of items) {
+          try {
+            const res = await item.write();
+            // Supabase reports a row blocked by row-level security as success
+            // with nothing returned, so an empty result counts as a failure.
+            if (res && res.error) failed.push(item.label + ' — ' + res.error.message);
+            else if (res && Array.isArray(res.data) && res.data.length === 0)
+              failed.push(item.label + ' — you may not have permission');
+            else this._items.delete(this._id(item.scope, item.key));
+          } catch (e) {
+            failed.push(item.label + ' — ' + (e?.message || 'could not save'));
+          }
+        }
+
+        this._paint();
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
+        const scopes = scope ? [scope] : [...new Set(items.map(i => i.scope))];
+        scopes.forEach(s => { try { this.rerender[s]?.(); } catch (e) {} });
+
+        if (failed.length) {
+          alert('Some changes were not saved:\n\n• ' + failed.join('\n• '));
+          return false;
+        }
+        if (bar) {
+          const done = document.getElementById('pend-done');
+          if (done) {
+            done.textContent = `✓ Saved ${items.length} change${items.length === 1 ? '' : 's'}`;
+            setTimeout(() => { done.textContent = ''; }, 3500);
+          }
+        }
+        return true;
+      },
+
+      _paint() {
+        let bar = document.getElementById('pend-bar');
+        if (!bar) {
+          bar = document.createElement('div');
+          bar.id = 'pend-bar';
+          bar.className = 'pend-bar';
+          bar.style.cssText = 'position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));' +
+                              'z-index:9800;top:auto;margin:0';
+          bar.innerHTML =
+            '<span class="pend-dot"></span>' +
+            '<span class="pend-txt" id="pend-txt"></span>' +
+            '<span id="pend-done" style="font-size:12px;font-weight:700"></span>' +
+            '<button class="pend-ghost" id="pend-discard" onclick="Pending.discard()">Discard</button>' +
+            '<button class="pend-btn"   id="pend-save"    onclick="Pending.save()">💾 Save</button>';
+          document.body.appendChild(bar);
+        }
+        const n = this.count();
+        bar.hidden = n === 0;
+        if (!n) return;
+        const names = [...new Set(this.list().map(i => i.label))];
+        document.getElementById('pend-txt').textContent =
+          `${n} unsaved change${n === 1 ? '' : 's'} · ` +
+          names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3} more` : '');
+      },
+    };
+
+    // Closing the tab with edits waiting would lose them silently.
+    window.addEventListener('beforeunload', (e) => {
+      if (!Pending.has()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
+
+    // Used before anything that swaps the screen out from under the edits.
+    function confirmLeaveUnsaved(what) {
+      if (!Pending.has()) return true;
+      const n = Pending.count();
+      return confirm(
+        `You have ${n} unsaved change${n === 1 ? '' : 's'}${what ? ' in ' + what : ''}.\n\n` +
+        `Leaving now discards ${n === 1 ? 'it' : 'them'}. Continue?`
+      ) && (Pending.discard(), true);
     }
 
     async function logActivity(category, action, opts) {
@@ -14252,13 +14430,18 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </div>`;
     }
 
-    async function cpmSaveTask(field, value) {
+    function cpmSaveTask(field, value) {
       if (!cpmCanEdit() || !cpmTask) return;
-      cpmTask[field] = value;
-      const { error } = await sb.from('cp_tasks').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', cpmTask.id);
-      if (error) return alert(error.message);
-      const idx = cpmTasks.findIndex(x => x.id === cpmTask.id);
+      const id = cpmTask.id, title = cpmTask.title;
+      cpmTask[field] = value;                        // show it, don't write it
+      const idx = cpmTasks.findIndex(x => x.id === id);
       if (idx >= 0) cpmTasks[idx][field] = value;
+      Pending.rerender.tasks = cpmRenderBoard;
+      Pending.stage('tasks', id + ':' + field, `${title || 'Task'} · ${field}`, async () => {
+        return await sb.from('cp_tasks')
+          .update({ [field]: value, updated_at: new Date().toISOString() })
+          .eq('id', id).select('id');
+      });
       cpmRenderBoard();
     }
 
@@ -16233,14 +16416,18 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     // Set straight from the row. Kept locally too so the list does not have to
     // be refetched just to move one client between states.
-    async function fnSetStatus(id, status) {
+    function fnSetStatus(id, status) {
       const c = _fnClients.find(x => x.id === id);
-      const { error } = await sb.from('fin_clients')
-        .update({ project_status: status, updated_at: new Date().toISOString() }).eq('id', id);
-      if (error) { alert('Could not change status: ' + error.message); return; }
-      if (c) c.project_status = status;
-      logActivity('change', 'Marked a client ' + status, {
-        module: 'finance', entityType: 'fin_client', entityId: id, label: c?.name,
+      if (c) c.project_status = status;             // show it, don't write it
+      Pending.rerender.finance = fnRender;
+      Pending.stage('finance', 'status:' + id, `${c?.name || 'Client'} status`, async () => {
+        const res = await sb.from('fin_clients')
+          .update({ project_status: status, updated_at: new Date().toISOString() })
+          .eq('id', id).select('id');
+        if (!res.error) logActivity('change', 'Marked a client ' + status, {
+          module: 'finance', entityType: 'fin_client', entityId: id, label: c?.name,
+        });
+        return res;
       });
       fnRender();
     }
@@ -16659,6 +16846,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     // ── HOME HUB ──────────────────────────────────
     function hubShowView(v) {
+      // Switching module would take the half-finished edits off screen.
+      if (v !== _hubView && !confirmLeaveUnsaved('this section')) return;
       _hubView = v;
       document.getElementById('hub-cards-view').style.display    = v === 'cards'    ? '' : 'none';
       document.getElementById('hub-pipeline-view').style.display = v === 'pipeline' ? '' : 'none';
@@ -17117,11 +17306,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       mtLoad();
     }
 
-    async function mtSaveNotes(id, notes) {
-      const { error } = await sb.from('meetings')
-        .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() }).eq('id', id);
-      if (error) { alert('Could not save notes: ' + error.message); return; }
-      const m = _mtMeetings.find(x => x.id === id); if (m) m.notes = notes.trim() || null;
+    function mtSaveNotes(id, notes) {
+      const m = _mtMeetings.find(x => x.id === id);
+      const val = notes.trim() || null;
+      Pending.stage('meetings', 'notes:' + id, `${m?.title || 'Meeting'} agenda`, async () => {
+        const res = await sb.from('meetings')
+          .update({ notes: val, updated_at: new Date().toISOString() }).eq('id', id).select('id');
+        if (!res.error && res.data?.length && m) m.notes = val;
+        return res;
+      });
     }
 
     // Short "when it was saved" label. Built from local parts — toISOString()
@@ -17136,27 +17329,40 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     // Minutes are written after the meeting and kept separate from the agenda,
     // so writing up what happened never overwrites what was planned.
-    async function mtSaveMinutes(id, minutes) {
+    function mtSaveMinutes(id, minutes) {
       const val = (minutes || '').trim() || null;
-      const now = new Date().toISOString();
-      const { data, error } = await sb.from('meetings')
-        .update({ minutes: val, minutes_updated_at: val ? now : null, updated_at: now })
-        .eq('id', id).select('id');
-      if (error) { alert('Could not save the meeting notes: ' + error.message); return; }
-      if (!data?.length) { alert('Nothing was saved — you may not have permission to edit this meeting.'); return; }
       const m = _mtMeetings.find(x => x.id === id);
-      if (m) { m.minutes = val; m.minutes_updated_at = val ? now : null; }
       const stamp = document.getElementById('mt-min-stamp-' + id);
-      if (stamp) stamp.textContent = val ? 'Last saved ' + mtStamp(now) : '';
-      const box = document.getElementById('mt-min-' + id);
-      if (box) box.style.borderColor = val ? 'rgba(22,163,74,.45)' : 'var(--border)';
-      logActivity('change', 'Wrote up meeting notes', { module: 'pipeline', entityType: 'meeting', entityId: id, label: m?.title });
+      if (stamp) stamp.textContent = 'Not saved yet';
+
+      Pending.stage('meetings', 'minutes:' + id, `${m?.title || 'Meeting'} notes`, async () => {
+        const now = new Date().toISOString();
+        const res = await sb.from('meetings')
+          .update({ minutes: val, minutes_updated_at: val ? now : null, updated_at: now })
+          .eq('id', id).select('id');
+        if (res.error || !res.data?.length) return res;
+        if (m) { m.minutes = val; m.minutes_updated_at = val ? now : null; }
+        const s = document.getElementById('mt-min-stamp-' + id);
+        if (s) s.textContent = val ? 'Last saved ' + mtStamp(now) : '';
+        const box = document.getElementById('mt-min-' + id);
+        if (box) box.style.borderColor = val ? 'rgba(22,163,74,.45)' : 'var(--border)';
+        logActivity('change', 'Wrote up meeting notes',
+          { module: 'meetings', entityType: 'meeting', entityId: id, label: m?.title });
+        return res;
+      });
     }
 
-    async function mtSetStatus(id, status) {
-      await sb.from('meetings').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-      const m = _mtMeetings.find(x => x.id === id); if (m) m.status = status;
-      logActivity('change', 'Marked a meeting ' + status, { module: 'pipeline', entityType: 'meeting', entityId: id, label: m?.title });
+    function mtSetStatus(id, status) {
+      const m = _mtMeetings.find(x => x.id === id);
+      if (m) m.status = status;                     // show it, don't write it
+      Pending.rerender.meetings = mtRenderGrid;
+      Pending.stage('meetings', 'status:' + id, `${m?.title || 'Meeting'} status`, async () => {
+        const res = await sb.from('meetings')
+          .update({ status, updated_at: new Date().toISOString() }).eq('id', id).select('id');
+        if (!res.error) logActivity('change', 'Marked a meeting ' + status,
+          { module: 'meetings', entityType: 'meeting', entityId: id, label: m?.title });
+        return res;
+      });
       mtRenderGrid();
     }
 
@@ -17201,10 +17407,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       mtLoadDetail(id);
     }
 
-    async function mtToggleTask(taskId, done, meetingId) {
-      await sb.from('meeting_tasks')
-        .update({ done, done_at: done ? new Date().toISOString() : null }).eq('id', taskId);
-      mtLoadDetail(meetingId);
+    function mtToggleTask(taskId, done, meetingId) {
+      Pending.stage('meetings', 'task:' + taskId, done ? 'Action item ticked' : 'Action item unticked', async () => {
+        const res = await sb.from('meeting_tasks')
+          .update({ done, done_at: done ? new Date().toISOString() : null })
+          .eq('id', taskId).select('id');
+        if (!res.error) mtLoadDetail(meetingId);
+        return res;
+      });
     }
 
     async function mtDelTask(taskId, meetingId) {
@@ -17268,6 +17478,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     function closeModuleSettings() {
+      if (Pending.has('msx') && !confirmLeaveUnsaved('this module’s access')) return;
       document.getElementById('msx-modal').classList.add('hidden');
     }
 
@@ -17287,6 +17498,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         .eq('organization_id', currentOrgId).eq('archived', false).order('full_name');
       if (error) { list.innerHTML = `<div class="msx-empty">⚠️ ${escHtml(error.message)}</div>`; return; }
       _msxMembers = data || [];
+      Pending.rerender.msx = msxRenderTeam;
       msxRenderTeam();
     }
 
@@ -17310,7 +17522,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         const control = (cfg.ownerOnly || isOwner)
           ? `<span class="msx-pill ${isOwner ? 'on' : ''}">${isOwner ? 'Owner · full access' : 'No access'}</span>`
           : `<select class="connect-input" style="padding:5px 9px;font-size:12.5px;min-width:auto"
-                     onchange="msxSetRole(${i}, this.value)">
+                     onchange="msxSetRole(${i}, this.value, this)">
                <option value=""       ${!role             ? 'selected' : ''}>No access</option>
                <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Viewer</option>
                <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
@@ -17325,32 +17537,45 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }).join('');
     }
 
-    async function msxSetRole(i, value) {
+    // Staged, not written. A permission change is the last thing that should
+    // happen just because a dropdown moved.
+    function msxSetRole(i, value, el) {
       const m = _msxMembers[i];
       if (!m) return;
+      const mod   = _msxMod;
+      const cfg   = MSX_MODULES[mod];
       const note  = document.getElementById('msx-team-note');
       const roles = { ...(m.module_roles || {}) };
-      if (value) roles[_msxMod] = value; else delete roles[_msxMod];
+      if (value) roles[mod] = value; else delete roles[mod];
+
+      const original = (m.module_roles || {})[mod] || '';
+      const row = el?.closest('.msx-row');
+      if (row) row.classList.toggle('pend-dirty', value !== original);
+
+      if (value === original) {
+        Pending.unstage('msx', m.id);
+        note.style.color = 'var(--text-muted)';
+        note.textContent = '';
+        return;
+      }
+
+      Pending.stage('msx', m.id, `${m.full_name || m.email} · ${cfg.name}`, async () => {
+        const res = await sb.from('cp_members')
+          .update({ module_roles: roles, modules: Object.keys(roles), updated_at: new Date().toISOString() })
+          .eq('id', m.id).select('id');
+        if (!res.error && res.data?.length) {
+          m.module_roles = roles; m.modules = Object.keys(roles);
+          // The Access page keeps its own copy of the same rows.
+          const twin = _acxMembers.find(x => x.id === m.id);
+          if (twin) { twin.module_roles = roles; twin.modules = m.modules; }
+          logActivity('change', `Set ${m.full_name || m.email} to ${value || 'no access'} on ${cfg.name}`,
+                      { module: mod, entityType: 'access', label: cfg.name });
+        }
+        return res;
+      });
 
       note.style.color = 'var(--text-muted)';
-      note.textContent = 'Saving…';
-      // Ask for the row back — a write blocked by row-level security changes
-      // nothing and reports no error, which reads as success.
-      const { data, error } = await sb.from('cp_members')
-        .update({ module_roles: roles, modules: Object.keys(roles), updated_at: new Date().toISOString() })
-        .eq('id', m.id).select('id');
-
-      if (error)            { note.style.color = 'var(--coral)'; note.textContent = '⚠️ ' + error.message; return; }
-      if (!(data || []).length) { note.style.color = 'var(--coral)'; note.textContent = '⚠️ Nothing saved — only the owner can change access.'; return; }
-
-      m.module_roles = roles; m.modules = Object.keys(roles);
-      note.style.color = '#16A34A';
-      note.textContent = `✓ ${m.full_name || m.email}: ${value || 'no access'}`;
-      logActivity('change', `Set ${m.full_name || m.email} to ${value || 'no access'} on ${MSX_MODULES[_msxMod].name}`,
-                  { module: _msxMod, entityType: 'access', label: MSX_MODULES[_msxMod].name });
-      // The Access page holds its own copy of the same rows.
-      const twin = _acxMembers.find(x => x.id === m.id);
-      if (twin) { twin.module_roles = roles; twin.modules = m.modules; }
+      note.textContent = `${m.full_name || m.email} → ${value || 'no access'} · not saved yet`;
     }
 
     async function msxRenderActivity() {
@@ -17425,6 +17650,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const l = await callEdgeFunction('manage-users', { action: 'list' });
       _acxLogins = l.users || [];
 
+      Pending.rerender.acx = acxRenderTeam;
       acxRenderTeam();
       acxRenderAccountPicker();
       acxFillDirectories();
@@ -17651,32 +17877,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (el) { el.textContent = text; el.style.color = colour || 'var(--text-muted)'; }
     }
 
-    async function _acxSave(i, patch) {
-      const m = _acxMembers[i];
-      Object.assign(m, patch);
-      _acxStatus(i, 'Saving…');
-      // Ask for the row back: a write blocked by row-level security updates
-      // nothing and returns no error, which would look like success.
-      const { data, error } = await sb.from('cp_members')
-        .update({ ...patch, updated_at: new Date().toISOString() })
-        .eq('id', m.id).select('id');
-      const err = document.getElementById('acx-team-error');
-      err.textContent = error ? error.message : '';
-      if (error) {
-        _acxStatus(i, '⚠️ ' + error.message, '#F87171');
-        return false;
-      }
-      if (!data?.length) {
-        _acxStatus(i, '⚠️ Nothing saved — only the owner can change access.', '#F87171');
-        return false;
-      }
-      const t = new Date();
-      _acxStatus(i, `✓ Saved ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '#16A34A');
-      logActivity('change', 'Changed access for ' + (m.full_name || m.email), {
-        module: 'access', entityType: 'access', label: 'Access', details: patch,
-      });
-      return true;
-    }
+    // _acxSave used to write on every dropdown move. It has been replaced by
+    // _acxStage + the Save button, and removing it keeps the instant-write
+    // path from quietly coming back.
 
     // Writes everything currently on this member's card in one go. Individual
     // controls already save on change; this is the deliberate "commit it now"
@@ -17704,38 +17907,75 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         return on.length === all.length ? null : on;
       };
 
-      const ok = await _acxSave(i, {
+      // Read everything currently on the card, stage it, then commit just this
+      // member — the bar at the bottom stays for anyone else still edited.
+      _acxStage(i, {
         module_roles: roles,
         modules:      Object.keys(roles),
         account_ids:  readScope('acx-accbox-' + i, m.account_ids),
         client_ids:   readScope('acx-clibox-' + i, m.client_ids),
       });
 
+      const ok = await Pending.saveOne('acx', m.id);
+
       if (btn) { btn.disabled = false; btn.textContent = ok ? '💾 Saved' : '💾 Save'; }
-      if (ok) setTimeout(() => { if (btn) btn.textContent = '💾 Save'; }, 2500);
+      if (ok) {
+        _acxStatus(i, '✓ Saved', '#16A34A');
+        setTimeout(() => { if (btn) btn.textContent = '💾 Save'; }, 2500);
+      }
     }
 
     function acxSetModule(i, key, value) {
       const roles = { ...(_acxMembers[i].module_roles || {}) };
       if (value) roles[key] = value; else delete roles[key];
       // modules[] is still read by older code paths; keep the two in step.
-      _acxSave(i, { module_roles: roles, modules: Object.keys(roles) });
+      // Staged — the per-member Save button commits it.
+      _acxStage(i, { module_roles: roles, modules: Object.keys(roles) });
     }
 
     // null = everything, including accounts added later. An empty array means
     // deliberately nothing, which is different.
-    async function acxScopeAll(i, field, all) {
-      await _acxSave(i, { [field]: all ? null : [] });
-      acxRenderTeam();
+    function acxScopeAll(i, field, all) {
+      _acxStage(i, { [field]: all ? null : [] });
     }
 
-    async function acxSetScope(i, field, input) {
+    function acxSetScope(i, field, input) {
       const box = input.closest('div');
       const ids = [...box.querySelectorAll('input:checked')].map(x => x.value);
       const total = box.querySelectorAll('input').length;
       // Everything ticked is stored as null, meaning "all, including future ones".
-      await _acxSave(i, { [field]: ids.length === total ? null : ids });
-      acxRenderTeam();   // refresh the summary line
+      _acxStage(i, { [field]: ids.length === total ? null : ids });
+    }
+
+    // Holds each member's edits until their Save button is pressed. The page
+    // used to write on every dropdown move while still showing a Save button,
+    // so closing without saving had already changed the permissions.
+    const _acxPending = {};
+
+    function _acxStage(i, patch) {
+      const m = _acxMembers[i];
+      if (!m) return;
+      Object.assign(_acxPending[m.id] ||= {}, patch);
+
+      const btn = document.getElementById('acx-save-btn-' + i);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save changes'; }
+      _acxStatus(i, 'Not saved yet', '#B45309');
+
+      Pending.stage('acx', m.id, m.full_name || m.email, async () => {
+        const patchNow = _acxPending[m.id];
+        if (!patchNow) return { data: [1] };
+        const res = await sb.from('cp_members')
+          .update({ ...patchNow, updated_at: new Date().toISOString() })
+          .eq('id', m.id).select('id');
+        if (!res.error && res.data?.length) {
+          Object.assign(m, patchNow);
+          delete _acxPending[m.id];
+          logActivity('change', 'Changed access for ' + (m.full_name || m.email), {
+            module: 'access', entityType: 'access', label: 'Access', details: patchNow,
+          });
+        }
+        return res;
+      });
     }
 
     async function acxAddMember() {
@@ -17922,26 +18162,29 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     // Renaming and re-scoping a live link takes effect immediately for whoever
     // already holds it — the URL does not change.
-    async function acxRenameShare(table, id, label) {
+    function acxRenameShare(table, id, label) {
       const err = document.getElementById('acx-cl-error');
-      const { error } = await sb.from(table).update({ label: label.trim() || null }).eq('id', id);
-      if (error) { err.style.color = '#e53e3e'; err.textContent = error.message; return; }
-      logActivity('change', 'Renamed a share link', { entityType: 'settings', label: label.trim() });
-      err.style.color = '#16A34A';
-      err.textContent = '✓ Name saved.';
-      setTimeout(() => { err.textContent = ''; }, 2500);
+      Pending.stage('acx-share', 'name:' + id, 'Share link name', async () => {
+        const res = await sb.from(table).update({ label: label.trim() || null }).eq('id', id).select('id');
+        if (!res.error) logActivity('change', 'Renamed a share link',
+          { module: 'access', entityType: 'access', label: label.trim() });
+        return res;
+      });
+      err.style.color = '#B45309';
+      err.textContent = 'Not saved yet — press Save.';
     }
 
-    async function acxSetShareMode(id, mode) {
+    function acxSetShareMode(id, mode) {
       const err = document.getElementById('acx-cl-error');
-      const { error } = await sb.from('cp_timeline_shares').update({ mode }).eq('id', id);
-      if (error) { err.style.color = '#e53e3e'; err.textContent = error.message; return; }
-      logActivity('change', 'Changed a share link to ' + mode, {
-        module: 'pipeline', entityType: 'settings', details: { mode },
+      Pending.stage('acx-share', 'mode:' + id, 'Share link access level', async () => {
+        const res = await sb.from('cp_timeline_shares').update({ mode }).eq('id', id).select('id');
+        if (!res.error) logActivity('change', 'Changed a share link to ' + mode, {
+          module: 'pipeline', entityType: 'access', details: { mode },
+        });
+        return res;
       });
-      err.style.color = '#16A34A';
-      err.textContent = '✓ Access level updated — applies to the existing link.';
-      setTimeout(() => { err.textContent = ''; }, 3500);
+      err.style.color = '#B45309';
+      err.textContent = 'Not saved yet — press Save. It will apply to the existing link.';
     }
 
     async function acxRevokeTimeline(id, label) {
