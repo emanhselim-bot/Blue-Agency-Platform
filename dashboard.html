@@ -10846,9 +10846,7 @@
     }
 
     function pfDownload() {
-      const w = window.open('', '_blank');
-      if (!w) { alert('Please allow pop-ups to download this.'); return; }
-      w.document.write(_pfExportHTML()); w.document.close();
+      openPrintable(_pfExportHTML(), 'Profitability');
     }
 
     function pfShare() {
@@ -11586,9 +11584,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
  <div style="font-size:12px;color:#6B7280;margin-bottom:16px">${escHtml(_alQuery.country)} · ${_alResults.length} ads · ${new Date().toLocaleDateString('en-GB')}</div>
  <table><thead><tr><th>Page</th><th>Started</th><th>Days</th><th>Status</th><th>Headline</th><th>Primary text</th></tr></thead><tbody>${rows}</tbody></table>
  <script>window.onload=function(){setTimeout(function(){window.print();},350);};<\/script></body></html>`;
-      const w = window.open('', '_blank');
-      if (!w) return alert('Please allow pop-ups to download this.');
-      w.document.write(html); w.document.close();
+      openPrintable(html, 'Competitor ads');
     }
 
 
@@ -12172,6 +12168,125 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     // ══════════════════════════════════════════════════════════════
+    // WORKS THE SAME INSTALLED AS IN A BROWSER TAB
+    // An installed app has no pop-ups, and iOS ignores a download
+    // attribute entirely. Printing, exporting and connecting an account
+    // all went through those, so each of them silently did nothing on a
+    // phone while working fine on the website. These three helpers try
+    // the browser route first and fall back to one that works anywhere.
+    // ══════════════════════════════════════════════════════════════
+    function _isInstalledApp() {
+      return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+          || window.navigator.standalone === true;
+    }
+
+    // Print or save a generated document. A blocked pop-up used to end in
+    // "please allow pop-ups"; now it prints from a hidden frame instead.
+    function openPrintable(html, title) {
+      if (!_isInstalledApp()) {
+        const w = window.open('', '_blank');
+        if (w) { w.document.write(html); w.document.close(); return true; }
+      }
+      const f = document.createElement('iframe');
+      f.setAttribute('aria-hidden', 'true');
+      f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0';
+      document.body.appendChild(f);
+      const d = f.contentWindow.document;
+      d.open();
+      // The document's own script calls print(); in a frame we drive it from
+      // here once it has laid out, so the same HTML serves both routes.
+      d.write(html.replace(/<script>[\s\S]*?<\/script>/gi, ''));
+      d.close();
+      setTimeout(() => {
+        try { f.contentWindow.focus(); f.contentWindow.print(); }
+        catch (e) { alert('Could not open the print view: ' + e.message); }
+        setTimeout(() => f.remove(), 60000);
+      }, 400);
+      return true;
+    }
+
+    // iOS ignores <a download> outright, so the file never arrives. Share it
+    // instead where that is offered, and otherwise show it to copy.
+    async function downloadFile(filename, mime, text) {
+      const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+      const a = document.createElement('a');
+      const supportsDownload = 'download' in a && !_isInstalledApp();
+      if (supportsDownload) {
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        return true;
+      }
+      try {
+        const file = new File([blob], filename, { type: mime });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return true;
+        }
+      } catch (e) { if (e?.name === 'AbortError') return false; }
+      _showCopyable(filename, text);
+      return true;
+    }
+
+    function _showCopyable(filename, text) {
+      const box = document.createElement('div');
+      box.className = 'modal-overlay';
+      box.style.zIndex = 9900;
+      box.innerHTML = `
+        <div class="modal" style="max-width:680px">
+          <div class="modal-header"><h2>${escHtml(filename)}</h2>
+            <button class="modal-close">✕</button></div>
+          <div class="modal-body">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+              Your phone won't let an app save a file directly. Copy the contents and paste
+              them wherever you need — a spreadsheet opens this straight away.</p>
+            <textarea readonly style="width:100%;height:240px;font-family:ui-monospace,monospace;
+              font-size:12px;padding:10px;border:1px solid var(--border);border-radius:10px;
+              background:var(--bg);color:var(--text-main)"></textarea>
+            <button class="refresh-btn" style="margin-top:10px">📋 Copy all</button>
+          </div>
+        </div>`;
+      box.querySelector('textarea').value = text;
+      box.querySelector('.modal-close').onclick = () => box.remove();
+      box.onclick = e => { if (e.target === box) box.remove(); };
+      box.querySelector('.refresh-btn').onclick = async (e) => {
+        const ta = box.querySelector('textarea');
+        ta.select();
+        try { await navigator.clipboard.writeText(text); } catch (_) { document.execCommand('copy'); }
+        e.target.textContent = '✓ Copied';
+      };
+      document.body.appendChild(box);
+    }
+
+    // Connecting an ad account opens the provider's sign-in in a pop-up, which
+    // reports back to this window when it finishes. An installed app has no
+    // pop-ups and no way to report back, so rather than appear to hang it says
+    // so and hands over a link that works.
+    function openAuthWindow(url, name, features) {
+      return window.open(url, name, features || 'width=600,height=700,scrollbars=yes');
+    }
+
+    function oauthBlockedNotice(url, statusEl, provider) {
+      if (statusEl) {
+        statusEl.className = (statusEl.className || '').replace(/\b(success|error)\b/g, '').trim();
+        statusEl.innerHTML =
+          `Connecting ${escHtml(provider)} needs a browser window, and an installed app can't open one. ` +
+          `<a href="${escHtml(url)}" target="_blank" rel="noopener" style="font-weight:700;color:var(--blue-light)">` +
+          `Open ${escHtml(provider)} sign-in</a> — finish there, then come back and pull down to refresh.`;
+      } else {
+        alert(`Connecting ${provider} needs a browser window. Open the dashboard in Safari or Chrome to finish this step.`);
+      }
+    }
+
+    // window.open('mailto:') is blocked in an installed app; navigation is not.
+    function openMail(href) {
+      if (_isInstalledApp()) { location.href = href; return; }
+      const w = window.open(href);
+      if (!w) location.href = href;
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // PENDING CHANGES
     // Nothing writes to the database the moment a control moves. Edits
     // are staged here, one bar says how many are waiting, and the write
@@ -12519,12 +12634,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           new Date(r.created_at).toLocaleString(), r.user_name || '', r.user_email || '',
           r.category, r.action, r.entity_label || '', r.details ? JSON.stringify(r.details) : '',
         ]));
-      const blob = new Blob([rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `activity-log-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      downloadFile(`activity-log-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv',
+                   rows.map(r => r.map(esc).join(',')).join('\n'));
       logActivity('share', 'Exported the activity log to CSV', { details: { rows: _alRows.length } });
     }
 
@@ -13700,11 +13811,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       status.className = 'modal-status';
       status.textContent = 'Opening Meta login…';
       const jwt = await getJWT();
-      const popup = window.open(
-        `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`,
-        'meta-oauth',
-        'width=600,height=700,scrollbars=yes'
-      );
+      const _oauthUrl = `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`;
+      const popup = openAuthWindow(_oauthUrl, 'meta-oauth');
+      // Blocked, or an installed app where pop-ups don't exist. Without this
+      // the status line just sat on "Opening Meta login..." for ever.
+      if (!popup || popup.closed) { oauthBlockedNotice(_oauthUrl, status, 'Meta'); return; }
       const handler = async (e) => {
         if (e.data?.event === 'meta_oauth_complete') {
           window.removeEventListener('message', handler);
@@ -13789,7 +13900,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function reconnectMeta() {
       const jwt = await getJWT();
       const oauthUrl = `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`;
-      const popup = window.open(oauthUrl, 'meta-oauth', 'width=600,height=700,scrollbars=yes');
+      const popup = openAuthWindow(oauthUrl, 'meta-oauth');
       const content = document.getElementById('content');
 
       // Popup blocked — show a direct link instead of going dark
@@ -13950,11 +14061,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       status.className = 'onboarding-status';
       status.textContent = 'Opening Meta login…';
       const jwt = await getJWT();
-      const popup = window.open(
-        `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`,
-        'meta-oauth',
-        'width=600,height=700,scrollbars=yes'
-      );
+      const _oauthUrl = `${SUPABASE_URL}/functions/v1/meta-oauth?org_id=${currentOrgId}&t=${jwt}`;
+      const popup = openAuthWindow(_oauthUrl, 'meta-oauth');
+      // Blocked, or an installed app where pop-ups don't exist. Without this
+      // the status line just sat on "Opening Meta login..." for ever.
+      if (!popup || popup.closed) { oauthBlockedNotice(_oauthUrl, status, 'Meta'); return; }
       const handler = async (e) => {
         if (e.data?.event === 'meta_oauth_complete') {
           window.removeEventListener('message', handler);
@@ -16535,10 +16646,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
   <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 350); };<\/script>
 </body></html>`;
 
-      const w = window.open('', '_blank');
-      if (!w) { alert('Please allow pop-ups for this site to download the timeline.'); return; }
-      w.document.write(html);
-      w.document.close();
+      openPrintable(html, 'Client timeline');
     }
 
     function _cpStatsHTML(proc) {
@@ -18810,7 +18918,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           module: 'pipeline', entityType: 'client', entityId: clientId, label, details: { mode },
         });
         if (email) {
-          window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your project timeline')}&body=${encodeURIComponent(`Hello,\n\nHere is your live project timeline:\n\n${url}\n\nNo login needed.\n\nBlue Ad`)}`);
+          openMail(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your project timeline')}&body=${encodeURIComponent(`Hello,\n\nHere is your live project timeline:\n\n${url}\n\nNo login needed.\n\nBlue Ad`)}`);
         }
         try { await navigator.clipboard.writeText(url); } catch (e) { /* clipboard may be blocked */ }
         err.style.color = '#16A34A';
@@ -18866,7 +18974,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         module: 'media', entityType: 'md_share', label, details: { accounts: ids.length, email, kind },
       });
       if (email) {
-        window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Blue Ad dashboard')}&body=${encodeURIComponent(`Hello,\n\nHere is your live performance dashboard:\n\n${url}\n\nIt updates automatically — no login needed.\n\nBlue Ad`)}`);
+        openMail(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Blue Ad dashboard')}&body=${encodeURIComponent(`Hello,\n\nHere is your live performance dashboard:\n\n${url}\n\nIt updates automatically — no login needed.\n\nBlue Ad`)}`);
       }
       try { await navigator.clipboard.writeText(url); } catch (e) { /* clipboard may be blocked */ }
       err.style.color = '#16A34A';
@@ -18953,7 +19061,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (email) {
         const subject = encodeURIComponent('Your Blue Ad dashboard');
         const body = encodeURIComponent(`Hello,\n\nHere is your live performance dashboard:\n\n${url}\n\nIt updates automatically — no login needed.\n\nBlue Ad`);
-        window.open(`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`);
+        openMail(`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`);
       }
       try { await navigator.clipboard.writeText(url); } catch (e) { /* clipboard may be blocked */ }
       err.style.color = '#16A34A';
