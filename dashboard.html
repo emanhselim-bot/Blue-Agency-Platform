@@ -71,7 +71,13 @@
     [data-theme="dark"] .settings-nav-section { color: #484f58; }
     [data-theme="dark"] .connect-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
     [data-theme="dark"] .connect-input option { background: var(--surface); }
-    [data-theme="dark"] .auth-card { background: var(--surface); border-color: var(--border); }
+    /* The sign-in card is .auth-box — this rule named a class that exists
+       nowhere, so in dark mode the card stayed hard-coded white while
+       .auth-title kept using --text-main (near-white). The title was
+       invisible on the sign-in screen. */
+    [data-theme="dark"] .auth-box { background: var(--surface); border: 1px solid var(--border); }
+    [data-theme="dark"] .auth-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
+    [data-theme="dark"] .auth-input::placeholder { color: var(--text-muted); }
     [data-theme="dark"] .auth-social-btn { background: var(--surface); color: var(--text-main); border-color: var(--border); }
     [data-theme="dark"] .auth-social-btn:hover { background: var(--bg); }
     [data-theme="dark"] .kpi-card { background: var(--surface); }
