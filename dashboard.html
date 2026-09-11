@@ -1723,6 +1723,11 @@
     [data-theme="dark"] .platform-tab { color: var(--text-muted); }
     [data-theme="dark"] .platform-tab.active { color: var(--blue-light); border-bottom-color: var(--blue-light); }
     [data-theme="dark"] .platform-tab:hover { background: rgba(255,255,255,0.05); }
+    /* An earlier rule paints the active tab solid blue, and these later ones
+       set the text to blue as well — identical to the background, so the label
+       of whichever tab you were on was invisible. */
+    .platform-tab.active,
+    [data-theme="dark"] .platform-tab.active { color: #fff; }
 
     .add-agency-tab {
       display: flex; align-items: center; gap: 6px;
