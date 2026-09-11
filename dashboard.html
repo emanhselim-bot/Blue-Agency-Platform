@@ -14000,7 +14000,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 <datalist id="nu-titles">${_cpmTitleList().map(t => `<option value="${cpmEsc(t)}">`).join('')}</datalist></label>
               <label>Email (their login)<input class="cpm-input" id="nu-email" type="email" autocomplete="off" placeholder="name@blue-ad.com"></label>
               <label>Password<input class="cpm-input" id="nu-pass" type="password" autocomplete="new-password" placeholder="min 8 characters"></label>
-              <label>Role<select class="cpm-input role-select" id="nu-role" data-role-long="1" data-role-default="editor"></select></label>
+              <label>Role<select class="cpm-input" id="nu-role">${roleOptionsHTML('editor', { long: true })}</select></label>
               <label>Clients they can access<select class="cpm-input" id="nu-scope">
                 <option value="all">All clients</option>
                 <option value="social">📱 Social Media only</option>
