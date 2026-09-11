@@ -3244,6 +3244,8 @@
                separate places to manage permissions. -->
           <button class="settings-nav-item active" id="snav-teams"    onclick="setSettingsTab('teams')"   style="display:none"><span class="settings-nav-icon">👥</span> Teams</button>
           <button class="settings-nav-item"        id="snav-clients"  onclick="setSettingsTab('clients')" style="display:none"><span class="settings-nav-icon">🔑</span> Client Accounts</button>
+          <div class="settings-nav-section">Your account</div>
+          <button class="settings-nav-item"        id="snav-password" onclick="setSettingsTab('password')"><span class="settings-nav-icon">🔒</span> Password</button>
           <div class="settings-nav-section">Integrations</div>
           <button class="settings-nav-item"        id="snav-shopify"  onclick="setSettingsTab('shopify')"> <span class="settings-nav-icon">🛍️</span> Shopify Stores</button>
           <button class="settings-nav-item"        id="snav-clarity"  onclick="setSettingsTab('clarity')"> <span class="settings-nav-icon">🔍</span> Microsoft Clarity</button>
@@ -3566,6 +3568,44 @@
           </button>
         </div>
         </div><!-- /spanel-dashboard -->
+
+        <!-- ── PANEL: Your password ── -->
+        <div class="settings-panel" id="spanel-password">
+        <div class="modal-section">
+          <div class="modal-section-title">Your password</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;line-height:1.6">
+            Set a password so you can sign in by typing it, instead of waiting for a magic link
+            each time. The magic link keeps working either way.
+          </p>
+          <div id="mypw-who" style="font-size:12px;color:var(--text-muted);margin-bottom:18px"></div>
+
+          <div style="max-width:380px">
+            <label style="display:block;font-size:12px;font-weight:700;margin-bottom:5px">New password</label>
+            <div style="position:relative;margin-bottom:12px">
+              <input type="password" id="mypw-new" class="connect-input" autocomplete="new-password"
+                     placeholder="At least 8 characters" style="width:100%;padding-right:42px"
+                     oninput="mypwCheck()" onkeydown="if(event.key==='Enter')document.getElementById('mypw-confirm').focus()">
+              <button type="button" onclick="mypwToggle()" id="mypw-eye" title="Show password"
+                      style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;
+                             cursor:pointer;font-size:15px;padding:4px;line-height:1">👁</button>
+            </div>
+
+            <label style="display:block;font-size:12px;font-weight:700;margin-bottom:5px">Confirm password</label>
+            <input type="password" id="mypw-confirm" class="connect-input" autocomplete="new-password"
+                   placeholder="Type it again" style="width:100%;margin-bottom:6px"
+                   oninput="mypwCheck()" onkeydown="if(event.key==='Enter')saveMyPassword()">
+
+            <div id="mypw-meter" style="font-size:12px;font-weight:600;min-height:18px;margin-bottom:14px"></div>
+
+            <button id="mypw-save" onclick="saveMyPassword()" disabled
+                    style="padding:10px 20px;background:var(--blue-light);color:#fff;border:none;border-radius:8px;
+                           font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+              🔒 Save password
+            </button>
+            <div id="mypw-status" class="modal-status"></div>
+          </div>
+        </div>
+        </div><!-- /spanel-password -->
 
         <!-- ── PANEL: Activity Log (owner only) ── -->
         <div class="settings-panel" id="spanel-activity">
@@ -6240,6 +6280,20 @@
         status.textContent = '✓ Magic link sent — check your email and click the link.';
         btn.textContent = '✉ SEND MAGIC LINK'; btn.disabled = false;
       }
+    });
+
+    // A reset link used to sign you in and then leave you with nowhere to type
+    // a new password. This is a second, separate subscription on purpose — the
+    // main one is rewritten at serve time and must not be touched.
+    sb.auth.onAuthStateChange((event) => {
+      if (event !== 'PASSWORD_RECOVERY') return;
+      setTimeout(async () => {
+        document.getElementById('settings-modal').classList.remove('hidden');
+        if (typeof refreshSettingsData === 'function') { try { await refreshSettingsData(); } catch (e) {} }
+        setSettingsTab('password');
+        const s = document.getElementById('mypw-status');
+        if (s) s.textContent = 'Choose a new password below.';
+      }, 0);
     });
 
     document.getElementById('signout-btn').addEventListener('click', async () => {
@@ -11337,7 +11391,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     });
 
     function setSettingsTab(name) {
-      ['teams','clients','shopify','clarity','meta','google-ads','tiktok-ads','website','linked','link','agencies','dashboard','activity'].forEach(t => {
+      ['teams','clients','password','shopify','clarity','meta','google-ads','tiktok-ads','website','linked','link','agencies','dashboard','activity'].forEach(t => {
         const nav = document.getElementById('snav-'   + t);
         const pan = document.getElementById('spanel-' + t);
         if (nav) nav.classList.toggle('active', t === name);
@@ -11351,7 +11405,111 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (name === 'tiktok-ads') loadTikTokAdsList();
       if (name === 'agencies')   renderAgencySettings();
       if (name === 'dashboard')  renderDashboardCustomPanel();
+      if (name === 'password')   openMyPasswordPanel();
       if (name === 'activity')   { _alOffset = 0; loadActivityLog(); }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // YOUR PASSWORD
+    // Lets a signed-in person set their own password so they can type it
+    // instead of waiting for a magic link. Nothing is ever read back —
+    // Supabase only accepts the new value and hashes it server side.
+    // ══════════════════════════════════════════════════════════════
+    function openMyPasswordPanel() {
+      const who = document.getElementById('mypw-who');
+      if (who) who.textContent = currentUser?.email ? 'Signed in as ' + currentUser.email : '';
+      ['mypw-new', 'mypw-confirm'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.value = ''; el.type = 'password'; }
+      });
+      const eye = document.getElementById('mypw-eye');
+      if (eye) eye.textContent = '👁';
+      document.getElementById('mypw-status').textContent = '';
+      document.getElementById('mypw-status').className = 'modal-status';
+      mypwCheck();
+      setTimeout(() => document.getElementById('mypw-new')?.focus(), 60);
+    }
+
+    function mypwToggle() {
+      const a = document.getElementById('mypw-new'), b = document.getElementById('mypw-confirm');
+      const show = a.type === 'password';
+      a.type = b.type = show ? 'text' : 'password';
+      document.getElementById('mypw-eye').textContent = show ? '🙈' : '👁';
+    }
+
+    // Rough strength read — enough to steer people off "12345678" without
+    // pretending to be a real policy engine.
+    function mypwStrength(p) {
+      let score = 0;
+      if (p.length >= 8)  score++;
+      if (p.length >= 12) score++;
+      if (/[a-z]/.test(p) && /[A-Z]/.test(p)) score++;
+      if (/\d/.test(p))   score++;
+      if (/[^A-Za-z0-9]/.test(p)) score++;
+      if (/^(.)\1+$/.test(p) || /^(1234|abcd|qwer|password)/i.test(p)) score = 0;
+      return score;
+    }
+
+    function mypwCheck() {
+      const a = document.getElementById('mypw-new').value;
+      const b = document.getElementById('mypw-confirm').value;
+      const meter = document.getElementById('mypw-meter');
+      const save  = document.getElementById('mypw-save');
+
+      let ok = false, msg = '', colour = 'var(--text-muted)';
+      if (!a) {
+        msg = '';
+      } else if (a.length < 8) {
+        msg = `${8 - a.length} more character${8 - a.length === 1 ? '' : 's'} needed`;
+        colour = 'var(--coral)';
+      } else if (b && a !== b) {
+        msg = 'The two passwords don’t match yet';
+        colour = 'var(--coral)';
+      } else {
+        const s = mypwStrength(a);
+        const label = s <= 1 ? 'Weak — easy to guess' : s <= 3 ? 'Fair' : 'Strong';
+        colour = s <= 1 ? 'var(--coral)' : s <= 3 ? 'var(--orange)' : '#16A34A';
+        msg = (b && a === b) ? `✓ ${label}` : label;
+        ok  = !!b && a === b;
+      }
+      meter.textContent = msg;
+      meter.style.color = colour;
+      save.disabled = !ok;
+      save.style.opacity = ok ? '1' : '.5';
+      save.style.cursor  = ok ? 'pointer' : 'not-allowed';
+    }
+
+    async function saveMyPassword() {
+      const a = document.getElementById('mypw-new').value;
+      const b = document.getElementById('mypw-confirm').value;
+      const status = document.getElementById('mypw-status');
+      const btn = document.getElementById('mypw-save');
+      if (a.length < 8 || a !== b) return;
+
+      btn.disabled = true;
+      status.className = 'modal-status';
+      status.textContent = 'Saving…';
+
+      const { error } = await sb.auth.updateUser({ password: a });
+
+      if (error) {
+        status.className = 'modal-status error';
+        // Supabase asks for a fresh sign-in when the session is too old to
+        // trust with a credential change.
+        status.textContent = /reauthentication|session|expired/i.test(error.message)
+          ? 'Your session is too old to change a password. Sign out, sign back in, and try again.'
+          : '⚠️ ' + error.message;
+        btn.disabled = false;
+        return;
+      }
+
+      document.getElementById('mypw-new').value = '';
+      document.getElementById('mypw-confirm').value = '';
+      mypwCheck();
+      status.className = 'modal-status success';
+      status.textContent = '✓ Password saved. You can now sign in with ' +
+                           (currentUser?.email || 'your email') + ' and this password.';
+      try { logActivity('auth', 'Set a new sign-in password'); } catch (e) {}
     }
 
     // ══════════════════════════════════════════════════════════════
