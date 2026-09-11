@@ -6,7 +6,7 @@
  * network, always. Caching a dashboard figure would be worse than showing
  * nothing, and caching an auth response would be a security problem.
  */
-const VERSION    = 'v2';
+const VERSION    = 'v3';
 const SHELL      = `blue-ad-shell-${VERSION}`;
 const VENDOR     = `blue-ad-vendor-${VERSION}`;
 
