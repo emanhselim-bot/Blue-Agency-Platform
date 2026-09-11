@@ -11111,8 +11111,13 @@
       };
     }
 
+    // A cost per result is often a few pounds, where rounding to whole EGP
+    // turns 5.43 into 5 and makes the bands look identical.
     function _ppMoney(v) {
-      return 'EGP ' + Math.round(v || 0).toLocaleString('en');
+      const n = Number(v) || 0;
+      return 'EGP ' + (Math.abs(n) < 100
+        ? n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : Math.round(n).toLocaleString('en'));
     }
     function _ppNum(v, d = 0) {
       return (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString('en', { maximumFractionDigits: d });
@@ -11195,9 +11200,8 @@
         <div class="pp-basis">
           Built from <strong>${e.accounts}</strong> account${e.accounts === 1 ? '' : 's'} over
           <strong>${e.sample}</strong> month${e.sample === 1 ? '' : 's'} of real spend.
-          Cost per result across them ranged
-          ${_ppMoney(bands.best)} (best quarter) to ${_ppMoney(bands.conservative)} (worst quarter),
-          with a middle of ${_ppMoney(bands.typical)}.
+          Cost per result across those months: the cheapest quarter averaged ${_ppMoney(bands.best)},
+          the dearest quarter ${_ppMoney(bands.conservative)}, and the middle sat at ${_ppMoney(bands.typical)}.
         </div>`;
     }
 
