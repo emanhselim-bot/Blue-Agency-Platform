@@ -3371,11 +3371,7 @@
             <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">The user will receive an invite link. You can also copy and share it manually.</div>
             <div class="invite-row">
               <input type="email" class="invite-email-input" id="invite-email" placeholder="colleague@example.com">
-              <select class="invite-role-select" id="invite-role">
-                <option value="viewer">Viewer</option>
-                <option value="editor">Editor</option>
-                <option value="admin">Admin</option>
-              </select>
+              <select class="invite-role-select role-select" id="invite-role"></select>
               <button class="btn-send-invite" id="invite-submit-btn" onclick="submitInvite()">Send Invite →</button>
             </div>
             <!-- Account access selector — populated by buildInviteAccessSection() -->
@@ -3439,10 +3435,7 @@
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">Send an invite link by email. The recipient clicks it to join this organisation.</div>
           <div class="connect-row" style="flex-wrap:wrap;gap:8px">
             <input type="email" class="connect-input" id="tm-invite-email" placeholder="colleague@example.com" style="flex:2;min-width:180px">
-            <select class="connect-input" id="tm-invite-role" style="flex:1;min-width:110px">
-              <option value="analyst">Analyst</option>
-              <option value="admin">Admin</option>
-            </select>
+            <select class="connect-input role-select" id="tm-invite-role" style="flex:1;min-width:110px"></select>
             <button class="connect-btn" onclick="submitSettingsInvite()">Send Invite →</button>
           </div>
           <div class="modal-status" id="tm-invite-result"></div>
@@ -3906,12 +3899,8 @@
           </div>
           <div>
             <label style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Role</label>
-            <select id="ac-role" class="connect-input" style="width:100%;box-sizing:border-box;cursor:pointer">
-              <option value="viewer">Viewer — read-only dashboard access</option>
-              <option value="analyst">Analyst — view + export data</option>
-              <option value="admin">Admin — manage accounts &amp; settings</option>
-              <option value="owner">Owner — full access</option>
-            </select>
+            <select id="ac-role" class="connect-input role-select" data-role-long="1"
+                    style="width:100%;box-sizing:border-box;cursor:pointer"></select>
           </div>
           <div id="ac-error" style="font-size:12px;color:#F87171;display:none"></div>
           <button class="connect-btn" style="width:100%;padding:10px;font-size:14px" id="ac-submit-btn" onclick="submitAddClient()">Create Account →</button>
@@ -13853,7 +13842,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     let cpmTasks = [];
     let cpmTask = null;
 
-    const cpmCanEdit  = () => cpmRole === 'owner' || cpmRole === 'editor';
+    // Admin is now a role this table can hold, and it edits like an editor.
+    const cpmCanEdit  = () => cpmRole === 'owner' || cpmRole === 'admin' || cpmRole === 'editor';
     // which client types this user may work on: all | social | media
     function cpmMyScope() {
       const me = (cpmData?.members || []).find(
@@ -14010,11 +14000,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 <datalist id="nu-titles">${_cpmTitleList().map(t => `<option value="${cpmEsc(t)}">`).join('')}</datalist></label>
               <label>Email (their login)<input class="cpm-input" id="nu-email" type="email" autocomplete="off" placeholder="name@blue-ad.com"></label>
               <label>Password<input class="cpm-input" id="nu-pass" type="password" autocomplete="new-password" placeholder="min 8 characters"></label>
-              <label>Role<select class="cpm-input" id="nu-role">
-                <option value="editor">Editor — can edit pipelines</option>
-                <option value="viewer">Viewer — read only</option>
-                <option value="owner">Owner — full control</option>
-              </select></label>
+              <label>Role<select class="cpm-input role-select" id="nu-role" data-role-long="1" data-role-default="editor"></select></label>
               <label>Clients they can access<select class="cpm-input" id="nu-scope">
                 <option value="all">All clients</option>
                 <option value="social">📱 Social Media only</option>
@@ -14092,7 +14078,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const btn = document.getElementById('nu-submit');
       btn.disabled = true; btn.textContent = 'Creating…';
 
-      const orgRole = role === 'owner' ? 'admin' : (role === 'editor' ? 'editor' : 'viewer');
+      const orgRole = _orgRoleFor(role);
       const { data: { session } } = await sb.auth.getSession();
       let created;
       try {
@@ -14155,7 +14141,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'create', email: r.email, name: r.full_name, password: pass,
-                               role: r.role === 'owner' ? 'admin' : (r.role === 'editor' ? 'editor' : 'viewer') }),
+                               role: _orgRoleFor(r.role) }),
       });
       const j = await res.json();
       if (!res.ok) return alert(j.error || ('Error ' + res.status));
@@ -14169,7 +14155,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const password = prompt('Set a temporary password for them (min 8 characters).\n\nShare it with them privately and ask them to change it after the first sign-in.');
       if (!password) return;
       if (password.length < 8) { alert('Password must be at least 8 characters.'); return; }
-      const orgRole = pipelineRole === 'owner' ? 'admin' : (pipelineRole === 'editor' ? 'editor' : 'viewer');
+      const orgRole = _orgRoleFor(pipelineRole);
       const { data: { session } } = await sb.auth.getSession();
       try {
         const res = await fetch(`${sb.supabaseUrl}/functions/v1/manage-users`, {
@@ -17550,7 +17536,55 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     ];
     let _acxMembers = [], _acxAccounts = [], _acxClients = [], _acxLogins = [];
 
+    // ══════════════════════════════════════════════════════════════
+    // ROLES
+    // There used to be five different role pickers offering five
+    // different sets — one screen offered only Analyst and Admin,
+    // another Viewer/Editor/Admin, another Viewer/Analyst/Admin/Owner.
+    // This is now the only definition, and every picker renders from it.
+    //
+    // Analyst is gone. No code ever honoured it: an analyst was a viewer
+    // whose figure fields were left unlocked, which is worse than either.
+    // Anyone who had it has become a viewer.
+    // ══════════════════════════════════════════════════════════════
+    const ROLES = [
+      ['owner',  '👑 Owner',  'Full access, including billing and who else gets in'],
+      ['admin',  '🛠 Admin',   'Everything except billing and ownership'],
+      ['editor', '✎ Editor',  'Can change data, but not settings or people'],
+      ['viewer', '👁 Viewer',  'Read-only'],
+    ];
+    const ROLE_LABEL = Object.fromEntries(ROLES.map(([k, l]) => [k, l]));
+
+    // The role you pick is the role they get. It used to be rewritten on the
+    // way to the database — picking Owner on the pipeline screen quietly
+    // created an Admin — so the label and the result disagreed. Creating a
+    // second owner stays reserved for the owner, since that hands over the
+    // account; an admin choosing Owner gets them Admin, the most that can be
+    // delegated.
+    function _orgRoleFor(role) {
+      if (!ROLE_LABEL[role]) return 'viewer';
+      if (role === 'owner' && currentRole !== 'owner') return 'admin';
+      return role;
+    }
+
+    function roleOptionsHTML(selected, { long = false, none = null, omit = [] } = {}) {
+      const head = none ? `<option value="">${escHtml(none)}</option>` : '';
+      return head + ROLES.filter(([k]) => !omit.includes(k)).map(([k, label, desc]) =>
+        `<option value="${k}" ${selected === k ? 'selected' : ''}>${label}${long ? ' — ' + desc : ''}</option>`
+      ).join('');
+    }
+
+    // Fills every static picker on the page from the one definition above.
+    function fillRoleSelects() {
+      document.querySelectorAll('select.role-select').forEach(s => {
+        const want = s.dataset.roleDefault || s.value || 'viewer';
+        s.innerHTML = roleOptionsHTML(want, { long: s.dataset.roleLong === '1' });
+        s.value = want;
+      });
+    }
+
     function acxGate() {
+      fillRoleSelects();
       const c = document.getElementById('hub-card-access');
       if (c) c.style.display = currentRole === 'owner' ? '' : 'none';
       // The per-module gear appears for the owner only, on every module.
@@ -17637,9 +17671,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           ? `<span class="msx-pill ${isOwner ? 'on' : ''}">${isOwner ? 'Owner · full access' : 'No access'}</span>`
           : `<select class="connect-input" style="padding:5px 9px;font-size:12.5px;min-width:auto"
                      onchange="msxSetRole(${i}, this.value, this)">
-               <option value=""       ${!role             ? 'selected' : ''}>No access</option>
-               <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Viewer</option>
-               <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+               ${roleOptionsHTML(role, { none: 'No access', omit: ['owner'] })}
              </select>`;
         return `<div class="msx-row">
           <div class="msx-row-main">
@@ -17872,9 +17904,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <div style="display:flex;align-items:center;gap:6px;margin:0 14px 6px 0">
             <span style="font-size:12px;min-width:110px">${label}</span>
             <select id="acx-mod-${i}-${key}" ${isOwner ? 'disabled' : ''} onchange="acxSetModule(${i},'${key}',this.value)" class="connect-input" style="padding:4px 8px;font-size:12px;min-width:auto">
-              <option value=""       ${!roles[key]              ? 'selected' : ''}>No access</option>
-              <option value="viewer" ${roles[key] === 'viewer'  ? 'selected' : ''}>Viewer</option>
-              <option value="editor" ${roles[key] === 'editor'  ? 'selected' : ''}>Editor</option>
+              ${roleOptionsHTML(roles[key], { none: 'No access', omit: ['owner'] })}
             </select>
           </div>`).join('');
 
@@ -18727,13 +18757,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         }
         const roles = data.module_roles && Object.keys(data.module_roles).length
           ? data.module_roles : null;
-        // Owners get every module. Derived from ACX_MODULES so adding a module
-        // there is enough — a hardcoded list here silently hid Meetings.
-        _cpModules = data.role === 'owner'
+        // Owners and admins get every module. Derived from ACX_MODULES so
+        // adding a module there is enough — a hardcoded list here silently hid
+        // Meetings.
+        const _fullAccess = data.role === 'owner' || data.role === 'admin';
+        _cpModules = _fullAccess
           ? ACX_MODULES.map(([key]) => key)
           : (roles ? Object.keys(roles)
                    : (Array.isArray(data.modules) ? data.modules : ['pipeline']));
-        _myAccess = data.role === 'owner' ? null : {
+        _myAccess = _fullAccess ? null : {
           roles:       roles || {},
           accountIds:  data.account_ids || null,   // null = all
           clientIds:   data.client_ids  || null,
@@ -18810,8 +18842,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function showHomeHub() {
       hubShowView('cards');
       document.getElementById('home-hub').classList.remove('hidden');
-      applyModuleAccess();
-      loadMyModules();
+      // Painting before the permissions load showed every module to everyone
+      // for a moment and then took them away again.
+      loadMyModules().then(applyModuleAccess);
     }
     function hubOpen(section) {
       if (!canOpenModule(section)) { alert('You do not have access to this section.'); return; }
@@ -19315,6 +19348,24 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
   (function () {
     var DISMISS_KEY = 'pwa_prompt_dismissed';
 
+    // An installed app can sit on the copy it opened with for days — you only
+    // find out it's behind when a screen looks different from the website.
+    // This checks for a newer build and offers to reload, rather than waiting
+    // to be noticed.
+    function pwaOfferReload() {
+      if (document.getElementById('pwa-update')) return;
+      var el = document.createElement('div');
+      el.id = 'pwa-update';
+      el.className = 'pend-bar';
+      el.style.cssText = 'position:fixed;left:14px;right:14px;top:auto;' +
+                         'bottom:calc(14px + env(safe-area-inset-bottom));z-index:9850;margin:0';
+      el.innerHTML = '<span class="pend-dot"></span>' +
+        '<span class="pend-txt">A newer version of Blue Ad is ready.</span>' +
+        '<button class="pend-ghost" onclick="this.parentNode.remove()">Later</button>' +
+        '<button class="pend-btn" onclick="location.reload()">Reload</button>';
+      document.body.appendChild(el);
+    }
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('/sw.js').then(function (reg) {
@@ -19326,9 +19377,18 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             sw.addEventListener('statechange', function () {
               if (sw.state === 'installed' && navigator.serviceWorker.controller) {
                 sw.postMessage('skip-waiting');
+                pwaOfferReload();
               }
             });
           });
+          // Check on launch and whenever the app comes back to the foreground,
+          // which is how a phone app is actually used.
+          var check = function () { try { reg.update(); } catch (e) {} };
+          check();
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') check();
+          });
+          setInterval(check, 30 * 60 * 1000);
         }).catch(function (e) { console.warn('[pwa] service worker not registered:', e); });
       });
     }
