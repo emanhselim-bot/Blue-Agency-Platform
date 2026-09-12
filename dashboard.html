@@ -996,6 +996,8 @@
       background: rgba(255,87,89,.12); color: var(--coral); font-size: 12px; font-weight: 800;
       cursor: pointer; font-family: inherit; white-space: nowrap; }
     .msx-remove:hover { background: rgba(255,87,89,.24); }
+    .acx-chip { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+      background: rgba(5,115,245,.16); color: var(--brand-ink); white-space: nowrap; }
     .msx-act { display: flex; gap: 9px; align-items: flex-start; padding: 8px 2px;
       border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .msx-act:last-child { border-bottom: none; }
@@ -18542,6 +18544,37 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       note.textContent = `${m.full_name || m.email} → ${value || 'no access'} · not saved yet`;
     }
 
+    // Same instant removal, from the Access page rather than inside a module.
+    async function acxRemoveModule(i, key) {
+      const m = _acxMembers[i];
+      if (!m) return;
+      const label = (ACX_MODULES.find(x => x[0] === key) || [, key])[1];
+      if (!confirm(`Remove ${m.full_name || m.email} from ${label}?\n\n` +
+                   `They lose its screens and its data immediately.`)) return;
+
+      const roles = { ...(m.module_roles || {}) };
+      delete roles[key];
+      const { data, error } = await sb.from('cp_members')
+        .update({ module_roles: roles, modules: Object.keys(roles), updated_at: new Date().toISOString() })
+        .eq('id', m.id).select('id');
+
+      if (error || !(data || []).length) {
+        _acxStatus(i, error ? '⚠️ ' + error.message
+                            : '⚠️ Nothing changed — only the owner can remove access.', '#F87171');
+        return;
+      }
+      m.module_roles = roles; m.modules = Object.keys(roles);
+      // Any staged edit for this person is now out of date.
+      Pending.unstage('acx', m.id);
+      delete _acxPending[m.id];
+      const twin = _msxMembers.find(x => x.id === m.id);
+      if (twin) { twin.module_roles = roles; twin.modules = m.modules; }
+      logActivity('change', `Removed ${m.full_name || m.email} from ${label}`,
+                  { module: key, entityType: 'access', label });
+      acxRenderTeam();
+      _acxStatus(i, `✓ Removed from ${label}`, '#16A34A');
+    }
+
     // Immediate, not staged. They lose the module the moment you confirm.
     async function msxRemove(i) {
       const m = _msxMembers[i];
@@ -18753,13 +18786,25 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       el.innerHTML = _acxMembers.map((m, i) => {
         const roles = m.module_roles || {};
         const isOwner = m.role === 'owner';
+        // Granting waits for Save; taking access away happens at once, the same
+        // way it does inside each dashboard's own settings.
         const modCells = ACX_MODULES.map(([key, label]) => `
           <div style="display:flex;align-items:center;gap:6px;margin:0 14px 6px 0">
             <span style="font-size:12px;min-width:110px">${label}</span>
             <select id="acx-mod-${i}-${key}" ${isOwner ? 'disabled' : ''} onchange="acxSetModule(${i},'${key}',this.value)" class="connect-input" style="padding:4px 8px;font-size:12px;min-width:auto">
               ${roleOptionsHTML(roles[key], { none: 'No access', omit: ['owner'] })}
             </select>
+            ${(!isOwner && roles[key]) ? `<button class="msx-remove" style="padding:3px 8px;font-size:11px"
+                 onclick="acxRemoveModule(${i},'${key}')" title="Remove from ${escHtml(label)} now">🚫</button>` : ''}
           </div>`).join('');
+
+        // What they can actually open, in one line.
+        const hasList = ACX_MODULES.filter(([k]) => isOwner || roles[k]).map(([, l]) => l);
+        const summaryLine = isOwner
+          ? '<span style="color:#16A34A">Every dashboard</span>'
+          : (hasList.length
+              ? hasList.map(l => `<span class="acx-chip">${escHtml(l)}</span>`).join(' ')
+              : '<span style="color:#E53E3E">No dashboards — they sign in to an empty home screen</span>');
 
         const login = _acxLogins.find(u => (u.email || '').toLowerCase() === (m.email || '').toLowerCase());
         const loginBits = login
@@ -18771,6 +18816,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <div>
               <div style="font-size:14px;font-weight:700">${escHtml(m.full_name || m.email)}${isOwner ? ' <span style="font-size:11px;color:var(--text-muted)">(owner — full access)</span>' : ''}</div>
               <div style="font-size:12px;color:var(--text-muted)">${escHtml(m.email)} · ${loginBits}</div>
+              <div style="font-size:11.5px;margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+                <span style="color:var(--text-muted)">Can open:</span> ${summaryLine}
+              </div>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
               ${isOwner ? '' : (login
