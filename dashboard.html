@@ -10276,6 +10276,11 @@
           ${kpi('c-gold',   '💵', 'Total Revenue',       sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _aggRevenueLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
           ${kpi('c-teal',   '🧾', 'Average Order Value', (totRevenue && totOrders) ? fmt(totRevenue / totOrders, curr) : '—', 'Total Revenue ÷ Total Orders')}
+          ${kpi('c-coral',  '↩️', 'Returns %',
+                (aggRetPct != null && !isNaN(aggRetPct)) ? Number(aggRetPct).toFixed(2) + '%' : '—',
+                aggReturned > 0
+                  ? `${fmt(aggReturned, curr)} returned · already deducted above`
+                  : 'Manual entry · Monthly history')}
           ${kpi('c-green',  '🎯', 'Impressions',         fmt(totImpressions,'',0), `Reach: ${fmt(totReach,'',0)}`)}
           ${totSessions !== null ? kpi('c-purple', '👁', 'Website Sessions', fmt(totSessions,'',0),
               `● Clarity · ${claritySourceCount} project${claritySourceCount === 1 ? '' : 's'}`) : ''}
