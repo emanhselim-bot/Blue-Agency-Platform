@@ -1027,7 +1027,10 @@
       font-size: 12px; font-family: inherit; }
     .access-search::placeholder { color: rgba(255,255,255,.45); }
     .access-count { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.6); white-space: nowrap; }
-    .access-group { margin-bottom: 12px; }
+    /* The account grid is itself a grid, so the agency blocks became
+       columns and their headings wrapped. Grouped lists stack instead. */
+    .access-grid.grouped { display: block; }
+    .access-group { margin-bottom: 14px; }
     .access-group-head { display: flex; align-items: center; gap: 8px; padding: 5px 2px 7px;
       border-bottom: 1px solid rgba(255,255,255,.13); margin-bottom: 8px; flex-wrap: wrap; }
     .access-group-name { font-size: 12px; font-weight: 800; letter-spacing: .4px; color: rgba(255,255,255,.92); }
@@ -11883,7 +11886,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                        oninput="accessFilter('${m.id}','account',this.value)">
                 <span class="access-count" id="accountCount_${m.id}"></span>
               </div>
-              <div class="access-grid" id="accountGrid_${m.id}" style="${hasFullAccountAccess ? 'opacity:0.4;pointer-events:none' : ''}">
+              <div class="access-grid grouped" id="accountGrid_${m.id}" style="${hasFullAccountAccess ? 'opacity:0.4;pointer-events:none' : ''}">
                 ${accountCheckboxes || '<div style="color:var(--text-muted);font-size:12px">No accounts connected yet</div>'}
               </div>
             </div>
