@@ -3513,6 +3513,7 @@
             Leave the password blank to send an invite link instead and let them choose their own.
           </div>
           <div class="connect-row" style="flex-wrap:wrap;gap:8px">
+            <input type="text" class="connect-input" id="tm-invite-name" placeholder="Full name" autocomplete="off" style="flex:1;min-width:140px">
             <input type="email" class="connect-input" id="tm-invite-email" placeholder="colleague@example.com" style="flex:2;min-width:180px">
             <input type="password" class="connect-input" id="tm-invite-pass" placeholder="Password (min 8)" autocomplete="new-password" style="flex:1;min-width:150px">
             <select class="connect-input role-select" id="tm-invite-role" style="flex:1;min-width:110px"></select>
@@ -12200,6 +12201,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     async function submitSettingsInvite() {
       const email   = document.getElementById('tm-invite-email').value.trim();
+      const name    = document.getElementById('tm-invite-name')?.value.trim() || '';
       const pass    = document.getElementById('tm-invite-pass')?.value || '';
       const role    = document.getElementById('tm-invite-role').value;
       const result  = document.getElementById('tm-invite-result');
@@ -12217,17 +12219,31 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           return;
         }
         result.className = 'modal-status'; result.textContent = 'Creating the account…';
+        const who = name || email.split('@')[0];
         const r = await callEdgeFunction('manage-users', {
           action: 'create', email, password: pass, role,
-          name: email.split('@')[0], username: '',
+          name: who, username: '',
         });
         if (r.error) { result.className = 'modal-status error'; result.textContent = r.error; return; }
+
+        // Put them on the Access list too, so they show up by name with their
+        // dashboards to tick — rather than existing only as a login.
+        // ignoreDuplicates matters: re-adding somebody who already has access
+        // must not reset the dashboards they already have.
+        await sb.from('cp_members').upsert({
+          organization_id: currentOrgId, full_name: who, email,
+          role: role === 'owner' || role === 'admin' ? role : (role === 'viewer' ? 'viewer' : 'editor'),
+          modules: [], module_roles: {}, client_scope: 'all', archived: false,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'organization_id,email', ignoreDuplicates: true }).select('id');
+
         result.className = 'modal-status success';
         result.textContent = r.existing
-          ? `${email} already had an account — password updated and added as ${ROLE_LABEL[role] || role}.`
-          : `✓ ${email} can sign in now as ${ROLE_LABEL[role] || role}.`;
-        document.getElementById('tm-invite-email').value = '';
-        document.getElementById('tm-invite-pass').value  = '';
+          ? `${who} already had an account — password updated and added as ${ROLE_LABEL[role] || role}. Give them their dashboards under Access.`
+          : `✓ ${who} can sign in now as ${ROLE_LABEL[role] || role}. Give them their dashboards under Access.`;
+        ['tm-invite-name','tm-invite-email','tm-invite-pass'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.value = '';
+        });
         logActivity('change', 'Added a team member', {
           module: 'access', entityType: 'access', label: email, details: { role, login: true },
         });
