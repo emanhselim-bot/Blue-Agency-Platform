@@ -6105,23 +6105,30 @@
     // one of them was lost on the next reload. Picking an agency from a
     // dropdown is one unambiguous choice, so it is written straight away.
     async function setAccountAgencyId(orgId, accountId, agencyId) {
-      const prev = accountMap[accountId]?.agency_id ?? null;
-      if (accountMap[accountId]) accountMap[accountId].agency_id = agencyId || null;
+      const acct = accountMap[accountId];
+      const prev = acct?.agency_id ?? null;
+      // Meta, Google and TikTok accounts share one list but not one table.
+      const table = acct?.type === 'google_ads' ? 'google_ads_accounts'
+                  : acct?.type === 'tiktok_ads' ? 'tiktok_ads_accounts'
+                  : 'meta_ad_accounts';
+      if (acct) acct.agency_id = agencyId || null;
 
-      const { data, error } = await sb.from('meta_ad_accounts')
+      const { data, error } = await sb.from(table)
         .update({ agency_id: agencyId || null, updated_at: new Date().toISOString() })
         .eq('id', accountId).eq('organization_id', orgId).select('id');
 
       const ok = !error && (data || []).length > 0;
       if (!ok) {
         // Put it back rather than showing an assignment that did not happen.
-        if (accountMap[accountId]) accountMap[accountId].agency_id = prev;
-        alert(error ? 'Could not move that account: ' + error.message
-                    : 'Nothing was saved — you may not have permission to move accounts between agencies.');
+        if (acct) acct.agency_id = prev;
+        alert(error
+          ? `Could not move ${acct?.account_name || 'that account'}: ${error.message}`
+          : `${acct?.account_name || 'That account'} was not moved. Only an owner or admin can ` +
+            `move accounts between agencies — if you are one, reload and try again.`);
         renderAgencySettings?.();
         return false;
       }
-      _agencyToast(`${accountMap[accountId]?.account_name || 'Account'} moved`);
+      _agencyToast(`${acct?.account_name || 'Account'} moved`);
       return true;
     }
 
@@ -6807,8 +6814,8 @@
       // Also load Google Ads and TikTok Ads accounts into the map
       if (currentOrgId) {
         const [{ data: gadsAccts }, { data: ttAccts }] = await Promise.all([
-          sb.from('google_ads_accounts').select('id, customer_id, account_name, clarity_project_id').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
-          sb.from('tiktok_ads_accounts').select('id, advertiser_id, account_name').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
+          sb.from('google_ads_accounts').select('id, customer_id, account_name, clarity_project_id, agency_id').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
+          sb.from('tiktok_ads_accounts').select('id, advertiser_id, account_name, agency_id').eq('organization_id', currentOrgId).eq('is_active', true).order('account_name'),
         ]);
         (gadsAccts || []).forEach(acc => {
           accountMap[acc.id] = { ...acc, type: 'google_ads', account_name: acc.account_name || acc.customer_id };
