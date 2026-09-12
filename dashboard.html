@@ -6048,24 +6048,28 @@
       return _agencies;
     }
 
-    function saveAgencies(orgId, agencies) {
+    // Also immediate, for the same reason: adding, renaming or removing an
+    // agency is a single deliberate action, and losing it on reload is worse
+    // than the friction a Save button would save.
+    async function saveAgencies(orgId, agencies) {
       _agencies = agencies;
-      Pending.rerender.agencies = () => { renderAgencyNav(); renderAgencySettings?.(); };
-      Pending.stage('agencies', 'list', 'Agencies', async () => {
-        const rows = agencies.map((a, i) => ({
-          id: a.id, organization_id: orgId, name: a.name,
-          icon: a.icon || '', sort_order: i, updated_at: new Date().toISOString(),
-        }));
-        const res = await sb.from('agencies')
-          .upsert(rows, { onConflict: 'organization_id,id' }).select('id');
-        if (res.error) return res;
-        // Anything removed from the list is deleted, so it stops appearing.
-        const keep = rows.map(r => r.id);
+      const rows = agencies.map((a, i) => ({
+        id: a.id, organization_id: orgId, name: a.name,
+        icon: a.icon || '', sort_order: i, updated_at: new Date().toISOString(),
+      }));
+      const res = await sb.from('agencies')
+        .upsert(rows, { onConflict: 'organization_id,id' }).select('id');
+      if (res.error) { alert('Could not save the agencies: ' + res.error.message); return false; }
+      if (!res.data?.length) { alert('Nothing was saved — only an owner or admin can change agencies.'); return false; }
+      // Anything removed from the list is deleted, so it stops appearing.
+      const keep = rows.map(r => r.id);
+      if (keep.length) {
         await sb.from('agencies').delete()
           .eq('organization_id', orgId)
           .not('id', 'in', `(${keep.map(k => `"${k}"`).join(',')})`);
-        return res;
-      });
+      }
+      _agencyToast('Agencies saved');
+      return true;
     }
 
     // Migration: strip legacy icons from built-in agencies
@@ -6096,14 +6100,63 @@
       return accountMap[accountId]?.agency_id || null;
     }
 
-    function setAccountAgencyId(orgId, accountId, agencyId) {
+    // Saves on the spot. This was briefly staged behind the Save bar with
+    // everything else, and filing a hundred accounts into agencies meant every
+    // one of them was lost on the next reload. Picking an agency from a
+    // dropdown is one unambiguous choice, so it is written straight away.
+    async function setAccountAgencyId(orgId, accountId, agencyId) {
+      const prev = accountMap[accountId]?.agency_id ?? null;
       if (accountMap[accountId]) accountMap[accountId].agency_id = agencyId || null;
-      Pending.rerender.agencies = () => { renderAgencyNav(); filterAccountsByAgency(); };
-      Pending.stage('agencies', 'acct:' + accountId,
-        `${accountMap[accountId]?.account_name || 'Account'} → agency`, async () =>
-        await sb.from('meta_ad_accounts')
-          .update({ agency_id: agencyId || null, updated_at: new Date().toISOString() })
-          .eq('id', accountId).eq('organization_id', orgId).select('id'));
+
+      const { data, error } = await sb.from('meta_ad_accounts')
+        .update({ agency_id: agencyId || null, updated_at: new Date().toISOString() })
+        .eq('id', accountId).eq('organization_id', orgId).select('id');
+
+      const ok = !error && (data || []).length > 0;
+      if (!ok) {
+        // Put it back rather than showing an assignment that did not happen.
+        if (accountMap[accountId]) accountMap[accountId].agency_id = prev;
+        alert(error ? 'Could not move that account: ' + error.message
+                    : 'Nothing was saved — you may not have permission to move accounts between agencies.');
+        renderAgencySettings?.();
+        return false;
+      }
+      _agencyToast(`${accountMap[accountId]?.account_name || 'Account'} moved`);
+      return true;
+    }
+
+    // The dropdown used to fire five things at once, none of which waited for
+    // the save. Now the write finishes first, and the rest only runs if it
+    // actually landed.
+    async function moveAccountToAgency(accountId, agencyId, el) {
+      if (el) el.disabled = true;
+      const ok = await setAccountAgencyId(currentOrgId, accountId, agencyId);
+      if (el) el.disabled = false;
+      renderAgencyNav();
+      filterAccountsByAgency();
+      renderAgencySettings();
+      if (ok && sel.value) loadData();
+    }
+
+    // Small confirmation, so a save that worked looks different from one that
+    // quietly did not.
+    let _agencyToastTimer = null;
+    function _agencyToast(msg) {
+      let el = document.getElementById('agency-toast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'agency-toast';
+        el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);' +
+          'bottom:calc(22px + env(safe-area-inset-bottom));z-index:9950;padding:9px 18px;' +
+          'border-radius:999px;background:#16A34A;color:#fff;font-size:13px;font-weight:700;' +
+          'box-shadow:0 8px 26px rgba(0,0,0,.32);pointer-events:none';
+        document.body.appendChild(el);
+      }
+      el.textContent = '✓ ' + msg;
+      el.style.opacity = '1';
+      clearTimeout(_agencyToastTimer);
+      _agencyToastTimer = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+      el.style.transition = 'opacity .3s';
     }
 
     // Render the horizontal agency navigation bar.
@@ -13282,7 +13335,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             const opts = agencies.map(a => `<option value="${a.id}" ${assigned===a.id?'selected':''}>${a.icon||'📊'} ${escHtml(a.name)}</option>`).join('');
             return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
               <span style="flex:1;font-size:13px;color:var(--text-main);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((acc.account_name||acc.meta_account_id||'').substring(0,40))}</span>
-              <select data-acct="${acc.id}" onchange="setAccountAgencyId(currentOrgId,this.dataset.acct,this.value||null);renderAgencyNav();filterAccountsByAgency();renderAgencySettings();if(sel.value)loadData();"
+              <select data-acct="${acc.id}" onchange="moveAccountToAgency(this.dataset.acct, this.value||null, this)"
                 style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text-main);cursor:pointer">
                 ${allOpt}${opts}
               </select>
@@ -13330,18 +13383,19 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (a) { a.name = newName.trim(); saveAgencies(currentOrgId, agencies); renderAgencyNav(); }
     }
 
-    function deleteAgencyFromSettings(id) {
+    async function deleteAgencyFromSettings(id) {
       if (!confirm('Remove this agency? Accounts assigned to it will move to the first agency.')) return;
       let agencies = getAgencies(currentOrgId);
       agencies = agencies.filter(a => a.id !== id);
       if (!agencies.length) return; // Keep at least one
       // Reassign accounts from deleted agency to first remaining
       const fallback = agencies[0].id;
-      Object.keys(accountMap).forEach(accId => {
-        const cur = getAccountAgencyId(currentOrgId, accId);
-        if (cur === id) setAccountAgencyId(currentOrgId, accId, fallback);
-      });
-      saveAgencies(currentOrgId, agencies);
+      // Move its accounts first and wait for them, otherwise the agency row is
+      // deleted while its accounts still point at it.
+      const orphans = Object.keys(accountMap)
+        .filter(accId => getAccountAgencyId(currentOrgId, accId) === id);
+      for (const accId of orphans) await setAccountAgencyId(currentOrgId, accId, fallback);
+      await saveAgencies(currentOrgId, agencies);
       if (currentAgencyId === id) setActiveAgency(fallback);
       renderAgencyNav();
       renderAgencySettings();
