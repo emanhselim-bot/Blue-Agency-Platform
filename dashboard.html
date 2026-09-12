@@ -3506,11 +3506,15 @@
         </div>
         <div class="modal-section" style="margin-top:8px">
           <div class="modal-section-title">Invite New Member</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">Send an invite link by email. The recipient clicks it to join this organisation.</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+            Set a password and the account is ready straight away — that is how everyone signs in.
+            Leave the password blank to send an invite link instead and let them choose their own.
+          </div>
           <div class="connect-row" style="flex-wrap:wrap;gap:8px">
             <input type="email" class="connect-input" id="tm-invite-email" placeholder="colleague@example.com" style="flex:2;min-width:180px">
+            <input type="password" class="connect-input" id="tm-invite-pass" placeholder="Password (min 8)" autocomplete="new-password" style="flex:1;min-width:150px">
             <select class="connect-input role-select" id="tm-invite-role" style="flex:1;min-width:110px"></select>
-            <button class="connect-btn" onclick="submitSettingsInvite()">Send Invite →</button>
+            <button class="connect-btn" onclick="submitSettingsInvite()">Add →</button>
           </div>
           <div class="modal-status" id="tm-invite-result"></div>
           <div id="tm-invite-link-box" style="display:none;margin-top:10px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:monospace;cursor:pointer;color:var(--text-muted)" onclick="copySettingsInviteLink(this)">🔗 Click to copy invite link</div>
@@ -12194,14 +12198,42 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     async function submitSettingsInvite() {
       const email   = document.getElementById('tm-invite-email').value.trim();
+      const pass    = document.getElementById('tm-invite-pass')?.value || '';
       const role    = document.getElementById('tm-invite-role').value;
       const result  = document.getElementById('tm-invite-result');
       const linkBox = document.getElementById('tm-invite-link-box');
 
       if (!email) { result.className = 'modal-status error'; result.textContent = 'Enter an email address.'; return; }
-      result.className = 'modal-status'; result.textContent = 'Sending…';
       linkBox.style.display = 'none';
 
+      // With a password the account is created here and can be used at once.
+      // Without one it falls back to an invite link, where they set their own.
+      if (pass) {
+        if (pass.length < 8) {
+          result.className = 'modal-status error';
+          result.textContent = 'Password must be at least 8 characters.';
+          return;
+        }
+        result.className = 'modal-status'; result.textContent = 'Creating the account…';
+        const r = await callEdgeFunction('manage-users', {
+          action: 'create', email, password: pass, role,
+          name: email.split('@')[0], username: '',
+        });
+        if (r.error) { result.className = 'modal-status error'; result.textContent = r.error; return; }
+        result.className = 'modal-status success';
+        result.textContent = r.existing
+          ? `${email} already had an account — password updated and added as ${ROLE_LABEL[role] || role}.`
+          : `✓ ${email} can sign in now as ${ROLE_LABEL[role] || role}.`;
+        document.getElementById('tm-invite-email').value = '';
+        document.getElementById('tm-invite-pass').value  = '';
+        logActivity('change', 'Added a team member', {
+          module: 'access', entityType: 'access', label: email, details: { role, login: true },
+        });
+        loadSettingsTeam();
+        return;
+      }
+
+      result.className = 'modal-status'; result.textContent = 'Sending…';
       const res = await callEdgeFunction('team-manage', { action: 'invite', org_id: currentOrgId, email, role });
 
       if (res.error) { result.className = 'modal-status error'; result.textContent = res.error; return; }
