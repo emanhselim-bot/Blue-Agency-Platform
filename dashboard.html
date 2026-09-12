@@ -6596,6 +6596,9 @@
 
       // Load current user's access restrictions (for non-owners)
       await loadMyAccess();
+      // Module permissions used to load only when the home hub was drawn, so
+      // any other route left them unknown — and unknown used to mean allowed.
+      await loadMyModules();
 
       // Restore dashboard settings from DB (overrides localStorage)
       const settings = await Auth.getDashboardSettings(currentUser.id, currentOrgId);
@@ -19343,7 +19346,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function canOpenModule(m) {
       // Owner-only modules are never part of a member's module list.
       if (m === 'activity' || m === 'access') return currentRole === 'owner';
-      return !_cpModules || _cpModules.includes(m);
+      // Until the permissions are actually known, the answer is no. This used
+      // to be "yes to everything", which is why a slow load or a failed lookup
+      // briefly showed every section to everyone.
+      if (!_cpModules) return false;
+      return _cpModules.includes(m);
     }
     function applyModuleAccess() {
       let visible = 0;
@@ -19355,6 +19362,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // Somebody with no modules would otherwise stare at an empty page and
       // assume the dashboard is broken.
       let note = document.getElementById('hub-no-access');
+      // While the answer is still unknown every card is hidden, so say why
+      // rather than showing what looks like an empty account.
+      const loading = !_cpModules;
+      if (loading) {
+        if (note) note.remove();
+        return;
+      }
       if (!visible && _cpModules && !_cpModules.length) {
         if (!note) {
           const host = document.querySelector('.hub-inner') || document.getElementById('home-hub');
