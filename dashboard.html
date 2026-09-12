@@ -992,6 +992,10 @@
     .msx-pill.on { background: rgba(22,163,74,.16); color: #15803D; }
     [data-theme="dark"] .msx-pill.on { color: #86EFAC; }
     .msx-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; min-height: 16px; }
+    .msx-remove { padding: 5px 11px; border-radius: 8px; border: 1px solid rgba(255,87,89,.5);
+      background: rgba(255,87,89,.12); color: var(--coral); font-size: 12px; font-weight: 800;
+      cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .msx-remove:hover { background: rgba(255,87,89,.24); }
     .msx-act { display: flex; gap: 9px; align-items: flex-start; padding: 8px 2px;
       border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .msx-act:last-child { border-bottom: none; }
@@ -3024,9 +3028,13 @@
         <span class="auth-link" id="forgot-link">Forgot password?</span>
         &nbsp;·&nbsp;
         <span class="auth-link" id="signup-link">Create account</span>
-        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-          <button class="auth-btn" id="magic-btn" style="background:white;color:var(--blue-dark);border:1.5px solid var(--blue-dark);letter-spacing:0.5px">✉ SEND MAGIC LINK</button>
-          <div class="auth-error" id="magic-status" style="margin-top:8px"></div>
+        <!-- Magic-link sign-in was removed on purpose: anyone with access to
+             the mailbox could get in, and access could not be cut off quickly.
+             Everyone signs in with an email and a password. The elements are
+             kept hidden because other code still refers to them. -->
+        <div style="display:none">
+          <button class="auth-btn" id="magic-btn">✉ SEND MAGIC LINK</button>
+          <div class="auth-error" id="magic-status"></div>
         </div>
       </div>
       <div id="auth-form-signup" style="display:none">
@@ -6597,7 +6605,11 @@
       if (!email) { status.textContent = 'Enter your email above first.'; return; }
       const btn = document.getElementById('magic-btn');
       btn.disabled = true; btn.textContent = 'Sending…';
-      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+      // Kept behind the hidden button so nothing breaks, but it no longer
+      // sends anything — password is the only way in.
+      const error = { message: 'Magic-link sign-in is switched off. Use your email and password.' };
+      if (error) { status.textContent = error.message; btn.disabled = false; return; }
+      const { error: _unused } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
       if (error) {
         status.textContent = error.message;
         btn.disabled = false; btn.textContent = '✉ SEND MAGIC LINK';
@@ -18436,12 +18448,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       list.innerHTML = _msxMembers.map((m, i) => {
         const isOwner = m.role === 'owner';
         const role    = (m.module_roles || {})[_msxMod] || '';
+        // Granting waits for Save; removing does not. Taking access away is
+        // never the dangerous direction, and making someone press Save to
+        // revoke is how a removal gets forgotten.
         const control = (cfg.ownerOnly || isOwner)
           ? `<span class="msx-pill ${isOwner ? 'on' : ''}">${isOwner ? 'Owner · full access' : 'No access'}</span>`
           : `<select class="connect-input" style="padding:5px 9px;font-size:12.5px;min-width:auto"
                      onchange="msxSetRole(${i}, this.value, this)">
                ${roleOptionsHTML(role, { none: 'No access', omit: ['owner'] })}
-             </select>`;
+             </select>
+             ${role ? `<button class="msx-remove" onclick="msxRemove(${i})"
+                        title="Remove from ${escHtml(cfg.name)} straight away">🚫 Remove</button>` : ''}`;
         return `<div class="msx-row">
           <div class="msx-row-main">
             <div class="msx-name">${escHtml(m.full_name || m.email || '—')}</div>
@@ -18491,6 +18508,41 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       note.style.color = 'var(--text-muted)';
       note.textContent = `${m.full_name || m.email} → ${value || 'no access'} · not saved yet`;
+    }
+
+    // Immediate, not staged. They lose the module the moment you confirm.
+    async function msxRemove(i) {
+      const m = _msxMembers[i];
+      const cfg = MSX_MODULES[_msxMod];
+      if (!m) return;
+      if (!confirm(`Remove ${m.full_name || m.email} from ${cfg.name}?\n\n` +
+                   `They lose access to its screens and its data immediately.`)) return;
+
+      const roles = { ...(m.module_roles || {}) };
+      delete roles[_msxMod];
+      const note = document.getElementById('msx-team-note');
+      note.style.color = 'var(--text-muted)';
+      note.textContent = 'Removing…';
+
+      const { data, error } = await sb.from('cp_members')
+        .update({ module_roles: roles, modules: Object.keys(roles), updated_at: new Date().toISOString() })
+        .eq('id', m.id).select('id');
+
+      if (error || !(data || []).length) {
+        note.style.color = 'var(--coral)';
+        note.textContent = error ? '⚠️ ' + error.message
+                                 : '⚠️ Nothing changed — only the owner can remove access.';
+        return;
+      }
+      m.module_roles = roles; m.modules = Object.keys(roles);
+      const twin = _acxMembers.find(x => x.id === m.id);
+      if (twin) { twin.module_roles = roles; twin.modules = m.modules; }
+      Pending.unstage('msx', m.id);
+      logActivity('change', `Removed ${m.full_name || m.email} from ${cfg.name}`,
+                  { module: _msxMod, entityType: 'access', label: cfg.name });
+      note.style.color = '#16A34A';
+      note.textContent = `✓ ${m.full_name || m.email} removed from ${cfg.name}`;
+      msxRenderTeam();
     }
 
     async function msxRenderActivity() {
@@ -18899,7 +18951,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const err   = document.getElementById('acx-team-error');
       err.style.color = '#e53e3e'; err.textContent = '';
       if (!name || !email) { err.textContent = 'Name and email are both needed.'; return; }
-      if (pass && pass.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+      // A password is now required. Adding someone without one created a row
+      // that could not sign in, and sign-in is by password only.
+      if (!pass) { err.textContent = 'Set a password — everyone signs in with an email and a password.'; return; }
+      if (pass.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
 
       if (pass) {
         const r = await callEdgeFunction('manage-users', {
