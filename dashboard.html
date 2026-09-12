@@ -10271,11 +10271,14 @@
           ${kpi('c-blue',   '💰', 'Total Spend',        fmt(totSpend, curr),  `${currLabel} · ${accountsWithData} account(s)` + _aggCxSpendNote)}
           ${kpi('c-sky',    '🛒', 'Total Orders',        sfmt(totOrders, v => v.toLocaleString('en')), _aggSourceLabel + _aggCxOrdersNote)}
           ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders'))}
+          ${/* Sits beside cost per order on purpose: what an order costs to win,
+                next to what an order is worth. It used to be first on the second
+                row, where it was easy to miss entirely. */''}
+          ${kpi('c-teal',   '🧾', 'Average Order Value', (totRevenue && totOrders) ? fmt(totRevenue / totOrders, curr) : '—', 'Total Revenue ÷ Total Orders')}
           ${kpi('c-teal',   '🧮', 'Total Pieces',        sfmt(totPieces, v => v.toLocaleString('en')), _aggSourceLabel + _aggCxPiecesNote)}
           ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Units sold'))}
           ${kpi('c-gold',   '💵', 'Total Revenue',       sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _aggRevenueLabel)}
           ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
-          ${kpi('c-teal',   '🧾', 'Average Order Value', (totRevenue && totOrders) ? fmt(totRevenue / totOrders, curr) : '—', 'Total Revenue ÷ Total Orders')}
           ${kpi('c-coral',  '↩️', 'Returns %',
                 (aggRetPct != null && !isNaN(aggRetPct)) ? Number(aggRetPct).toFixed(2) + '%' : '—',
                 aggReturned > 0
