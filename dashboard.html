@@ -1027,6 +1027,16 @@
       font-size: 12px; font-family: inherit; }
     .access-search::placeholder { color: rgba(255,255,255,.45); }
     .access-count { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.6); white-space: nowrap; }
+    .access-group { margin-bottom: 12px; }
+    .access-group-head { display: flex; align-items: center; gap: 8px; padding: 5px 2px 7px;
+      border-bottom: 1px solid rgba(255,255,255,.13); margin-bottom: 8px; flex-wrap: wrap; }
+    .access-group-name { font-size: 12px; font-weight: 800; letter-spacing: .4px; color: rgba(255,255,255,.92); }
+    .access-group-n { font-size: 10.5px; font-weight: 800; color: rgba(255,255,255,.55);
+      background: rgba(255,255,255,.1); border-radius: 999px; padding: 1px 8px; }
+    .access-group-head .access-tool { margin-left: 0; padding: 3px 9px; font-size: 11px; }
+    .access-group-head .access-tool:first-of-type { margin-left: auto; }
+    .access-group-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+    @media (max-width: 768px) { .access-group-body { grid-template-columns: 1fr; } }
     @media (max-width: 768px) { .access-search { flex: 1 1 100%; order: 3; } .access-count { order: 4; } }
 
     /* ── PROPOSAL ── */
@@ -6012,18 +6022,47 @@
       { id: 'agency_wolves', name: 'Wolves Ground',   icon: '🐺' },
     ];
 
+    // Agencies used to live in localStorage, which meant they existed in one
+    // browser only: teammates saw nothing, and "give access to an agency"
+    // could not work because the server had no idea what an agency contained.
+    // They are rows now; this cache keeps every existing caller synchronous.
+    let _agencies = null;
+
+    async function loadAgencies() {
+      if (!currentOrgId) { _agencies = null; return; }
+      const { data, error } = await sb.from('agencies')
+        .select('id, name, icon, sort_order')
+        .eq('organization_id', currentOrgId)
+        .order('sort_order').order('name');
+      if (error) { console.warn('[agencies] could not load', error.message); return; }
+      _agencies = data || [];
+    }
+
     function getAgencies(orgId) {
       if (!orgId) return DEFAULT_AGENCIES;
-      const stored = localStorage.getItem(`agencies_${orgId}`);
-      if (stored) {
-        try { return JSON.parse(stored); } catch { /* fall through */ }
-      }
-      localStorage.setItem(`agencies_${orgId}`, JSON.stringify(DEFAULT_AGENCIES));
-      return DEFAULT_AGENCIES;
+      // Still loading, or a brand-new organisation with none yet.
+      if (!_agencies) return DEFAULT_AGENCIES;
+      return _agencies;
     }
 
     function saveAgencies(orgId, agencies) {
-      localStorage.setItem(`agencies_${orgId}`, JSON.stringify(agencies));
+      _agencies = agencies;
+      Pending.rerender.agencies = () => { renderAgencyNav(); renderAgencySettings?.(); };
+      Pending.stage('agencies', 'list', 'Agencies', async () => {
+        const rows = agencies.map((a, i) => ({
+          id: a.id, organization_id: orgId, name: a.name,
+          icon: a.icon || '', sort_order: i, updated_at: new Date().toISOString(),
+        }));
+        const res = await sb.from('agencies')
+          .upsert(rows, { onConflict: 'organization_id,id' }).select('id');
+        if (res.error) return res;
+        // Anything removed from the list is deleted, so it stops appearing.
+        const keep = rows.map(r => r.id);
+        await sb.from('agencies').delete()
+          .eq('organization_id', orgId)
+          .not('id', 'in', `(${keep.map(k => `"${k}"`).join(',')})`);
+        return res;
+      });
     }
 
     // Migration: strip legacy icons from built-in agencies
@@ -6048,13 +6087,20 @@
       }
     })();
 
+    // Which agency an account belongs to now travels with the account itself,
+    // so everyone sees the same grouping.
     function getAccountAgencyId(orgId, accountId) {
-      return localStorage.getItem(`acct_agency_${orgId}_${accountId}`) || null;
+      return accountMap[accountId]?.agency_id || null;
     }
 
     function setAccountAgencyId(orgId, accountId, agencyId) {
-      if (agencyId) localStorage.setItem(`acct_agency_${orgId}_${accountId}`, agencyId);
-      else          localStorage.removeItem(`acct_agency_${orgId}_${accountId}`);
+      if (accountMap[accountId]) accountMap[accountId].agency_id = agencyId || null;
+      Pending.rerender.agencies = () => { renderAgencyNav(); filterAccountsByAgency(); };
+      Pending.stage('agencies', 'acct:' + accountId,
+        `${accountMap[accountId]?.account_name || 'Account'} → agency`, async () =>
+        await sb.from('meta_ad_accounts')
+          .update({ agency_id: agencyId || null, updated_at: new Date().toISOString() })
+          .eq('id', accountId).eq('organization_id', orgId).select('id'));
     }
 
     // Render the horizontal agency navigation bar.
@@ -6612,6 +6658,7 @@
       // Module permissions used to load only when the home hub was drawn, so
       // any other route left them unknown — and unknown used to mean allowed.
       await loadMyModules();
+      await loadAgencies();
 
       // Restore dashboard settings from DB (overrides localStorage)
       const settings = await Auth.getDashboardSettings(currentUser.id, currentOrgId);
@@ -6692,7 +6739,7 @@
       // Show all connected active accounts (accounts appear as soon as access is granted)
       const { data: accounts } = await sb
         .from('meta_ad_accounts_safe')  // safe view, no tokens
-        .select('id, meta_account_id, account_name, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id, campaigns_last_synced_at')
+        .select('id, meta_account_id, account_name, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id, campaigns_last_synced_at, agency_id')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true)
         .order('account_name');
@@ -11626,11 +11673,21 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     // Apply account access restrictions for non-owner users
+    // An agency grant means everything in that agency — including accounts
+    // added to it later, which is the point of granting by agency rather than
+    // ticking names. Account grants add to it rather than replacing it.
     function applyAccountAccessRestrictions(accounts) {
       if (!currentMemberAccess) return accounts;
-      const allowed = currentMemberAccess.allowed_account_ids;
-      if (!allowed || allowed.length === 0 || currentMemberAccess.role === 'owner') return accounts;
-      return accounts.filter(a => allowed.includes(a.id));
+      if (currentMemberAccess.role === 'owner') return accounts;
+      const byAccount = currentMemberAccess.allowed_account_ids;
+      const byAgency  = currentMemberAccess.allowed_agency_ids;
+      const accountsUnrestricted = !byAccount || byAccount.length === 0;
+      const agenciesUnrestricted = !byAgency  || byAgency.length  === 0;
+      if (accountsUnrestricted && agenciesUnrestricted) return accounts;
+      return accounts.filter(a =>
+        (!accountsUnrestricted && byAccount.includes(a.id)) ||
+        (!agenciesUnrestricted && a.agency_id && byAgency.includes(a.agency_id))
+      );
     }
 
     // Apply agency access restrictions for non-owner users
@@ -11775,13 +11832,31 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         const hasFullAccountAccess = curAccounts === null;
         const hasFullAgencyAccess  = curAgencies === null;
 
-        const accountCheckboxes = allAccounts.map(a =>
+        // Grouped under their agency. One alphabetical run of 101 accounts was
+        // unworkable, and grouping is also how access is granted now.
+        const box = (a) =>
           `<label class="access-checkbox${curAccounts && curAccounts.includes(a.id) ? ' checked' : ''}">
             <input type="checkbox" data-member="${m.id}" data-type="account" value="${a.id}"
+              data-agency="${escHtml(a.agency_id || '')}"
               ${hasFullAccountAccess || (curAccounts && curAccounts.includes(a.id)) ? 'checked' : ''}>
             ${escHtml((a.account_name || a.meta_account_id || '').substring(0,30))}
-          </label>`
-        ).join('');
+          </label>`;
+
+        const groups = allAgencies.map(ag => [ag.id, `${ag.icon || '📊'} ${ag.name}`])
+                                  .concat([['', '— No agency']]);
+        const accountCheckboxes = groups.map(([gid, label]) => {
+          const mine = allAccounts.filter(a => (a.agency_id || '') === gid);
+          if (!mine.length) return '';
+          return `<div class="access-group" data-agency-group="${escHtml(gid)}">
+              <div class="access-group-head">
+                <span class="access-group-name">${escHtml(label)}</span>
+                <span class="access-group-n">${mine.length}</span>
+                <button type="button" class="access-tool" onclick="accessSetGroup('${m.id}','${escHtml(gid)}',true)">✓ All</button>
+                <button type="button" class="access-tool" onclick="accessSetGroup('${m.id}','${escHtml(gid)}',false)">✕ None</button>
+              </div>
+              <div class="access-group-body">${mine.map(box).join('')}</div>
+            </div>`;
+        }).join('');
 
         const agencyCheckboxes = allAgencies.map(ag =>
           `<label class="access-checkbox${curAgencies && curAgencies.includes(ag.id) ? ' checked' : ''}">
@@ -11872,6 +11947,21 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       accessCount(memberId, type);
     }
 
+    // Tick or clear one agency's accounts.
+    function accessSetGroup(memberId, agencyId, on) {
+      const grid = _accessGrid(memberId, 'account');
+      if (!grid) return;
+      grid.querySelectorAll(`.access-group[data-agency-group="${CSS.escape(agencyId)}"] .access-checkbox`)
+        .forEach(lbl => {
+          if (lbl.style.display === 'none') return;
+          const cb = lbl.querySelector('input[type=checkbox]');
+          if (!cb) return;
+          cb.checked = on;
+          lbl.classList.toggle('checked', on);
+        });
+      accessCount(memberId, 'account');
+    }
+
     // Ticking or clearing 113 accounts one at a time was the only way to do
     // this. Only what the filter currently shows is affected, so you can clear
     // or select a subset rather than all or nothing.
@@ -11894,6 +11984,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const q = (term || '').trim().toLowerCase();
       grid.querySelectorAll('.access-checkbox').forEach(lbl => {
         lbl.style.display = !q || lbl.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+      // An agency heading with nothing left under it is just noise.
+      grid.querySelectorAll('.access-group').forEach(g => {
+        const any = [...g.querySelectorAll('.access-checkbox')].some(l => l.style.display !== 'none');
+        g.style.display = any ? '' : 'none';
       });
       accessCount(memberId, type);
     }
@@ -13143,7 +13238,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (listEl) {
         listEl.innerHTML = agencies.map(a => {
           const count = accounts.filter(acc => {
-            const assigned = localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`);
+            const assigned = getAccountAgencyId(currentOrgId, acc.id);
             return !assigned || assigned === a.id;
           }).length;
           return `
@@ -13169,7 +13264,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         } else {
           // Group the rows by the agency each account belongs to, so every agency's
           // accounts sit together instead of one long alphabetical list.
-          const agencyOf = acc => localStorage.getItem(`acct_agency_${currentOrgId}_${acc.id}`) || '';
+          const agencyOf = acc => getAccountAgencyId(currentOrgId, acc.id) || '';
           const byAgency = new Map();
           agencies.forEach(a => byAgency.set(a.id, []));
           byAgency.set('', []);                                   // unassigned bucket
@@ -13240,7 +13335,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // Reassign accounts from deleted agency to first remaining
       const fallback = agencies[0].id;
       Object.keys(accountMap).forEach(accId => {
-        const cur = localStorage.getItem(`acct_agency_${currentOrgId}_${accId}`);
+        const cur = getAccountAgencyId(currentOrgId, accId);
         if (cur === id) setAccountAgencyId(currentOrgId, accId, fallback);
       });
       saveAgencies(currentOrgId, agencies);
