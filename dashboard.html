@@ -5682,16 +5682,37 @@
     //
     // Writes into the inputs rather than the database, so nothing is committed
     // until Save is pressed and a wrong pull can simply be discarded.
+    // Which real ad accounts a monthly-history scope covers. A single account
+    // is itself; a saved combination is its members; All Accounts is every
+    // Meta account currently visible.
+    function _mhScopeAccounts() {
+      const key = _mhScopeKey;
+      if (!key) return [];
+      if (key === '__all__') {
+        return Object.values(accountMap).filter(a => !a.type);
+      }
+      if (String(key).startsWith('__group__')) {
+        const g = _acctGroups.find(x => '__group__' + x.id === key);
+        return (g?.account_ids || []).map(id => accountMap[id]).filter(a => a && !a.type);
+      }
+      const one = accountMap[key];
+      return (one && !one.type) ? [one] : [];
+    }
+
     async function mhFillFromLive() {
       const btn    = document.getElementById('mh-fill-btn');
       const status = document.getElementById('mh-status');
       const year   = parseInt(document.getElementById('mh-year').value, 10) || new Date().getFullYear();
-      const acct   = accountMap[_mhScopeKey];
-      if (!acct) {
-        status.textContent = 'Pick a single account first — live data cannot be pulled for a combined selection.';
+      // A combined selection used to be refused outright. It now totals the
+      // accounts inside it — which is the whole point of a group, and the only
+      // way a group's history can agree with its dashboard.
+      const accts = _mhScopeAccounts();
+      if (!accts.length) {
+        status.textContent = 'No ad accounts in this selection.';
         status.style.color = '#F59E0B';
         return;
       }
+      // No single "acct" any more — everything below works from the list.
 
       const now = new Date();
       const months = [];
@@ -5730,12 +5751,34 @@
           const to    = `${year}-${String(m + 1).padStart(2, '0')}-${last}`;
           btn.textContent = `⤓ ${MH_MONTHS[m].slice(0, 3)} (${i + 1}/${months.length})…`;
 
-          const [metaRes, shopRes] = await Promise.allSettled([
-            callEdgeFunction('meta-data', { account_db_id: acct.id, period: 'custom', custom_from: from, custom_to: to }),
-            acct.shopify_store_id
-              ? callEdgeFunction('shopify-data', { store_id: acct.shopify_store_id, query: `FROM all SHOW orders SINCE ${from} UNTIL ${to}` })
-              : Promise.resolve(null),
+          // Every account in the selection, summed. Stores are de-duplicated
+          // first: two accounts pointing at the same shop would otherwise count
+          // its orders twice.
+          const storeIds = [...new Set(accts.map(a => a.shopify_store_id).filter(Boolean))];
+          const [metaAll, shopAll] = await Promise.all([
+            Promise.allSettled(accts.map(a =>
+              callEdgeFunction('meta-data', { account_db_id: a.id, period: 'custom', custom_from: from, custom_to: to }))),
+            Promise.allSettled(storeIds.map(id =>
+              callEdgeFunction('shopify-data', { store_id: id, query: `FROM all SHOW orders SINCE ${from} UNTIL ${to}` }))),
           ]);
+
+          const okMeta = metaAll.filter(r => r.status === 'fulfilled' && r.value && !r.value.error).map(r => r.value);
+          const okShop = shopAll.filter(r => r.status === 'fulfilled' && r.value && !r.value.error).map(r => r.value);
+
+          const metaRes = okMeta.length
+            ? { status: 'fulfilled', value: { ad_entity: { amount_spent:
+                okMeta.reduce((s, v) => s + (parseFloat(v.ad_entity?.amount_spent) || 0), 0) } } }
+            : { status: 'rejected' };
+
+          const _sumRow = (rows, idx, parse) =>
+            rows.reduce((s, r) => s + (parse(r?.[idx]) || 0), 0);
+          const salesRows = okShop.map(v => v.sales?.rows?.[0]).filter(Boolean);
+          const invRows   = okShop.map(v => v.inventory?.rows?.[0]).filter(Boolean);
+          const shopRes = okShop.length
+            ? { status: 'fulfilled', value: { sales: { rows: salesRows.length ? [[
+                  _sumRow(salesRows, 0, parseInt), _sumRow(salesRows, 1, parseFloat)]] : [] },
+                inventory: { rows: invRows.length ? [[_sumRow(invRows, 0, parseInt)]] : [] } } }
+            : { status: 'rejected' };
 
           if (metaRes.status === 'fulfilled' && metaRes.value && !metaRes.value.error) {
             const total = parseFloat(metaRes.value.ad_entity?.amount_spent);
@@ -5771,9 +5814,12 @@
         const note = unsplitSpend.length
           ? `<div style="margin-top:6px;color:#F59E0B">Spend left blank for ${unsplitSpend.join(', ')} — Meta reports one figure per account and cannot say how much went to website versus messages. Type one of the two and run this again; the other will be filled exactly.</div>`
           : '';
+        const sourceNote = accts.length > 1
+          ? ` Totalled from <strong>${accts.length}</strong> accounts: ${accts.map(a => escHtml(a.account_name)).join(', ')}.`
+          : '';
         status.innerHTML = (filled
-          ? `Filled <strong>${filled}</strong> empty cell${filled === 1 ? '' : 's'} across ${months.length} month${months.length === 1 ? '' : 's'}. Nothing you had typed was changed — press Save to keep them.`
-          : 'No live figures were available for the empty cells.') + note;
+          ? `Filled <strong>${filled}</strong> empty cell${filled === 1 ? '' : 's'} across ${months.length} month${months.length === 1 ? '' : 's'}.${sourceNote} Nothing you had typed was changed — press Save to keep them.`
+          : 'No live figures were available for the empty cells.' + sourceNote) + note;
         status.style.color = filled ? '#16A34A' : 'var(--text-muted)';
       } catch (err) {
         status.textContent = '⚠️ ' + (err?.message || 'Could not reach Meta or Shopify.');
