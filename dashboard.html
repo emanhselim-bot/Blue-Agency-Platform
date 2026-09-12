@@ -1016,6 +1016,19 @@
     /* Anything edited but not yet written gets a gold edge. */
     .pend-dirty { box-shadow: inset 3px 0 0 var(--brand-gold); border-radius: 6px; }
 
+    /* ── ACCOUNT ACCESS TOOLS ── */
+    .access-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+    .access-tool { padding: 5px 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,.22);
+      background: rgba(255,255,255,.07); color: rgba(255,255,255,.88); font-size: 12px; font-weight: 700;
+      cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .access-tool:hover { background: rgba(255,255,255,.16); }
+    .access-search { flex: 1; min-width: 130px; padding: 5px 10px; border-radius: 7px;
+      border: 1px solid rgba(255,255,255,.22); background: rgba(0,0,0,.18); color: #fff;
+      font-size: 12px; font-family: inherit; }
+    .access-search::placeholder { color: rgba(255,255,255,.45); }
+    .access-count { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.6); white-space: nowrap; }
+    @media (max-width: 768px) { .access-search { flex: 1 1 100%; order: 3; } .access-count { order: 4; } }
+
     /* ── PROPOSAL ── */
     .pp-wrap { max-width: 1100px; margin: 0 auto; }
     .pp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 20px; }
@@ -11788,6 +11801,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   onchange="toggleAllAccess('${m.id}','account',this.checked)">
                 Full access — all current and future accounts
               </label>
+              <div class="access-tools" id="accountTools_${m.id}" style="${hasFullAccountAccess ? 'display:none' : ''}">
+                <button type="button" class="access-tool" onclick="accessSetAll('${m.id}','account',true)">✓ Select all</button>
+                <button type="button" class="access-tool" onclick="accessSetAll('${m.id}','account',false)">✕ Clear all</button>
+                <input type="search" class="access-search" placeholder="Filter accounts…"
+                       oninput="accessFilter('${m.id}','account',this.value)">
+                <span class="access-count" id="accountCount_${m.id}"></span>
+              </div>
               <div class="access-grid" id="accountGrid_${m.id}" style="${hasFullAccountAccess ? 'opacity:0.4;pointer-events:none' : ''}">
                 ${accountCheckboxes || '<div style="color:var(--text-muted);font-size:12px">No accounts connected yet</div>'}
               </div>
@@ -11799,6 +11819,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   onchange="toggleAllAccess('${m.id}','agency',this.checked)">
                 Full access — all agencies
               </label>
+              <div class="access-tools" id="agencyTools_${m.id}" style="${hasFullAgencyAccess ? 'display:none' : ''}">
+                <button type="button" class="access-tool" onclick="accessSetAll('${m.id}','agency',true)">✓ Select all</button>
+                <button type="button" class="access-tool" onclick="accessSetAll('${m.id}','agency',false)">✕ Clear all</button>
+                <span class="access-count" id="agencyCount_${m.id}"></span>
+              </div>
               <div class="access-grid" id="agencyGrid_${m.id}" style="${hasFullAgencyAccess ? 'opacity:0.4;pointer-events:none' : ''}">
                 ${agencyCheckboxes}
               </div>
@@ -11815,16 +11840,27 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       container.querySelectorAll('.access-checkbox input[type=checkbox]').forEach(cb => {
         cb.addEventListener('change', () => {
           cb.closest('.access-checkbox').classList.toggle('checked', cb.checked);
+          const grid = cb.closest('.access-grid');
+          const m = (grid?.id || '').split('_').slice(1).join('_');
+          if (m) accessCount(m, grid.id.startsWith('accountGrid') ? 'account' : 'agency');
         });
       });
+      // Show "N of M selected" straight away rather than only after a change.
+      members.forEach(m => { accessCount(m.id, 'account'); accessCount(m.id, 'agency'); });
     }
 
     function toggleMemberCard(memberId) {
       document.getElementById(`mc_${memberId}`)?.classList.toggle('expanded');
     }
 
+    function _accessGrid(memberId, type) {
+      return document.getElementById(`${type === 'account' ? 'accountGrid' : 'agencyGrid'}_${memberId}`);
+    }
+
     function toggleAllAccess(memberId, type, isAll) {
-      const grid = document.getElementById(`${type === 'account' ? 'accountGrid' : 'agencyGrid'}_${memberId}`);
+      const grid = _accessGrid(memberId, type);
+      const tools = document.getElementById(`${type === 'account' ? 'accountTools' : 'agencyTools'}_${memberId}`);
+      if (tools) tools.style.display = isAll ? 'none' : '';
       if (grid) {
         grid.style.opacity = isAll ? '0.4' : '1';
         grid.style.pointerEvents = isAll ? 'none' : 'auto';
@@ -11833,6 +11869,43 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           cb.closest('.access-checkbox').classList.add('checked');
         });
       }
+      accessCount(memberId, type);
+    }
+
+    // Ticking or clearing 113 accounts one at a time was the only way to do
+    // this. Only what the filter currently shows is affected, so you can clear
+    // or select a subset rather than all or nothing.
+    function accessSetAll(memberId, type, on) {
+      const grid = _accessGrid(memberId, type);
+      if (!grid) return;
+      grid.querySelectorAll('.access-checkbox').forEach(lbl => {
+        if (lbl.style.display === 'none') return;      // hidden by the filter
+        const cb = lbl.querySelector('input[type=checkbox]');
+        if (!cb) return;
+        cb.checked = on;
+        lbl.classList.toggle('checked', on);
+      });
+      accessCount(memberId, type);
+    }
+
+    function accessFilter(memberId, type, term) {
+      const grid = _accessGrid(memberId, type);
+      if (!grid) return;
+      const q = (term || '').trim().toLowerCase();
+      grid.querySelectorAll('.access-checkbox').forEach(lbl => {
+        lbl.style.display = !q || lbl.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+      accessCount(memberId, type);
+    }
+
+    function accessCount(memberId, type) {
+      const grid = _accessGrid(memberId, type);
+      const out  = document.getElementById(`${type === 'account' ? 'accountCount' : 'agencyCount'}_${memberId}`);
+      if (!grid || !out) return;
+      const all = [...grid.querySelectorAll('.access-checkbox input[type=checkbox]')];
+      const on  = all.filter(c => c.checked).length;
+      const shown = [...grid.querySelectorAll('.access-checkbox')].filter(l => l.style.display !== 'none').length;
+      out.textContent = `${on} of ${all.length} selected` + (shown < all.length ? ` · showing ${shown}` : '');
     }
 
     async function saveAccess(memberId) {
