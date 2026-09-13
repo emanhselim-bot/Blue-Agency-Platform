@@ -8747,12 +8747,26 @@
     }
 
     let _loadDataActive = false;
+    let _loadDataQueued = false;
     async function loadData() {
-      if (_loadDataActive) return; // prevent overlapping calls
+      // A request arriving mid-load used to be thrown away. Pressing Apply on
+      // the date picker while the previous load was still running therefore did
+      // nothing at all, with nothing on screen to say so. Remember it instead
+      // and run it as soon as the current load finishes.
+      if (_loadDataActive) {
+        _loadDataQueued = true;
+        const btn = document.getElementById('refresh-btn');
+        if (btn) btn.textContent = '⏳ Loading… (queued)';
+        return;
+      }
       // Whatever route got here, the staged selection is now being loaded.
       _clearViewPending();
       _loadDataActive = true;
-      try { await _loadDataInner(); } finally { _loadDataActive = false; }
+      try { await _loadDataInner(); }
+      finally {
+        _loadDataActive = false;
+        if (_loadDataQueued) { _loadDataQueued = false; loadData(); }
+      }
     }
     let _webSource = null;   // 'Website' | 'GA4' when the numbers do not come from Shopify
 
