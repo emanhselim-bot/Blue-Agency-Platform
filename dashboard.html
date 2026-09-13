@@ -1252,6 +1252,11 @@
     .cmp-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
     .cmp-title { font-size: 13px; font-weight: 800; color: var(--text-main); }
     .cmp-sel { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-main); font-size: 12px; font-family: inherit; }
+    .cmp-slot { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .cmp-range { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+    .cmp-range[hidden] { display: none; }
+    .cmp-date { padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text-main); font-size: 12px; font-family: inherit; }
     .cmp-run { background: var(--blue-light); color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: 700; cursor: pointer; }
     .cmp-run:hover { background: var(--blue-dark); }
     .cmp-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -2926,11 +2931,26 @@
   <div id="compare-panel">
     <div class="cmp-bar">
       <span class="cmp-title">⇄ Compare periods</span>
-      <select class="cmp-sel" id="cmp-a"></select>
+      <span class="cmp-slot">
+        <select class="cmp-sel" id="cmp-a" onchange="cmpToggleRange('a')"></select>
+        <span class="cmp-range" id="cmp-a-range" hidden>
+          <input type="date" class="cmp-date" id="cmp-a-from"><span>→</span><input type="date" class="cmp-date" id="cmp-a-to">
+        </span>
+      </span>
       <span style="color:var(--text-muted)">vs</span>
-      <select class="cmp-sel" id="cmp-b"></select>
+      <span class="cmp-slot">
+        <select class="cmp-sel" id="cmp-b" onchange="cmpToggleRange('b')"></select>
+        <span class="cmp-range" id="cmp-b-range" hidden>
+          <input type="date" class="cmp-date" id="cmp-b-from"><span>→</span><input type="date" class="cmp-date" id="cmp-b-to">
+        </span>
+      </span>
       <span style="color:var(--text-muted)">vs</span>
-      <select class="cmp-sel" id="cmp-c"></select>
+      <span class="cmp-slot">
+        <select class="cmp-sel" id="cmp-c" onchange="cmpToggleRange('c')"></select>
+        <span class="cmp-range" id="cmp-c-range" hidden>
+          <input type="date" class="cmp-date" id="cmp-c-from"><span>→</span><input type="date" class="cmp-date" id="cmp-c-to">
+        </span>
+      </span>
       <button class="cmp-run" onclick="runCompare()">Compare</button>
       <button class="cmp-ghost" onclick="toggleComparePanel(false)">✕ Close</button>
     </div>
@@ -5959,18 +5979,56 @@
     function cmpFillSelects() {
       const opts = (sel, def, allowNone) =>
         (allowNone ? '<option value="">— none —</option>' : '') +
-        CMP_PERIODS.map(p => `<option value="${p}" ${p === def ? 'selected' : ''}>${PERIOD_LABELS[p] || p}</option>`).join('');
+        CMP_PERIODS.map(p => `<option value="${p}" ${p === def ? 'selected' : ''}>${PERIOD_LABELS[p] || p}</option>`).join('') +
+        '<option value="custom">📅 Custom range…</option>';
       const a = document.getElementById('cmp-a'), b = document.getElementById('cmp-b'), c = document.getElementById('cmp-c');
       if (a && !a.options.length) a.innerHTML = opts(a, 'this_month', false);
       if (b && !b.options.length) b.innerHTML = opts(b, 'last_month', false);
       if (c && !c.options.length) c.innerHTML = opts(c, '', true);
     }
 
+    // Any of the three slots can be an arbitrary range rather than a preset —
+    // comparing a two-week launch against the fortnight before it was not
+    // possible when only whole presets were on offer.
+    function cmpToggleRange(slot) {
+      const s = document.getElementById('cmp-' + slot);
+      const box = document.getElementById(`cmp-${slot}-range`);
+      if (!s || !box) return;
+      const on = s.value === 'custom';
+      box.hidden = !on;
+      if (on) {
+        // Seed with the dashboard's own range, or the last 30 days.
+        const f = document.getElementById(`cmp-${slot}-from`);
+        const t = document.getElementById(`cmp-${slot}-to`);
+        if (f && !f.value) f.value = customFrom || rcYmd(new Date(Date.now() - 30 * 864e5));
+        if (t && !t.value) t.value = customTo   || rcYmd(new Date(Date.now() - 864e5));
+      }
+    }
+
+    // One slot's answer: either a preset key, or a pair of dates.
+    function _cmpSpec(slot) {
+      const s = document.getElementById('cmp-' + slot);
+      if (!s || !s.value) return null;
+      if (s.value !== 'custom') return { key: s.value, label: PERIOD_LABELS[s.value] || s.value };
+      const from = document.getElementById(`cmp-${slot}-from`)?.value;
+      const to   = document.getElementById(`cmp-${slot}-to`)?.value;
+      if (!from || !to) return { error: 'Pick both dates for the custom range.' };
+      if (from > to)    return { error: 'A custom range starts before it ends — check the dates.' };
+      const nice = d => { const [y, m, dd] = d.split('-'); return `${+dd} ${RC_MON[+m - 1]}`; };
+      return { key: 'custom', from, to, label: `${nice(from)} → ${nice(to)}` };
+    }
+
     // Fetch one period's headline metrics for the selected account
-    async function cmpFetch(account, period) {
+    async function cmpFetch(account, spec) {
+      // spec is either { key: 'last_month' } or { key: 'custom', from, to }.
+      const isCustom = spec.key === 'custom';
       if (account.type === 'google_ads') {
+        // resolveDateRange in the edge function passes anything it does not
+        // recognise straight through, so plain dates work as-is.
         const d = await callEdgeFunction('google-ads-data', {
-          account_id: account.id, organization_id: currentOrgId, since: period, until: period,
+          account_id: account.id, organization_id: currentOrgId,
+          since: isCustom ? spec.from : spec.key,
+          until: isCustom ? spec.to   : spec.key,
         });
         const t = d?.totals || {};
         return {
@@ -5982,7 +6040,9 @@
           costPerResult: t.cost_per_conversion ?? null,
         };
       }
-      const d = await callEdgeFunction('meta-data', { account_db_id: account.id, period });
+      const d = await callEdgeFunction('meta-data', isCustom
+        ? { account_db_id: account.id, period: 'custom', custom_from: spec.from, custom_to: spec.to }
+        : { account_db_id: account.id, period: spec.key });
       const e = d?.ad_entity || {};
       const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
       const spend = num(e.amount_spent) ?? 0;
@@ -6006,9 +6066,9 @@
     // One period, across every account in the selection. Rates are recomputed
     // from the totals: averaging a percentage across accounts of different
     // sizes gives a number that belongs to nobody.
-    async function cmpFetchScope(accounts, period) {
+    async function cmpFetchScope(accounts, spec) {
       const parts = await Promise.all(accounts.map(a =>
-        cmpFetch(a, period).catch(() => null)));
+        cmpFetch(a, spec).catch(() => null)));
       const ok = parts.filter(Boolean);
       if (!ok.length) return null;
       if (ok.length === 1) return ok[0];
@@ -6041,9 +6101,11 @@
       const scopeName = accounts.length > 1
         ? `${sel.options[sel.selectedIndex]?.textContent.trim()} · ${accounts.length} accounts`
         : (account.account_name || '');
-      const periods = [document.getElementById('cmp-a').value, document.getElementById('cmp-b').value, document.getElementById('cmp-c').value]
-        .filter(Boolean);
-      if (periods.length < 2) { alert('Pick at least two periods to compare.'); return; }
+      const specs = ['a', 'b', 'c'].map(_cmpSpec).filter(Boolean);
+      const bad = specs.find(s => s.error);
+      if (bad) { alert(bad.error); return; }
+      if (specs.length < 2) { alert('Pick at least two periods to compare.'); return; }
+      const periods = specs;
 
       const out = document.getElementById('cmp-result');
       out.innerHTML = '<div class="cmp-wrap"><div class="cmp-loading"><div class="spinner"></div>Fetching ' + periods.length + ' periods…</div></div>';
@@ -6087,7 +6149,7 @@
 
       out.innerHTML = `<div class="cmp-wrap"><table class="cmp-table">
         <thead><tr><th>Metric</th>${periods.map((p, i) =>
-          `<th>${escHtml(PERIOD_LABELS[p] || p)}${i === 0 ? ' <span style="opacity:.6">(base)</span>' : ''}</th>`).join('')}</tr></thead>
+          `<th>${escHtml(p.label)}${i === 0 ? ' <span style="opacity:.6">(base)</span>' : ''}</th>`).join('')}</tr></thead>
         <tbody>${ROWS.map(([label, get, f, hib]) => {
           const vals = data.map(get);
           if (vals.every(v => v == null || isNaN(v))) return '';
