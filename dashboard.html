@@ -6119,24 +6119,125 @@
       };
     }
 
-    // Recorded figures for one whole calendar month. Same rule as mhForPeriod:
-    // a stored row covers a month, so applying it to a shorter range would
-    // overstate it.
-    async function _cmpMh(accountKey, range) {
-      if (!range || !currentOrgId || !accountKey) return null;
+    // Every calendar month a range touches, with the slice of each one it
+    // actually covers.
+    function _cmpMonths(range) {
+      const out = [];
       const [fy, fm, fd] = range.from.split('-').map(Number);
       const [ty, tm, td] = range.to.split('-').map(Number);
-      if (fy !== ty || fm !== tm) return null;
-      const last = new Date(ty, tm, 0).getDate();
-      if (fd !== 1 || td !== last) return null;
+      const pad = n => String(n).padStart(2, '0');
+      let y = fy, m = fm;
+      for (let guard = 0; guard < 60; guard++) {
+        const last = new Date(y, m, 0).getDate();
+        const startDay = (y === fy && m === fm) ? fd : 1;
+        const endDay   = (y === ty && m === tm) ? td : last;
+        if (endDay >= startDay) {
+          out.push({
+            y, m, last,
+            key:       `${y}-${pad(m)}-01`,
+            from:      `${y}-${pad(m)}-${pad(startDay)}`,
+            to:        `${y}-${pad(m)}-${pad(endDay)}`,
+            monthFrom: `${y}-${pad(m)}-01`,
+            monthTo:   `${y}-${pad(m)}-${pad(last)}`,
+            whole:     startDay === 1 && endDay === last,
+            dayShare:  (endDay - startDay + 1) / last,
+          });
+        }
+        if (y === ty && m === tm) break;
+        m++; if (m > 12) { m = 1; y++; }
+      }
+      return out;
+    }
+
+    // What share of a month a partial range actually represents. Days are a
+    // poor proxy — a fortnight containing a campaign launch is not half the
+    // month's sales — so the split follows the store's own daily takings, and
+    // only falls back to days when Shopify cannot answer.
+    async function _cmpMonthShare(accounts, mo) {
+      if (mo.whole) return { share: 1, basis: 'whole month' };
+      const storeIds = [...new Set(accounts.map(a => a.shopify_store_id).filter(Boolean))];
+      if (!storeIds.length) return { share: mo.dayShare, basis: 'days' };
+      const res = await Promise.allSettled(storeIds.map(id =>
+        callEdgeFunction('shopify-data', {
+          store_id: id,
+          query: `FROM all SHOW orders SINCE ${mo.monthFrom} UNTIL ${mo.monthTo}`,
+        })));
+      let inRange = 0, whole = 0, sawDays = false;
+      for (const r of res) {
+        if (r.status !== 'fulfilled' || !r.value || r.value.error) continue;
+        const rows = r.value.daily_sales?.rows;
+        if (!Array.isArray(rows) || !rows.length) continue;
+        sawDays = true;
+        for (const [date, val] of rows) {
+          const v = parseFloat(val) || 0;
+          whole += v;
+          if (date >= mo.from && date <= mo.to) inRange += v;
+        }
+      }
+      if (!sawDays || !(whole > 0)) return { share: mo.dayShare, basis: 'days' };
+      return { share: Math.min(1, inRange / whole), basis: 'daily sales' };
+    }
+
+    // Recorded figures covering a range. A whole month is used as it stands; a
+    // shorter range takes its share of the month, which is an estimate and is
+    // labelled as one wherever it is shown.
+    async function _cmpRecorded(accountKey, accounts, range) {
+      if (!range || !currentOrgId || !accountKey) return null;
+      const months = _cmpMonths(range);
+      if (!months.length || months.length > 24) return null;
+
       const { data } = await sb.from('monthly_history')
-        .select('web_orders, web_revenue, web_orders_confirmed, web_revenue_confirmed, '
+        .select('month, web_orders, web_revenue, web_orders_confirmed, web_revenue_confirmed, '
               + 'msg_orders, msg_revenue, branding_spend, returns_pct')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey)
-        .eq('month', `${fy}-${String(fm).padStart(2, '0')}-01`)
-        .order('updated_at', { ascending: false }).limit(1);
-      return data?.[0] || null;
+        .in('month', months.map(x => x.key));
+      if (!data?.length) return null;
+
+      // One row per month; the newest write wins if a month was saved twice.
+      const byMonth = {};
+      for (const r of data) byMonth[String(r.month).slice(0, 10)] = r;
+
+      const num = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
+      const shares = await Promise.all(months.map(mo =>
+        byMonth[mo.key] ? _cmpMonthShare(accounts, mo) : Promise.resolve(null)));
+
+      const acc = {
+        web_orders: null, web_revenue: null,
+        web_orders_confirmed: null, web_revenue_confirmed: null,
+        msg_orders: null, msg_revenue: null, branding_spend: null, returns_pct: null,
+      };
+      let apportioned = false, basis = null, retWeighted = 0, retWeight = 0, matched = 0;
+
+      months.forEach((mo, i) => {
+        const row = byMonth[mo.key], sh = shares[i];
+        if (!row || !sh) return;
+        matched++;
+        if (sh.share < 1) { apportioned = true; basis = basis || sh.basis; }
+        const take = (k) => {
+          const v = num(row[k]);
+          if (v == null) return;
+          acc[k] = (acc[k] || 0) + v * sh.share;
+        };
+        ['web_orders', 'web_revenue', 'web_orders_confirmed', 'web_revenue_confirmed',
+         'msg_orders', 'msg_revenue', 'branding_spend'].forEach(take);
+        // A rate is not apportioned — it is averaged, weighted by the revenue
+        // it applies to, so a big month's returns rate carries more of the total.
+        const rp = num(row.returns_pct);
+        if (rp != null) {
+          const w = (num(row.web_revenue_confirmed) ?? num(row.web_revenue) ?? 0) * sh.share || sh.share;
+          retWeighted += rp * w; retWeight += w;
+        }
+      });
+      if (!matched) return null;
+      if (retWeight > 0) acc.returns_pct = retWeighted / retWeight;
+
+      // Counts are whole things; a fifth of an order helps nobody.
+      if (acc.web_orders           != null) acc.web_orders           = Math.round(acc.web_orders);
+      if (acc.web_orders_confirmed != null) acc.web_orders_confirmed = Math.round(acc.web_orders_confirmed);
+      if (acc.msg_orders           != null) acc.msg_orders           = Math.round(acc.msg_orders);
+
+      return { ...acc, apportioned, basis, monthsMatched: matched, monthsTouched: months.length };
     }
 
     // Presets go to Shopify as its own keywords, exactly as shopifyDR sends
@@ -6213,7 +6314,7 @@
       // These stores rarely cancel inside Shopify, so its own cancelled figure
       // says nothing; the confirmed count is the real measure.
       let cancelPct = null, cancelWhy = null;
-      if (cfmOrders == null) cancelWhy = mh ? 'confirmed orders not filled in' : 'whole calendar months only';
+      if (cfmOrders == null) cancelWhy = mh ? 'confirmed orders not filled in' : 'no month recorded for this period';
       else if (!(webOrders > 0)) cancelWhy = 'no orders recorded for this period';
       else cancelPct = Math.max(0, webOrders - cfmOrders) / webOrders * 100;
 
@@ -6226,6 +6327,8 @@
         brandingExcluded: brandCapped || 0,
         returnsPct: retPct,
         usedRecorded: !!mh,
+        apportioned: !!mh?.apportioned,
+        apportionBasis: mh?.basis || null,
       };
     }
 
@@ -6243,7 +6346,7 @@
       const [parts, shop, mh, get] = await Promise.all([
         Promise.all(accounts.map(a => cmpFetch(a, spec).catch(() => null))),
         _cmpShopify(accounts, spec).catch(() => null),
-        _cmpMh(mhKey, range).catch(() => null),
+        _cmpRecorded(mhKey, accounts, range).catch(() => null),
         _cmpManual(_cmpPeriodKey(spec)).catch(() => (() => null)),
       ]);
       const ok = parts.filter(Boolean);
@@ -6306,6 +6409,11 @@
       const fmtM = v => v == null || isNaN(v) ? '—' : cur + Number(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const fmtP = v => v == null || isNaN(v) ? '—' : Number(v).toFixed(2) + '%';
       const fmtX = v => v == null || isNaN(v) ? '—' : Number(v).toFixed(2) + '×';
+      // A figure split out of a whole month is an estimate. Say so on the value
+      // itself — a footnote is too easy to read past when the number is the
+      // thing being quoted to a client.
+      const _est = fn => (v, d) => (d?.apportioned && v != null && !isNaN(v))
+        ? '≈ ' + fn(v) : fn(v);
 
       // key: label, accessor, formatter, higherIsBetter
       const ROWS = [
@@ -6318,11 +6426,11 @@
         ['CPM',              d => d.cpm,           fmtM, false],
         ['Results',          d => d.results,       fmtN, true],
         ['Cost per Result',  d => d.costPerResult, fmtM, false],
-        ['Orders',           d => d.orders,        fmtN, true],
-        ['Revenue',          d => d.revenue,       fmtM, true],
-        ['ROAS',             d => d.roas,          fmtX, true],
-        ['AOV',              d => d.aov,           fmtM, true],
-        ['Cancellation %',   d => d.cancelPct,     fmtP, false],
+        ['Orders',           d => d.orders,        _est(fmtN), true],
+        ['Revenue',          d => d.revenue,       _est(fmtM), true],
+        ['ROAS',             d => d.roas,          _est(fmtX), true],
+        ['AOV',              d => d.aov,           _est(fmtM), true],
+        ['Cancellation %',   d => d.cancelPct,     _est(fmtP), false],
       ];
 
       const delta = (base, val, higherIsBetter) => {
@@ -6343,7 +6451,10 @@
       if (data.every(d => d.cancelPct == null) && cancelWhys.length)
         notes.push('no cancellation % — ' + cancelWhys.join('; '));
       if (data.some(d => d.revenue != null) && data.some(d => !d.usedRecorded))
-        notes.push('periods without a recorded month use Shopify alone, before confirmed orders and returns');
+        notes.push('periods with no recorded month use Shopify alone, before confirmed orders and returns');
+      const _appBasis = data.find(d => d.apportioned)?.apportionBasis;
+      if (_appBasis)
+        notes.push(`≈ is a part-month estimate — the month's recorded figures split by ${_appBasis}`);
       const _brand = data.reduce((m, d) => Math.max(m, d.brandingExcluded || 0), 0);
       if (_brand > 0) notes.push('ROAS divides by conversion spend — branding is excluded');
       const _ret = data.map(d => d.returnsPct).find(v => v != null);
@@ -6359,7 +6470,7 @@
           const valid = vals.filter(v => v != null && !isNaN(v));
           const best = hib === null ? null : (hib ? Math.max(...valid) : Math.min(...valid));
           return `<tr><td>${label}</td>${vals.map((v, i) => `
-            <td class="${best != null && v === best && valid.length > 1 ? 'cmp-best' : ''}">${f(v)}${i > 0 ? delta(vals[0], v, hib) : ''}</td>`).join('')}</tr>`;
+            <td class="${best != null && v === best && valid.length > 1 ? 'cmp-best' : ''}">${f(v, data[i])}${i > 0 ? delta(vals[0], v, hib) : ''}</td>`).join('')}</tr>`;
         }).join('')}</tbody></table></div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Green = best value across periods · % change is versus the first (base) period · ${escHtml(scopeName)}${
           data.some(d => d.mixedCurrency)
