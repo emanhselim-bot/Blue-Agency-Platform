@@ -10344,6 +10344,14 @@
                 aggReturned > 0
                   ? `${fmt(aggReturned, curr)} returned · already deducted above`
                   : 'Manual entry · Monthly history')}
+          ${/* Orders placed minus orders confirmed, over placed — the same
+                measure as a single account. Needs a confirmed figure for the
+                group, so it reads "—" rather than 0% when there isn't one. */''}
+          ${kpi('c-orange', '🚫', 'Cancellation %',
+                (_aggCxOrderRate != null) ? (_aggCxOrderRate * 100).toFixed(1) + '%' : '—',
+                (_aggCxOrderRate != null)
+                  ? `${_aggCxOrdersLost.toLocaleString('en')} of ${_aggWebOrders.toLocaleString('en')} not confirmed`
+                  : 'Needs confirmed orders in Monthly history')}
           ${kpi('c-green',  '🎯', 'Impressions',         fmt(totImpressions,'',0), `Reach: ${fmt(totReach,'',0)}`)}
           ${totSessions !== null ? kpi('c-purple', '👁', 'Website Sessions', fmt(totSessions,'',0),
               `● Clarity · ${claritySourceCount} project${claritySourceCount === 1 ? '' : 's'}`) : ''}
