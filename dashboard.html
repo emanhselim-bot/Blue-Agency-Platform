@@ -11812,20 +11812,34 @@
       return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
     }
 
-    // Cost per result across the sample, as three honest bands rather than a
-    // single number that hides how much the accounts varied.
+    // What comparable accounts actually paid per result: the cheapest month
+    // they managed, the dearest, and the average across the lot.
+    //
+    // The average is weighted by spend — total spend over total results — not
+    // an average of each month's rate. A 3,000 test month at a freak rate would
+    // otherwise count as much as a 300,000 month, and the figure quoted to a
+    // client would be one no campaign ever actually paid.
+    //
+    // Minimum and maximum are single months by definition, so they move on one
+    // outlier. The month count travels with them for exactly that reason.
     function _ppBands(sample, objective) {
       if (!sample.length) return null;
       const per = _ppPer(objective);
       const cprs = sample.map(m => m.spend / m.results * per).sort((a, b) => a - b);
+      const totSpend   = sample.reduce((s, m) => s + m.spend, 0);
+      const totResults = sample.reduce((s, m) => s + m.results, 0);
       return {
-        best:         _ppPct(cprs, 0.25),
-        typical:      _ppPct(cprs, 0.50),
-        conservative: _ppPct(cprs, 0.75),
+        min: cprs[0],
+        max: cprs[cprs.length - 1],
+        avg: totResults > 0 ? totSpend / totResults * per : null,
+        median: _ppPct(cprs, 0.50),
         accounts: new Set(sample.map(m => m.name)).size,
         months: sample.length,
       };
     }
+
+    // Saved proposals from before this change stored quartile names.
+    const _PP_BASIS_ALIAS = { best: 'min', typical: 'avg', conservative: 'max' };
 
     function _ppEstimate() {
       const objective = PP_OBJ[_pp.objective];
@@ -11892,8 +11906,9 @@
     }
     function ppSetCpr(basis) {
       const bands = _ppBands(_ppSample(), PP_OBJ[_pp.objective]);
-      _pp.cprBasis = basis;
-      if (bands && bands[basis] != null) _pp.cpr = bands[basis];
+      const key = _PP_BASIS_ALIAS[basis] || basis;
+      _pp.cprBasis = key;
+      if (bands && bands[key] != null) _pp.cpr = bands[key];
       _ppRender();
     }
     function ppSetCustomCpr(v) {
@@ -11948,8 +11963,11 @@
         <div class="pp-basis">
           Built from <strong>${e.accounts}</strong> account${e.accounts === 1 ? '' : 's'} over
           <strong>${e.sample}</strong> month${e.sample === 1 ? '' : 's'} of real spend.
-          ${objective.unit === 'cpm' ? 'CPM' : 'Cost per result'} across those months: the cheapest quarter averaged ${_ppMoney(bands.best)},
-          the dearest quarter ${_ppMoney(bands.conservative)}, and the middle sat at ${_ppMoney(bands.typical)}.
+          ${objective.unit === 'cpm' ? 'CPM' : 'Cost per result'} across those months ran from
+          ${_ppMoney(bands.min)} at best to ${_ppMoney(bands.max)} at worst, averaging ${_ppMoney(bands.avg)}.
+          ${e.sample >= 4 ? `Half the months came in under ${_ppMoney(bands.median)}.` : ''}
+          ${'' /* min and max are each one month, so say how thin that is */}
+          ${e.sample < 6 ? `<span style="color:#F59E0B">The minimum and maximum are single months out of ${e.sample} — one unusual month sets either end.</span>` : ''}
         </div>`;
 
       // Attention, not goods — so only the volume and what it cost.
@@ -11960,12 +11978,12 @@
             <div class="pp-card"><div class="pp-card-l">${escHtml(metricLabel)}</div>
               <div class="pp-card-v">${_ppNum(e.results)}</div>
               <div class="pp-card-s">${priceEach}</div></div>
-            <div class="pp-card"><div class="pp-card-l">Cheapest quarter</div>
-              <div class="pp-card-v">${_ppNum(_pp.budget / bands.best * _ppPer(objective))}</div>
-              <div class="pp-card-s">at ${_ppMoney(bands.best)}</div></div>
-            <div class="pp-card"><div class="pp-card-l">Dearest quarter</div>
-              <div class="pp-card-v">${_ppNum(_pp.budget / bands.conservative * _ppPer(objective))}</div>
-              <div class="pp-card-s">at ${_ppMoney(bands.conservative)}</div></div>
+            <div class="pp-card"><div class="pp-card-l">At their best</div>
+              <div class="pp-card-v">${_ppNum(_pp.budget / bands.min * _ppPer(objective))}</div>
+              <div class="pp-card-s">at ${_ppMoney(bands.min)}</div></div>
+            <div class="pp-card"><div class="pp-card-l">At their worst</div>
+              <div class="pp-card-v">${_ppNum(_pp.budget / bands.max * _ppPer(objective))}</div>
+              <div class="pp-card-s">at ${_ppMoney(bands.max)}</div></div>
           </div>
           <div class="pp-warn">This objective buys attention, not orders. There is no revenue or ROAS to quote from it — say so plainly rather than letting a client infer one.</div>
           ${basisLine}`;
@@ -12010,15 +12028,26 @@
 
       const cprOpts = bands ? `
         ${o('', '— choose —', _pp.cprBasis)}
-        ${o('best',         `Best case · ${_ppMoney(bands.best)}`,         _pp.cprBasis)}
-        ${o('typical',      `Typical · ${_ppMoney(bands.typical)}`,        _pp.cprBasis)}
-        ${o('conservative', `Conservative · ${_ppMoney(bands.conservative)}`, _pp.cprBasis)}
+        ${o('min', `Minimum · ${_ppMoney(bands.min)}`, _pp.cprBasis)}
+        ${o('avg', `Average · ${_ppMoney(bands.avg)}`, _pp.cprBasis)}
+        ${o('max', `Maximum · ${_ppMoney(bands.max)}`, _pp.cprBasis)}
         ${o('custom',       'My own figure…',                              _pp.cprBasis)}` : o('', 'No comparable data yet', '');
 
-      // Accounts with history that still have no industry set — they're
-      // excluded from every industry-matched estimate until they do.
+      // Every account, not only the ones missing an industry. Tagging used to
+      // mean waiting for an account to appear in a nag list, which meant it was
+      // never done in one sitting and the benchmark sample stayed thin. The
+      // whole list is here so it can be set once and forgotten; accounts with
+      // history come first because those are the ones an estimate is built on.
       const withHistory = new Set((_ppRows || []).map(r => r.account_key));
-      const untagged = _ppAccounts.filter(a => withHistory.has(a.id) && !a.business_type);
+      const allAccts = [..._ppAccounts].sort((a, b) => {
+        const ah = withHistory.has(a.id), bh = withHistory.has(b.id);
+        if (ah !== bh) return ah ? -1 : 1;
+        const at = !!a.business_type, bt = !!b.business_type;
+        if (at !== bt) return at ? 1 : -1;   // untagged first within each group
+        return (a.account_name || '').localeCompare(b.account_name || '');
+      });
+      const untaggedCount     = allAccts.filter(a => !a.business_type).length;
+      const untaggedWithHist  = allAccts.filter(a => !a.business_type && withHistory.has(a.id)).length;
 
       document.getElementById('content').innerHTML = `
         <div class="pp-wrap">
@@ -12074,17 +12103,28 @@
               <button class="refresh-btn" onclick="ppSave()">💾 Save this proposal</button>
             </div>` : ''}
 
-          ${untagged.length ? `
+          ${allAccts.length ? `
             <div class="pp-untagged">
-              <div class="pp-untagged-h">${untagged.length} account${untagged.length === 1 ? '' : 's'} with history have no industry set</div>
-              <div class="pp-untagged-s">They are left out of any industry-matched estimate until you say what they are.</div>
-              ${untagged.map(a => `
+              <div class="pp-untagged-h">
+                Industry by account
+                ${untaggedCount
+                  ? `<span style="color:#F59E0B;font-weight:600"> · ${untaggedCount} still unset</span>`
+                  : `<span style="color:#16A34A;font-weight:600"> · all ${allAccts.length} set</span>`}
+              </div>
+              <div class="pp-untagged-s">${untaggedWithHist
+                ? `${untaggedWithHist} of them ${untaggedWithHist === 1 ? 'has' : 'have'} history and ${untaggedWithHist === 1 ? 'is' : 'are'} left out of every industry-matched estimate until set.`
+                : 'Every account with history is tagged, so the estimates draw on all of it.'}
+                Set them once and this list stops mattering.</div>
+              ${allAccts.map(a => `
                 <div class="pp-untagged-row">
-                  <span>${escHtml(a.account_name)}</span>
+                  <span>${escHtml(a.account_name)}${withHistory.has(a.id)
+                    ? ''
+                    : ' <span style="font-size:11px;color:var(--text-muted)">· no history yet</span>'}</span>
                   <select class="connect-input" style="min-width:auto;padding:5px 9px;font-size:12.5px"
                           onchange="ppSetAccountType('${a.id}', this.value)">
                     <option value="">— set industry —</option>
-                    ${PP_BUSINESS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+                    ${PP_BUSINESS.map(([v, l]) =>
+                      `<option value="${v}" ${a.business_type === v ? 'selected' : ''}>${l}</option>`).join('')}
                   </select>
                 </div>`).join('')}
             </div>` : ''}
@@ -12116,7 +12156,11 @@
       Object.assign(_pp, {
         platform: p.platform || 'meta', business: p.business_type || '',
         objective: p.objective || '', metric: p.metric || '',
-        cprBasis: p.cpr_basis || 'custom', cpr: p.cpr != null ? Number(p.cpr) : null,
+        // Proposals saved before the bands became min/average/max stored the
+        // old quartile names; the figure itself was saved too, so the reopened
+        // proposal shows exactly what was quoted either way.
+        cprBasis: _PP_BASIS_ALIAS[p.cpr_basis] || p.cpr_basis || 'custom',
+        cpr: p.cpr != null ? Number(p.cpr) : null,
         budget: p.budget != null ? Number(p.budget) : null,
       });
       _ppRender();
