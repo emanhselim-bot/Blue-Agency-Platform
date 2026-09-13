@@ -6086,84 +6086,180 @@
       }
     }
 
-    // Cancellation comes from the confirmed-orders figures typed into Monthly
-    // history, which are recorded per whole calendar month. A range that is not
-    // a run of whole months has no confirmed number to compare against, so it
-    // reports nothing rather than a figure covering the wrong days.
-    async function _cmpCancellation(scopeKey, range) {
-      if (!range || !currentOrgId) return { pct: null, why: 'no date range' };
-      const [fy, fm, fd] = range.from.split('-').map(Number);
-      const [ty, tm, td] = range.to.split('-').map(Number);
-      const lastDay = new Date(ty, tm, 0).getDate();
-      if (fd !== 1 || td !== lastDay) return { pct: null, why: 'whole calendar months only' };
+    // The dashboard's Revenue, ROAS and AOV cards are not raw Shopify: they add
+    // orders taken over messages, prefer a confirmed figure over what Shopify
+    // recorded, and take returns off the top. Compare has to walk the same chain
+    // or its revenue silently disagrees with the cards above it.
 
-      const { data, error } = await sb.from('monthly_history')
-        .select('web_orders, web_orders_confirmed, month')
-        .eq('organization_id', currentOrgId)
-        .eq('account_key', scopeKey)
-        .gte('month', `${fy}-${String(fm).padStart(2, '0')}-01`)
-        .lte('month', `${ty}-${String(tm).padStart(2, '0')}-01`);
-      if (error || !data?.length) return { pct: null, why: 'nothing recorded for these months' };
-
-      const n = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
-      const placed    = data.reduce((s, r) => s + n(r.web_orders), 0);
-      const confirmed = data.reduce((s, r) => s + n(r.web_orders_confirmed), 0);
-      if (!placed) return { pct: null, why: 'no orders recorded for these months' };
-      if (!data.some(r => r.web_orders_confirmed != null))
-        return { pct: null, why: 'confirmed orders not filled in' };
-      return { pct: Math.max(0, (placed - confirmed) / placed) * 100 };
+    // The key the dashboard files manual figures under, rebuilt for a period
+    // other than the one currently on screen.
+    function _cmpPeriodKey(spec) {
+      return `${currentOrgId}-${currentAgencyId}-` +
+             (spec.key === 'custom' ? `${spec.from}_${spec.to}` : spec.key);
     }
 
-    // Revenue and orders for the period, from every distinct store behind the
-    // selection. Compare only ever asked the ad platforms, which is why it
-    // could not show revenue or ROAS at all.
-    async function _cmpShopify(accounts, range) {
+    // Manual figures for one period. Mirrors _mkGet: the shared database value
+    // wins, and anything typed before manual_kpis existed is still read from
+    // this browser.
+    async function _cmpManual(periodKey) {
+      let values = {};
+      if (currentOrgId) {
+        const { data } = await sb.from('manual_kpis')
+          .select('values').eq('organization_id', currentOrgId)
+          .eq('period_key', periodKey).maybeSingle();
+        values = data?.values || {};
+      }
+      return (prefix) => {
+        const k = `${prefix}-${periodKey}`;
+        if (Object.prototype.hasOwnProperty.call(values, k)) {
+          const v = values[k];
+          return v == null ? null : String(v);
+        }
+        return localStorage.getItem(k);
+      };
+    }
+
+    // Recorded figures for one whole calendar month. Same rule as mhForPeriod:
+    // a stored row covers a month, so applying it to a shorter range would
+    // overstate it.
+    async function _cmpMh(accountKey, range) {
+      if (!range || !currentOrgId || !accountKey) return null;
+      const [fy, fm, fd] = range.from.split('-').map(Number);
+      const [ty, tm, td] = range.to.split('-').map(Number);
+      if (fy !== ty || fm !== tm) return null;
+      const last = new Date(ty, tm, 0).getDate();
+      if (fd !== 1 || td !== last) return null;
+      const { data } = await sb.from('monthly_history')
+        .select('web_orders, web_revenue, web_orders_confirmed, web_revenue_confirmed, '
+              + 'msg_orders, msg_revenue, branding_spend, returns_pct')
+        .eq('organization_id', currentOrgId)
+        .eq('account_key', accountKey)
+        .eq('month', `${fy}-${String(fm).padStart(2, '0')}-01`)
+        .order('updated_at', { ascending: false }).limit(1);
+      return data?.[0] || null;
+    }
+
+    // Presets go to Shopify as its own keywords, exactly as shopifyDR sends
+    // them, so "This Month" here means the same days it means on the cards.
+    function _cmpShopifyDR(spec) {
+      if (spec.key === 'custom') return `SINCE ${spec.from} UNTIL ${spec.to}`;
+      return `SINCE ${spec.key} UNTIL ${spec.key}`;
+    }
+
+    // Orders and revenue for the period from every distinct store behind the
+    // selection — a client with two ad accounts on one store is counted once.
+    async function _cmpShopify(accounts, spec) {
       const storeIds = [...new Set(accounts.map(a => a.shopify_store_id).filter(Boolean))];
-      if (!storeIds.length || !range) return null;
+      if (!storeIds.length) return null;
+      const dr = _cmpShopifyDR(spec);
       const res = await Promise.allSettled(storeIds.map(id =>
-        callEdgeFunction('shopify-data', {
-          store_id: id, query: `FROM all SHOW orders SINCE ${range.from} UNTIL ${range.to}`,
-        })));
+        callEdgeFunction('shopify-data', { store_id: id, query: `FROM all SHOW orders ${dr}` })));
       const ok = res.filter(r => r.status === 'fulfilled' && r.value && !r.value.error).map(r => r.value);
       if (!ok.length) return null;
-      const n = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
-      let orders = 0, revenue = 0;
-      ok.forEach(v => { const s = v.sales?.rows?.[0]; if (s) { orders += n(s[0]); revenue += n(s[1]); } });
-      return { orders, revenue };
+      let orders = null, revenue = null;
+      ok.forEach(v => {
+        const s = v.sales?.rows?.[0];
+        if (s) {
+          orders  = (orders  || 0) + (parseInt(s[0])   || 0);
+          revenue = (revenue || 0) + (parseFloat(s[1]) || 0);
+        }
+      });
+      return (orders == null && revenue == null) ? null : { orders, revenue };
+    }
+
+    // Revenue, ROAS, AOV and cancellation for one period, following whichever
+    // chain the dashboard itself uses for this selection — the single-account
+    // view prefers confirmed figures, the combined view does not, and Compare
+    // has to agree with whichever card is on screen.
+    function _cmpDerive({ shop, mh, get, isGroup, spend }) {
+      const num   = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
+      const typed = k => num(get(k));
+
+      // What Shopify recorded, with the month's figures standing in when there
+      // was no live store answer at all.
+      let webOrders  = shop?.orders  ?? null;
+      let webRevenue = shop?.revenue ?? null;
+      if (webOrders  == null) webOrders  = num(mh?.web_orders);
+      if (webRevenue == null) webRevenue = num(mh?.web_revenue);
+
+      const cfmOrders  = typed('web-confirmed-orders')  ?? num(mh?.web_orders_confirmed);
+      const cfmRevenue = typed('web-confirmed-revenue') ?? num(mh?.web_revenue_confirmed);
+
+      // A confirmed figure replaces what Shopify recorded — an order placed and
+      // never confirmed is money spent for nothing, so it does not belong in
+      // revenue.
+      const forTotalO = cfmOrders  != null ? cfmOrders  : (webOrders  ?? 0);
+      const forTotalR = cfmRevenue != null ? cfmRevenue : (webRevenue ?? 0);
+
+      const msgOrders  = typed('msg-orders')  ?? num(mh?.msg_orders)  ?? 0;
+      const msgRevenue = typed('msg-revenue') ?? num(mh?.msg_revenue) ?? 0;
+
+      const orders = forTotalO + msgOrders;
+      const gross  = forTotalR + msgRevenue;
+
+      const _ret = isGroup ? (num(mh?.returns_pct) ?? typed('returns-rate'))
+                           : (typed('returns-rate') ?? num(mh?.returns_pct));
+      const retPct   = _ret == null ? null : Math.min(100, Math.max(0, _ret));
+      const returned = retPct ? gross * retPct / 100 : 0;
+      const revenue  = gross - returned;
+
+      // Engagement and follower campaigns buy no orders, so they come out of the
+      // denominator — the same split the ROAS card makes.
+      const branding    = typed('branding-spend') ?? num(mh?.branding_spend) ?? 0;
+      const brandCapped = Math.min(Math.max(0, branding), spend || 0);
+      const convSpend   = Math.max(0, (spend || 0) - brandCapped) || spend;
+
+      // Cancellation is the gap between orders placed and orders confirmed.
+      // These stores rarely cancel inside Shopify, so its own cancelled figure
+      // says nothing; the confirmed count is the real measure.
+      let cancelPct = null, cancelWhy = null;
+      if (cfmOrders == null) cancelWhy = mh ? 'confirmed orders not filled in' : 'whole calendar months only';
+      else if (!(webOrders > 0)) cancelWhy = 'no orders recorded for this period';
+      else cancelPct = Math.max(0, webOrders - cfmOrders) / webOrders * 100;
+
+      return {
+        orders:  orders  || null,
+        revenue: revenue || null,
+        roas: (revenue && convSpend) ? revenue / convSpend : null,
+        aov:  (revenue && orders)    ? revenue / orders    : null,
+        cancelPct, cancelWhy,
+        brandingExcluded: brandCapped || 0,
+        returnsPct: retPct,
+        usedRecorded: !!mh,
+      };
     }
 
     // One period, across every account in the selection. Rates are recomputed
     // from the totals: averaging a percentage across accounts of different
     // sizes gives a number that belongs to nobody.
     async function cmpFetchScope(accounts, spec, scopeKey) {
-      const range = _cmpRange(spec);
-      const [parts, shop, cancel] = await Promise.all([
+      const range   = _cmpRange(spec);
+      const isGroup = accounts.length > 1 || scopeKey === '__all__'
+                   || String(scopeKey).startsWith('__group__');
+      // Recorded figures for a combined client are filed against the picker's
+      // value, not each ad account — the same key the Monthly history tab uses.
+      const mhKey = isGroup ? scopeKey : (accounts[0]?.id || scopeKey);
+
+      const [parts, shop, mh, get] = await Promise.all([
         Promise.all(accounts.map(a => cmpFetch(a, spec).catch(() => null))),
-        _cmpShopify(accounts, range),
-        _cmpCancellation(scopeKey, range),
+        _cmpShopify(accounts, spec).catch(() => null),
+        _cmpMh(mhKey, range).catch(() => null),
+        _cmpManual(_cmpPeriodKey(spec)).catch(() => (() => null)),
       ]);
       const ok = parts.filter(Boolean);
       if (!ok.length) return null;
 
-      const withExtras = (base) => {
-        const revenue = shop?.revenue ?? null;
-        return {
-          ...base,
-          orders:  shop?.orders ?? null,
-          revenue,
-          roas: (revenue != null && base.spend) ? revenue / base.spend : null,
-          cancelPct: cancel?.pct ?? null,
-          cancelWhy: cancel?.why ?? null,
-        };
-      };
-      if (ok.length === 1) return withExtras(ok[0]);
+      const withTotals = (base) =>
+        ({ ...base, ..._cmpDerive({ shop, mh, get, isGroup, spend: base.spend }) });
+
+      if (ok.length === 1) return withTotals(ok[0]);
 
       const sum   = k => ok.reduce((s, d) => s + (Number(d[k]) || 0), 0);
       const maybe = k => ok.every(d => d[k] == null) ? null : sum(k);
       const spend = sum('spend'), impressions = sum('impressions'), clicks = sum('clicks');
       const results = maybe('results');
       const currencies = [...new Set(ok.map(d => d.currency))];
-      return withExtras({
+      return withTotals({
         currency: currencies.length === 1 ? currencies[0] : '',
         mixedCurrency: currencies.length > 1,
         spend, impressions, clicks,
@@ -6209,6 +6305,7 @@
       const fmtN = v => v == null || isNaN(v) ? '—' : Number(v).toLocaleString('en', { maximumFractionDigits: 0 });
       const fmtM = v => v == null || isNaN(v) ? '—' : cur + Number(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const fmtP = v => v == null || isNaN(v) ? '—' : Number(v).toFixed(2) + '%';
+      const fmtX = v => v == null || isNaN(v) ? '—' : Number(v).toFixed(2) + '×';
 
       // key: label, accessor, formatter, higherIsBetter
       const ROWS = [
@@ -6223,7 +6320,8 @@
         ['Cost per Result',  d => d.costPerResult, fmtM, false],
         ['Orders',           d => d.orders,        fmtN, true],
         ['Revenue',          d => d.revenue,       fmtM, true],
-        ['ROAS',             d => d.roas,          v => (v == null || isNaN(v)) ? '—' : v.toFixed(2) + '×', true],
+        ['ROAS',             d => d.roas,          fmtX, true],
+        ['AOV',              d => d.aov,           fmtM, true],
         ['Cancellation %',   d => d.cancelPct,     fmtP, false],
       ];
 
@@ -6236,13 +6334,21 @@
         return `<span class="cmp-delta ${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
       };
 
-      // Cancellation comes from the typed-in monthly history, so it simply does
-      // not exist for a stray date range. Say why rather than leaving the row out
-      // with no explanation.
+      // Revenue and cancellation lean on figures recorded per whole calendar
+      // month. A period that isn't one falls back to Shopify alone, which is a
+      // different number from the card above — say so rather than let the two
+      // quietly disagree.
       const cancelWhys = [...new Set(data.map(d => d.cancelWhy).filter(Boolean))];
-      const cancelNote = data.every(d => d.cancelPct == null) && cancelWhys.length
-        ? ' · no cancellation % — ' + escHtml(cancelWhys.join('; '))
-        : '';
+      const notes = [];
+      if (data.every(d => d.cancelPct == null) && cancelWhys.length)
+        notes.push('no cancellation % — ' + cancelWhys.join('; '));
+      if (data.some(d => d.revenue != null) && data.some(d => !d.usedRecorded))
+        notes.push('periods without a recorded month use Shopify alone, before confirmed orders and returns');
+      const _brand = data.reduce((m, d) => Math.max(m, d.brandingExcluded || 0), 0);
+      if (_brand > 0) notes.push('ROAS divides by conversion spend — branding is excluded');
+      const _ret = data.map(d => d.returnsPct).find(v => v != null);
+      if (_ret) notes.push(`revenue is net of ${_ret}% returns`);
+      const cancelNote = notes.length ? ' · ' + escHtml(notes.join(' · ')) : '';
 
       out.innerHTML = `<div class="cmp-wrap"><table class="cmp-table">
         <thead><tr><th>Metric</th>${periods.map((p, i) =>
@@ -10431,10 +10537,23 @@
       }
 
       // Website-only counts, captured before message orders are folded in
-      // below. The cancellation rate compares Shopify against confirmed, and
-      // messages are neither.
+      // below and before confirmed figures replace them. The cancellation rate
+      // compares what Shopify recorded against what was confirmed, and messages
+      // are neither.
       const _aggWebOrders = totOrders;
       const _aggWebPieces = totPieces;
+
+      // A confirmed figure replaces what Shopify recorded, exactly as it does
+      // on a single account. Without this a combined client showed Shopify's
+      // placed orders while the same client viewed one account at a time showed
+      // the confirmed ones — two different revenues for the same month, and the
+      // numbers typed against the group were never used at all.
+      const _aggCfmO = _num(_mhGroup?.web_orders_confirmed);
+      const _aggCfmR = _num(_mhGroup?.web_revenue_confirmed);
+      const _aggCfmP = _num(_mhGroup?.web_pieces_confirmed);
+      if (_aggCfmO != null) totOrders  = _aggCfmO;
+      if (_aggCfmR != null) totRevenue = _aggCfmR;
+      if (_aggCfmP != null) totPieces  = _aggCfmP;
 
       // Orders taken over messages are recorded by hand and are not in Shopify.
       // Without them these cards say "Number of Orders" while counting only the
@@ -10468,11 +10587,12 @@
       // Say exactly which channels a card counts, so a "total" is never assumed
       // to include something it does not.
       const _storeCount = uniqueStoreIds.length;
-      const _aggSourceLabel = aggHasMsg
+      const _aggCfmNote = (_aggCfmO != null || _aggCfmR != null) ? ' · Confirmed' : '';
+      const _aggSourceLabel = (aggHasMsg
         ? `Website + Messages${_storeCount > 1 ? ` · ${_storeCount} stores` : ''}`
         : (shopifyEnabled
             ? `<span class="shopify-badge">● Shopify</span>${_storeCount > 1 ? ` · ${_storeCount} stores` : ''}`
-            : 'No website data');
+            : 'No website data')) + _aggCfmNote;
       const _aggRevenueLabel = aggReturned > 0
         ? `Net of ${fmt(aggReturned, curr)} returns (${aggRetPct}%)`
         : _aggSourceLabel;
@@ -10491,8 +10611,8 @@
       // figure for the group, so it stays blank on a selection that has none.
       // Must sit below `curr`: the spend note formats currency, and reading a
       // const before its declaration throws and takes the whole render down.
-      const _aggCfmOrders = _num(_mhGroup?.web_orders_confirmed);
-      const _aggCfmPieces = _num(_mhGroup?.web_pieces_confirmed);
+      const _aggCfmOrders = _aggCfmO;
+      const _aggCfmPieces = _aggCfmP;
       const _aggCxOrdersLost = (_aggWebOrders > 0 && _aggCfmOrders != null)
         ? Math.max(0, _aggWebOrders - _aggCfmOrders) : null;
       const _aggCxOrderRate  = (_aggCxOrdersLost != null) ? _aggCxOrdersLost / _aggWebOrders : null;
