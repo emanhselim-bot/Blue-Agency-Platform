@@ -11759,6 +11759,7 @@
       ['clinic',        '🏥 Hospital / Clinic'],
       ['education',     '🎓 Education & academies'],
       ['automotive',    '🚗 Automotive'],
+      ['real_estate',   '🏘 Real estate'],
       ['food',          '🍽 Food & beverage'],
       ['home',          '🏠 Home & lifestyle'],
       ['services',      '🛠 Other services'],
@@ -12208,7 +12209,7 @@
                 <div class="pp-untagged-row">
                   <span>${escHtml(a.account_name)}${withHistory.has(a.id)
                     ? ''
-                    : ' <span style="font-size:11px;color:var(--text-muted)">· no history yet</span>'}</span>
+                    : ` <span style="font-size:11px;color:var(--text-muted)" title="Meta has the spend and delivery for this account — it just has not been written into Monthly history yet. Open Monthly history with this account selected and press Fill blanks from live data.">· no recorded months <span style="opacity:.7">ⓘ</span></span>`}</span>
                   <select class="connect-input" style="min-width:auto;padding:5px 9px;font-size:12.5px"
                           onchange="ppSetAccountType('${a.id}', this.value)">
                     <option value="">— set industry —</option>
