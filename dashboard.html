@@ -5556,6 +5556,14 @@
       ['aw_video_views',    'Video views'],
       ['aw_profile_visits', 'Profile visits'],
       ['aw_follows',        'Follows'],
+      // Meta's own publisher_platform breakdown. Stored so a placement's cost
+      // per result is measured rather than inferred from a spend share.
+      ['fb_spend',       'FB spend'],
+      ['fb_impressions', 'FB impressions'],
+      ['fb_results',     'FB results'],
+      ['ig_spend',       'IG spend'],
+      ['ig_impressions', 'IG impressions'],
+      ['ig_results',     'IG results'],
       ['branding_spend', 'Branding spend'],
       ['returns_pct', 'Returns %'],
     ];
@@ -5629,6 +5637,7 @@
             <th colspan="7" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
             <th colspan="4" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
             <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#FBBF24">📣 Awareness</th>
+            <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#A5B4FC">📘 Facebook · 📷 Instagram</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#C4B5FD">📣 Branding spend</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
@@ -5639,7 +5648,8 @@
                   their own, so listing them here pushed this row one cell wide
                   and shifted every label off its column. */''}
             ${MH_FIELDS.filter(([k]) => k.startsWith('web_') || k.startsWith('msg_')
-                                    || k === 'meta_spend' || k.startsWith('aw_')).map(([, label]) =>
+                                    || k === 'meta_spend' || k.startsWith('aw_')
+                                    || k.startsWith('fb_') || k.startsWith('ig_')).map(([, label]) =>
                 `<th style="padding:6px 8px;font-size:11px;color:var(--text-muted);
                  border-bottom:1px solid var(--border);font-weight:600">${label}</th>`).join('')}
           </tr>
@@ -5788,11 +5798,13 @@
           // first: two accounts pointing at the same shop would otherwise count
           // its orders twice.
           const storeIds = [...new Set(accts.map(a => a.shopify_store_id).filter(Boolean))];
-          const [metaAll, shopAll] = await Promise.all([
+          const [metaAll, shopAll, platAll] = await Promise.all([
             Promise.allSettled(accts.map(a =>
               callEdgeFunction('meta-data', { account_db_id: a.id, period: 'custom', custom_from: from, custom_to: to }))),
             Promise.allSettled(storeIds.map(id =>
               callEdgeFunction('shopify-data', { store_id: id, query: `FROM all SHOW orders SINCE ${from} UNTIL ${to}` }))),
+            Promise.allSettled(accts.map(a =>
+              callEdgeFunction('meta-data', { account_db_id: a.id, period: 'custom', custom_from: from, custom_to: to, level: 'platform' }))),
           ]);
 
           const okMeta = metaAll.filter(r => r.status === 'fulfilled' && r.value && !r.value.error).map(r => r.value);
@@ -5818,6 +5830,25 @@
              ['actions:follow',          'aw_follows']].forEach(([src, col]) => {
               if (_metaAny(src)) setIfBlank(m, col, _metaSum(src));
               else missingAw.add(col);
+            });
+          }
+
+          // Facebook and Instagram, from Meta's own breakdown. Results here are
+          // Meta-attributed: Shopify cannot say which placement sold an order,
+          // so this is the only honest source for a per-placement cost.
+          const okPlat = platAll.filter(r => r.status === 'fulfilled' && r.value && !r.value.error)
+                                .flatMap(r => r.value.platforms || []);
+          if (okPlat.length) {
+            const byPlat = (name, key) => okPlat
+              .filter(p => String(p.platform || '').toLowerCase() === name)
+              .reduce((s, p) => s + (parseFloat(p[key]) || 0), 0);
+            const has = name => okPlat.some(p => String(p.platform || '').toLowerCase() === name);
+            [['facebook', 'fb'], ['instagram', 'ig']].forEach(([name, pre]) => {
+              if (!has(name)) return;
+              setIfBlank(m, pre + '_spend',       byPlat(name, 'spend'));
+              setIfBlank(m, pre + '_impressions', byPlat(name, 'impressions'));
+              const res = byPlat(name, 'results');
+              if (res > 0) setIfBlank(m, pre + '_results', res);
             });
           }
 
@@ -11705,7 +11736,12 @@
     let _ppMode = false;
     let _ppRows = null;          // monthly history joined to its account
     let _ppSaved = [];
-    const _pp = { platform: 'meta', business: '', objective: '', metric: '', cprBasis: '', cpr: null, budget: null };
+    const _pp = { platform: 'facebook', business: '', objective: '', metric: '', cprBasis: '', cpr: null, budget: null };
+
+    // Which placement's columns a month should be read from. Anything that is
+    // not one of Meta's two placements reads the combined figures.
+    const _PP_PLACEMENT = { facebook: 'fb', instagram: 'ig' };
+    const _ppPlacement = () => _PP_PLACEMENT[_pp.platform] || null;
 
     const PP_BUSINESS = [
       ['fashion',    '👗 Fashion & apparel'],
@@ -11757,7 +11793,8 @@
         sb.from('monthly_history')
           .select('account_key, month, web_spend, web_orders, web_pieces, web_revenue, '
                 + 'msg_spend, msg_count, msg_orders, msg_pieces, msg_revenue, currency, '
-                + 'meta_spend, aw_impressions, aw_engagement, aw_video_views, aw_profile_visits, aw_follows')
+                + 'meta_spend, aw_impressions, aw_engagement, aw_video_views, aw_profile_visits, aw_follows, '
+                + 'fb_spend, fb_impressions, fb_results, ig_spend, ig_impressions, ig_results')
           .eq('organization_id', currentOrgId),
         sb.from('meta_ad_accounts_safe')
           .select('id, account_name, business_type, currency').eq('organization_id', currentOrgId),
@@ -11778,12 +11815,46 @@
     // One month of one account, reduced to the figures a proposal needs.
     function _ppMonth(row, side, objective) {
       const n = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+      const pl = _ppPlacement();
+
+      // Facebook and Instagram, where Meta measured them separately.
+      //
+      // Only impressions and results are broken out by placement, so those are
+      // the two that can be priced per placement honestly. Splitting anything
+      // else by a placement's share of spend would be arithmetic theatre: it
+      // scales the spend and the results by the same factor, so the cost per
+      // result comes out identical to the combined figure — the number the
+      // whole selector exists to distinguish. Those objectives read the
+      // combined month and say so instead.
+      if (pl) {
+        const spend = n(row[pl + '_spend']);
+        if (spend > 0) {
+          if (side === 'aw' && objective.unit === 'cpm') {
+            return { spend, results: n(row[pl + '_impressions']),
+                     pieces: 0, orders: 0, revenue: 0, split: true };
+          }
+          if (side === 'web' || side === 'msg') {
+            const res = n(row[pl + '_results']);
+            if (res > 0) {
+              // Revenue stays the account's, scaled to this placement's share
+              // of results — Meta attributed the result, Shopify holds the value.
+              const all = n(row.web_orders) + n(row.msg_orders);
+              const rev = n(row.web_revenue) + n(row.msg_revenue);
+              const share = all > 0 ? Math.min(1, res / all) : 0;
+              return { spend, results: res, orders: res,
+                       pieces: (n(row.web_pieces) + n(row.msg_pieces)) * share,
+                       revenue: rev * share, split: true };
+            }
+          }
+        }
+      }
+
       if (side === 'aw') {
         // Delivery bought by the whole month's spend, not a channel's share:
         // impressions and engagements accrue from every campaign that ran.
         return {
           spend: n(row.meta_spend), results: n(row[objective.field]),
-          pieces: 0, orders: 0, revenue: 0,
+          pieces: 0, orders: 0, revenue: 0, split: false,
         };
       }
       if (side === 'web') {
@@ -11835,6 +11906,7 @@
         median: _ppPct(cprs, 0.50),
         accounts: new Set(sample.map(m => m.name)).size,
         months: sample.length,
+        split: sample.filter(m => m.split).length,
       };
     }
 
@@ -11959,6 +12031,12 @@
       const priceEach = objective.unit === 'cpm'
         ? `at ${_ppMoney(_pp.cpr)} per thousand`
         : `at ${_ppMoney(_pp.cpr)} each`;
+      const pl = _ppPlacement();
+      const placeNote = !pl ? '' : bands.split === bands.months
+        ? `<div class="pp-basis" style="margin-bottom:8px">Measured on ${_pp.platform === 'facebook' ? 'Facebook' : 'Instagram'} alone, from Meta's own placement breakdown.</div>`
+        : bands.split === 0
+        ? `<div class="pp-warn">Meta has no separate ${_pp.platform === 'facebook' ? 'Facebook' : 'Instagram'} figure for this objective, so these are the combined Facebook + Instagram numbers. Splitting them by each placement's share of spend would divide the spend and the results by the same amount and leave the cost per result untouched — it would look split without being split.</div>`
+        : `<div class="pp-warn">${bands.split} of ${bands.months} months have a separate ${_pp.platform === 'facebook' ? 'Facebook' : 'Instagram'} figure; the rest are combined Facebook + Instagram.</div>`;
       const basisLine = `
         <div class="pp-basis">
           Built from <strong>${e.accounts}</strong> account${e.accounts === 1 ? '' : 's'} over
@@ -11973,7 +12051,7 @@
       // Attention, not goods — so only the volume and what it cost.
       if (e.awareness) {
         return `
-          ${warn}
+          ${warn}${placeNote}
           <div class="pp-cards">
             <div class="pp-card"><div class="pp-card-l">${escHtml(metricLabel)}</div>
               <div class="pp-card-v">${_ppNum(e.results)}</div>
@@ -11990,7 +12068,7 @@
       }
 
       return `
-        ${warn}
+        ${warn}${placeNote}
         <div class="pp-cards">
           <div class="pp-card"><div class="pp-card-l">${escHtml(metricLabel)}</div>
             <div class="pp-card-v">${_ppNum(e.results)}</div>
@@ -12063,7 +12141,9 @@
 
           <div class="pp-grid">
             ${q('pp-platform', '1 · Platform', _pp.platform,
-                  o('meta', '📘 Meta Ads', _pp.platform) + o('google_ads', '🔍 Google Ads', _pp.platform) + o('tiktok_ads', '🎵 TikTok Ads', _pp.platform),
+                  o('facebook', '📘 Facebook', _pp.platform) + o('instagram', '📷 Instagram', _pp.platform)
+                  + (_pp.platform === 'meta' ? o('meta', '📘 Meta · both placements', _pp.platform) : '')
+                  + o('google_ads', '🔍 Google Ads', _pp.platform) + o('tiktok_ads', '🎵 TikTok Ads', _pp.platform),
                   "ppSet('platform', this.value)")}
 
             ${q('pp-business', '2 · Type of business', _pp.business,
