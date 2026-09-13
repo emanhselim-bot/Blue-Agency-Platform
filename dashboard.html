@@ -2907,6 +2907,10 @@
           <button id="mh-fill-btn" onclick="mhFillFromLive()" title="Pull spend, orders, pieces, revenue and messages from Meta and Shopify for any cell still empty"
                   style="padding:8px 14px;background:transparent;color:var(--text-main);border:1px solid var(--border);
                          border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">⤓ Fill blanks from live data</button>
+          <button id="mh-backfill-btn" onclick="mhBackfillAll()"
+                  title="Pull every month Meta still holds, for every ad account, straight into this history. Runs once; safe to re-run."
+                  style="padding:8px 14px;background:transparent;color:var(--text-main);border:1px solid var(--border);
+                         border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">⇊ Backfill all accounts</button>
           <button onclick="mhSave()" style="padding:8px 18px;background:var(--blue-light);color:#fff;border:none;
                   border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">💾 Save</button>
           <button onclick="mhClose()" style="padding:8px 14px;background:transparent;color:var(--text-main);
@@ -5915,6 +5919,133 @@
         btn.disabled = false;
         btn.textContent = originalLabel;
       }
+    }
+
+    // ── Backfill every account from Meta ─────────────────────────────────────
+    // The per-account fill asks Meta for one month at a time, which across 114
+    // accounts and three years is thousands of round trips and gets throttled
+    // long before it finishes. meta-backfill returns a whole account at once,
+    // so this is one call per account (two when the placement split is wanted).
+    //
+    // Writes are additive: a month already recorded keeps whatever is in it,
+    // because those are the numbers somebody checked. Only empty columns fill.
+    let _mhBackfillRunning = false;
+
+    async function mhBackfillAll() {
+      if (_mhBackfillRunning) return;
+      const btn    = document.getElementById('mh-backfill-btn');
+      const status = document.getElementById('mh-status');
+      const accts  = Object.values(accountMap).filter(a => a && !a.type);   // Meta only
+      if (!accts.length) { status.textContent = 'No Meta ad accounts to read.'; return; }
+
+      if (!confirm(
+        `Pull every month Meta still holds (about 3 years) for ${accts.length} Meta ad accounts?\n\n` +
+        `Months you have already recorded are left exactly as they are — only blanks are filled.\n\n` +
+        `This takes a while and Meta will slow it down partway; it waits and carries on.`)) return;
+
+      _mhBackfillRunning = true;
+      btn.disabled = true;
+      const origLabel = btn.textContent;
+
+      const num = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
+      let done = 0, wrote = 0, skipped = 0, failed = [], throttles = 0;
+
+      // Everything already recorded, so a month that exists is never overwritten.
+      const existing = {};
+      try {
+        const { data } = await sb.from('monthly_history')
+          .select('account_key, month').eq('organization_id', currentOrgId);
+        (data || []).forEach(r => { existing[r.account_key + '|' + String(r.month).slice(0, 10)] = true; });
+      } catch { /* an empty map just means nothing is skipped */ }
+
+      const callWithBackoff = async (payload) => {
+        // Meta's throttle clears on its own; the only sane response is to wait
+        // and try the same account again rather than lose its history.
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const r = await callEdgeFunction('meta-backfill', payload).catch(e => ({ error: String(e?.message || e) }));
+          if (!r?.error) return r;
+          if (r.error === 'RATE_LIMITED' || /rate|throttl|limit/i.test(r.error)) {
+            throttles++;
+            const wait = Math.min(60, 5 * Math.pow(2, attempt));
+            btn.textContent = `⏳ Meta is throttling — waiting ${wait}s…`;
+            await new Promise(res => setTimeout(res, wait * 1000));
+            continue;
+          }
+          return r;   // a real error; the caller records it and moves on
+        }
+        return { error: 'RATE_LIMITED' };
+      };
+
+      for (const acct of accts) {
+        done++;
+        btn.textContent = `⇊ ${done}/${accts.length} — ${(acct.account_name || '').slice(0, 18)}…`;
+
+        const [base, split] = await Promise.all([
+          callWithBackoff({ account_db_id: acct.id }),
+          callWithBackoff({ account_db_id: acct.id, split: true }),
+        ]);
+
+        if (base?.error) { failed.push(`${acct.account_name}: ${base.error}`); continue; }
+
+        const byMonth = {};
+        (base.monthly || []).forEach(m => {
+          // A month with no spend bought nothing and tells a benchmark nothing.
+          if (!(m.spend > 0)) return;
+          byMonth[m.month] = {
+            organization_id: currentOrgId,
+            agency_id: acct.agency_id || currentAgencyId || 'x',
+            account_key: acct.id, month: m.month,
+            currency: acct.currency || base.currency || null,
+            updated_by: currentUser?.id || null,
+            updated_at: new Date().toISOString(),
+            meta_spend:        m.spend,
+            aw_impressions:    num(m.impressions),
+            aw_engagement:     num(m.engagement),
+            aw_video_views:    num(m.video_views),
+            aw_profile_visits: num(m.profile_visits),
+            aw_follows:        num(m.follows),
+          };
+        });
+        (split?.placements || []).forEach(p => {
+          const row = byMonth[p.month];
+          if (!row) return;
+          const pre = p.platform === 'facebook' ? 'fb' : 'ig';
+          row[pre + '_spend']       = p.spend;
+          row[pre + '_impressions'] = num(p.impressions);
+          row[pre + '_results']     = num(p.results);
+        });
+
+        const rows = Object.values(byMonth).filter(r => {
+          if (existing[r.account_key + '|' + r.month]) { skipped++; return false; }
+          return true;
+        });
+        if (!rows.length) continue;
+
+        try {
+          const { error } = await sb.from('monthly_history')
+            .upsert(rows, { onConflict: 'organization_id,account_key,month' });
+          if (error) throw error;
+          wrote += rows.length;
+        } catch (e) {
+          failed.push(`${acct.account_name}: ${e.message || e}`);
+        }
+      }
+
+      _mhHistoryCache = {};
+      btn.disabled = false;
+      btn.textContent = origLabel;
+      _mhBackfillRunning = false;
+
+      status.innerHTML =
+        `Wrote <strong>${wrote}</strong> month${wrote === 1 ? '' : 's'} across ${accts.length} accounts.` +
+        (skipped   ? ` <span style="color:var(--text-muted)">${skipped} already recorded and left untouched.</span>` : '') +
+        (throttles ? ` <span style="color:var(--text-muted)">Waited out ${throttles} throttle${throttles === 1 ? '' : 's'}.</span>` : '') +
+        (failed.length
+          ? `<div style="margin-top:6px;color:#F59E0B">${failed.length} account${failed.length === 1 ? '' : 's'} could not be read: ${failed.slice(0, 6).map(escHtml).join('; ')}${failed.length > 6 ? ' …' : ''}</div>`
+          : '');
+      status.style.color = wrote ? '#16A34A' : 'var(--text-muted)';
+      logActivity('change', `Backfilled ${wrote} months from Meta across ${accts.length} accounts`, { module: 'media' });
+      mhLoad();
     }
 
     async function mhSave() {
