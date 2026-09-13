@@ -5548,6 +5548,14 @@
       ['web_revenue_confirmed', 'Confirmed revenue'],
       ['msg_orders',  'Orders'],  ['msg_pieces',  'Pieces'],  ['msg_revenue',  'Revenue'],
       ['msg_spend',   'Spend'],
+      // Delivery figures for the month. Filled from Meta, not typed, and used
+      // by the Proposal tab to price awareness-type objectives.
+      ['meta_spend',        'Spend (all)'],
+      ['aw_impressions',    'Impressions'],
+      ['aw_engagement',     'Engagement'],
+      ['aw_video_views',    'Video views'],
+      ['aw_profile_visits', 'Profile visits'],
+      ['aw_follows',        'Follows'],
       ['branding_spend', 'Branding spend'],
       ['returns_pct', 'Returns %'],
     ];
@@ -5620,6 +5628,7 @@
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
             <th colspan="7" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
             <th colspan="4" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
+            <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#FBBF24">📣 Awareness</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#C4B5FD">📣 Branding spend</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
@@ -5629,7 +5638,8 @@
                   Branding, Returns and Net revenue each own a rowspan header of
                   their own, so listing them here pushed this row one cell wide
                   and shifted every label off its column. */''}
-            ${MH_FIELDS.filter(([k]) => k.startsWith('web_') || k.startsWith('msg_')).map(([, label]) =>
+            ${MH_FIELDS.filter(([k]) => k.startsWith('web_') || k.startsWith('msg_')
+                                    || k === 'meta_spend' || k.startsWith('aw_')).map(([, label]) =>
                 `<th style="padding:6px 8px;font-size:11px;color:var(--text-muted);
                  border-bottom:1px solid var(--border);font-weight:600">${label}</th>`).join('')}
           </tr>
@@ -5755,6 +5765,7 @@
       btn.disabled = true;
       let filled = 0;
       const unsplitSpend = [];   // months where Meta's spend could not be apportioned
+      const missingAw = new Set();  // delivery metrics Meta returned nothing for
 
       const setIfBlank = (m, key, value) => {
         if (value == null || isNaN(value)) return;
@@ -5791,6 +5802,24 @@
             ? { status: 'fulfilled', value: { ad_entity: { amount_spent:
                 okMeta.reduce((s, v) => s + (parseFloat(v.ad_entity?.amount_spent) || 0), 0) } } }
             : { status: 'rejected' };
+
+          // Delivery figures, summed across the selection. Unlike spend these
+          // need no channel split — an impression is an impression — so they
+          // fill directly. A metric Meta did not report is left blank rather
+          // than written as a zero, which would read as "none happened".
+          const _metaSum = k => okMeta.reduce((s, v) => s + (parseFloat(v.ad_entity?.[k]) || 0), 0);
+          const _metaAny = k => okMeta.some(v => v.ad_entity?.[k] != null);
+          if (okMeta.length) {
+            setIfBlank(m, 'meta_spend', _metaSum('amount_spent'));
+            [['impressions',             'aw_impressions'],
+             ['actions:page_engagement', 'aw_engagement'],
+             ['actions:video_view',      'aw_video_views'],
+             ['actions:profile_visit',   'aw_profile_visits'],
+             ['actions:follow',          'aw_follows']].forEach(([src, col]) => {
+              if (_metaAny(src)) setIfBlank(m, col, _metaSum(src));
+              else missingAw.add(col);
+            });
+          }
 
           const _sumRow = (rows, idx, parse) =>
             rows.reduce((s, r) => s + (parse(r?.[idx]) || 0), 0);
@@ -5833,6 +5862,11 @@
           }
         }
 
+        const awNote = missingAw.size
+          ? `<div style="margin-top:6px;color:var(--text-muted)">Meta reported nothing for ${
+              [...missingAw].map(k => (MH_FIELDS.find(([c]) => c === k) || [, k])[1].toLowerCase()).join(', ')
+            } on these accounts — either those campaigns did not run, or Meta names that action something else. Left blank rather than written as zero.</div>`
+          : '';
         const note = unsplitSpend.length
           ? `<div style="margin-top:6px;color:#F59E0B">Spend left blank for ${unsplitSpend.join(', ')} — Meta reports one figure per account and cannot say how much went to website versus messages. Type one of the two and run this again; the other will be filled exactly.</div>`
           : '';
@@ -5841,7 +5875,7 @@
           : '';
         status.innerHTML = (filled
           ? `Filled <strong>${filled}</strong> empty cell${filled === 1 ? '' : 's'} across ${months.length} month${months.length === 1 ? '' : 's'}.${sourceNote} Nothing you had typed was changed — press Save to keep them.`
-          : 'No live figures were available for the empty cells.' + sourceNote) + note;
+          : 'No live figures were available for the empty cells.' + sourceNote) + note + awNote;
         status.style.color = filled ? '#16A34A' : 'var(--text-muted)';
       } catch (err) {
         status.textContent = '⚠️ ' + (err?.message || 'Could not reach Meta or Shopify.');
@@ -11687,13 +11721,27 @@
     ];
     const PP_BUSINESS_LABEL = Object.fromEntries(PP_BUSINESS);
 
-    // Each objective decides which half of the month's figures to read.
-    // 'web' is website/Shopify selling; 'msg' is conversations on Meta.
+    // Each objective decides which part of the month's figures to read.
+    // 'web' is website/Shopify selling, 'msg' is conversations on Meta, and
+    // 'aw' is delivery — the figures Meta reports whatever the campaign sold.
+    //
+    // The fifth slot names the column an awareness objective counts, and the
+    // sixth how it is priced: 'each' for a cost per one, 'cpm' for a cost per
+    // thousand. Impressions are priced per thousand because a cost per single
+    // impression is a number nobody quotes or can read.
     const PP_OBJECTIVES = [
-      ['sales',    '🛒 Online sales',        'web', [['purchase', 'Purchases (orders)'], ['piece', 'Pieces sold']]],
-      ['messages', '💬 Messages & DMs',      'msg', [['message', 'Conversations started'], ['msg_order', 'Orders closed from messages']]],
+      ['sales',     '🛒 Online sales',   'web', [['purchase', 'Purchases (orders)'], ['piece', 'Pieces sold']]],
+      ['messages',  '💬 Messages & DMs', 'msg', [['message', 'Conversations started'], ['msg_order', 'Orders closed from messages']]],
+      ['awareness', '📣 Awareness',      'aw',  [['impression', 'Impressions']],    'aw_impressions',    'cpm'],
+      ['engagement','👍 Engagement',     'aw',  [['engagement', 'Engagements']],    'aw_engagement',     'each'],
+      ['video',     '▶️ Video views',    'aw',  [['video_view', 'Video views (3s)']], 'aw_video_views',  'each'],
+      ['profile',   '👤 Profile visits', 'aw',  [['profile_visit', 'Profile visits']], 'aw_profile_visits', 'each'],
+      ['follow',    '➕ Follows',        'aw',  [['follow', 'Follows']],            'aw_follows',        'each'],
     ];
-    const PP_OBJ = Object.fromEntries(PP_OBJECTIVES.map(o => [o[0], { label: o[1], side: o[2], metrics: o[3] }]));
+    const PP_OBJ = Object.fromEntries(PP_OBJECTIVES.map(o =>
+      [o[0], { label: o[1], side: o[2], metrics: o[3], field: o[4] || null, unit: o[5] || 'each' }]));
+    // How many results one quoted price buys: 1000 for a CPM, 1 otherwise.
+    const _ppPer = obj => (obj && obj.unit === 'cpm') ? 1000 : 1;
 
     async function openProposalTab() {
       _ppMode = true; _pfMode = false; _alMode = false;
@@ -11707,7 +11755,9 @@
     async function ppLoad() {
       const [{ data: hist }, { data: accts }, { data: saved }] = await Promise.all([
         sb.from('monthly_history')
-          .select('account_key, month, web_spend, web_orders, web_pieces, web_revenue, msg_spend, msg_count, msg_orders, msg_pieces, msg_revenue, currency')
+          .select('account_key, month, web_spend, web_orders, web_pieces, web_revenue, '
+                + 'msg_spend, msg_count, msg_orders, msg_pieces, msg_revenue, currency, '
+                + 'meta_spend, aw_impressions, aw_engagement, aw_video_views, aw_profile_visits, aw_follows')
           .eq('organization_id', currentOrgId),
         sb.from('meta_ad_accounts_safe')
           .select('id, account_name, business_type, currency').eq('organization_id', currentOrgId),
@@ -11726,8 +11776,16 @@
     let _ppAccounts = [];
 
     // One month of one account, reduced to the figures a proposal needs.
-    function _ppMonth(row, side) {
+    function _ppMonth(row, side, objective) {
       const n = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+      if (side === 'aw') {
+        // Delivery bought by the whole month's spend, not a channel's share:
+        // impressions and engagements accrue from every campaign that ran.
+        return {
+          spend: n(row.meta_spend), results: n(row[objective.field]),
+          pieces: 0, orders: 0, revenue: 0,
+        };
+      }
       if (side === 'web') {
         const spend = n(row.web_spend), res = n(row.web_orders);
         return { spend, results: res, pieces: n(row.web_pieces), orders: res, revenue: n(row.web_revenue) };
@@ -11743,7 +11801,7 @@
       if (!_ppRows || !objective) return [];
       return _ppRows
         .filter(r => !_pp.business || r.acct.business_type === _pp.business)
-        .map(r => ({ ...(_ppMonth(r, objective.side)), name: r.acct.account_name, month: r.month }))
+        .map(r => ({ ...(_ppMonth(r, objective.side, objective)), name: r.acct.account_name, month: r.month }))
         .filter(m => m.spend > 0 && m.results > 0);
     }
 
@@ -11756,9 +11814,10 @@
 
     // Cost per result across the sample, as three honest bands rather than a
     // single number that hides how much the accounts varied.
-    function _ppBands(sample) {
+    function _ppBands(sample, objective) {
       if (!sample.length) return null;
-      const cprs = sample.map(m => m.spend / m.results).sort((a, b) => a - b);
+      const per = _ppPer(objective);
+      const cprs = sample.map(m => m.spend / m.results * per).sort((a, b) => a - b);
       return {
         best:         _ppPct(cprs, 0.25),
         typical:      _ppPct(cprs, 0.50),
@@ -11769,8 +11828,9 @@
     }
 
     function _ppEstimate() {
+      const objective = PP_OBJ[_pp.objective];
       const sample = _ppSample();
-      const bands  = _ppBands(sample);
+      const bands  = _ppBands(sample, objective);
       const cpr    = _pp.cpr, budget = _pp.budget;
       if (!bands || !cpr || cpr <= 0 || !budget || budget <= 0) return null;
 
@@ -11780,7 +11840,20 @@
       const totRevenue = sample.reduce((s, m) => s + m.revenue, 0);
       const totPieces  = sample.reduce((s, m) => s + m.pieces, 0);
 
-      const results   = budget / cpr;
+      // A CPM buys a thousand at a time.
+      const results   = budget / cpr * _ppPer(objective);
+
+      // Awareness objectives sell attention, not goods. Orders, revenue, AOV
+      // and ROAS are returned as null rather than zero so the cards can be left
+      // out entirely — a ROAS of 0.00x against an awareness budget is not a
+      // poor return, it is a category error.
+      if (objective.side === 'aw') {
+        return {
+          results, orders: null, revenue: null, pieces: null, aov: null,
+          roas: null, orderRate: null, benchRoas: null,
+          bands, sample: sample.length, accounts: bands.accounts, awareness: true,
+        };
+      }
       // For messages the result is a conversation, and only some become orders.
       const orderRate = totResults > 0 ? totOrders / totResults : 0;
       const orders    = _pp.objective === 'sales' ? results : results * orderRate;
@@ -11818,7 +11891,7 @@
       _ppRender();
     }
     function ppSetCpr(basis) {
-      const bands = _ppBands(_ppSample());
+      const bands = _ppBands(_ppSample(), PP_OBJ[_pp.objective]);
       _pp.cprBasis = basis;
       if (bands && bands[basis] != null) _pp.cpr = bands[basis];
       _ppRender();
@@ -11854,7 +11927,7 @@
 
     function _ppResultHTML() {
       const sample = _ppSample();
-      const bands  = _ppBands(sample);
+      const bands  = _ppBands(sample, PP_OBJ[_pp.objective]);
       if (!_pp.objective) return `<div class="pp-hint">Pick an objective to see what comparable accounts achieved.</div>`;
       if (!bands) {
         return `<div class="pp-hint">No comparable months yet${_pp.business ? ' for ' + escHtml(PP_BUSINESS_LABEL[_pp.business] || _pp.business) : ''}.
@@ -11864,9 +11937,39 @@
       if (!e) return `<div class="pp-hint">Choose a cost per result and a budget to see the estimate.
         Based on <strong>${bands.accounts}</strong> account${bands.accounts === 1 ? '' : 's'} over <strong>${bands.months}</strong> month${bands.months === 1 ? '' : 's'}.</div>`;
 
-      const metricLabel = (PP_OBJ[_pp.objective].metrics.find(m => m[0] === _pp.metric) || [, 'results'])[1];
+      const objective  = PP_OBJ[_pp.objective];
+      const metricLabel = (objective.metrics.find(m => m[0] === _pp.metric) || [, 'results'])[1];
       const warn = e.sample < 3
         ? `<div class="pp-warn">Only ${e.sample} comparable month${e.sample === 1 ? '' : 's'} — treat this as a rough indication, not a promise.</div>` : '';
+      const priceEach = objective.unit === 'cpm'
+        ? `at ${_ppMoney(_pp.cpr)} per thousand`
+        : `at ${_ppMoney(_pp.cpr)} each`;
+      const basisLine = `
+        <div class="pp-basis">
+          Built from <strong>${e.accounts}</strong> account${e.accounts === 1 ? '' : 's'} over
+          <strong>${e.sample}</strong> month${e.sample === 1 ? '' : 's'} of real spend.
+          ${objective.unit === 'cpm' ? 'CPM' : 'Cost per result'} across those months: the cheapest quarter averaged ${_ppMoney(bands.best)},
+          the dearest quarter ${_ppMoney(bands.conservative)}, and the middle sat at ${_ppMoney(bands.typical)}.
+        </div>`;
+
+      // Attention, not goods — so only the volume and what it cost.
+      if (e.awareness) {
+        return `
+          ${warn}
+          <div class="pp-cards">
+            <div class="pp-card"><div class="pp-card-l">${escHtml(metricLabel)}</div>
+              <div class="pp-card-v">${_ppNum(e.results)}</div>
+              <div class="pp-card-s">${priceEach}</div></div>
+            <div class="pp-card"><div class="pp-card-l">Cheapest quarter</div>
+              <div class="pp-card-v">${_ppNum(_pp.budget / bands.best * _ppPer(objective))}</div>
+              <div class="pp-card-s">at ${_ppMoney(bands.best)}</div></div>
+            <div class="pp-card"><div class="pp-card-l">Dearest quarter</div>
+              <div class="pp-card-v">${_ppNum(_pp.budget / bands.conservative * _ppPer(objective))}</div>
+              <div class="pp-card-s">at ${_ppMoney(bands.conservative)}</div></div>
+          </div>
+          <div class="pp-warn">This objective buys attention, not orders. There is no revenue or ROAS to quote from it — say so plainly rather than letting a client infer one.</div>
+          ${basisLine}`;
+      }
 
       return `
         ${warn}
@@ -11884,12 +11987,7 @@
             <div class="pp-card-v">${e.roas.toFixed(2)}×</div>
             <div class="pp-card-s">these accounts averaged ${e.benchRoas.toFixed(2)}×</div></div>
         </div>
-        <div class="pp-basis">
-          Built from <strong>${e.accounts}</strong> account${e.accounts === 1 ? '' : 's'} over
-          <strong>${e.sample}</strong> month${e.sample === 1 ? '' : 's'} of real spend.
-          Cost per result across those months: the cheapest quarter averaged ${_ppMoney(bands.best)},
-          the dearest quarter ${_ppMoney(bands.conservative)}, and the middle sat at ${_ppMoney(bands.typical)}.
-        </div>`;
+        ${basisLine}`;
     }
 
     function _ppRender(state) {
@@ -11899,7 +11997,7 @@
         return;
       }
       const objective = PP_OBJ[_pp.objective];
-      const bands = _ppBands(_ppSample());
+      const bands = _ppBands(_ppSample(), PP_OBJ[_pp.objective]);
       // Named q, not sel — sel is the global account picker and shadowing it
       // here would be a trap for whoever edits this next.
       const q = (id, label, value, opts, onchange, disabled) => `
@@ -11951,7 +12049,7 @@
                   o('', '— choose —', _pp.metric) + (objective ? objective.metrics.map(m => o(m[0], m[1], _pp.metric)).join('') : ''),
                   "ppSet('metric', this.value)", !objective)}
 
-            ${q('pp-cpr', '5 · Cost per result', _pp.cprBasis, cprOpts,
+            ${q('pp-cpr', objective?.unit === 'cpm' ? '5 · CPM' : '5 · Cost per result', _pp.cprBasis, cprOpts,
                   "ppSetCpr(this.value)", !objective)}
 
             <div class="pp-q">

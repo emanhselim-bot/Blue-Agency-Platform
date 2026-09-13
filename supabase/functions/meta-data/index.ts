@@ -1,12 +1,7 @@
 /**
  * Meta Data Proxy — Supabase Edge Function
- * Deploy: supabase functions deploy meta-data
  *
  * Fetches Meta Marketing API insights for a given ad account.
- * The browser sends the DB UUID of the account record; this function
- * retrieves the stored access token and Meta account ID server-side,
- * calls the Meta API, and returns normalized data to the dashboard.
- *
  * The Meta access token is never exposed to the browser.
  */
 
@@ -14,57 +9,98 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const META_API = "https://graph.facebook.com/v21.0";
 
-// Fields that map to what the dashboard renders
 const INSIGHTS_FIELDS = [
-  "account_name",
-  "spend",
-  "impressions",
-  "reach",
-  "clicks",
-  "inline_link_clicks",   // direct link-click count (more reliable than actions array)
-  "cpm",
-  "cpc",
-  "ctr",
-  "frequency",
-  "actions",
-  "cost_per_action_type",
-  "cost_per_result",
-  "results",
-  "date_start",
-  "date_stop",
+  "account_name", "spend", "impressions", "reach", "clicks",
+  "inline_link_clicks", "cpm", "cpc", "ctr", "frequency",
+  "actions", "cost_per_action_type", "cost_per_result", "results",
+  "date_start", "date_stop",
 ].join(",");
 
-// Campaign-level breakdown fields
 const CAMPAIGN_FIELDS = [
-  "campaign_id",
-  "campaign_name",
-  "spend",
-  "impressions",
-  "reach",
-  "clicks",
-  "cpm",
-  "cpc",
-  "ctr",
-  "frequency",
-  "actions",
-  "cost_per_action_type",
-  "results",
-  "cost_per_result",
-  "date_start",
-  "date_stop",
+  "campaign_id", "campaign_name", "spend", "impressions", "reach", "clicks",
+  "cpm", "cpc", "ctr", "frequency", "actions", "cost_per_action_type",
+  "results", "cost_per_result", "date_start", "date_stop",
 ].join(",");
 
-// Daily trend fields (used with time_increment=1)
 const DAILY_FIELDS = [
-  "spend",
-  "impressions",
-  "reach",
-  "clicks",
-  "ctr",
-  "cpc",
-  "cpm",
-  "date_start",
+  "spend", "impressions", "reach", "clicks", "ctr", "cpc", "cpm", "date_start",
 ].join(",");
+
+// ── What counts as a "result" ──────────────────────────────────────
+// Meta reports `results` against the ad set's optimisation goal — a purchase
+// for a sales campaign, a conversation for a messaging one. Where the API
+// returns it (account and campaign level) that is the figure to show.
+//
+// Breakdowns and ad rows do not carry it, so those fall back to the action
+// types below. The ORDER is the thing that was wrong: the list used to lead
+// with link_click, the cheapest action Meta returns, so a cost per click was
+// displayed wherever a cost per purchase or per conversation belonged. On a
+// Shopify account that showed EGP 8 against a real cost per purchase of over
+// EGP 300. link_click is now last, and only stands in when nothing else was
+// tracked at all.
+const RESULT_PRIORITY = [
+  "omni_purchase",
+  "offsite_conversion.fb_pixel_purchase",
+  "onsite_conversion.messaging_conversation_started_7d",
+  "lead",
+  "onsite_conversion.lead_grouped",
+  "complete_registration",
+  "add_to_cart",
+  "landing_page_view",
+  "link_click",
+];
+
+// ── Awareness-side action types ────────────────────────────────────
+// Meta names these differently across placements and has renamed them between
+// API versions, so each metric takes the first name that actually came back
+// rather than one hard-coded guess. The whole action map is returned as
+// `actions_all` so a name missing from these lists can be found from real data
+// instead of guessed at, and `*_basis` records which name was used.
+const VIDEO_VIEW_KEYS = [
+  "video_view",
+];
+const PROFILE_VISIT_KEYS = [
+  "profile_visit",
+  "onsite_conversion.ig_profile_visit",
+  "instagram_profile_visit",
+  "onsite_conversion.profile_visit",
+];
+// `like` is a Facebook page like, which is a follow — but it is the loosest
+// match here, so it is tried last and the basis records that it was used.
+const FOLLOW_KEYS = [
+  "follow",
+  "onsite_conversion.follow",
+  "page_like",
+  "like",
+];
+
+function firstOf(
+  map: Record<string, string>,
+  keys: string[],
+): { value: string | null; basis: string | null } {
+  for (const k of keys) if (map[k] != null) return { value: map[k], basis: k };
+  return { value: null, basis: null };
+}
+
+function firstValue(v: unknown): string | null {
+  const arr = v as { value?: string }[] | undefined;
+  return Array.isArray(arr) && arr.length ? (arr[0]?.value ?? null) : null;
+}
+
+/** Meta's own result for the objective when present; otherwise the most valuable tracked action. */
+function pickResult(
+  row: Record<string, unknown>,
+  acts: Record<string, string>,
+  cpa: Record<string, string>,
+): { results: string | null; cost_per_result: string | null; result_basis: string | null } {
+  const r  = firstValue(row.results);
+  const cr = firstValue(row.cost_per_result);
+  if (r != null || cr != null) return { results: r, cost_per_result: cr, result_basis: "meta_objective" };
+  for (const k of RESULT_PRIORITY) {
+    if (acts[k] != null) return { results: acts[k], cost_per_result: cpa[k] ?? null, result_basis: k };
+  }
+  return { results: null, cost_per_result: null, result_basis: null };
+}
 
 const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -86,7 +122,6 @@ function jsonResponse(body: unknown, status = 200) {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  // ── 1. Authenticate ──
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return jsonResponse({ error: "Unauthorized" }, 401);
 
@@ -95,13 +130,12 @@ Deno.serve(async (req: Request) => {
   );
   if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  // ── 2. Parse request ──
   let body: {
-    account_db_id?: string;  // UUID of the meta_ad_accounts row
-    period?: string;          // today | yesterday | this_month | last_month | custom
-    custom_from?: string;     // YYYY-MM-DD
-    custom_to?: string;       // YYYY-MM-DD
-    level?: string;           // "account" (default) | "campaign" | "daily"
+    account_db_id?: string;
+    period?: string;
+    custom_from?: string;
+    custom_to?: string;
+    level?: string;
   };
   try {
     body = await req.json();
@@ -112,10 +146,6 @@ Deno.serve(async (req: Request) => {
   const { account_db_id, period = "today", custom_from, custom_to, level = "account" } = body;
   if (!account_db_id) return jsonResponse({ error: "account_db_id is required" }, 400);
 
-  // ── 3. Fetch account + token via Business Manager (service role) ──
-  // The access token is stored on meta_business_managers, not on the
-  // ad account itself. We join through business_manager_id to get it.
-  // We also select the BM's id so we can mark it expired if we get a 190.
   const { data: account, error: accErr } = await supabaseAdmin
     .from("meta_ad_accounts")
     .select(`
@@ -137,10 +167,6 @@ Deno.serve(async (req: Request) => {
   const accessToken = bm?.access_token;
   if (!accessToken) return jsonResponse({ error: "No access token found for this account" }, 422);
 
-  // ── Helper: mark a business manager's token as expired ──────────────────────
-  // Called whenever Meta returns error code 190 (OAuthException).
-  // Uses the service role so it bypasses RLS — this write happens from the
-  // Edge Function, not from the browser.
   async function markTokenExpired(bmId: string): Promise<void> {
     await supabaseAdmin
       .from("meta_business_managers")
@@ -149,7 +175,6 @@ Deno.serve(async (req: Request) => {
     console.log(`Marked business manager ${bmId} as expired (Meta error 190)`);
   }
 
-  // Verify org membership
   const { data: member } = await supabaseAdmin
     .from("organization_members")
     .select("id")
@@ -160,29 +185,16 @@ Deno.serve(async (req: Request) => {
 
   if (!member) return jsonResponse({ error: "Forbidden" }, 403);
 
-  // ── 4. Build Meta API date parameters ──
-  // Meta Marketing API date_preset values:
-  //   today, yesterday, last_7_days, last_14_days, last_28_days, last_30_days,
-  //   last_90_days, this_month, last_month, this_quarter, last_quarter,
-  //   this_year, last_year, last_3d, last_7d, last_14d, last_28d, last_30d
   const META_DATE_PRESETS: Record<string, string> = {
-    today:        "today",
-    yesterday:    "yesterday",
-    last_7_days:  "last_7_days",
-    last_30_days: "last_30_days",
-    this_month:   "this_month",
-    last_month:   "last_month",
-    this_quarter: "this_quarter",
-    last_quarter: "last_quarter",
-    this_year:    "this_year",
+    today: "today", yesterday: "yesterday", last_7_days: "last_7_days",
+    last_30_days: "last_30_days", this_month: "this_month", last_month: "last_month",
+    this_quarter: "this_quarter", last_quarter: "last_quarter", this_year: "this_year",
   };
 
   const dateParams: Record<string, string> =
     period === "custom" && custom_from && custom_to
       ? { time_range: JSON.stringify({ since: custom_from, until: custom_to }) }
       : { date_preset: META_DATE_PRESETS[period] ?? "today" };
-
-  // ── 5. Call Meta Marketing API (branched by level) ──────────────
 
   async function callMeta(fields: string, extra: Record<string, string> = {}): Promise<unknown> {
     const p = new URLSearchParams({ fields, access_token: accessToken, ...dateParams, ...extra });
@@ -195,8 +207,6 @@ Deno.serve(async (req: Request) => {
     }
     const body = await res.json();
     if (body.error) {
-      // Error code 190 (OAuthException) = token expired, invalid, or revoked.
-      // Throw a typed error so each calling branch can handle it uniformly.
       if (body.error.code === 190 || body.error.type === "OAuthException") {
         throw Object.assign(new Error("TOKEN_EXPIRED"), { isTokenExpired: true });
       }
@@ -205,7 +215,15 @@ Deno.serve(async (req: Request) => {
     return body;
   }
 
-  // ── level = "campaign": per-campaign breakdown ──────────────────
+  const actionMaps = (row: Record<string, unknown>) => {
+    const acts: Record<string, string> = {};
+    for (const a of (row.actions as {action_type:string;value:string}[]) ?? []) acts[a.action_type] = a.value;
+    const cpa: Record<string, string> = {};
+    for (const a of (row.cost_per_action_type as {action_type:string;value:string}[]) ?? []) cpa[a.action_type] = a.value;
+    return { acts, cpa };
+  };
+
+  // ── level = "campaign" ─────────────────────────────────────────
   if (level === "campaign") {
     let metaBody: Record<string, unknown>;
     try {
@@ -224,16 +242,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const campaigns = ((metaBody.data as Record<string, unknown>[]) ?? []).map(c => {
-      const acts: Record<string, string> = {};
-      for (const a of (c.actions as {action_type:string;value:string}[]) ?? []) acts[a.action_type] = a.value;
-      const cpa: Record<string, string> = {};
-      for (const a of (c.cost_per_action_type as {action_type:string;value:string}[]) ?? []) cpa[a.action_type] = a.value;
-      // Meta returns results/cost_per_result as [{action_type, value}] arrays
-      const resultsArr     = (c.results         as {action_type:string;value:string}[]) ?? [];
-      const cprArr         = (c.cost_per_result  as {action_type:string;value:string}[]) ?? [];
-      const resultsVal     = resultsArr[0]?.value ?? null;
-      const costPerResult  = cprArr[0]?.value     ?? null;
-      // Messaging: conversations started (7-day click window)
+      const { acts, cpa } = actionMaps(c);
+      const picked = pickResult(c, acts, cpa);
       const MSG_KEY = "onsite_conversion.messaging_conversation_started_7d";
       return {
         campaign_id:      c.campaign_id,
@@ -248,8 +258,9 @@ Deno.serve(async (req: Request) => {
         frequency:        c.frequency,
         date_start:       c.date_start,
         date_stop:        c.date_stop,
-        results:          resultsVal,
-        cost_per_result:  costPerResult,
+        results:          picked.results,
+        cost_per_result:  picked.cost_per_result,
+        result_basis:     picked.result_basis,
         messages:         acts[MSG_KEY] ?? null,
         cost_per_message: cpa[MSG_KEY]  ?? null,
         "actions:link_click":       acts["link_click"] ?? null,
@@ -261,7 +272,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ campaigns, currency: account.currency });
   }
 
-  // ── level = "daily": time-series (one row per day) ──────────────
+  // ── level = "daily" ───────────────────────────────────────────
   if (level === "daily") {
     let metaBody: Record<string, unknown>;
     try {
@@ -289,7 +300,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ daily, currency: account.currency });
   }
 
-  // ── level = "platform": publisher_platform breakdown ────────────────
+  // ── level = "platform" ───────────────────────────────────────
   if (level === "platform") {
     const PLATFORM_FIELDS = "spend,impressions,reach,clicks,actions,cost_per_action_type";
     let platBody: Record<string, unknown>;
@@ -301,24 +312,23 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: err.message }, 502);
     }
     const platforms = ((platBody.data as Record<string, unknown>[]) ?? []).map(p => {
-      const acts: Record<string, string> = {};
-      for (const a of (p.actions as {action_type: string; value: string}[]) ?? []) acts[a.action_type] = a.value;
-      const cpa: Record<string, string> = {};
-      for (const a of (p.cost_per_action_type as {action_type: string; value: string}[]) ?? []) cpa[a.action_type] = a.value;
+      const { acts, cpa } = actionMaps(p);
+      const picked = pickResult(p, acts, cpa);
       return {
         platform:        p.publisher_platform as string,
         spend:           p.spend,
         impressions:     p.impressions,
         reach:           p.reach,
         clicks:          p.clicks,
-        results:         acts["link_click"] ?? acts["omni_purchase"] ?? null,
-        cost_per_result: cpa["link_click"]  ?? cpa["omni_purchase"]  ?? null,
+        results:         picked.results,
+        cost_per_result: picked.cost_per_result,
+        result_basis:    picked.result_basis,
       };
     }).sort((a, b) => parseFloat(String(b.spend ?? 0)) - parseFloat(String(a.spend ?? 0)));
     return jsonResponse({ platforms, currency: account.currency });
   }
 
-  // ── level = "region": geographic breakdown ───────────────────────────
+  // ── level = "region" ─────────────────────────────────────────
   if (level === "region") {
     const REGION_FIELDS = "spend,impressions,reach,clicks,actions,cost_per_action_type";
     let regBody: Record<string, unknown>;
@@ -330,22 +340,26 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: err.message }, 502);
     }
     const regions = ((regBody.data as Record<string, unknown>[]) ?? []).map(r => {
-      const acts: Record<string, string> = {};
-      for (const a of (r.actions as {action_type: string; value: string}[]) ?? []) acts[a.action_type] = a.value;
-      const cpa: Record<string, string> = {};
-      for (const a of (r.cost_per_action_type as {action_type: string; value: string}[]) ?? []) cpa[a.action_type] = a.value;
+      const { acts, cpa } = actionMaps(r);
+      const picked = pickResult(r, acts, cpa);
       return {
         region:          r.region as string,
         spend:           r.spend,
         impressions:     r.impressions,
-        results:         acts["link_click"] ?? acts["omni_purchase"] ?? null,
-        cost_per_result: cpa["link_click"]  ?? cpa["omni_purchase"]  ?? null,
+        results:         picked.results,
+        cost_per_result: picked.cost_per_result,
+        result_basis:    picked.result_basis,
       };
     }).sort((a, b) => parseFloat(String(b.spend ?? 0)) - parseFloat(String(a.spend ?? 0)));
     return jsonResponse({ regions, currency: account.currency });
   }
 
-  // ── level = "ad": per-ad breakdown ──────────────────────────────────
+  // ── level = "ad" ───────────────────────────────────────────
+  // Deliberately does NOT request results/cost_per_result: asking for them at
+  // this level makes Meta return every ad in the account, including ones with
+  // no delivery, which pushed the ads that actually spent past the row limit
+  // and emptied the Best Creatives card. The priority list above supplies the
+  // result instead.
   if (level === "ad") {
     const AD_FIELDS = "ad_id,ad_name,spend,impressions,clicks,actions,cost_per_action_type";
     let adBody: Record<string, unknown>;
@@ -357,24 +371,23 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: err.message }, 502);
     }
     const ads = ((adBody.data as Record<string, unknown>[]) ?? []).map(a => {
-      const acts: Record<string, string> = {};
-      for (const act of (a.actions as {action_type: string; value: string}[]) ?? []) acts[act.action_type] = act.value;
-      const cpa: Record<string, string> = {};
-      for (const act of (a.cost_per_action_type as {action_type: string; value: string}[]) ?? []) cpa[act.action_type] = act.value;
+      const { acts, cpa } = actionMaps(a);
+      const picked = pickResult(a, acts, cpa);
       return {
         ad_id:           a.ad_id as string,
         ad_name:         a.ad_name as string,
         spend:           a.spend,
         impressions:     a.impressions,
         clicks:          a.clicks,
-        results:         acts["link_click"] ?? acts["omni_purchase"] ?? null,
-        cost_per_result: cpa["link_click"]  ?? cpa["omni_purchase"]  ?? null,
+        results:         picked.results,
+        cost_per_result: picked.cost_per_result,
+        result_basis:    picked.result_basis,
       };
     });
     return jsonResponse({ ads, currency: account.currency });
   }
 
-  // ── level = "billing": billing charges + fund top-ups from account activities ──
+  // ── level = "billing" ───────────────────────────────────────
   if (level === "billing") {
     const BILLING_EVENTS = new Set([
       "ad_account_billing_charge",
@@ -426,7 +439,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ transactions: txs, currency: account.currency });
   }
 
-  // ── level = "account" (default): existing aggregate behaviour ───
+  // ── level = "account" (default) ────────────────────────────────
   let metaRes: Response;
   let balanceRes: Response;
   let campaignsRes: Response;
@@ -438,7 +451,6 @@ Deno.serve(async (req: Request) => {
       ...dateParams,
     });
     const campaignFilter = JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]);
-    // Fetch insights + account balance + active campaign budgets in parallel
     [metaRes, balanceRes, campaignsRes] = await Promise.all([
       fetch(`${META_API}/act_${account.meta_account_id}/insights?${params.toString()}`),
       fetch(`${META_API}/act_${account.meta_account_id}?fields=balance,currency,spend_cap,amount_spent,funding_source_details{display_string,type}&access_token=${accessToken}`),
@@ -453,7 +465,6 @@ Deno.serve(async (req: Request) => {
   const balanceBody = await balanceRes.json().catch(() => ({}));
   const campaignsBody = await campaignsRes.json().catch(() => ({}));
 
-  // balance is returned in cents by Meta — divide by 100 for display
   const accountBalance = balanceBody.balance != null
     ? parseFloat(balanceBody.balance) / 100
     : null;
@@ -461,7 +472,6 @@ Deno.serve(async (req: Request) => {
     ? parseFloat(balanceBody.spend_cap) / 100
     : null;
 
-  // Sum daily budgets of all active campaigns (also in cents)
   const totalDailyBudgetCents = ((campaignsBody.data ?? []) as { daily_budget?: string }[])
     .filter(c => c.daily_budget && parseInt(c.daily_budget) > 0)
     .reduce((sum, c) => sum + parseInt(c.daily_budget!), 0);
@@ -469,7 +479,6 @@ Deno.serve(async (req: Request) => {
 
   if (metaBody.error) {
     console.error("Meta API error:", metaBody.error);
-    // Error code 190 (OAuthException) = token expired or revoked
     if (metaBody.error.code === 190 || metaBody.error.type === "OAuthException") {
       if (bm?.id) await markTokenExpired(bm.id);
       return jsonResponse({ error: "TOKEN_EXPIRED" }, 401);
@@ -479,15 +488,19 @@ Deno.serve(async (req: Request) => {
 
   const insight = metaBody.data?.[0] ?? {};
 
-  // ── 6. Normalize: build action lookup maps ──
   const actions: Record<string, string> = {};
   for (const a of insight.actions ?? []) actions[a.action_type] = a.value;
 
   const costPerAction: Record<string, string> = {};
   for (const a of insight.cost_per_action_type ?? []) costPerAction[a.action_type] = a.value;
 
-  // ── 7. Fetch Business Suite page messages (total conversations, not just ad-attributed) ──
-  // Converts period → actual YYYY-MM-DD dates for the Page Insights API
+  const accountPicked = pickResult(insight, actions, costPerAction);
+
+  // Awareness-side metrics, for the proposal benchmarks.
+  const videoViews    = firstOf(actions, VIDEO_VIEW_KEYS);
+  const profileVisits = firstOf(actions, PROFILE_VISIT_KEYS);
+  const follows       = firstOf(actions, FOLLOW_KEYS);
+
   function periodToDates(p: string, cf?: string, ct?: string): { since: string; until: string } {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -503,7 +516,7 @@ Deno.serve(async (req: Request) => {
       case "this_quarter": { const q = Math.floor(now.getMonth() / 3); return { since: fmt(new Date(now.getFullYear(), q * 3, 1)), until: today }; }
       case "this_year":    return { since: fmt(new Date(now.getFullYear(), 0, 1)), until: today };
       case "custom":       return { since: cf ?? today, until: ct ?? today };
-      default:             return { since: today, until: today }; // "today"
+      default:             return { since: today, until: today };
     }
   }
 
@@ -511,33 +524,23 @@ Deno.serve(async (req: Request) => {
   let messageSource: "business_suite" | "meta_ads" | null = null;
   const _debugPageInsights: Record<string, unknown> = {};
 
-  // page_messages_new_conversation_unique has a 24-48h reporting delay on Facebook's side.
-  // For "today", this metric is always 0 regardless of actual conversations.
-  // Skip the BM lookup entirely for "today" — saves ~1-2s of API calls and avoids showing 0.
   const skipPageInsights = (period === "today");
   if (skipPageInsights) {
     console.log("Skipping page insights for 'today' period (24-48h delay on this metric)");
   }
 
   try {
-    // App Access Token — same app used for meta-oauth.
-    // App tokens can query BM pages regardless of what scopes the stored user/system-user token has.
     const META_APP_ID     = Deno.env.get("META_APP_ID");
     const META_APP_SECRET = Deno.env.get("META_APP_SECRET");
     const appToken = (META_APP_ID && META_APP_SECRET) ? `${META_APP_ID}|${META_APP_SECRET}` : null;
     console.log("App token available:", !!appToken);
 
-    // Helper: fetch page insights. Tries to get a page-specific access token first,
-    // since page insights require a user token or page token (not an app token).
     const fetchPageInsights = async (pageId: string): Promise<number | null> => {
       const { since, until } = periodToDates(period, custom_from, custom_to);
       _debugPageInsights.pageId = pageId;
       _debugPageInsights.since  = since;
       _debugPageInsights.until  = until;
 
-      // Exchange for a page access token.
-      // Try user token first, then App Token (APP_ID|APP_SECRET) as fallback —
-      // the App Token can get a page token for any page that has the app installed.
       let pageToken = accessToken;
       try {
         const ptRes  = await fetch(`${META_API}/${pageId}?fields=access_token&access_token=${accessToken}`);
@@ -584,7 +587,6 @@ Deno.serve(async (req: Request) => {
     };
 
     if (!skipPageInsights) {
-      // 7a. Use stored facebook_page_id if available (fastest path, no discovery needed)
       const storedPageId = (account as any).facebook_page_id as string | undefined;
       if (storedPageId) {
         console.log("Using stored page ID:", storedPageId);
@@ -594,23 +596,19 @@ Deno.serve(async (req: Request) => {
       }
 
       if (pageMessages === null) {
-      // 7b. Get Business ID from the ad account
       const bizRes  = await fetch(`${META_API}/act_${account.meta_account_id}?fields=business&access_token=${accessToken}`);
       const bizData = await bizRes.json();
       const businessId = bizData.business?.id as string | undefined;
       console.log("BM ID:", businessId ?? "none");
 
       if (businessId) {
-        // Use App Token for BM page lookups — broadest access, no user-scope dependency
         const lookupToken = appToken ?? accessToken;
 
-        // 7b-1. owned_pages via App Token
         const ownedRes  = await fetch(`${META_API}/${businessId}/owned_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
         const ownedData = await ownedRes.json();
         let pageId = ownedData.data?.[0]?.id as string | undefined;
         console.log("owned_pages:", ownedData.data?.length ?? 0, "| error:", ownedData.error?.message ?? "none");
 
-        // 7b-2. client_pages
         if (!pageId) {
           const clientRes  = await fetch(`${META_API}/${businessId}/client_pages?fields=id,name&limit=10&access_token=${lookupToken}`);
           const clientData = await clientRes.json();
@@ -618,7 +616,6 @@ Deno.serve(async (req: Request) => {
           console.log("client_pages:", clientData.data?.length ?? 0, "| error:", clientData.error?.message ?? "none");
         }
 
-        // 7b-3. /pages on the business
         if (!pageId) {
           const bpRes  = await fetch(`${META_API}/${businessId}/pages?fields=id,name&limit=10&access_token=${lookupToken}`);
           const bpData = await bpRes.json();
@@ -633,7 +630,6 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // 7c. Final fallback: /me/accounts — pages the token user directly administers
       if (pageMessages === null) {
         const meRes  = await fetch(`${META_API}/me/accounts?fields=id,name&limit=10&access_token=${accessToken}`);
         const meData = await meRes.json();
@@ -649,18 +645,16 @@ Deno.serve(async (req: Request) => {
           }
         }
       }
-      } // end if (pageMessages === null) BM discovery block
+      }
     }
   } catch (e) {
     console.log("Page messages fetch failed:", e);
   }
 
-  // Determine final message source for dashboard labeling
   if (messageSource === null) {
     messageSource = actions["onsite_conversion.messaging_conversation_started_7d"] != null ? "meta_ads" : null;
   }
 
-  // ── 8. Return shape that the dashboard's parse logic expects ──
   const adSpend = parseFloat(insight.spend ?? "0") || 0;
   return jsonResponse({
     ad_entity: {
@@ -669,7 +663,6 @@ Deno.serve(async (req: Request) => {
       date_start: insight.date_start,
       date_stop: insight.date_stop,
 
-      // Account balance (prepaid fund remaining)
       account_balance:  accountBalance,
       spend_cap:        spendCap,
       daily_budget:     totalDailyBudget,
@@ -677,10 +670,8 @@ Deno.serve(async (req: Request) => {
       funding_source:   balanceBody.funding_source_details?.display_string ?? null,
       lifetime_spent:   balanceBody.amount_spent != null ? parseFloat(balanceBody.amount_spent) / 100 : null,
 
-      // Primary spend
       amount_spent: insight.spend,
 
-      // Reach & engagement
       impressions: insight.impressions,
       reach: insight.reach,
       clicks: insight.clicks,
@@ -689,30 +680,39 @@ Deno.serve(async (req: Request) => {
       ctr: insight.ctr,
       frequency: insight.frequency,
 
-      // Results (messages / leads / purchases — context-dependent)
-      results:          insight.results?.[0]?.value         ?? null,
-      cost_per_result:  insight.cost_per_result?.[0]?.value ?? null,
+      results:          accountPicked.results,
+      cost_per_result:  accountPicked.cost_per_result,
+      result_basis:     accountPicked.result_basis,
 
-      // Business Suite total messages (page_messages_new_conversation_unique) — primary source
-      // Falls back to ad-attributed 7d-click action if page insights unavailable
       page_messages:    pageMessages,
       messages:         actions["onsite_conversion.messaging_conversation_started_7d"] ?? null,
-      message_source:   messageSource,   // "business_suite" | "meta_ads" | null
+      message_source:   messageSource,
       cost_per_message: pageMessages && adSpend ? String(adSpend / pageMessages) : (costPerAction["onsite_conversion.messaging_conversation_started_7d"] ?? null),
 
-      // Action breakdowns
       "actions:like":             actions["like"]            ?? null,
       "actions:page_engagement":  actions["page_engagement"] ?? null,
       "actions:comment":          actions["comment"]         ?? null,
       "actions:post_reaction":    actions["post_reaction"]   ?? null,
       "actions:link_click":       actions["link_click"]      ?? insight.inline_link_clicks ?? null,
 
-      // Cost per action
+      // Awareness-side metrics. Each carries the action type it was read from,
+      // because Meta's naming varies by placement and API version — a null with
+      // no basis means nothing of that kind was tracked, not that it was zero.
+      "actions:video_view":    videoViews.value,
+      "actions:profile_visit": profileVisits.value,
+      "actions:follow":        follows.value,
+      video_view_basis:    videoViews.basis,
+      profile_visit_basis: profileVisits.basis,
+      follow_basis:        follows.basis,
+
       "cost_per_action_type:page_engagement": costPerAction["page_engagement"] ?? null,
       "cost_per_action_type:like":            costPerAction["like"] ?? null,
       "cost_per_action_type:omni_purchase":   costPerAction["omni_purchase"] ?? costPerAction["offsite_conversion.fb_pixel_purchase"] ?? null,
       "actions:omni_purchase":               actions["omni_purchase"] ?? actions["offsite_conversion.fb_pixel_purchase"] ?? null,
     },
+    // Every action type Meta returned, so a metric missing above can be
+    // identified from real data rather than guessed at.
+    actions_all: actions,
     currency: account.currency,
     _debug_page_insights: _debugPageInsights,
   });
