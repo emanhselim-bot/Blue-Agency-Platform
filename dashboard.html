@@ -5682,21 +5682,23 @@
     //
     // Writes into the inputs rather than the database, so nothing is committed
     // until Save is pressed and a wrong pull can simply be discarded.
-    // Which real ad accounts a monthly-history scope covers. A single account
-    // is itself; a saved combination is its members; All Accounts is every
-    // Meta account currently visible.
-    function _mhScopeAccounts() {
-      const key = _mhScopeKey;
+    // Which real ad accounts a selection covers. A single account is itself, a
+    // saved combination is its members, All Accounts is everything visible.
+    // metaOnly because monthly history is Meta + Shopify; Compare handles
+    // Google Ads too.
+    function _scopeAccounts(key, { metaOnly = false } = {}) {
       if (!key) return [];
-      if (key === '__all__') {
-        return Object.values(accountMap).filter(a => !a.type);
-      }
+      const keep = a => a && (!metaOnly || !a.type);
+      if (key === '__all__') return Object.values(accountMap).filter(keep);
       if (String(key).startsWith('__group__')) {
         const g = _acctGroups.find(x => '__group__' + x.id === key);
-        return (g?.account_ids || []).map(id => accountMap[id]).filter(a => a && !a.type);
+        return (g?.account_ids || []).map(id => accountMap[id]).filter(keep);
       }
-      const one = accountMap[key];
-      return (one && !one.type) ? [one] : [];
+      return keep(accountMap[key]) ? [accountMap[key]] : [];
+    }
+
+    function _mhScopeAccounts() {
+      return _scopeAccounts(_mhScopeKey, { metaOnly: true });
     }
 
     async function mhFillFromLive() {
@@ -6001,9 +6003,44 @@
       };
     }
 
+    // One period, across every account in the selection. Rates are recomputed
+    // from the totals: averaging a percentage across accounts of different
+    // sizes gives a number that belongs to nobody.
+    async function cmpFetchScope(accounts, period) {
+      const parts = await Promise.all(accounts.map(a =>
+        cmpFetch(a, period).catch(() => null)));
+      const ok = parts.filter(Boolean);
+      if (!ok.length) return null;
+      if (ok.length === 1) return ok[0];
+
+      const sum   = k => ok.reduce((s, d) => s + (Number(d[k]) || 0), 0);
+      const maybe = k => ok.every(d => d[k] == null) ? null : sum(k);
+      const spend = sum('spend'), impressions = sum('impressions'), clicks = sum('clicks');
+      const results = maybe('results');
+      const currencies = [...new Set(ok.map(d => d.currency))];
+      return {
+        currency: currencies.length === 1 ? currencies[0] : '',
+        mixedCurrency: currencies.length > 1,
+        spend, impressions, clicks,
+        reach: maybe('reach'),
+        results,
+        ctr: impressions ? (clicks / impressions) * 100 : null,
+        cpc: clicks ? spend / clicks : null,
+        cpm: impressions ? (spend / impressions) * 1000 : null,
+        costPerResult: results ? spend / results : null,
+      };
+    }
+
     async function runCompare() {
-      const account = accountMap[sel.value];
-      if (!account) { alert('Select an account first.'); return; }
+      // A combined selection used to be refused outright — "Select an account
+      // first" even though one was selected. It now compares the whole
+      // selection, the same way the dashboard itself aggregates it.
+      const accounts = _scopeAccounts(sel.value);
+      if (!accounts.length) { alert('Select an account first.'); return; }
+      const account = accounts[0];
+      const scopeName = accounts.length > 1
+        ? `${sel.options[sel.selectedIndex]?.textContent.trim()} · ${accounts.length} accounts`
+        : (account.account_name || '');
       const periods = [document.getElementById('cmp-a').value, document.getElementById('cmp-b').value, document.getElementById('cmp-c').value]
         .filter(Boolean);
       if (periods.length < 2) { alert('Pick at least two periods to compare.'); return; }
@@ -6013,7 +6050,9 @@
 
       let data;
       try {
-        data = await Promise.all(periods.map(p => cmpFetch(account, p)));
+        data = await Promise.all(periods.map(p => cmpFetchScope(accounts, p)));
+        if (data.every(d => !d)) throw new Error('No data came back for those periods.');
+        data = data.map(d => d || { currency: '', spend: 0, impressions: 0, clicks: 0 });
       } catch (e) {
         out.innerHTML = `<div class="cmp-wrap"><div class="cmp-loading">⚠️ ${escHtml(e.message || String(e))}</div></div>`;
         return;
@@ -6057,7 +6096,13 @@
           return `<tr><td>${label}</td>${vals.map((v, i) => `
             <td class="${best != null && v === best && valid.length > 1 ? 'cmp-best' : ''}">${f(v)}${i > 0 ? delta(vals[0], v, hib) : ''}</td>`).join('')}</tr>`;
         }).join('')}</tbody></table></div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Green = best value across periods · % change is versus the first (base) period · ${escHtml(account.account_name || '')}</div>`;
+        <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Green = best value across periods · % change is versus the first (base) period · ${escHtml(scopeName)}${
+          data.some(d => d.mixedCurrency)
+            ? ' · <span style="color:#F59E0B">these accounts bill in different currencies, so money is added without conversion</span>'
+            : ''}${
+          accounts.length > 1
+            ? ' · reach is summed and so counts anyone in more than one account twice'
+            : ''}</div>`;
     }
 
     const PERIOD_LABELS = {
