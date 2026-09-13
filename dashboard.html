@@ -7230,7 +7230,14 @@
 
     document.addEventListener('click', e => {
       if (!_rcOpen) return;
-      if (e.target.closest('#rc-pop') || e.target.closest('#rc-trigger')) return;
+      // Changing month or picking a preset redraws the popup, which detaches
+      // the element that was clicked. Asking that detached element whether it
+      // sits inside the popup answers no, so this listener used to decide the
+      // click was outside and shut the calendar. composedPath is captured when
+      // the event is dispatched and still holds the original ancestors.
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      const inPath = path.some(n => n && (n.id === 'rc-pop' || n.id === 'rc-trigger'));
+      if (inPath || e.target.closest?.('#rc-pop') || e.target.closest?.('#rc-trigger')) return;
       rcClose();
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && _rcOpen) rcClose(); });
