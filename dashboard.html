@@ -11743,17 +11743,26 @@
     const _PP_PLACEMENT = { facebook: 'fb', instagram: 'ig' };
     const _ppPlacement = () => _PP_PLACEMENT[_pp.platform] || null;
 
+    // Grouped: consumer looks, then the medical block, then everything else.
+    // Keys are what is stored, so an existing key is never renamed — `clinic`
+    // already tags four accounts, and changing it would orphan them. Only its
+    // label moved to Hospital / Clinic.
     const PP_BUSINESS = [
-      ['fashion',    '👗 Fashion & apparel'],
-      ['beauty',     '💄 Skincare, beauty & personal care'],
-      ['pharma',     '💊 Pharma & medical products'],
-      ['clinic',     '🏥 Clinics & healthcare services'],
-      ['education',  '🎓 Education & academies'],
-      ['automotive', '🚗 Automotive'],
-      ['food',       '🍽 Food & beverage'],
-      ['home',       '🏠 Home & lifestyle'],
-      ['services',   '🛠 Other services'],
-      ['other',      '📦 Something else'],
+      ['fashion',       '👗 Fashion & apparel'],
+      ['beauty',        '💄 Skincare, beauty & personal care'],
+      ['haircare',      '💇 Hair care'],
+      ['pharma',        '💊 Pharma & medical products'],
+      ['otc',           '🧪 OTC medication'],
+      ['vitamins',      '🌿 Vitamins & supplements'],
+      ['medical_broad', '🩺 Medical · broad audience'],
+      ['hcp',           '👨‍⚕️ HCPs · healthcare professionals'],
+      ['clinic',        '🏥 Hospital / Clinic'],
+      ['education',     '🎓 Education & academies'],
+      ['automotive',    '🚗 Automotive'],
+      ['food',          '🍽 Food & beverage'],
+      ['home',          '🏠 Home & lifestyle'],
+      ['services',      '🛠 Other services'],
+      ['other',         '📦 Something else'],
     ];
     const PP_BUSINESS_LABEL = Object.fromEntries(PP_BUSINESS);
 
