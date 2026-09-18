@@ -75,15 +75,31 @@ Deno.serve(async (req: Request) => {
   if (!tracker || !tracker.is_active) return json({ error: "unknown tracker" }, 404);
   if (!tracker.webhook_secret) return json({ error: "no secret set for this tracker" }, 403);
 
+  // WooCommerce checks a new webhook before saving it, and that check is not a
+  // real delivery: depending on the version it arrives as an empty body or as
+  // {"webhook_id": N}, and it is never signed. Rejecting it makes the shop
+  // report the webhook as broken and eventually switch it off, so it is
+  // answered before the secret is checked. Nothing is written and nothing is
+  // read back, so an unsigned ping learns only that the tracker exists — which
+  // its own site key already tells it.
+  // WooCommerce's deliver_ping() posts `webhook_id=N` form-encoded, not JSON,
+  // so this has to be caught before any parsing.
+  if (!raw.trim() || /^webhook_id=/.test(raw.trim())) return json({ ping: true });
+
+  let body: unknown;
+  try { body = JSON.parse(raw); } catch { return json({ error: "bad json" }, 400); }
+
+  const asPing = body as { webhook_id?: unknown; id?: unknown; total?: unknown };
+  if (asPing && asPing.webhook_id != null && asPing.id == null && asPing.total == null) {
+    return json({ ping: true });
+  }
+
   // Either the shared secret outright, or WooCommerce's signature over the body.
   const given = req.headers.get("x-bluead-secret");
   const sig   = req.headers.get("x-wc-webhook-signature");
   let ok = given != null && given === tracker.webhook_secret;
   if (!ok && sig) ok = sig === await hmacB64(tracker.webhook_secret, raw);
   if (!ok) return json({ error: "bad secret" }, 401);
-
-  let body: unknown;
-  try { body = JSON.parse(raw); } catch { return json({ error: "bad json" }, 400); }
 
   const list: Record<string, unknown>[] = Array.isArray((body as { orders?: unknown }).orders)
     ? (body as { orders: Record<string, unknown>[] }).orders
