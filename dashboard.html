@@ -9584,7 +9584,13 @@
         const since = _webRangeStart(), until = _webRangeEnd();
         try {
           if (account.site_tracker_id) {
-            const w = await callEdgeFunction('site-data', { tracker_id: account.site_tracker_id, since, until });
+            // report_currency converts what the site charged into what this
+            // account reports in. A school charging AED against an EGP account
+            // would otherwise show 144 labelled as EGP — out by fourteenfold.
+            const w = await callEdgeFunction('site-data', {
+              tracker_id: account.site_tracker_id, since, until,
+              report_currency: (account.currency || '').trim() || undefined,
+            });
             if (!w.error) {
               shopifyOrders = w.orders; revenue = w.revenue; pieces = w.pieces;
               sessions = w.sessions; conversionRate = w.conversion_rate * 100;
