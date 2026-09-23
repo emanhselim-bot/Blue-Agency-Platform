@@ -13617,10 +13617,25 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // They now live in manual_kpis, keyed exactly as before so what is
     // already typed carries over untouched.
     // ══════════════════════════════════════════════════════════════
-    let _mkValues = {}, _mkLoadedFor = null;
+    let _mkValues = {}, _mkLegacy = {}, _mkLoadedFor = null, _mkLegacyFor = null;
 
-    // One definition of the key, so the loader and the renderer can't drift.
+    // Figures are per account. They used to be keyed by agency and period only,
+    // so every account in a workspace shared one set: type a figure on one
+    // client, open another for the same month, and the same number was there --
+    // and whichever was typed last won for both.
     function _mkPeriodKey() {
+      return `${currentOrgId}-${currentAgencyId}-${_mkScope()}-` +
+             (currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod);
+    }
+
+    // The account, group or all-accounts selection the figures belong to.
+    function _mkScope() { return (sel?.value || '__none__'); }
+
+    // The key as it was before figures were tied to an account. Still read, so
+    // nothing already typed disappears; the moment someone retypes a figure on
+    // a specific account it is saved against that account and stops showing on
+    // the others.
+    function _mkLegacyKey() {
       return `${currentOrgId}-${currentAgencyId}-` +
              (currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod);
     }
@@ -13628,20 +13643,41 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function mkLoad(periodKey) {
       if (!currentOrgId || !periodKey) return;
       _mkLoadedFor = periodKey;
-      const { data, error } = await sb.from('manual_kpis')
-        .select('values').eq('organization_id', currentOrgId).eq('period_key', periodKey).maybeSingle();
-      _mkValues = (!error && data?.values) ? data.values : {};
+      const legacyKey = _mkLegacyKey();
+      _mkLegacyFor = legacyKey;
+      const [own, legacy] = await Promise.all([
+        sb.from('manual_kpis').select('values')
+          .eq('organization_id', currentOrgId).eq('period_key', periodKey).maybeSingle(),
+        sb.from('manual_kpis').select('values')
+          .eq('organization_id', currentOrgId).eq('period_key', legacyKey).maybeSingle(),
+      ]);
+      _mkValues = (!own.error && own.data?.values) ? own.data.values : {};
+      _mkLegacy = (!legacy.error && legacy.data?.values) ? legacy.data.values : {};
     }
 
-    // The browser copy is still read, so nothing typed before this existed
-    // disappears — the shared value simply wins once there is one.
+    // This account's own figure wins. Falling back to the shared one keeps what
+    // was typed before visible, and then to this browser's copy for anything
+    // that predates the figures being stored at all.
     function _mkGet(key) {
       if (Object.prototype.hasOwnProperty.call(_mkValues, key)) {
         const v = _mkValues[key];
         return v == null ? null : String(v);
       }
+      const legacy = _mkLegacyName(key);
+      if (legacy && Object.prototype.hasOwnProperty.call(_mkLegacy, legacy)) {
+        const v = _mkLegacy[legacy];
+        return v == null ? null : String(v);
+      }
       return localStorage.getItem(key);
     }
+
+    // Same figure, named the old way, so the old record can still be found.
+    function _mkLegacyName(key) {
+      if (!_mkLoadedFor || !_mkLegacyFor) return null;
+      return key.endsWith(_mkLoadedFor) ? key.slice(0, -_mkLoadedFor.length) + _mkLegacyFor : null;
+    }
+
+    let _mkDirty = {};
 
     function _mkSet(key, value) {
       _mkValues[key] = value;
@@ -13650,13 +13686,21 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       try { localStorage.setItem(key, String(value)); } catch (e) {}
       if (!_mkLoadedFor) return;
       const periodKey = _mkLoadedFor;
+      // Only the figures actually edited are sent. Sending the whole set, as
+      // this used to, meant a second person's save overwrote the first's with
+      // a copy loaded before those edits existed -- the numbers looked right
+      // until the page was refreshed.
+      _mkDirty[key] = value;
       Pending.stage('kpi', 'manual:' + periodKey, 'Manual figures', async () => {
-        const res = await sb.from('manual_kpis').upsert({
-          organization_id: currentOrgId, period_key: periodKey,
-          values: _mkValues, updated_by: currentUser?.id || null,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'organization_id,period_key' }).select('id');
-        if (!res.error && res.data?.length) {
+        const patch = { ..._mkDirty };
+        const res = await sb.rpc('manual_kpi_merge', {
+          p_org: currentOrgId, p_period_key: periodKey, p_patch: patch,
+        });
+        if (!res.error) {
+          // The server returns the merged set, so the page holds what is
+          // actually stored rather than its own guess at it.
+          if (res.data && typeof res.data === 'object') _mkValues = res.data;
+          Object.keys(patch).forEach(k => { delete _mkDirty[k]; });
           logActivity('change', 'Saved manual figures', { module: 'media', entityType: 'ad_account' });
         }
         return res;
