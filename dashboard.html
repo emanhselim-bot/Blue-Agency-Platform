@@ -9414,6 +9414,9 @@
       }
     }
     let _webSource = null;   // 'Website' | 'GA4' when the numbers do not come from Shopify
+    // False when the tracker on this account has never recorded a sale, so its
+    // zero means "never able to look" rather than "nothing sold".
+    let _webMeasuresOrders = true;
 
     function _webRangeStart() {
       const d = new Date(), f = x => x.toISOString().slice(0, 10);
@@ -9441,6 +9444,7 @@
 
     async function _loadDataInner() {
       _webSource = null;
+      _webMeasuresOrders = true;
       const accountDbId = sel.value;
       if (!accountDbId) return;
       // Must land before anything renders — the cards read these figures.
@@ -9585,6 +9589,7 @@
               shopifyOrders = w.orders; revenue = w.revenue; pieces = w.pieces;
               sessions = w.sessions; conversionRate = w.conversion_rate * 100;
               _webSource = 'Website';
+              if (w.measures_orders === false) _webMeasuresOrders = false;
             }
           } else if (account.ga4_property_id) {
             const g = await callEdgeFunction('ga4-site-data', {
@@ -9741,7 +9746,13 @@
         // zeros. Zero orders AND zero sessions means nothing was measured, not
         // that nothing sold; zero orders with real sessions is a true zero and
         // must be left alone.
-        const _nothingMeasured = !sessions;
+        //
+        // Unless the tracker cannot see sales at all. A Teachable school blocks
+        // custom code on its checkout and thank-you pages, so it reports real
+        // visits and zero orders for ever. Read as a true zero, that discards
+        // the figures typed into Monthly history on the strength of a number
+        // that only means the tracker was never allowed to look.
+        const _nothingMeasured = !sessions || !_webMeasuresOrders;
         const _missing = (v) => v == null || (v === 0 && _nothingMeasured);
 
         if (_missing(shopifyOrders) && _o != null) { shopifyOrders = _o; _webSource = 'Recorded'; }
