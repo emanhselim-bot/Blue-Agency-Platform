@@ -14537,6 +14537,163 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
     }
 
+    // ── Notion sheets: test a link, or pull the figures in ───────────────────
+    // The media buying team fills a Notion sheet per client every day and never
+    // retypes it here, so recorded months read as empty. These read that sheet.
+    //
+    // Fill-blanks-only is enforced server-side, not here: a figure already in
+    // Monthly history keeps its value, so pressing Sync twice cannot replace
+    // someone's correction with Notion's number.
+
+    // Mirrors FLOOR_MONTH in the notion-sync function. Older sheets use yet more
+    // column spellings, so they are left out rather than half-read.
+    const NOTION_FLOOR = '2025-01';
+
+    function _notionNote(accountId, html, tone) {
+      const el = document.getElementById('notion-note-' + accountId);
+      if (!el) return;
+      const colour = tone === 'error' ? '#F87171' : tone === 'ok' ? '#4ADE80' : 'var(--text-muted)';
+      el.innerHTML = `<span style="color:${colour}">${html}</span>`;
+    }
+
+    // Turn the function's error codes into something a media buyer can act on.
+    function _notionProblem(r) {
+      const code = r?.error;
+      if (!code) return null;
+      if (code === 'NO_NOTION_TOKEN')
+        return 'Notion is not connected yet — a workspace owner needs to add the Notion integration key in Supabase.';
+      if (code === 'BAD_NOTION_TOKEN')
+        return 'Notion rejected the key. It may have been revoked or regenerated.';
+      if (code === 'NO_NOTION_LINK')  return 'No Notion link on this account yet.';
+      if (code === 'NOT_SHARED')
+        return 'Notion cannot see that page. Open it in Notion → ••• → Connections → add the Blue Ad integration.';
+      if (code === 'NO_DATABASES')
+        return r.note || 'No month sheets found under that link.';
+      return code;
+    }
+
+    // Read the sheet and report what it holds, writing nothing. Uses whatever is
+    // typed in the box rather than what is saved, so a link can be checked
+    // before it is committed.
+    async function notionTest(accountId) {
+      const input = document.getElementById('notion-url-' + accountId);
+      const url = (input?.value || '').trim();
+      if (!url) { _notionNote(accountId, 'Paste a Notion link first.', 'error'); return; }
+
+      _notionNote(accountId, 'Reading Notion…');
+      const r = await callEdgeFunction('notion-sync',
+        { account_id: accountId, url, dry_run: true }, 120000);
+
+      const problem = _notionProblem(r) || _notionProblem(r?.results?.[0]);
+      if (problem) { _notionNote(accountId, escHtml(problem), 'error'); return; }
+
+      const res = r?.results?.[0];
+      if (!res) { _notionNote(accountId, 'No answer from the sync.', 'error'); return; }
+
+      const months = Object.entries(res.months || {});
+      if (!months.length) {
+        _notionNote(accountId,
+          `Found ${res.databases} sheet(s) but no dated rows from ${escHtml(NOTION_FLOOR)} onwards.`, 'error');
+        return;
+      }
+      // Newest month first — that is the one someone is checking.
+      const [mk, m] = months[months.length - 1];
+      // fmtN and fmtM in this file are local to other functions, so format here.
+      const n  = v => Number(v).toLocaleString('en', { maximumFractionDigits: 0 });
+      const n2 = v => Number(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const bits = [
+        m.web_orders    != null ? `${n(m.web_orders)} web orders`    : null,
+        m.web_pieces    != null ? `${n(m.web_pieces)} pieces`        : null,
+        m.msg_orders    != null ? `${n(m.msg_orders)} msg orders`    : null,
+        m.msg_count     != null ? `${n(m.msg_count)} messages`       : null,
+        m.total_revenue != null ? `${n2(m.total_revenue)} revenue`   : null,
+      ].filter(Boolean);
+      _notionNote(accountId,
+        `✓ ${res.databases} month sheet(s), ${res.rows} days, ${months.length} month(s) in range. ` +
+        `${escHtml(mk)}: ${escHtml(bits.join(' · '))}. ` +
+        `<span style="opacity:.75">Nothing written — press Sync to fill blanks.</span>`, 'ok');
+    }
+
+    async function notionSyncOne(accountId) {
+      const input = document.getElementById('notion-url-' + accountId);
+      const url = (input?.value || '').trim();
+      if (!url) { _notionNote(accountId, 'Paste a Notion link first.', 'error'); return; }
+
+      // Save the link first if it was only typed — otherwise a successful sync
+      // would report against a link the account does not actually hold.
+      if (_linkPending[accountId]?.notion_url !== undefined) {
+        const { error } = await sb.from('meta_ad_accounts')
+          .update({ notion_url: url }).eq('id', accountId).eq('organization_id', currentOrgId);
+        if (error) { _notionNote(accountId, escHtml(error.message), 'error'); return; }
+        delete _linkPending[accountId].notion_url;
+        if (!Object.keys(_linkPending[accountId]).length) delete _linkPending[accountId];
+      }
+
+      _notionNote(accountId, 'Syncing…');
+      const r = await callEdgeFunction('notion-sync', { account_id: accountId }, 180000);
+
+      const problem = _notionProblem(r) || _notionProblem(r?.results?.[0]);
+      if (problem) { _notionNote(accountId, escHtml(problem), 'error'); return; }
+
+      const res = r?.results?.[0];
+      if (!res) { _notionNote(accountId, 'No answer from the sync.', 'error'); return; }
+      _notionNote(accountId, escHtml(res.note || 'Done.'), res.filled ? 'ok' : null);
+      logActivity('change', `Synced Notion figures for an account`, {
+        entityType: 'settings', label: 'Notion sync',
+        details: { account: res.account, filled: res.filled, kept: res.kept, months: res.months },
+      });
+    }
+
+    async function notionSyncAll() {
+      const btn = document.getElementById('notion-sync-all-btn');
+      const status = document.getElementById('linked-status');
+      const linked = document.querySelectorAll('[id^="notion-url-"]');
+      let n = 0; linked.forEach(i => { if (i.value.trim()) n++; });
+      if (!n) {
+        if (status) {
+          status.className = 'modal-status error';
+          status.textContent = '✗ No accounts have a Notion link yet.';
+        }
+        return;
+      }
+      if (!confirm(`Read ${n} Notion sheet${n === 1 ? '' : 's'} and fill blank months?\n\n` +
+                   `Figures already in Monthly history are left alone.`)) return;
+
+      if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+      if (status) { status.className = 'modal-status'; status.textContent = `Reading ${n} Notion sheet(s)…`; }
+
+      // One call, long timeout: the function walks each account's page tree, and
+      // Notion is slow enough that a per-account round trip would be worse.
+      const r = await callEdgeFunction('notion-sync', { all: true }, 540000);
+
+      const problem = _notionProblem(r);
+      if (problem) {
+        if (btn) { btn.disabled = false; btn.textContent = '⇊ Sync all Notion'; }
+        if (status) { status.className = 'modal-status error'; status.textContent = '✗ ' + problem; }
+        return;
+      }
+
+      const results = r?.results || [];
+      const failed  = results.filter(x => x.error);
+      const filled  = results.reduce((s, x) => s + (x.filled || 0), 0);
+      const kept    = results.reduce((s, x) => s + (x.kept || 0), 0);
+
+      if (status) {
+        status.className = failed.length ? 'modal-status error' : 'modal-status success';
+        status.textContent =
+          `${failed.length ? '⚠' : '✓'} ${results.length - failed.length} of ${results.length} sheets read · ` +
+          `${filled} blank figure${filled === 1 ? '' : 's'} filled · ${kept} left alone` +
+          (failed.length ? ` · ${failed.length} failed (see each row)` : '');
+      }
+      logActivity('change', 'Synced Notion figures for all linked accounts', {
+        entityType: 'settings', label: 'Notion sync',
+        details: { accounts: results.length, filled, kept, failed: failed.length },
+      });
+
+      if (btn) { btn.disabled = false; btn.textContent = '⇊ Sync all Notion'; }
+      await loadLinkedAccountsTab();     // re-read so every row shows its own note
+    }
+
     async function saveLinkedAccount(metaAccountId, shopifyStoreId, clarityProjectId) {
       const status = document.getElementById('linked-status');
       try {
@@ -14646,7 +14803,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       const [{ data: metaAccs }, { data: stores }, { data: clarityProjs }] = await Promise.all([
         sb.from('meta_ad_accounts_safe')
-          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id')
+          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id, '
+                + 'site_tracker_id, ga4_property_id, notion_url, notion_synced_at, notion_sync_note')
           .eq('organization_id', currentOrgId).eq('is_active', true),
         sb.from('shopify_stores_safe')
           .select('id, shop_name, shop_domain')
@@ -14679,6 +14837,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <input type="search" id="linked-filter" placeholder="Filter accounts…" oninput="linkedFilter(this.value)"
             style="width:190px;padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;
                    background:var(--bg);color:var(--text-main);box-sizing:border-box">
+          <button class="cpm-btn" id="notion-sync-all-btn" onclick="notionSyncAll()"
+            title="Read every linked Notion sheet and fill blank months">⇊ Sync all Notion</button>
           <button class="cpm-btn" id="linked-save-btn" disabled onclick="saveLinkedAccounts()">Save changes</button>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -14689,6 +14849,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <th style="text-align:left;padding:6px 8px 8px">Clarity Project</th>
               <th style="text-align:left;padding:6px 8px 8px">Website Tracker</th>
               <th style="text-align:left;padding:6px 8px 8px">GA4 Property ID</th>
+              <th style="text-align:left;padding:6px 8px 8px">Notion sheet</th>
             </tr>
           </thead>
           <tbody>
@@ -14720,7 +14881,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                     ondragover="linkedDragOver(event)" ondrop="linkedDrop(event,'${escHtml(gid)}')"
                     ondragend="linkedDragEnd(event)"
                     style="cursor:grab">
-                  <td colspan="5" style="padding:14px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.8px;
+                  <td colspan="6" style="padding:14px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.8px;
                       text-transform:uppercase;color:#60A5FA;border-bottom:1px solid var(--border)">
                     <span onclick="linkedToggleGroup('${escHtml(gid)}')" style="cursor:pointer;user-select:none">
                       <span class="linked-caret" data-gid="${escHtml(gid)}">▾</span>
@@ -14756,6 +14917,24 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   <input class="connect-input" style="font-size:12px;padding:4px 8px;width:130px"
                     placeholder="e.g. 493812345" value="${escHtml(a.ga4_property_id || '')}"
                     onchange="stageLinkedAccount('${escHtml(a.id)}', 'ga4_property_id', this.value.trim())">
+                </td>
+                <td style="padding:10px 8px;min-width:280px">
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <input class="connect-input" id="notion-url-${escHtml(a.id)}"
+                      style="font-size:12px;padding:4px 8px;flex:1;min-width:150px"
+                      placeholder="Paste the client's Notion link" value="${escHtml(a.notion_url || '')}"
+                      onchange="stageLinkedAccount('${escHtml(a.id)}', 'notion_url', this.value.trim())">
+                    <button class="cpm-btn" style="padding:4px 9px;font-size:11px;white-space:nowrap"
+                      onclick="notionTest('${escHtml(a.id)}')" title="Read the sheet without changing anything">Test</button>
+                    <button class="cpm-btn" style="padding:4px 9px;font-size:11px;white-space:nowrap"
+                      onclick="notionSyncOne('${escHtml(a.id)}')" title="Fill this account's blank months now">Sync</button>
+                  </div>
+                  <div id="notion-note-${escHtml(a.id)}" style="font-size:10.5px;color:var(--text-muted);margin-top:4px;line-height:1.45">
+                    ${a.notion_sync_note
+                        ? escHtml(a.notion_sync_note) +
+                          (a.notion_synced_at ? ` <span style="opacity:.7">· ${escHtml(new Date(a.notion_synced_at).toLocaleString())}</span>` : '')
+                        : '<span style="opacity:.6">Not synced yet</span>'}
+                  </div>
                 </td>
               </tr>`).join('');
               }).join('');
