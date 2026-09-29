@@ -87,14 +87,31 @@ serve(async (req: Request) => {
     });
   }
 
-  // ── Auth: service role only ───────────────────────────────────────────────
+  // ── Auth: service role, or the nightly cron's own secret ──────────────────
   // This function reads and rotates access tokens — it must never be callable
-  // by a browser client. The service role key acts as the shared secret.
-  const authHeader    = req.headers.get("Authorization") ?? "";
+  // by a browser client.
+  //
+  // Two ways in. The service role key still works, so the manual curl in the
+  // header above is unchanged. The nightly cron uses a secret from app_secrets
+  // instead, because the service role key would otherwise have to be pasted
+  // into the cron command and would then sit in cron.job in plain text.
+  // app_secrets has RLS on with no policy and no grants to anon or
+  // authenticated, so only this function can read it.
+  const authHeader     = req.headers.get("Authorization") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  if (authHeader !== `Bearer ${serviceRoleKey}`) {
-    return jsonResponse({ error: "Unauthorized" }, 401);
+  let authorised = authHeader === `Bearer ${serviceRoleKey}`;
+
+  if (!authorised) {
+    let given: string | undefined;
+    try { given = (await req.json())?.cron_secret; } catch { /* no body */ }
+    if (given) {
+      const { data: secret } = await supabaseAdmin
+        .from("app_secrets").select("value").eq("key", "meta_refresh_cron").maybeSingle();
+      authorised = !!secret?.value && secret.value === given;
+    }
   }
+
+  if (!authorised) return jsonResponse({ error: "Unauthorized" }, 401);
 
   // ── Find tokens that need refreshing ─────────────────────────────────────
   // We refresh when:
