@@ -116,13 +116,47 @@ serve(async (req: Request) => {
     account_status: number; timezone_name: string;
   };
 
-  // If no Business Managers found, fall back to user's personal ad accounts
-  const bizList: BizManager[] = businesses?.length
-    ? businesses
-    : [{ id: "personal", name: "Personal Ad Accounts" }];
+  // Always look at /me/adaccounts as well as any Business Managers.
+  //
+  // This used to be an either/or: personal accounts were only read when the
+  // business list came back empty. On 29 September 2026 that silently cost
+  // almost the whole estate. Facebook returned exactly one business
+  // (WolvesGround), so the fallback never fired, and reconnecting attached its
+  // 2 ad accounts while ignoring the other 87 the same token could see -- the
+  // dashboard came back with 2 accounts out of 89 and no error anywhere.
+  //
+  // Personal goes first so that a business-owned account processed by both
+  // passes ends up attributed to its business, which is the more specific and
+  // more useful owner.
+  const bizList: BizManager[] = [
+    { id: "personal", name: "Personal Ad Accounts" },
+    ...(businesses ?? []),
+  ];
 
-  let totalAccountsConnected = 0;
+  // Counted as a set of account ids, not a running total: an account owned by
+  // a business is also returned by /me/adaccounts, so adding up both passes
+  // would report more accounts than exist.
+  const connectedAccountIds = new Set<string>();
   const businessManagerIds: string[] = [];
+
+  // Meta pages these lists. Taking only the first page silently drops
+  // everything past the limit, which is the same class of bug as the one
+  // above: no error, just fewer accounts than the agency actually runs.
+  async function fetchAllAccounts(firstUrl: string): Promise<AdAccount[]> {
+    const out: AdAccount[] = [];
+    let next: string | undefined = firstUrl;
+    for (let page = 0; page < 20 && next; page++) {
+      const res = await fetch(next);
+      const body = await res.json();
+      if (body.error) {
+        console.error("Ad account fetch failed:", body.error);
+        break;
+      }
+      out.push(...((body.data || []) as AdAccount[]));
+      next = body.paging?.next;
+    }
+    return out;
+  }
 
   // ── 4. Process each Business Manager ───────────────────────────
   for (const biz of bizList) {
@@ -130,10 +164,9 @@ serve(async (req: Request) => {
       ? `${META_API}/me/adaccounts?fields=id,name,currency,account_status,timezone_name&limit=100&access_token=${accessToken}`
       : `${META_API}/${biz.id}/owned_ad_accounts?fields=id,name,currency,account_status,timezone_name&limit=100&access_token=${accessToken}`;
 
-    const accountsRes = await fetch(accountsEndpoint);
-    const { data: accounts } = await accountsRes.json();
+    const accounts = await fetchAllAccounts(accountsEndpoint);
 
-    const activeAccounts = ((accounts || []) as AdAccount[]).filter(
+    const activeAccounts = accounts.filter(
       (a) => a.account_status === 1
     );
     if (!activeAccounts.length) continue;
@@ -186,9 +219,11 @@ serve(async (req: Request) => {
     if (accErr) {
       console.error("Failed to upsert ad accounts:", accErr);
     } else {
-      totalAccountsConnected += accountRows.length;
+      for (const r of accountRows) connectedAccountIds.add(r.meta_account_id);
     }
   }
+
+  const totalAccountsConnected = connectedAccountIds.size;
 
   if (totalAccountsConnected === 0) {
     return popupCloser("meta_oauth_error", {
