@@ -39,7 +39,11 @@
  *   https://YOUR_PROJECT.supabase.co/functions/v1/shopify-webhook
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Deno.serve is built in. This used to import serve() from deno.land/std, and
+// on 29 September 2026 that stopped working: the edge runtime now refuses
+// remote specifiers, so the worker failed to boot at all and every webhook
+// Shopify sent came back 503 -- 1,574 of them in a day. Nothing remote is
+// imported here any more, so it cannot happen again.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseAdmin = createClient(
@@ -366,7 +370,7 @@ async function handleShopRedact(
 }
 
 // ── Main request handler ──────────────────────────────────────────────────────
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*" } });
   }
