@@ -961,6 +961,17 @@
     .settings-sidebar { width: 420px; flex-shrink: 0; background: #141E2E; border-right: 1px solid rgba(255,255,255,0.07); overflow-y: auto; padding: 8px 0; }
     .settings-nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px; color: rgba(255,255,255,0.3); padding: 16px 18px 6px; }
 
+    /* Process map: progress line above the table */
+    .cp-progline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 2px 0 12px; }
+    .cp-progline-n { font-size: 12.5px; font-weight: 800; color: var(--text-main); white-space: nowrap; }
+    .cp-progline-bar { flex: 1; min-width: 110px; height: 5px; border-radius: 999px; background: var(--border); overflow: hidden; }
+    .cp-progline-bar > span { display: block; height: 100%; background: var(--brand-accent); border-radius: 999px; transition: width .3s; }
+    .cp-progline-next { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+    .cp-progline-next.late { color: #F87171; font-weight: 700; }
+    /* Which stage a step came from, shown under its name in date order so the
+       sequence is still readable once the stage grouping is gone. */
+    .cp-tbl-from { font-size: 10.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px; }
+
     /* Access editor */
     .acx-group { margin-top: 14px; }
     .acx-group:first-child { margin-top: 4px; }
@@ -17970,7 +17981,29 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     // ── Map view options: view mode, filters, stats ──
-    let _cpView = localStorage.getItem('cp_view') || 'flow';   // flow | compact | table
+    // Table is the default view now. Flow draws the process as a chain of
+    // stages, which is a good picture of how the work is shaped and a poor
+    // answer to the question people actually open this screen with: what is
+    // late, and who has it. Flow is still one click away for anyone who wants
+    // the shape, and a saved preference still wins.
+    // Rolled out once. cp_view is only written when somebody clicks the view
+    // switcher, but anyone who ever did is holding 'flow' and would never see
+    // this change — the same way the slate theme never reached people whose
+    // laptops were set to light. This clears the old preference a single time;
+    // whatever they pick after that sticks for good.
+    (function () {
+      if (localStorage.getItem('cp_view_default_v2')) return;
+      localStorage.setItem('cp_view_default_v2', '1');
+      if (localStorage.getItem('cp_view') === 'flow') localStorage.removeItem('cp_view');
+    })();
+
+    let _cpView = localStorage.getItem('cp_view') || 'table';   // flow | compact | table
+
+    // Within the table: deadline order, or the order the stages run in.
+    // Deadline order is the default for the same reason as above — a sequence
+    // tells you where the work sits, a date tells you what is on fire.
+    let _cpSort = localStorage.getItem('cp_sort') || 'deadline'; // deadline | stage
+    function cpSetSort(v) { _cpSort = v; localStorage.setItem('cp_sort', v); renderClientProfile(); }
     let _cpFilterOwner = '';
     let _cpFilterStatus = '';
     let _cpOnlyOverdue = false;
@@ -17989,17 +18022,16 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       if (_cpView === 'table') {
         const rows = [];
-        groups.forEach(g => g.stages.forEach(({ st, si }) => {
-          const items = (st.items || []).filter(_cpMatches);
-          if (!items.length) return;
-          rows.push(`<tr class="cp-tbl-phase"><td colspan="6">${escHtml(g.name)} › ${escHtml(st.stage)}</td></tr>`);
-          items.forEach(it => {
+
+        // One row builder for both orderings, so the two cannot drift apart.
+        const rowFor = (g, st, si, it, showStage) => {
             const ii = (st.items || []).indexOf(it);
             const stt = _cpItemState(it);
             const over = it.date && it.date < today && stt !== 'done';
-            rows.push(`<tr class="${stt}">
+            return `<tr class="${stt}">
               <td style="width:26px"><span class="cp-dot ${stt}"></span></td>
-              <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}${Number(it.total) ? ` <span style="font-weight:800;color:${(Number(it.doneCount)||0) >= Number(it.total) ? '#16A34A' : '#0557D9'}">${Number(it.doneCount)||0}/${Number(it.total)}</span>` : ''}</td>
+              <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}${Number(it.total) ? ` <span style="font-weight:800;color:${(Number(it.doneCount)||0) >= Number(it.total) ? '#16A34A' : '#0557D9'}">${Number(it.doneCount)||0}/${Number(it.total)}</span>` : ''}
+                ${showStage ? `<div class="cp-tbl-from">${escHtml(st.stage || 'Stage')}${g.name && g.name !== 'Custom stages' ? ' · ' + escHtml(g.name) : ''}</div>` : ''}</td>
               ${cpHidesOwners() ? '' : `<td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>`}
               <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗 Open</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}</td>
@@ -18007,9 +18039,35 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <td>${it.type === 'decision'
                 ? `<button class="cp-branch-btn ${it.decision === 'yes' ? 'yes active' : (it.decision === 'no' ? 'no active' : 'yes')}" style="margin:0" onclick="cpDecide(${si},${ii},'${it.decision === 'yes' ? 'yes' : 'yes'}')">${it.decision === 'yes' ? '✓ APPROVED' : (it.decision === 'no' ? '✗ REVISING' : 'PENDING')}</button>`
                 : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}</td>
-            </tr>`);
+            </tr>`;
+        };
+
+        if (_cpSort === 'deadline') {
+          // Everything on one list, soonest first. Overdue naturally rises to the
+          // top because its date is in the past; undated steps sink to the
+          // bottom rather than pretending to be urgent. The stage each step came
+          // from moves under its name, so the sequence is not lost.
+          const flat = [];
+          groups.forEach(g => g.stages.forEach(({ st, si }) => {
+            (st.items || []).filter(_cpMatches).forEach(it => flat.push({ g, st, si, it }));
+          }));
+          flat.sort((a, b) => {
+            const da = a.it.date || '', db = b.it.date || '';
+            if (!da && !db) return 0;
+            if (!da) return 1;          // undated last
+            if (!db) return -1;
+            return da < db ? -1 : da > db ? 1 : 0;
           });
-        }));
+          flat.forEach(x => rows.push(rowFor(x.g, x.st, x.si, x.it, true)));
+        } else {
+          groups.forEach(g => g.stages.forEach(({ st, si }) => {
+            const items = (st.items || []).filter(_cpMatches);
+            if (!items.length) return;
+            rows.push(`<tr class="cp-tbl-phase"><td colspan="6">${escHtml(g.name)} › ${escHtml(st.stage)}</td></tr>`);
+            items.forEach(it => rows.push(rowFor(g, st, si, it, false)));
+          }));
+        }
+
         return `<div class="table-wrapper" style="max-height:60vh;overflow:auto">
           <table class="cp-tbl">
             <thead><tr><th></th><th>Step</th>${cpHidesOwners() ? '' : '<th>Owner</th>'}<th>Link</th><th>Date</th><th>Status</th></tr></thead>
@@ -18089,7 +18147,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const owners = cpHidesOwners() ? [] : [...new Set(proc.flatMap(st => (st.items || []).map(i => i.owner).filter(Boolean)))];
       const seg = (v, l) => `<button class="${_cpView === v ? 'active' : ''}" onclick="cpSetView('${v}')">${l}</button>`;
       return `<div class="cp-toolbar">
-        <div class="cp-seg">${seg('flow', '⛓ Flow')}${seg('compact', '☰ List')}${seg('table', '▦ Table')}</div>
+        <div class="cp-seg">${seg('table', '▦ Deadlines')}${seg('compact', '☰ List')}${seg('flow', '⛓ Flow')}</div>
+        ${_cpView === 'table' ? `<div class="cp-seg">
+          <button class="${_cpSort === 'deadline' ? 'active' : ''}" title="Soonest first, overdue at the top" onclick="cpSetSort('deadline')">By date</button>
+          <button class="${_cpSort === 'stage' ? 'active' : ''}" title="In the order the stages run" onclick="cpSetSort('stage')">By stage</button>
+        </div>` : ''}
         ${_cpView === 'flow' ? `<button class="cp-chipbtn" title="Collapse every stage" onclick="cpFoldAll(true)">▸ Collapse all</button>
         <button class="cp-chipbtn" title="Expand every stage" onclick="cpFoldAll(false)">▾ Expand all</button>` : ''}
         <span style="flex:1"></span>
@@ -18424,7 +18486,21 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </div>`;
       }).join('');
 
-      return `<div class="cp-stats">
+      // Percent complete and the next deadline, across the top — the two things
+      // the stage cards never answered without adding the columns up by eye.
+      const pct = items.length ? Math.round(done / items.length * 100) : 0;
+      const nextDue = items
+        .filter(i => i.date && _cpItemState(i) !== 'done')
+        .map(i => i.date).sort()[0];
+      const nextLate = nextDue && nextDue < today;
+
+      return `<div class="cp-progline">
+        <span class="cp-progline-n">${done} of ${items.length} done</span>
+        <span class="cp-progline-bar"><span style="width:${pct}%"></span></span>
+        <span class="cp-progline-n">${pct}%</span>
+        ${nextDue ? `<span class="cp-progline-next ${nextLate ? 'late' : ''}">${nextLate ? '⚠ Overdue since' : 'Next deadline'} ${nextDue}</span>` : ''}
+      </div>
+      <div class="cp-stats">
         ${stat(items.length, 'Total steps')}
         ${stat(done, 'Completed', '#16A34A')}
         ${stat(prog, 'In progress', '#F59E0B')}
