@@ -9791,17 +9791,15 @@
 
       const _mhNum = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
       const _stored = (k) => localStorage.getItem(k);
-      // Typed for this period wins, then Notion for exactly these dates, then
-      // the month's recorded history.
-      const msgOrders   = parseInt(_stored(_msgKey)    ?? '') || _mhNum(_ndRow?.msg_orders)  || _mhNum(_mhRow?.msg_orders)  || 0;
-      const msgPieces   = parseInt(_stored(_piecesKey) ?? '') || _mhNum(_ndRow?.msg_pieces)  || _mhNum(_mhRow?.msg_pieces)  || 0;
-      // Notion records one Revenue per day across every channel rather than a
-      // message-only figure, so it only stands in where the sheet has no
-      // website orders for the same days — otherwise it would count web sales
-      // as message sales.
-      const _ndMsgRevenue = _mhNum(_ndRow?.msg_revenue)
-        ?? ((_ndRow && !_ndRow.web_orders) ? _mhNum(_ndRow.total_revenue) : null);
-      const msgRevenue  = parseFloat(_stored(_revKey)  ?? '') || _ndMsgRevenue || _mhNum(_mhRow?.msg_revenue) || 0;
+      // A number typed into the card for this period wins; otherwise fall back
+      // to the month's stored history.
+      //
+      // Deliberately not from Notion. Only the confirmed order count and the
+      // message count are taken from there; orders, pieces and revenue stay on
+      // Shopify, Clarity and the existing equations.
+      const msgOrders   = parseInt(_stored(_msgKey)    ?? '') || _mhNum(_mhRow?.msg_orders)  || 0;
+      const msgRevenue  = parseFloat(_stored(_revKey)  ?? '') || _mhNum(_mhRow?.msg_revenue) || 0;
+      const msgPieces   = parseInt(_stored(_piecesKey) ?? '') || _mhNum(_mhRow?.msg_pieces)  || 0;
       // Returns % is typed in per period. Kept as its own value rather than
       // derived from Shopify refunds, which only counts refunded orders and
       // misses exchanges and returns handled outside the store.
@@ -9842,9 +9840,7 @@
         const n = parseFloat(v);
         return isNaN(n) ? null : n;
       })();
-      const brandingSpend = _brandTyped
-        ?? _mhNum(_ndRow?.branding_spend)
-        ?? _mhNum(_mhRow?.branding_spend) ?? 0;
+      const brandingSpend = _brandTyped ?? _mhNum(_mhRow?.branding_spend) ?? 0;
       // Never let branding exceed what was actually spent.
       const _brandCapped  = Math.min(Math.max(0, brandingSpend), spend || 0);
       const conversionSpend = Math.max(0, (spend || 0) - _brandCapped);
@@ -9876,7 +9872,12 @@
         const n = parseFloat(v);
         return isNaN(n) ? null : n;
       };
-      const confirmedOrders  = _cfmTyped(_cfmKeyO) ?? _mhNum(_mhRow?.web_orders_confirmed);
+      // Confirmed orders is one of the two figures taken from Notion, because
+      // it is the team's own count of orders that actually stuck and Shopify
+      // cannot know it. Typed still wins; the month's history is the fallback.
+      const confirmedOrders  = _cfmTyped(_cfmKeyO)
+        ?? _mhNum(_ndRow?.web_orders_confirmed)
+        ?? _mhNum(_mhRow?.web_orders_confirmed);
       const confirmedRevenue = _cfmTyped(_cfmKeyR) ?? _mhNum(_mhRow?.web_revenue_confirmed);
       const confirmedPieces  = _cfmTyped(_cfmKeyP) ?? _mhNum(_mhRow?.web_pieces_confirmed);
 
@@ -10056,7 +10057,7 @@
               <div class="kpi-label">Orders from Messages</div>
               <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-              <div class="kpi-sub">${_srcSub(_stored(_msgKey), _ndRow?.msg_orders, 'Manual entry')}</div>
+              <div class="kpi-sub">Manual entry</div>
             </div>
             <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
@@ -10064,7 +10065,7 @@
               <div class="kpi-label">Pieces from Messages</div>
               <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-              <div class="kpi-sub">${_srcSub(_stored(_piecesKey), _ndRow?.msg_pieces, 'Manual entry')}</div>
+              <div class="kpi-sub">Manual entry</div>
             </div>
             <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
@@ -10072,7 +10073,7 @@
               <div class="kpi-label">Revenue from Messages</div>
               <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-              <div class="kpi-sub">${_srcSub(_stored(_revKey), _ndMsgRevenue, 'Manual entry')}</div>
+              <div class="kpi-sub">Manual entry</div>
             </div>
             ${kpi('c-teal solid', '🧾', 'Avg Order Value (Messages)',
                 (msgRevenue && msgOrders) ? fmt(msgRevenue / msgOrders, curr) : '—',
@@ -10182,7 +10183,7 @@
                 <input id="kpi-branding-spend-input" type="number" min="0" step="any"
                   value="${brandingSpend || ''}" placeholder="0.00"
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">${_srcSub(_mkGet(_brandKey), _ndRow?.branding_spend, 'Engagement, follows, awareness')}</div>
+                <div class="kpi-sub">Engagement, follows, awareness</div>
               </div>
               ${kpi('c-teal solid', '🎯', 'Conversion Spend',
                   fmt(conversionSpend, curr),

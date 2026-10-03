@@ -1,44 +1,40 @@
 /**
- * Notion "Daily Reports" -> monthly_history
+ * Notion "Daily Reports" -> the dashboard
  *
  * The media buying team records each client's day in Notion: messages, orders,
  * pieces, revenue and the spend split between website and message campaigns.
- * Nobody then retypes it into the dashboard, so months that are fully recorded
- * in Notion read as empty here. Maree's August is the case that proved it --
- * Notion held 85 web orders, 170 pieces and EGP 150,833 that the dashboard did
- * not, while the spend figures agreed to within 7 EGP.
+ * Nobody then retypes it into the dashboard.
+ *
+ * Only two of those figures are read by the dashboard:
+ *
+ *   web_orders_confirmed  the team's own count of orders that actually stuck.
+ *                         Shopify counts an order when it is placed and cannot
+ *                         know which were later confirmed.
+ *   msg_count             how many messages came in.
+ *
+ * Everything else on screen stays on Shopify, Clarity and the existing
+ * equations. The sync still reads and stores the rest of each sheet in
+ * notion_daily, for reference and for reconciling a disagreement, but it is not
+ * shown and does not reach monthly_history.
+ *
+ * Two outputs:
+ *   notion_daily     one row per account per day, overwritten each run, so the
+ *                    cards can answer Today, Yesterday or any custom range.
+ *                    Nothing else writes here, so a corrected day in the sheet
+ *                    corrects the dashboard.
+ *   monthly_history  the same two figures as a month total, filling blanks
+ *                    only, because that table is shared with figures people
+ *                    type in by hand.
  *
  * Shape of the source: one Notion database per client per month, one row per
- * day, sitting under
+ * day, under
  *   Media Buying Performance Reports / <buyer> / <client> / <year> / Daily Reports
  *
- * Three things about that shape drive the design:
- *
- *  1. Column names differ per client. Maree has "Website Spending" and
- *     "No,Purchase"; Basma has " Spending Web", "Spending SM" and "No.purchase",
- *     plus FB / IG / WhatsApp splits. So columns are matched on a normalised
- *     name (lowercased, punctuation and spaces removed) against a synonym list,
- *     never on an exact string.
- *
- *  2. Database titles are unreliable -- "September" and "September " both exist,
- *     and a month's database can be renamed. So the month a figure belongs to is
- *     read from each row's own Date property, never from the database title. A
- *     mislabelled database therefore cannot file August under September.
- *
- *  3. Client names do not match account names ("Basma" is "Basma natural EGP";
- *     "Ibriz" matches two accounts). So nothing is matched by name: a person
- *     pastes the Notion link on the account, and that link is the only mapping.
- *
- * Writes fill blanks only. A figure already in monthly_history -- typed by hand,
- * confirmed from Shopify, or filled from Meta -- is never overwritten, so a
- * sync cannot quietly replace someone's correction. Fields Notion did not
- * supply are left alone rather than zeroed.
- *
- * Revenue is deliberately narrow. Notion records one Revenue number per day
- * covering every channel on that row, while the dashboard splits revenue into
- * website and message revenue. There is no honest way to divide one into the
- * other, so Revenue is written to total_revenue, which means exactly "the
- * month's revenue as recorded", and web_revenue / msg_revenue are left empty.
+ * Column names differ per client, database titles are unreliable, and client
+ * names do not match account names -- so columns match on a normalised name
+ * against a synonym list, a figure's month comes from its own Date property
+ * rather than the database title, and the pasted link is the only mapping
+ * between a sheet and an account.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -104,6 +100,11 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   // FB / IG / WhatsApp columns are a breakdown that does not always add up to
   // it (Basma's September: 66 + 39 + 37 = 142 against 147), so the total is
   // trusted when present and the breakdown only used in its absence.
+  // The team's own count of orders that stuck. Shopify counts an order when it
+  // is placed and cannot know which were later confirmed, so this is the one
+  // order figure Notion is the authority on.
+  web_orders_confirmed: ["confirmedorders", "confirmedordersfcs", "confirmedorder",
+                         "orderconfirmed", "ordersconfirmed", "confirmedwebsiteorders"],
   msg_orders_total: ["nopurchase", "nopurchases", "purchases", "noofpurchase"],
   msg_orders_parts: ["fborder", "fborders", "igorder", "igorders", "whatsorder", "whatsorders",
                      "whatsapporder", "whatsapporders"],
@@ -285,6 +286,7 @@ type DaySums = {
   web_revenue: number | null; msg_revenue: number | null;
   web_spend: number | null;  msg_spend: number | null;
   branding_spend: number | null; total_revenue: number | null;
+  web_orders_confirmed: number | null;
 };
 
 type MonthSums = {
@@ -293,7 +295,7 @@ type MonthSums = {
   web_spend: number | null;  msg_spend: number | null;
   msg_orders: number | null; msg_pieces: number | null;
   msg_count: number | null;  total_revenue: number | null;
-  branding_spend: number | null;
+  branding_spend: number | null; web_orders_confirmed: number | null;
   days: number;
 };
 
@@ -301,7 +303,7 @@ const blank = (): MonthSums => ({
   web_orders: null, web_pieces: null, web_revenue: null, msg_revenue: null,
   web_spend: null, msg_spend: null,
   msg_orders: null, msg_pieces: null, msg_count: null, total_revenue: null,
-  branding_spend: null, days: 0,
+  branding_spend: null, web_orders_confirmed: null, days: 0,
 });
 
 // null + value = value, so a month keeps null for a column the sheet never had
@@ -341,7 +343,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           day, msg_count: null, msg_orders: null, msg_pieces: null,
           web_orders: null, web_pieces: null, web_revenue: null, msg_revenue: null,
           web_spend: null, msg_spend: null,
-          branding_spend: null, total_revenue: null,
+          branding_spend: null, total_revenue: null, web_orders_confirmed: null,
         });
 
         let msgOrdersTotal: number | null = null;
@@ -369,6 +371,9 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
             case "revenue":    m.total_revenue = add(m.total_revenue, v); d.total_revenue = add(d.total_revenue, v); break;
             case "branding_spend":
               m.branding_spend = add(m.branding_spend, v); d.branding_spend = add(d.branding_spend, v); break;
+            case "web_orders_confirmed":
+              m.web_orders_confirmed = add(m.web_orders_confirmed, v);
+              d.web_orders_confirmed = add(d.web_orders_confirmed, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
             case "msg_orders_parts": msgOrdersParts = add(msgOrdersParts, v); break;
             case "msg_pieces_parts":
@@ -395,10 +400,12 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
 
 // ── Writing ───────────────────────────────────────────────────────────────────
 
+// Only what the dashboard actually takes from Notion. Everything else the sync
+// reads is kept in notion_daily for reference, but must not land in
+// monthly_history, which sits behind cards that are meant to show Shopify,
+// Clarity and the existing equations.
 const WRITE_FIELDS = [
-  "web_orders", "web_pieces", "web_spend", "msg_spend",
-  "msg_orders", "msg_pieces", "msg_count", "total_revenue", "branding_spend",
-  "web_revenue", "msg_revenue",
+  "msg_count", "web_orders_confirmed",
 ] as const;
 
 /**
@@ -490,6 +497,7 @@ async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
     web_orders: d.web_orders, web_pieces: d.web_pieces, web_revenue: d.web_revenue,
     web_spend: d.web_spend, msg_spend: d.msg_spend,
     branding_spend: d.branding_spend, total_revenue: d.total_revenue,
+    web_orders_confirmed: d.web_orders_confirmed,
     synced_at: new Date().toISOString(),
   }));
 
