@@ -961,6 +961,17 @@
     .settings-sidebar { width: 420px; flex-shrink: 0; background: #141E2E; border-right: 1px solid rgba(255,255,255,0.07); overflow-y: auto; padding: 8px 0; }
     .settings-nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px; color: rgba(255,255,255,0.3); padding: 16px 18px 6px; }
 
+    /* Access editor */
+    .acx-group { margin-top: 14px; }
+    .acx-group:first-child { margin-top: 4px; }
+    .acx-group-head { font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 8px; }
+    .acx-group-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.55; margin: -2px 0 10px; }
+    .acx-opt { display: flex; align-items: center; gap: 10px; padding: 8px 11px; border-radius: 9px;
+      border: 1px solid var(--border); background: var(--surface); margin-bottom: 6px; cursor: pointer; font-size: 13px; }
+    .acx-opt:hover { border-color: var(--brand-accent); }
+    .acx-opt input { width: 16px; height: 16px; accent-color: var(--brand-accent); cursor: pointer; }
+
     /* Linked accounts: status filter */
     .linked-seg { display: inline-flex; background: var(--well); border: 1px solid var(--border); border-radius: 9px; padding: 2px; gap: 2px; }
     .linked-segbtn { background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 12px;
@@ -3055,6 +3066,17 @@
   </div>
 
   <!-- BILLING TRANSACTION MODAL -->
+  <div class="hub-modal hidden" id="acx-edit-modal">
+    <div class="hub-modal-box" style="max-width:460px">
+      <h3 id="acx-edit-title">Access</h3>
+      <div id="acx-edit-body"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+        <button class="cpm-btn" onclick="acxCloseEdit()">Cancel</button>
+        <button class="cpm-btn" onclick="acxSaveEdit()">Save access</button>
+      </div>
+    </div>
+  </div>
+
   <div class="hub-modal hidden" id="bill-modal">
     <div class="hub-modal-box">
       <h3>Add transaction</h3>
@@ -7030,21 +7052,29 @@
       // Every platform is always listed. One with no accounts yet is dimmed and
       // explains how to connect it, rather than being hidden — otherwise there
       // is no sign the dashboard supports it at all.
-      bar.innerHTML = Object.keys(PLATFORM_DEFS).map(p => {
+      // Only the tabs this person is allowed to open are drawn. A hidden tab is
+      // also blocked at its entry point and, for Proposal and Profitability, in
+      // the database — the button going away is the courtesy, not the control.
+      const platformBtns = Object.keys(PLATFORM_DEFS).filter(canSeeMediaTab).map(p => {
         const def = PLATFORM_DEFS[p];
         const connected = orgPlatforms.includes(p);
         const on = !_pfMode && !_alMode && !_ppMode && currentPlatformTab === p;
         return `<button class="platform-tab${on ? ' active' : ''}" onclick="setPlatformTab('${p}')"
                         style="${connected ? '' : 'opacity:.55'}"
                         title="${connected ? '' : def.label + ' — not connected yet'}">${def.icon} ${def.label}</button>`;
-      }).join('') +
-      `<span class="platform-sep"></span>
-       <button class="platform-tab${_pfMode ? ' active' : ''}" onclick="openProfitTab()" title="Unit economics — will this budget make money?">💰 Profitability</button>
-       <button class="platform-tab${_alMode ? ' active' : ''}" onclick="openAdsLibraryTab()" title="Competitor ads from Meta's Ad Library">🔎 Ads Library</button>
-       <button class="platform-tab${_ppMode ? ' active' : ''}" onclick="openProposalTab()" title="Estimate results for a new client from what similar accounts actually did">📝 Proposal</button>`;
+      }).join('');
+
+      const toolBtns = [
+        canSeeMediaTab('profitability') ? `<button class="platform-tab${_pfMode ? ' active' : ''}" onclick="openProfitTab()" title="Unit economics — will this budget make money?">💰 Profitability</button>` : '',
+        canSeeMediaTab('ads_library')   ? `<button class="platform-tab${_alMode ? ' active' : ''}" onclick="openAdsLibraryTab()" title="Competitor ads from Meta's Ad Library">🔎 Ads Library</button>` : '',
+        canSeeMediaTab('proposal')      ? `<button class="platform-tab${_ppMode ? ' active' : ''}" onclick="openProposalTab()" title="Estimate results for a new client from what similar accounts actually did">📝 Proposal</button>` : '',
+      ].filter(Boolean).join('');
+
+      bar.innerHTML = platformBtns + (toolBtns ? '<span class="platform-sep"></span>' + toolBtns : '');
     }
 
     function setPlatformTab(platform) {
+      if (!requireMediaTab(platform)) return;
       _pfMode = false; _alMode = false; _ppMode = false;
       currentPlatformTab = platform;
       localStorage.setItem(`dash_platform_${currentOrgId}`, platform);
@@ -11258,6 +11288,7 @@
     let _pfAccountName = '', _pfCurrency = 'EGP ', _pfMode = false, _pfReadonly = false;
 
     function openProfitTab() {
+      if (!requireMediaTab('profitability')) return;
       _pfMode = true; _alMode = false; _ppMode = false;
       renderPlatformTabs();
       renderProfitability(accountMap[sel?.value] || {});
@@ -11375,14 +11406,29 @@
       _pfScopeLabel = scope.label;
       _pfRender();
 
-      const { data, error } = await sb.from('monthly_history')
-        .select('account_key, month, msg_orders, msg_pieces, msg_revenue, msg_spend, '
-              + 'web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, '
-              + 'web_revenue_confirmed, web_spend, branding_spend, total_revenue, returns_pct, cost_pct')
-        .eq('organization_id', currentOrgId)
-        .gte('month', `${_pfYear}-01-01`).lte('month', `${_pfYear}-12-31`);
+      // Two reads: the month figures, which anyone with Media buying can see,
+      // and the cost percentages, which live in their own table behind the
+      // Profitability permission. Someone without it gets the first and an
+      // empty second, so margins simply have nothing to compute from.
+      const [{ data, error }, costRes] = await Promise.all([
+        sb.from('monthly_history')
+          .select('account_key, month, msg_orders, msg_pieces, msg_revenue, msg_spend, '
+                + 'web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, '
+                + 'web_revenue_confirmed, web_spend, branding_spend, total_revenue, returns_pct')
+          .eq('organization_id', currentOrgId)
+          .gte('month', `${_pfYear}-01-01`).lte('month', `${_pfYear}-12-31`),
+        sb.from('profitability_costs')
+          .select('account_key, month, cost_pct')
+          .eq('organization_id', currentOrgId)
+          .gte('month', `${_pfYear}-01-01`).lte('month', `${_pfYear}-12-31`),
+      ]);
 
       if (error) { _pfYearRows = { error: error.message }; _pfRender(); return; }
+
+      const costOf = {};
+      (costRes.data || []).forEach(c => {
+        costOf[c.account_key + '|' + String(c.month).slice(0, 7)] = c.cost_pct;
+      });
 
       const inScope = (data || [])
         .map(r => ({ ...r, month: String(r.month).slice(0, 7) }))
@@ -11421,7 +11467,7 @@
         // small account's 30% cannot outweigh a large one's 5%.
         const rp = _pfN(r.returns_pct);
         if (rp != null && revenue > 0) { m.retWeighted += rp * revenue; m.retBase += revenue; }
-        const cp = _pfN(r.cost_pct);
+        const cp = _pfN(costOf[r.account_key + '|' + r.month]);
         if (cp != null && revenue > 0) { m.costWeighted += cp * revenue; m.costBase += revenue; }
       });
 
@@ -11488,14 +11534,27 @@
       }
 
       Pending.stage('profit', key + ':' + month, `Cost % · ${PF_MONTHS[i]}`, async () => {
-        // .select() and a row count, because an RLS-blocked update returns no
-        // error and no rows — it would silently look like it saved.
-        const res = await sb.from('monthly_history')
-          .update({ cost_pct: v, updated_at: new Date().toISOString() })
-          .eq('organization_id', currentOrgId).eq('account_key', key).eq('month', month)
+        // Cost % moved out of monthly_history into profitability_costs. It is
+        // the one figure here that is not already visible to anyone with Media
+        // buying, and monthly_history grants are table-wide, so it could not be
+        // withheld while leaving the rest of the month readable.
+        //
+        // Upsert rather than update: unlike the old column there may be no row
+        // yet, and a cost % is worth recording even for a month with no history.
+        // .select() and a row count still, because an RLS-blocked write returns
+        // no error and no rows — it would silently look like it saved.
+        if (v == null) {
+          return await sb.from('profitability_costs').delete()
+            .eq('organization_id', currentOrgId).eq('account_key', key).eq('month', month);
+        }
+        const res = await sb.from('profitability_costs')
+          .upsert({ organization_id: currentOrgId, account_key: key, month,
+                    cost_pct: v, updated_by: currentUser?.id,
+                    updated_at: new Date().toISOString() },
+                  { onConflict: 'organization_id,account_key,month' })
           .select('id');
         if (!res.error && !(res.data || []).length) {
-          return { error: { message: `there is no recorded month for ${PF_MONTHS[i]} to attach a cost % to` } };
+          return { error: { message: 'you do not have access to Profitability' } };
         }
         return res;
       });
@@ -11953,6 +12012,7 @@
     }
 
     async function openAdsLibraryTab() {
+      if (!requireMediaTab('ads_library')) return;
       _alMode = true; _pfMode = false; _ppMode = false;
       renderPlatformTabs();
       _alRender();
@@ -12024,6 +12084,7 @@
     const _ppPer = obj => (obj && obj.unit === 'cpm') ? 1000 : 1;
 
     async function openProposalTab() {
+      if (!requireMediaTab('proposal')) return;
       _ppMode = true; _pfMode = false; _alMode = false;
       renderPlatformTabs();
       _ppRender('loading');
@@ -16235,22 +16296,90 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     // Owner-only: which sections a member can open
+    // Access editor.
+    //
+    // This was a prompt() asking for letters like "pm", which had two problems:
+    // it could not express the Media buying tabs at all, and its parser only
+    // knew p, m and f — so anyone edited through it silently lost Meetings.
     async function cpmEditModules(id) {
       const r = cpmData.members.find(x => x.id === id);
       if (!r) return;
-      const cur = Array.isArray(r.modules) ? r.modules : ['pipeline'];
-      const ans = prompt(
-        `Sections ${r.full_name} can open — type the letters, e.g. "pm".\n\n  p = 🤝 Clients Pipeline\n  m = 📊 Media Buying\n  f = 💰 Finance`,
-        cur.map(x => x[0]).join(''));
-      if (ans === null) return;
-      const mods = [];
-      if (/p/i.test(ans)) mods.push('pipeline');
-      if (/m/i.test(ans)) mods.push('media');
-      if (/f/i.test(ans)) mods.push('finance');
-      if (!mods.length) return alert('Pick at least one section.');
-      const { error } = await sb.from('cp_members')
-        .update({ modules: mods, updated_at: new Date().toISOString() }).eq('id', id);
-      if (error) return alert(error.message);
+      _acxEditing = r;
+      const mods = Array.isArray(r.modules) ? r.modules : ['pipeline'];
+      // null in the column means every tab; the boxes show that as all ticked.
+      const tabs = Array.isArray(r.media_tabs) ? r.media_tabs : MEDIA_TABS.map(([k]) => k);
+
+      const row = (k, label, checked, cls) =>
+        `<label class="acx-opt"><input type="checkbox" class="${cls}" value="${k}" ${checked ? 'checked' : ''}
+           ${cls === 'acx-mod' ? `onchange="acxSyncMedia()"` : ''}> <span>${label}</span></label>`;
+
+      document.getElementById('acx-edit-title').textContent = 'Access — ' + (r.full_name || r.email || '');
+      document.getElementById('acx-edit-body').innerHTML = `
+        <div class="acx-group">
+          <div class="acx-group-head">Sections</div>
+          ${ACX_MODULES.map(([k, l]) => row(k, l, mods.includes(k), 'acx-mod')).join('')}
+        </div>
+        <div class="acx-group" id="acx-media-group" style="${mods.includes('media') ? '' : 'display:none'}">
+          <div class="acx-group-head">Inside Media buying</div>
+          <div class="acx-group-note">Profitability carries cost percentages and margins. Proposal carries
+            benchmarks drawn from every account. Both are blocked in the database too, not just hidden.</div>
+          ${MEDIA_TABS.map(([k, l]) => row(k, l, tabs.includes(k), 'acx-tab')).join('')}
+        </div>
+        <div id="acx-edit-err" class="modal-status"></div>`;
+      document.getElementById('acx-edit-modal').classList.remove('hidden');
+    }
+
+    let _acxEditing = null;
+
+    // Media tabs are meaningless without the Media buying section itself.
+    function acxSyncMedia() {
+      const on = [...document.querySelectorAll('.acx-mod')].some(c => c.value === 'media' && c.checked);
+      const g = document.getElementById('acx-media-group');
+      if (g) g.style.display = on ? '' : 'none';
+    }
+
+    function acxCloseEdit() {
+      document.getElementById('acx-edit-modal').classList.add('hidden');
+      _acxEditing = null;
+    }
+
+    async function acxSaveEdit() {
+      if (!_acxEditing) return;
+      const err  = document.getElementById('acx-edit-err');
+      const mods = [...document.querySelectorAll('.acx-mod:checked')].map(c => c.value);
+      if (!mods.length) {
+        err.className = 'modal-status error';
+        err.textContent = '✗ Pick at least one section.';
+        return;
+      }
+      const tabs = [...document.querySelectorAll('.acx-tab:checked')].map(c => c.value);
+      if (mods.includes('media') && !tabs.length) {
+        err.className = 'modal-status error';
+        err.textContent = '✗ Media buying needs at least one tab, or untick the section.';
+        return;
+      }
+      // All ticked is stored as null, which is the column's "unrestricted".
+      // Storing the full list instead would silently freeze this person's access
+      // if a new tab were added later.
+      const allTabs = tabs.length === MEDIA_TABS.length;
+      const patch = {
+        modules: mods,
+        media_tabs: mods.includes('media') ? (allTabs ? null : tabs) : null,
+        updated_at: new Date().toISOString(),
+      };
+      err.className = 'modal-status';
+      err.textContent = 'Saving…';
+      const { error } = await sb.from('cp_members').update(patch).eq('id', _acxEditing.id);
+      if (error) {
+        err.className = 'modal-status error';
+        err.textContent = '✗ ' + error.message;
+        return;
+      }
+      logActivity('change', `Updated access for ${_acxEditing.full_name || _acxEditing.email}`, {
+        entityType: 'settings', label: 'Access',
+        details: { sections: mods, media_tabs: patch.media_tabs ?? 'all' },
+      });
+      acxCloseEdit();
       cpmRefresh();
     }
 
@@ -20984,7 +21113,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function loadMyModules() {
       try {
         const { data } = await sb.from('cp_members')
-          .select('role, modules, module_roles, account_ids, client_ids, client_scope, archived')
+          .select('role, modules, module_roles, account_ids, client_ids, client_scope, archived, media_tabs')
           .eq('organization_id', currentOrgId)
           .ilike('email', currentUser?.email || '')
           .maybeSingle();
@@ -20994,8 +21123,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         // trust only the organisation role, which cannot be hidden this way.
         if (!data || data.archived) {
           const privileged = currentRole === 'owner' || currentRole === 'admin';
-          _cpModules = privileged ? ACX_MODULES.map(([key]) => key) : [];
-          _myAccess  = privileged ? null : { roles: {}, accountIds: [], clientIds: [] };
+          _cpModules  = privileged ? ACX_MODULES.map(([key]) => key) : [];
+          _myAccess   = privileged ? null : { roles: {}, accountIds: [], clientIds: [] };
+          _myMediaTabs = privileged ? null : [];   // null = all, [] = none
           applyModuleAccess();
           applyScopeFilters();
           return;
@@ -21015,13 +21145,19 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           accountIds:  data.account_ids || null,   // null = all
           clientIds:   data.client_ids  || null,
         };
+        // null = every tab, which is what every member had before this existed.
+        // Narrowing is something an owner opts into, so nobody loses a tab by
+        // the feature simply shipping.
+        _myMediaTabs = _fullAccess ? null
+          : (Array.isArray(data.media_tabs) ? data.media_tabs : null);
       } catch (e) {
         // A failed lookup must not hand out access either. Owners and admins
         // keep everything; everyone else waits until the list can be read.
         console.warn('[access] could not load module permissions', e);
         const privileged = currentRole === 'owner' || currentRole === 'admin';
-        _cpModules = privileged ? ACX_MODULES.map(([key]) => key) : [];
-        _myAccess  = privileged ? null : { roles: {}, accountIds: [], clientIds: [] };
+        _cpModules  = privileged ? ACX_MODULES.map(([key]) => key) : [];
+        _myAccess   = privileged ? null : { roles: {}, accountIds: [], clientIds: [] };
+        _myMediaTabs = privileged ? null : [];
       }
       applyModuleAccess();
       applyScopeFilters();
@@ -21051,6 +21187,46 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       });
       if (sel.value && !canSeeAccount(sel.value)) { sel.value = ''; }
     }
+    // ── Media buying: per-tab access ────────────────────────────────────────
+    // "media" used to be one permission covering the platforms, Profitability,
+    // Proposal and Ads Library together, so a buyer who needed Meta also got
+    // the margin assumptions and the cross-account benchmarks.
+    //
+    // undefined means the permissions have not loaded yet and the answer is no,
+    // the same rule canOpenModule learned: a slow load used to flash every
+    // section on screen before taking it away.
+    // var, not let, deliberately. This is declared near the bottom of a very
+    // long script but read by renderPlatformTabs far above it. With let, any
+    // call before this line executes throws a ReferenceError from the temporal
+    // dead zone instead of answering "no" — an access check that crashes is
+    // worse than one that denies. var hoists as undefined, which the check
+    // below already treats as "not known yet, so no".
+    var _myMediaTabs;                      // undefined = unknown, null = all, [] = none
+    const MEDIA_TABS = [
+      ['meta',          '📘 Meta Ads'],
+      ['google_ads',    '🔍 Google Ads'],
+      ['tiktok_ads',    '🎵 TikTok Ads'],
+      ['profitability', '💰 Profitability'],
+      ['proposal',      '📝 Proposal'],
+      ['ads_library',   '🔎 Ads Library'],
+    ];
+    const MEDIA_TAB_LABEL = Object.fromEntries(MEDIA_TABS);
+
+    function canSeeMediaTab(tab) {
+      if (_myMediaTabs === undefined) return false;   // not known yet
+      if (_myMediaTabs === null) return true;         // unrestricted
+      return _myMediaTabs.includes(tab);
+    }
+
+    // Used by the entry points, so a bookmark, a stale button or a console call
+    // cannot open a tab the person is not allowed to see.
+    function requireMediaTab(tab) {
+      if (canSeeMediaTab(tab)) return true;
+      alert('You do not have access to ' +
+        (MEDIA_TAB_LABEL[tab] || tab).replace(/^\S+\s/, '') + '.');
+      return false;
+    }
+
     function canOpenModule(m) {
       // Owner-only modules are never part of a member's module list.
       if (m === 'activity' || m === 'access') return currentRole === 'owner';
