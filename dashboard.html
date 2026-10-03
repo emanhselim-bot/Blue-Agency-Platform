@@ -969,11 +969,17 @@
     .linked-segbtn span { font-size: 10.5px; font-weight: 800; background: var(--surface-2); color: var(--text-muted); border-radius: 999px; padding: 1px 6px; }
     .linked-segbtn.active { background: var(--surface-2); color: var(--text-main); }
     .linked-segbtn.active span { background: var(--brand-accent); color: #04142C; }
-    /* A switched-off account is still listed, so it has to say so on the row —
-       otherwise it reads as live and someone links a store to a dead account. */
-    .linked-off { font-size: 9.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
-      background: #3A1A1C; color: #FCA5A5; border-radius: 999px; padding: 1px 7px; margin-left: 7px; vertical-align: 1px; }
-    html:not([data-theme="dark"]) .linked-off { background: #FEE2E2; color: #B91C1C; }
+    /* Every row says which of the three states it is in, because the list now
+       mixes them — otherwise an idle or closed account reads as live and
+       someone links a store to it. */
+    .linked-chip { font-size: 9.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+      border-radius: 999px; padding: 1px 7px; margin-left: 7px; vertical-align: 1px; white-space: nowrap; }
+    .linked-chip.run  { background: #10331F; color: #6EE7A8; }
+    .linked-chip.idle { background: #232F42; color: #9AA8BC; }
+    .linked-chip.off  { background: #3A1A1C; color: #FCA5A5; }
+    html:not([data-theme="dark"]) .linked-chip.run  { background: #DCFCE7; color: #15803D; }
+    html:not([data-theme="dark"]) .linked-chip.idle { background: #EEF2F7; color: #64748B; }
+    html:not([data-theme="dark"]) .linked-chip.off  { background: #FEE2E2; color: #B91C1C; }
     .settings-nav-item { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 16px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.55); background: none; border: none; border-right: 2px solid transparent; text-align: left; cursor: pointer; transition: background 0.12s, color 0.12s; white-space: nowrap; font-family: inherit; border-radius: 0; }
     .settings-nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.88); }
     .settings-nav-item.active { background: rgba(5,115,245,0.15); color: #5b9cf6; font-weight: 600; border-right-color: #5b9cf6; }
@@ -14859,8 +14865,28 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     // Filter the linked-accounts table by account name or id. Group headers are
     // hidden when every account beneath them is filtered out.
-    // Status filter for the linked-accounts table: all | active | inactive.
-    let _linkedStatus = 'active';
+    // What "inactive" means here is "not running any campaigns", which is not
+    // the same as the is_active flag. is_active says whether Meta still has the
+    // account open; has_active_campaigns says whether anything is live in it.
+    // Right now that is 30 running, 69 open but idle, and 15 closed by Meta —
+    // so filtering on is_active split the list 99/15 and answered a question
+    // nobody was asking.
+    //
+    // has_active_campaigns is kept current by meta-campaigns-sync, and is null
+    // on closed accounts, which have never been synced.
+    function _linkedState(a) {
+      if (!a.is_active) return 'closed';
+      return a.has_active_campaigns ? 'running' : 'idle';
+    }
+
+    const _LINKED_CHIP = {
+      running: '<span class="linked-chip run">Running</span>',
+      idle:    '<span class="linked-chip idle">Not running</span>',
+      closed:  '<span class="linked-chip off">Closed</span>',
+    };
+
+    // running | idle | closed | all
+    let _linkedStatus = 'running';
 
     function linkedSetStatus(k) { _linkedStatus = k; linkedApplyFilters(); }
 
@@ -14885,9 +14911,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           return;
         }
         total++;
-        const isActive = tr.dataset.active === '1';
-        const statusOk = _linkedStatus === 'all'
-          || (_linkedStatus === 'active' ? isActive : !isActive);
+        const statusOk = _linkedStatus === 'all' || tr.dataset.state === _linkedStatus;
         const hit = statusOk && (!q || (tr.dataset.search || '').includes(q));
         tr.style.display = hit ? '' : 'none';
         if (hit) { shownInGroup++; shown++; }
@@ -14911,7 +14935,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         // this screen — there was no way to find it, let alone see what it was
         // still linked to. The Active / Inactive filter below decides what shows.
         sb.from('meta_ad_accounts_safe')
-          .select('id, account_name, meta_account_id, currency, is_active, shopify_store_id, clarity_project_id, '
+          .select('id, account_name, meta_account_id, currency, is_active, has_active_campaigns, '
+                + 'campaigns_last_synced_at, shopify_store_id, clarity_project_id, '
                 + 'site_tracker_id, ga4_property_id, notion_url, notion_synced_at, notion_sync_note')
           .eq('organization_id', currentOrgId),
         sb.from('shopify_stores_safe')
@@ -14941,9 +14966,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       container.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
           <div class="linked-seg" role="group" aria-label="Filter by status">
-            <button class="linked-segbtn" data-k="all"      onclick="linkedSetStatus('all')">All <span>${metaAccs.length}</span></button>
-            <button class="linked-segbtn" data-k="active"   onclick="linkedSetStatus('active')">Active <span>${metaAccs.filter(a => a.is_active).length}</span></button>
-            <button class="linked-segbtn" data-k="inactive" onclick="linkedSetStatus('inactive')">Inactive <span>${metaAccs.filter(a => !a.is_active).length}</span></button>
+            <button class="linked-segbtn" data-k="running" onclick="linkedSetStatus('running')"
+              title="Has at least one campaign running right now">Running <span>${metaAccs.filter(a => _linkedState(a) === 'running').length}</span></button>
+            <button class="linked-segbtn" data-k="idle" onclick="linkedSetStatus('idle')"
+              title="Account is open but nothing is running">Not running <span>${metaAccs.filter(a => _linkedState(a) === 'idle').length}</span></button>
+            <button class="linked-segbtn" data-k="closed" onclick="linkedSetStatus('closed')"
+              title="Meta has closed or disabled the account">Closed <span>${metaAccs.filter(a => _linkedState(a) === 'closed').length}</span></button>
+            <button class="linked-segbtn" data-k="all" onclick="linkedSetStatus('all')">All <span>${metaAccs.length}</span></button>
           </div>
           <input type="search" id="linked-filter" placeholder="Search by name or ID…" oninput="linkedApplyFilters()"
             style="flex:1;min-width:180px;max-width:280px;padding:6px 11px;font-size:12.5px;border:1px solid var(--border);border-radius:8px;
@@ -15005,12 +15034,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                     <span style="float:right;color:var(--text-muted);font-weight:500;opacity:.6" title="Drag to reorder">⠿</span>
                   </td>
                 </tr>` + list.map(a => `
-              <tr class="linked-acct-row" data-gid="${escHtml(gid)}" data-active="${a.is_active ? '1' : '0'}"
+              <tr class="linked-acct-row" data-gid="${escHtml(gid)}" data-state="${_linkedState(a)}"
                   data-search="${escHtml(((a.account_name || '') + ' ' + (a.meta_account_id || '') + ' ' + (a.currency || '')).toLowerCase())}"
                   style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
                 <td style="padding:10px 8px">
                   <div style="font-weight:600;color:var(--text-main)">${escHtml(a.account_name||a.meta_account_id)}
-                    ${a.is_active ? '' : '<span class="linked-off">Inactive</span>'}</div>
+                    ${_LINKED_CHIP[_linkedState(a)]}</div>
                   <div style="color:var(--text-muted);font-size:11px">${escHtml(a.meta_account_id)} · ${escHtml(a.currency)}</div>
                 </td>
                 <td style="padding:10px 8px">
