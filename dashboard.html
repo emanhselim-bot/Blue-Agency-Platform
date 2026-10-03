@@ -57,19 +57,28 @@
       --text-main:   #111827;
       --text-muted:  #6B7280;
       --border:      #E5E7EB;
+      --well:        #E9EDF3;
       --table-hover: #fafbff;
       --chart-bg:    #ffffff;
     }
     [data-theme="dark"] {
       color-scheme: dark;
-      --bg:          #172B7A;   /* brand navy — sampled from the brand deck */
-      --surface:     #1B3289;
-      --surface-2:   #223A96;
-      --text-main:   #EDF2FF;
-      --text-muted:  #A9B9E8;
-      --border:      #2C4499;
-      --table-hover: #223A96;
-      --chart-bg:    #1B3289;
+      /* Slate, not the brand navy. The navy was the brand deck colour, but at
+         full-screen size it tinted every white card blue and left thin text
+         fighting the background. Slate stays out of the way, so the brand blue
+         and gold read as accents instead of competing with the page. */
+      --bg:          #0B1220;
+      --surface:     #141E2E;
+      --surface-2:   #1B2638;
+      /* A recessed well for kanban columns, so a column reads as a container
+         and the cards inside it read as sitting on top. Without this the
+         column and its cards land on the same value and the depth inverts. */
+      --well:        #0F1827;
+      --text-main:   #E6EDF7;
+      --text-muted:  #94A3B8;
+      --border:      #243147;
+      --table-hover: #1B2638;
+      --chart-bg:    #141E2E;
     }
     [data-theme="dark"] body { background: var(--bg); color: var(--text-main); }
     [data-theme="dark"] .modal { background: var(--surface); }
@@ -145,7 +154,7 @@
     .controls-bar label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     /* White background, so the text colour is pinned dark rather than following
        the theme — otherwise the options vanish in dark mode. */
-    select { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: #fff; color: #16213E; color-scheme: light; cursor: pointer; max-width: 230px; transition: border-color 0.15s; }
+    select { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: #fff; color: #1B2638; color-scheme: light; cursor: pointer; max-width: 230px; transition: border-color 0.15s; }
     select:focus { outline: none; border-color: var(--blue-light); }
 
     .period-tabs { display: flex; gap: 2px; background: var(--bg); border-radius: 10px; padding: 3px; }
@@ -157,12 +166,12 @@
     .custom-dates.visible { display: flex; }
     /* The field is always white, so the text must be a fixed dark colour.
        var(--text-main) turns near-white in dark mode — white on white. */
-    .date-input { padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; background: #fff; color: #16213E; color-scheme: light; }
+    .date-input { padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; background: #fff; color: #1B2638; color-scheme: light; }
     .date-input:focus { outline: none; border-color: var(--blue-light); }
     .date-input::-webkit-datetime-edit-text,
     .date-input::-webkit-datetime-edit-day-field,
     .date-input::-webkit-datetime-edit-month-field,
-    .date-input::-webkit-datetime-edit-year-field { color: #16213E; }
+    .date-input::-webkit-datetime-edit-year-field { color: #1B2638; }
     .date-input::-webkit-calendar-picker-indicator { opacity: .75; cursor: pointer; }
     .date-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
     .date-sep { font-size: 12px; color: var(--text-muted); font-weight: 600; }
@@ -394,16 +403,20 @@
     /* pipeline kanban */
     .pipe-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: start; }
     @media (max-width: 1000px) { .pipe-board { grid-template-columns: repeat(2, 1fr); } }
-    .pipe-col { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 14px; padding: 12px; min-height: 320px; }
-    .pipe-col.drag-over { background: rgba(255,255,255,.22); }
-    .pipe-col-head { color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .pipe-count { background: rgba(255,255,255,.25); border-radius: 10px; padding: 1px 8px; font-size: 11px; }
-    .pipe-col-total { color: rgba(255,255,255,.65); font-size: 11px; margin-bottom: 10px; min-height: 14px; }
-    .pipe-card { background: #fff; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: grab; box-shadow: 0 3px 10px rgba(0,0,0,.18); transition: transform .12s; }
-    .pipe-card:hover { transform: translateY(-2px); }
-    .pipe-card-name { font-size: 14px; font-weight: 700; color: #111827; }
-    .pipe-card-sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
-    .pipe-card-val { font-size: 12px; font-weight: 700; color: #0573F5; margin-top: 6px; }
+    /* Columns were white-alpha overlays, which only worked because the page
+       behind them was a strong navy. On slate that reads as grey haze, so they
+       follow the palette: a flat surface with a real border, like the cards in
+       the rest of the app. Drag and drop is unchanged. */
+    .pipe-col { background: var(--well); border: 1px solid var(--border); border-radius: 14px; padding: 12px; min-height: 320px; }
+    .pipe-col.drag-over { background: var(--surface-2); border-color: var(--brand-accent); }
+    .pipe-col-head { color: var(--text-main); font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .pipe-count { background: var(--surface-2); color: var(--text-muted); border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+    .pipe-col-total { color: var(--text-muted); font-size: 11px; margin-bottom: 10px; min-height: 14px; }
+    .pipe-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: grab; transition: transform .12s, border-color .12s; }
+    .pipe-card:hover { transform: translateY(-2px); border-color: var(--brand-accent); }
+    .pipe-card-name { font-size: 14px; font-weight: 700; color: var(--text-main); }
+    .pipe-card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .pipe-card-val { font-size: 12px; font-weight: 700; color: var(--brand-accent); margin-top: 6px; }
     /* finance */
     .fin-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
     @media (max-width: 800px) { .fin-summary { grid-template-columns: 1fr; } }
@@ -568,7 +581,7 @@
     .cp-link.has { background: #EAF7EE; border-color: #A7E3BC; color: #15803D; font-weight: 700; }
     .cp-link:hover { border-color: #0573F5; color: #0573F5; }
     .cp-link.has:hover { border-color: #16A34A; color: #15803D; }
-    [data-theme="dark"] .cp-link { background: #1E293B; border-color: #334155; color: #475569; }
+    [data-theme="dark"] .cp-link { background: #1B2638; border-color: #334155; color: #475569; }
     [data-theme="dark"] .cp-link.has { background: #10261A; border-color: #166534; color: #86EFAC; }
 
     .cp-node-del { background: none; border: none; cursor: pointer; opacity: 0; font-size: 11px; color: #9AA4B2; transition: opacity .15s; }
@@ -580,15 +593,15 @@
     .cp-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #F7F9FC; border: 1px solid #E4E9F2; border-radius: 12px; padding: 9px 12px; margin-bottom: 14px; }
     [data-theme="dark"] .cp-toolbar { background: #0F172A; border-color: #334155; }
     .cp-seg { display: inline-flex; background: #E9EEF6; border-radius: 9px; padding: 2px; }
-    [data-theme="dark"] .cp-seg { background: #1E293B; }
+    [data-theme="dark"] .cp-seg { background: #1B2638; }
     .cp-seg button { border: none; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 11.5px; font-weight: 700; cursor: pointer; color: #64748B; }
     .cp-seg button.active { background: #fff; color: #0A1CA3; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
     [data-theme="dark"] .cp-seg button.active { background: #0573F5; color: #fff; }
     .cp-filter { border: 1px solid #D6DEE9; background: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; color: #374151; font-family: inherit; }
-    [data-theme="dark"] .cp-filter { background: #1E293B; border-color: #334155; color: #E2E8F0; }
+    [data-theme="dark"] .cp-filter { background: #1B2638; border-color: #334155; color: #E2E8F0; }
     .cp-chipbtn { border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 700; cursor: pointer; color: #64748B; }
     .cp-chipbtn.active { background: #0573F5; border-color: #0573F5; color: #fff; }
-    [data-theme="dark"] .cp-chipbtn { background: #1E293B; border-color: #334155; color: #94A3B8; }
+    [data-theme="dark"] .cp-chipbtn { background: #1B2638; border-color: #334155; color: #94A3B8; }
     /* summary strip */
     .cp-sharebar { display: flex; align-items: center; gap: 10px; background: #083BBF; color: #fff; border-radius: 12px; padding: 11px 16px; margin-bottom: 18px; font-size: 13px; }
     .cp-sharebar-logo { display: inline-flex; align-items: flex-end; gap: 3px; height: 22px; }
@@ -640,7 +653,7 @@
     [data-theme="dark"] .cp-deliv-title, [data-theme="dark"] .cp-deliv-empty { color: #94A3B8; }
     .cp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
     .cp-stat { background: #fff; border: 1px solid #E4E9F2; border-radius: 10px; padding: 10px 13px; }
-    [data-theme="dark"] .cp-stat { background: #1E293B; border-color: #334155; }
+    [data-theme="dark"] .cp-stat { background: #1B2638; border-color: #334155; }
     .cp-stat-n { font-size: 19px; font-weight: 800; color: #0A1CA3; }
     [data-theme="dark"] .cp-stat-n { color: #93C5FD; }
     .cp-stat-l { font-size: 9.5px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; color: #94A3B8; margin-top: 2px; }
@@ -687,7 +700,7 @@
     [data-theme="dark"] .cp-decision.no { background: #2A2418; border-color: #78350F; }
     [data-theme="dark"] .cp-decision.no .cp-node-name { color: #FCD34D; }
     [data-theme="dark"] .cp-branch-line { border-color: #334155; }
-    [data-theme="dark"] .cp-branch-btn { background: #1E293B; border-color: #334155; color: #94A3B8; }
+    [data-theme="dark"] .cp-branch-btn { background: #1B2638; border-color: #334155; color: #94A3B8; }
     [data-theme="dark"] .cp-branch-note { color: #64748B; }
     [data-theme="dark"] .cp-revcount { background: #422006; color: #FCD34D; }
 
@@ -699,7 +712,7 @@
     .cp-count.full .n { color: #15803D; }
     .cp-countadd { border: 1px dashed #C9D4E3; background: transparent; border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer; color: #B6BFCC; font-family: inherit; }
     .cp-countadd:hover { border-color: #0573F5; color: #0573F5; }
-    [data-theme="dark"] .cp-count { background: #1E293B; border-color: #334155; }
+    [data-theme="dark"] .cp-count { background: #1B2638; border-color: #334155; }
     [data-theme="dark"] .cp-count button { color: #94A3B8; }
     [data-theme="dark"] .cp-count .n { color: #93C5FD; }
     [data-theme="dark"] .cp-count.full { background: #10261A; border-color: #166534; }
@@ -709,7 +722,7 @@
     .cp-cmt-btn { border: 1px solid #D6DEE9; background: #fff; border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer; color: #B6BFCC; font-family: inherit; }
     .cp-cmt-btn.has { background: #EEF2FF; border-color: #C7D2FE; color: #4338CA; font-weight: 700; }
     .cp-cmt-btn:hover { border-color: #0573F5; color: #0573F5; }
-    [data-theme="dark"] .cp-cmt-btn { background: #1E293B; border-color: #334155; color: #475569; }
+    [data-theme="dark"] .cp-cmt-btn { background: #1B2638; border-color: #334155; color: #475569; }
     [data-theme="dark"] .cp-cmt-btn.has { background: #1E1B4B; border-color: #4338CA; color: #C7D2FE; }
     .cp-cmt-panel { width: 100%; max-width: 460px; border: 1px solid #E4E9F2; border-left: 3px solid #4338CA; border-radius: 0 10px 10px 0; background: #FAFBFE; padding: 10px 13px; margin-top: -2px; }
     [data-theme="dark"] .cp-cmt-panel { background: #0F172A; border-color: #334155; border-left-color: #4338CA; }
@@ -721,7 +734,7 @@
     .cp-cmt-del:hover { opacity: 1; color: #DC2626; }
     .cp-cmt-form { display: flex; gap: 6px; margin-top: 9px; }
     .cp-cmt-form input { flex: 1; padding: 6px 10px; border: 1px solid #D6DEE9; border-radius: 7px; font-size: 12px; font-family: inherit; background: #fff; color: #111827; }
-    [data-theme="dark"] .cp-cmt-form input { background: #1E293B; border-color: #334155; color: #F1F5F9; }
+    [data-theme="dark"] .cp-cmt-form input { background: #1B2638; border-color: #334155; color: #F1F5F9; }
     .cp-cmt-form button { background: #4338CA; color: #fff; border: none; border-radius: 7px; padding: 6px 14px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
 
     .cp-addnode { border: 1.5px dashed #C9D4E3; border-radius: 12px; background: transparent; color: #8A97A8; padding: 7px 18px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 200px; }
@@ -729,7 +742,7 @@
     .cp-flow-end { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #16A34A; border: 2px solid #86EFAC; background: #F4FDF7; border-radius: 20px; padding: 6px 22px; }
     [data-theme="dark"] .cp-phase { background: #16294A; border-color: #2563EB; color: #BFDBFE; }
     [data-theme="dark"] .cp-arrow { color: #3E5680; }
-    [data-theme="dark"] .cp-node { background: #1E293B; border-color: #334155; }
+    [data-theme="dark"] .cp-node { background: #1B2638; border-color: #334155; }
     [data-theme="dark"] .cp-node-name { color: #E2E8F0; }
     [data-theme="dark"] .cp-node-tick { background: #0F172A; border-color: #475569; }
     [data-theme="dark"] .cp-node.done { background: #10261A; border-color: #166534; }
@@ -765,7 +778,7 @@
     .cpm-tab:hover { background: rgba(255,255,255,.24); }
     .cpm-tab.active { background: #fff; color: #0A1CA3; border-color: #fff; }
     .cpm-panel { background: rgba(255,255,255,.97); border-radius: 16px; padding: 22px 24px; box-shadow: 0 8px 30px rgba(0,0,0,.25); max-height: 74vh; overflow-y: auto; text-align: left; }
-    [data-theme="dark"] .cpm-panel { background: #1E293B; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+    [data-theme="dark"] .cpm-panel { background: #1B2638; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
     .cpm-sechead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .cpm-sectitle { font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #6B7280; flex: 1; }
     [data-theme="dark"] .cpm-sectitle { color: #94A3B8; }
@@ -791,13 +804,13 @@
     .cpm-role.viewer { background: #F1F5F9; color: #64748B; }
     [data-theme="dark"] .cpm-role.owner  { background: #3B0764; color: #D8B4FE; }
     [data-theme="dark"] .cpm-role.editor { background: #16294A; color: #93C5FD; }
-    [data-theme="dark"] .cpm-role.viewer { background: #1E293B; color: #94A3B8; }
+    [data-theme="dark"] .cpm-role.viewer { background: #1B2638; color: #94A3B8; }
     .cpm-empty { padding: 26px; text-align: center; color: #9AA4B2; font-size: 13px; }
     .cpm-badge { font-size: 10px; font-weight: 800; letter-spacing: .5px; padding: 3px 10px; border-radius: 20px; background: rgba(255,255,255,.18); color: #fff; }
     .cpm-clients { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
     .cpm-ccard { background: rgba(255,255,255,.97); border-radius: 14px; padding: 18px; cursor: pointer; box-shadow: 0 6px 22px rgba(0,0,0,.22); border: 2px solid transparent; transition: transform .15s, border-color .15s; text-align: left; }
     .cpm-ccard:hover { transform: translateY(-4px); border-color: #0573F5; }
-    [data-theme="dark"] .cpm-ccard { background: #1E293B; }
+    [data-theme="dark"] .cpm-ccard { background: #1B2638; }
     .cpm-ccard-name { font-size: 15px; font-weight: 800; color: #0A1CA3; margin-bottom: 4px; }
     [data-theme="dark"] .cpm-ccard-name { color: #93C5FD; }
     .cpm-ccard-sub { font-size: 11.5px; color: #6B7280; margin-bottom: 10px; }
@@ -824,16 +837,61 @@
     .cpm-task.done { border-left-color: #16A34A; }
     .cpm-task.in_progress { border-left-color: #F59E0B; }
     .cpm-task.blocked { border-left-color: #EF4444; }
-    [data-theme="dark"] .cpm-task { background: #1E293B; }
+    [data-theme="dark"] .cpm-task { background: #1B2638; }
     .cpm-task-name { font-size: 12.5px; font-weight: 700; color: #111827; }
     [data-theme="dark"] .cpm-task-name { color: #F1F5F9; }
     .cpm-task-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 10px; color: #6B7280; align-items: center; }
     .cpm-pill { background: #EAF2FE; color: #0557D9; border-radius: 10px; padding: 1px 8px; font-weight: 700; }
     [data-theme="dark"] .cpm-pill { background: #16294A; color: #93C5FD; }
     .cpm-pill.overdue { background: #FEE2E2; color: #DC2626; }
+    /* ── Deadline-first task list ──────────────────────────────────────────
+       Replaces the four-column status board for a client's pipeline. With 24
+       stages the board meant scrolling sideways to find out what was due, and
+       the thing people actually ask is "what is late and who has it" — which a
+       board answers worst. Everything the cards carried is still here: stage,
+       owner, due date with the overdue state, the notes marker, and the click
+       through to the task drawer. Status moved from dragging to a dropdown,
+       which also works on a phone, where dragging never did. */
+    .cpm-list { background: var(--well); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .cpm-list-head { display: grid; grid-template-columns: 1fr 132px 132px 108px; gap: 10px; padding: 10px 16px;
+      font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+      color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .cpm-row { display: grid; grid-template-columns: 1fr 132px 132px 108px; gap: 10px; padding: 11px 16px;
+      align-items: center; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s; }
+    .cpm-row:last-child { border-bottom: none; }
+    .cpm-row:hover { background: var(--surface-2); }
+    .cpm-row-name { font-size: 13px; font-weight: 650; color: var(--text-main); display: flex; align-items: center; gap: 7px; }
+    .cpm-row-n { color: var(--text-muted); font-weight: 700; font-size: 11px; min-width: 18px; }
+    .cpm-row-owner, .cpm-row-due { font-size: 11.5px; color: var(--text-muted); }
+    .cpm-row-due.overdue { color: #F87171; font-weight: 700; }
+    .cpm-row.is-done .cpm-row-name { color: var(--text-muted); }
+    /* The status select is styled as a chip so the row still scans as a status
+       column rather than a form. */
+    .cpm-stat { border: 1px solid transparent; border-radius: 999px; padding: 3px 10px; font-size: 11px;
+      font-weight: 700; cursor: pointer; appearance: none; -webkit-appearance: none; text-align: center; }
+    .cpm-stat:disabled { cursor: default; opacity: 1; }
+    .cpm-stat.done        { background: #10331F; color: #6EE7A8; }
+    .cpm-stat.in_progress { background: #3A2A10; color: #FBBF24; }
+    .cpm-stat.blocked     { background: #3A1A1C; color: #FCA5A5; }
+    .cpm-stat.pending     { background: #232F42; color: #9AA8BC; }
+    html:not([data-theme="dark"]) .cpm-stat.done        { background: #DCFCE7; color: #15803D; }
+    html:not([data-theme="dark"]) .cpm-stat.in_progress { background: #FEF3C7; color: #B45309; }
+    html:not([data-theme="dark"]) .cpm-stat.blocked     { background: #FEE2E2; color: #B91C1C; }
+    html:not([data-theme="dark"]) .cpm-stat.pending     { background: #EEF2F7; color: #64748B; }
+    .cpm-list-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .cpm-list-count { font-size: 12.5px; font-weight: 800; color: var(--text-main); }
+    .cpm-list-bar { flex: 1; min-width: 120px; height: 5px; border-radius: 999px; background: var(--border); overflow: hidden; }
+    .cpm-list-fill { height: 100%; background: var(--brand-accent); border-radius: 999px; transition: width .3s; }
+    .cpm-list-next { font-size: 11.5px; color: var(--text-muted); }
+    @media (max-width: 760px) {
+      .cpm-list-head { display: none; }
+      .cpm-row { grid-template-columns: 1fr auto; gap: 6px 10px; padding: 12px 14px; }
+      .cpm-row-owner, .cpm-row-due { grid-column: 1 / -1; }
+    }
+
     /* task drawer */
     .cpm-drawer { position: fixed; top: 0; right: 0; width: 460px; max-width: 94vw; height: 100vh; background: #fff; z-index: 9600; box-shadow: -8px 0 40px rgba(0,0,0,.3); display: flex; flex-direction: column; }
-    [data-theme="dark"] .cpm-drawer { background: #1E293B; }
+    [data-theme="dark"] .cpm-drawer { background: #1B2638; }
     .cpm-drawer.hidden { display: none; }
     .cpm-drawer-head { padding: 18px 20px 14px; border-bottom: 1px solid #E4E9F2; display: flex; align-items: center; gap: 10px; }
     [data-theme="dark"] .cpm-drawer-head { border-bottom-color: #334155; }
@@ -884,7 +942,7 @@
     /* ── SOCIAL AUTH ── */
     .auth-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 12px; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
     .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-    .auth-social-btn { width: 100%; padding: 11px 16px; background: #fff; color: #16213E; border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: background 0.15s; margin-bottom: 4px; }
+    .auth-social-btn { width: 100%; padding: 11px 16px; background: #fff; color: #1B2638; border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: background 0.15s; margin-bottom: 4px; }
     .auth-social-btn:hover { background: var(--bg); border-color: #bbb; }
     .auth-social-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
@@ -1178,23 +1236,23 @@
     .kpi-card .kpi-tprog .tprog-meta { font-size: 9.5px; }
 
     /* ═══ DARK MODE for hub / pipeline / client profile / finance ═══ */
-    [data-theme="dark"] .hub-card { background: #1E293B; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+    [data-theme="dark"] .hub-card { background: #1B2638; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
     [data-theme="dark"] .hub-card-title { color: #93C5FD; }
     [data-theme="dark"] .hub-card-desc { color: #94A3B8; }
     [data-theme="dark"] .hub-card-badge { background: #1E3A8A; color: #BFDBFE; }
-    [data-theme="dark"] .hub-section { background: #1E293B; }
+    [data-theme="dark"] .hub-section { background: #141E2E; }
     [data-theme="dark"] .hub-section h2 { color: #93C5FD; }
     [data-theme="dark"] .hub-section p { color: #94A3B8; }
-    [data-theme="dark"] .hub-modal-box { background: #1E293B; color: #F1F5F9; }
+    [data-theme="dark"] .hub-modal-box { background: #1B2638; color: #F1F5F9; }
     [data-theme="dark"] .hub-modal-box h3 { color: #93C5FD; }
     [data-theme="dark"] .hub-modal-box label { color: #94A3B8; }
     [data-theme="dark"] .hub-input { background: #0F172A; border-color: #334155; color: #F1F5F9; }
     [data-theme="dark"] .hub-modal-actions .ghost { border-color: #334155; color: #CBD5E1; }
-    [data-theme="dark"] .pipe-card { background: #1E293B; box-shadow: 0 3px 10px rgba(0,0,0,.45); }
+    [data-theme="dark"] .pipe-card { background: var(--surface-2); box-shadow: 0 3px 10px rgba(0,0,0,.45); }
     [data-theme="dark"] .pipe-card-name { color: #F1F5F9; }
     [data-theme="dark"] .pipe-card-sub { color: #94A3B8; }
     [data-theme="dark"] .pipe-card-val { color: #60A5FA; }
-    [data-theme="dark"] .fin-table-wrap { background: #1E293B; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+    [data-theme="dark"] .fin-table-wrap { background: #1B2638; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
     [data-theme="dark"] .fin-table th { background: #0F172A; color: #94A3B8; }
     [data-theme="dark"] .fin-table td { color: #F1F5F9; border-top-color: #334155; }
     [data-theme="dark"] .fin-empty { color: #94A3B8; }
@@ -1204,7 +1262,7 @@
     [data-theme="dark"] .fin-chip.invoiced { background: #1E3A8A; color: #BFDBFE; }
     [data-theme="dark"] .fin-chip.overdue { background: #7F1D1D; color: #FCA5A5; }
     /* client profile */
-    [data-theme="dark"] .cp-wrap { background: #1E293B; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+    [data-theme="dark"] .cp-wrap { background: #1B2638; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
     [data-theme="dark"] .cp-name { color: #93C5FD; }
     [data-theme="dark"] .cp-meta, [data-theme="dark"] .cp-sec-title, [data-theme="dark"] .cp-stage-prog { color: #94A3B8; }
     [data-theme="dark"] .cp-empty { color: #64748B; }
@@ -1216,24 +1274,24 @@
     [data-theme="dark"] .cp-opt { color: #E2E8F0; }
     [data-theme="dark"] .cp-opt:hover { background: #1E3A8A; }
     [data-theme="dark"] .cp-picker-foot { border-top-color: #334155; }
-    [data-theme="dark"] .cp-picker-foot input[type=text] { background: #1E293B; border-color: #334155; color: #F1F5F9; }
+    [data-theme="dark"] .cp-picker-foot input[type=text] { background: #1B2638; border-color: #334155; color: #F1F5F9; }
     [data-theme="dark"] .cp-monthbar { background: #0F172A; border-color: #334155; }
-    [data-theme="dark"] .cp-mnav { background: #1E293B; border-color: #334155; color: #93C5FD; }
+    [data-theme="dark"] .cp-mnav { background: #1B2638; border-color: #334155; color: #93C5FD; }
     [data-theme="dark"] .cp-mnav:hover { background: #1E3A8A; }
     [data-theme="dark"] .cp-mlabel { color: #93C5FD; }
-    [data-theme="dark"] .cp-mchip { background: #1E293B; border-color: #334155; color: #94A3B8; }
+    [data-theme="dark"] .cp-mchip { background: #1B2638; border-color: #334155; color: #94A3B8; }
     [data-theme="dark"] .cp-mchip.has { color: #BFDBFE; border-color: #1E3A8A; }
     [data-theme="dark"] .cp-mchip.active { background: #0573F5; color: #fff; border-color: #0573F5; }
-    [data-theme="dark"] .cp-tcard { background: #1E293B; border-color: #334155; }
+    [data-theme="dark"] .cp-tcard { background: #1B2638; border-color: #334155; }
     [data-theme="dark"] .cp-tstage.done .cp-tcard { background: #14261C; }
     [data-theme="dark"] .cp-tstage.active .cp-tcard { background: #2A2418; }
-    [data-theme="dark"] .cp-tdot { background: #1E293B; }
+    [data-theme="dark"] .cp-tdot { background: #1B2638; }
     [data-theme="dark"] .cp-stage { background: #0F172A; border-color: #334155; }
     [data-theme="dark"] .cp-stage-name, [data-theme="dark"] .cp-item-name { color: #F1F5F9; }
     [data-theme="dark"] .cp-item { border-top-color: #334155; }
     [data-theme="dark"] .cp-item.done .cp-item-name { color: #64748B; }
     [data-theme="dark"] .cp-date { background: #0F172A; border-color: #334155; color: #E2E8F0; color-scheme: dark; }
-    [data-theme="dark"] .cp-status { background: #1E293B; border-color: #334155; color: #CBD5E1; }
+    [data-theme="dark"] .cp-status { background: #1B2638; border-color: #334155; color: #CBD5E1; }
     [data-theme="dark"] .cp-status.in_progress { background: #422006; color: #FCD34D; border-color: #78350F; }
     [data-theme="dark"] .cp-status.done { background: #14532D; color: #86EFAC; border-color: #166534; }
     [data-theme="dark"] .cp-bar { background: #334155; }
@@ -1801,7 +1859,7 @@
     .ai-msg.assistant strong { font-weight: 700; }
     .ai-msg.assistant em { font-style: italic; }
     .ai-msg.assistant code { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 11px; }
-    .ai-msg.assistant pre { background: #1e293b; color: #e2e8f0; padding: 10px 12px; border-radius: 8px; font-size: 11px; overflow-x: auto; white-space: pre; font-family: monospace; margin: 6px 0; }
+    .ai-msg.assistant pre { background: #1B2638; color: #e2e8f0; padding: 10px 12px; border-radius: 8px; font-size: 11px; overflow-x: auto; white-space: pre; font-family: monospace; margin: 6px 0; }
     .ai-msg.assistant ul, .ai-msg.assistant ol { padding-left: 16px; margin: 4px 0; }
     .ai-msg.assistant li { margin: 2px 0; }
     .ai-msg.assistant .ai-h1, .ai-msg.assistant .ai-h2 { font-weight: 700; display: block; margin-top: 8px; }
@@ -2202,49 +2260,49 @@
 
 
     /* ═══════════════════════════════════════════════════
-       DARK NAVY THEME — brand navy #172B7A everywhere
+       DARK NAVY THEME — brand navy #0B1220 everywhere
        ═══════════════════════════════════════════════════ */
-    [data-theme="dark"] body { background: #172B7A; }
-    [data-theme="dark"] .home-hub { background: #172B7A; }
+    [data-theme="dark"] body { background: #0B1220; }
+    [data-theme="dark"] .home-hub { background: #0B1220; }
     [data-theme="dark"] .content, [data-theme="dark"] .hub-inner, [data-theme="dark"] .cp-wrap { color: #EDF2FF; }
-    [data-theme="dark"] .hub-card { background: #1B3289; border: 1px solid #2C4499; box-shadow: 0 8px 30px rgba(0,0,0,.28); }
-    [data-theme="dark"] .hub-card:hover { border-color: #4562BE; background: #22399A; }
+    [data-theme="dark"] .hub-card { background: #141E2E; border: 1px solid #243147; box-shadow: 0 8px 30px rgba(0,0,0,.28); }
+    [data-theme="dark"] .hub-card:hover { border-color: #3B82F6; background: #1B2638; }
     [data-theme="dark"] .hub-card-desc { color: #A9B9E8; }
     [data-theme="dark"] .hub-input, [data-theme="dark"] .cpm-input {
-      background: #223A96; border-color: #3A54AE; color: #EDF2FF; }
+      background: #1B2638; border-color: #243147; color: #EDF2FF; }
     [data-theme="dark"] .hub-modal-box, [data-theme="dark"] .cpm-drawer,
-    [data-theme="dark"] .cpm-panel, [data-theme="dark"] .cp-picker { background: #1B3289; border-color: #2C4499; }
-    [data-theme="dark"] .cpm-ccard { background: #1B3289; border-color: #2C4499; }
-    [data-theme="dark"] .cpm-ccard:hover { border-color: #4562BE; background: #22399A; }
-    [data-theme="dark"] .cpm-addcard { border-color: #3A54AE; color: #A9B9E8; }
-    [data-theme="dark"] .cp-node { background: #1B3289; border-color: #2C4499; }
-    [data-theme="dark"] .cp-node:hover { border-color: #4562BE; }
+    [data-theme="dark"] .cpm-panel, [data-theme="dark"] .cp-picker { background: #141E2E; border-color: #243147; }
+    [data-theme="dark"] .cpm-ccard { background: #141E2E; border-color: #243147; }
+    [data-theme="dark"] .cpm-ccard:hover { border-color: #3B82F6; background: #1B2638; }
+    [data-theme="dark"] .cpm-addcard { border-color: #243147; color: #A9B9E8; }
+    [data-theme="dark"] .cp-node { background: #141E2E; border-color: #243147; }
+    [data-theme="dark"] .cp-node:hover { border-color: #3B82F6; }
     [data-theme="dark"] .cp-node-name { color: #EDF2FF; }
     [data-theme="dark"] .cp-phase { background: rgba(255,255,255,.08); border-color: #5B9CF6; color: #CFE0FF; }
     [data-theme="dark"] .cp-stat, [data-theme="dark"] .cp-deliv, [data-theme="dark"] .cp-deliv-wrap,
     [data-theme="dark"] .cp-units, [data-theme="dark"] .cp-monthbar, [data-theme="dark"] .cp-toolbar {
-      background: #1B3289; border-color: #2C4499; }
+      background: #141E2E; border-color: #243147; }
     [data-theme="dark"] .cp-deliv-name, [data-theme="dark"] .cp-unitname { color: #EDF2FF; }
     [data-theme="dark"] .cp-link, [data-theme="dark"] .cp-cmt-btn, [data-theme="dark"] .cp-countadd,
     [data-theme="dark"] .cp-branch-btn, [data-theme="dark"] .cp-btn, [data-theme="dark"] .cp-chipbtn,
     [data-theme="dark"] .cp-filter, [data-theme="dark"] .cp-unitdue, [data-theme="dark"] .cp-unitcheck {
-      background: #223A96; border-color: #3A54AE; color: #D5DEF8; }
+      background: #1B2638; border-color: #243147; color: #D5DEF8; }
     [data-theme="dark"] .cp-node-date, [data-theme="dark"] .cp-meta, [data-theme="dark"] .cp-empty { color: #A9B9E8; }
-    [data-theme="dark"] .cp-cmt-panel, [data-theme="dark"] .cp-cmt { background: #223A96; border-color: #3A54AE; color: #E4EAFB; }
+    [data-theme="dark"] .cp-cmt-panel, [data-theme="dark"] .cp-cmt { background: #1B2638; border-color: #243147; color: #E4EAFB; }
     [data-theme="dark"] .fin-sum-card, [data-theme="dark"] .bill-fund-card,
-    [data-theme="dark"] .pipe-col, [data-theme="dark"] .pipe-card, [data-theme="dark"] .cmp-wrap,
+    [data-theme="dark"] .cmp-wrap,
     [data-theme="dark"] .kpi-card, [data-theme="dark"] .section, [data-theme="dark"] .metric-card {
-      background: #1B3289; border-color: #2C4499; }
+      background: #141E2E; border-color: #243147; }
     [data-theme="dark"] .fin-table th, [data-theme="dark"] .bill-table th,
     [data-theme="dark"] .cpm-table th, [data-theme="dark"] .cmp-table th,
-    [data-theme="dark"] .data-table th { background: #223A96; }
+    [data-theme="dark"] .data-table th { background: #1B2638; }
     [data-theme="dark"] .cp-arrow { color: #5B72C4; }
     [data-theme="dark"] .cp-flow-end { background: rgba(22,163,74,.18); border-color: #22C55E; color: #A7F3C4; }
     [data-theme="dark"] .modal, [data-theme="dark"] .modal-header, [data-theme="dark"] .modal-body,
-    [data-theme="dark"] .settings-tabs { background: #1B3289; }
-    [data-theme="dark"] .settings-sidebar { background: #152667; border-right-color: #2C4499; }
+    [data-theme="dark"] .settings-tabs { background: #141E2E; }
+    [data-theme="dark"] .settings-sidebar { background: #152667; border-right-color: #243147; }
     [data-theme="dark"] .header { background: #142263; }
-    [data-theme="dark"] .agency-nav, [data-theme="dark"] .controls-bar { background: #17296F; border-color: #2C4499; }
+    [data-theme="dark"] .agency-nav, [data-theme="dark"] .controls-bar { background: #17296F; border-color: #243147; }
 
     /* floating light / dark switch — every screen, phone and desktop */
     .theme-fab { position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom));
@@ -2449,7 +2507,7 @@
     [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
       color: #EDF2FF; }
     [data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: #8FA2D8; }
-    [data-theme="dark"] select option { background: #1B3289; color: #EDF2FF; }
+    [data-theme="dark"] select option { background: #141E2E; color: #EDF2FF; }
 
     /* headings + brand ink on navy */
     [data-theme="dark"] .cp-name, [data-theme="dark"] .cp-mapname, [data-theme="dark"] .cp-mlabel,
@@ -2467,8 +2525,8 @@
 
     /* comment bubbles + pickers */
     [data-theme="dark"] .cp-cmt-meta strong { color: #A9C7FF !important; }
-    [data-theme="dark"] .cp-picker, [data-theme="dark"] .cp-opt { background: #1B3289; }
-    [data-theme="dark"] .cp-opt:hover { background: #22399A; }
+    [data-theme="dark"] .cp-picker, [data-theme="dark"] .cp-opt { background: #141E2E; }
+    [data-theme="dark"] .cp-opt:hover { background: #1B2638; }
 
 
     /* card sub-text and stats: readable on navy, spaced apart */
@@ -2484,11 +2542,11 @@
     [data-theme="dark"] .cpm-newuser-foot span, [data-theme="dark"] .cpm-newuser-grid label {
       color: #C6D2F2; }
     [data-theme="dark"] .cpm-ccard-tag { background: rgba(255,255,255,.14); color: #DCE7FF; }
-    [data-theme="dark"] { --text-muted: #C6D2F2; }
+    [data-theme="dark"] { --text-muted: #94A3B8; }
 
 
     /* every muted / grey label reads clearly on the navy */
-    [data-theme="dark"] { --text-muted: #C6D2F2; }
+    [data-theme="dark"] { --text-muted: #94A3B8; }
     [data-theme="dark"] .cpm-ccard-sub, [data-theme="dark"] .cpm-ccard-stat,
     [data-theme="dark"] .cpm-ccard-pct, [data-theme="dark"] .cpm-empty,
     [data-theme="dark"] .cp-empty, [data-theme="dark"] .cp-deliv-empty,
@@ -2566,7 +2624,7 @@
     /* template picker was see-through over the KPI cards */
     .tmpl-picker { background: var(--surface) !important; border: 1px solid var(--border) !important;
       box-shadow: 0 18px 50px rgba(0,0,0,.45) !important; z-index: 400 !important; padding: 6px !important; }
-    [data-theme="dark"] .tmpl-picker { background: #1B3289 !important; border-color: #2C4499 !important; }
+    [data-theme="dark"] .tmpl-picker { background: #141E2E !important; border-color: #243147 !important; }
     .tmpl-option { color: var(--text-main); }
     [data-theme="dark"] .tmpl-option { color: #EDF2FF; }
     [data-theme="dark"] .tmpl-option-desc { color: #A9B9E8; }
@@ -2895,7 +2953,7 @@
   <!-- MONTHLY HISTORY (manual figures for months with no live data) -->
   <div id="mh-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(6,12,30,.72);
        overflow-y:auto;align-items:flex-start;justify-content:center">
-    <div style="width:100%;max-width:1000px;margin:auto;padding:26px 24px;background:var(--bg-card,#16213E);
+    <div style="width:100%;max-width:1000px;margin:auto;padding:26px 24px;background:var(--bg-card,#1B2638);
          border:1px solid var(--border);border-radius:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div>
@@ -3635,7 +3693,7 @@
               <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px">
                 <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Ready-to-send message</div>
                 <textarea id="client-message-text" readonly style="width:100%;background:transparent;border:none;color:#94a3b8;font-size:12px;line-height:1.6;resize:none;outline:none;height:130px"></textarea>
-                <button id="copy-msg-btn" onclick="copyClientMessage(event)" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;margin-top:4px">Copy message</button>
+                <button id="copy-msg-btn" onclick="copyClientMessage(event)" style="background:#1B2638;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;margin-top:4px">Copy message</button>
               </div>
             </div>
           </div>
@@ -4124,7 +4182,7 @@
       const fab = document.getElementById('theme-fab');
       if (fab) { fab.textContent = dark ? '☀️' : '🌙'; fab.title = dark ? 'Switch to white' : 'Switch to black'; }
       const meta = document.getElementById('theme-color-meta');
-      if (meta) meta.setAttribute('content', dark ? '#172B7A' : '#0573F5');
+      if (meta) meta.setAttribute('content', dark ? '#0B1220' : '#0573F5');
     }
     function blueToggleTheme() { blueSetTheme(!blueIsDark()); }
 
@@ -5636,7 +5694,7 @@
       const now = new Date();
       document.getElementById('mh-table').innerHTML = `
         <thead>
-          <tr style="position:sticky;top:0;background:var(--bg-card,#16213E);z-index:1">
+          <tr style="position:sticky;top:0;background:var(--bg-card,#1B2638);z-index:1">
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
             <th colspan="7" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
             <th colspan="4" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
@@ -5646,7 +5704,7 @@
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
           </tr>
-          <tr style="position:sticky;top:32px;background:var(--bg-card,#16213E);z-index:1">
+          <tr style="position:sticky;top:32px;background:var(--bg-card,#1B2638);z-index:1">
             ${/* Only the columns sitting under the Website and Messages spans.
                   Branding, Returns and Net revenue each own a rowspan header of
                   their own, so listing them here pushed this row one cell wide
@@ -16400,39 +16458,72 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     function _cpmMember(id) { return cpmData.members.find(m => m.id === id); }
 
+    // Tasks as a deadline-first list rather than a status board.
+    //
+    // Rows stay in pipeline order (sort_order), because the stages are a
+    // sequence — Quotation Sent through Monthly Report — and reordering them by
+    // date would hide where the work actually is. The summary above the list
+    // carries what the board used to show at a glance: how many are done, and
+    // which deadline is next.
     function cpmRenderBoard() {
       const today = new Date().toISOString().slice(0, 10);
-      const cols = CPM_STATUS.map(st => {
-        const items = cpmTasks.filter(t => (t.status || 'pending') === st);
-        return `<div class="cpm-col" ondragover="event.preventDefault()" ondrop="cpmDropTask(event,'${st}')">
-          <div class="cpm-col-head">${CPM_STATUS_LABEL[st]} <span class="cpm-col-n">${items.length}</span></div>
-          ${items.map(t => {
-            const m = _cpmMember(t.owner_id);
-            const overdue = t.due_date && t.due_date < today && t.status !== 'done';
-            return `<div class="cpm-task ${t.status}" draggable="${cpmCanEdit()}" ondragstart="event.dataTransfer.setData('text/plain','${t.id}')" onclick="cpmOpenTask('${t.id}')">
-              <div class="cpm-task-name">${cpmEsc(t.stage)}</div>
-              <div class="cpm-task-meta">
-                ${m ? `<span class="cpm-pill">👤 ${cpmEsc(m.full_name.split(' ')[0])}</span>` : ''}
-                ${t.due_date ? `<span class="cpm-pill ${overdue ? 'overdue' : ''}">📅 ${t.due_date.slice(5)}</span>` : ''}
-                ${t.notes ? '<span title="Has notes">📝</span>' : ''}
-              </div>
-            </div>`;
-          }).join('')}
+      const ro = !cpmCanEdit();
+
+      const done = cpmTasks.filter(t => t.status === 'done').length;
+      const pct  = cpmTasks.length ? Math.round(done / cpmTasks.length * 100) : 0;
+
+      // The soonest unfinished deadline. Overdue ones sort first naturally,
+      // which is what someone opening this screen needs to see.
+      const nextDue = cpmTasks
+        .filter(t => t.due_date && t.status !== 'done')
+        .map(t => t.due_date).sort()[0];
+
+      const rows = cpmTasks.map((t, i) => {
+        const st = t.status || 'pending';
+        const m = _cpmMember(t.owner_id);
+        const overdue = t.due_date && t.due_date < today && st !== 'done';
+        const opts = CPM_STATUS.map(s =>
+          `<option value="${s}" ${s === st ? 'selected' : ''}>${CPM_STATUS_LABEL[s]}</option>`).join('');
+        return `<div class="cpm-row ${st === 'done' ? 'is-done' : ''}" onclick="cpmOpenTask('${t.id}')">
+          <div class="cpm-row-name">
+            <span class="cpm-row-n">${i + 1}</span>
+            ${cpmEsc(t.stage)}
+            ${t.notes ? '<span title="Has notes" style="opacity:.6">📝</span>' : ''}
+          </div>
+          <select class="cpm-stat ${st}" ${ro ? 'disabled' : ''}
+                  onclick="event.stopPropagation()"
+                  onchange="cpmSetStatus('${t.id}', this.value)">${opts}</select>
+          <div class="cpm-row-owner">${m ? '👤 ' + cpmEsc(m.full_name.split(' ')[0]) : '—'}</div>
+          <div class="cpm-row-due ${overdue ? 'overdue' : ''}">${t.due_date ? (overdue ? '⚠ ' : '') + t.due_date.slice(5) : '—'}</div>
         </div>`;
       }).join('');
-      document.getElementById('cpm-boardwrap').innerHTML = `<div class="cpm-board">${cols}</div>`;
+
+      document.getElementById('cpm-boardwrap').innerHTML = `
+        <div class="cpm-list-top">
+          <span class="cpm-list-count">${done} of ${cpmTasks.length} done</span>
+          <span class="cpm-list-bar"><span class="cpm-list-fill" style="width:${pct}%"></span></span>
+          <span class="cpm-list-count">${pct}%</span>
+          ${nextDue ? `<span class="cpm-list-next">Next deadline ${nextDue}</span>` : ''}
+        </div>
+        <div class="cpm-list">
+          <div class="cpm-list-head"><span>Task</span><span>Status</span><span>Owner</span><span>Due</span></div>
+          ${rows || '<div class="cpm-empty" style="padding:18px">No tasks in this pipeline yet.</div>'}
+        </div>`;
     }
 
-    async function cpmDropTask(ev, status) {
-      ev.preventDefault();
+    // Status used to change by dragging a card between columns. A dropdown does
+    // the same thing, works on a phone, and keeps the row in place so you can
+    // see what you just changed.
+    async function cpmSetStatus(id, status) {
       if (!cpmCanEdit()) return;
-      const id = ev.dataTransfer.getData('text/plain');
       const t = cpmTasks.find(x => x.id === id);
       if (!t || t.status === status) return;
+      const previous = t.status;
       t.status = status;
       cpmRenderBoard();
-      const { error } = await sb.from('cp_tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-      if (error) { alert(error.message); cpmLoadTasks(); }
+      const { error } = await sb.from('cp_tasks')
+        .update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) { alert(error.message); t.status = previous; cpmRenderBoard(); }
     }
 
     // ── Task drawer: owner, due date, status, notes, attachments, comments ──
