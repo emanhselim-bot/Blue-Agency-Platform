@@ -112,21 +112,41 @@ function idFromUrl(raw: string): string | null {
   return dashed ? dashed[0].replace(/-/g, "").toLowerCase() : null;
 }
 
-async function notion(token: string, path: string, init?: RequestInit) {
-  const res = await fetch(NOTION + path, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (res.status === 401) throw new Error("BAD_NOTION_TOKEN");
-  if (res.status === 429) throw new Error("RATE_LIMITED");
-  if (res.status === 404) throw new Error("NOT_SHARED");
-  if (!res.ok) throw new Error(`Notion returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return await res.json();
+// Notion allows roughly three requests a second per integration. A full run
+// walks twenty-odd client pages and queries several hundred month sheets, which
+// sailed past that and came back 429 for most of them. Requests are paced, and
+// a 429 is waited out rather than thrown away.
+let _lastCall = 0;
+const MIN_GAP_MS = 350;
+
+// deno-lint-ignore no-explicit-any
+async function notion(token: string, path: string, init?: RequestInit): Promise<any> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const wait = _lastCall + MIN_GAP_MS - Date.now();
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    _lastCall = Date.now();
+
+    const res = await fetch(NOTION + path, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+    if (res.status === 429) {
+      const retry = Number(res.headers.get("Retry-After") || "1");
+      await new Promise(r => setTimeout(r, Math.min(retry, 10) * 1000 * (attempt + 1)));
+      continue;
+    }
+    if (res.status === 401) throw new Error("BAD_NOTION_TOKEN");
+    if (res.status === 404) throw new Error("NOT_SHARED");
+    if (!res.ok) throw new Error(`Notion returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    return await res.json();
+  }
+  throw new Error("RATE_LIMITED");
 }
 
 /**
@@ -150,8 +170,10 @@ async function findDatabases(token: string, rootId: string) {
     seen.add(rootId);
     return found;
   } catch (e) {
-    // Not a database (or not shared) -- fall through and treat it as a page.
-    if ((e as Error).message === "BAD_NOTION_TOKEN") throw e;
+    // Not a database -- fall through and treat it as a page. A bad token or a
+    // rate limit is about the whole run, not this one id, so it propagates.
+    const msg = (e as Error).message;
+    if (msg === "BAD_NOTION_TOKEN" || msg === "RATE_LIMITED") throw e;
   }
 
   while (queue.length && visited < MAX_NODES) {
@@ -170,7 +192,10 @@ async function findDatabases(token: string, rootId: string) {
         try {
           page = await notion(token, `/blocks/${node.id}/children?${q}`);
         } catch (e) {
-          if ((e as Error).message === "BAD_NOTION_TOKEN") throw e;
+          const msg = (e as Error).message;
+          // Swallowing a rate limit here turned it into "nothing found at that
+          // link", which sent people checking Notion sharing that was fine.
+          if (msg === "BAD_NOTION_TOKEN" || msg === "RATE_LIMITED") throw e;
           break;   // an unshared or deleted child should not abort the whole walk
         }
         for (const b of page.results ?? []) {
@@ -416,6 +441,7 @@ Deno.serve(async (req: Request) => {
     all?: boolean;
     until?: string;
     cron_secret?: string;
+    limit?: number;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
 
@@ -447,23 +473,68 @@ Deno.serve(async (req: Request) => {
   }
 
   // Which accounts to do.
+  //
+  // A combined group is a target in its own right. A client running two ad
+  // accounts against one Notion sheet gets that sheet on the group as well as
+  // on each account: monthly_history keys group rows as '__group__<id>', and
+  // the dashboard's dedupe takes the group row for any month it covers, so the
+  // client is not counted twice in totals while each account still shows the
+  // figures when selected on its own.
   type Acct = {
     id: string; organization_id: string; account_name: string | null;
     currency: string | null; agency_id: string | null; notion_url: string | null;
+    notion_synced_at?: string | null;
+    isGroup?: boolean;
   };
   let accounts: Acct[] = [];
 
+  const asGroup = (g: Record<string, unknown>): Acct => ({
+    id: "__group__" + String(g.id),
+    organization_id: String(g.organization_id),
+    account_name: (g.name as string | null) ?? "Combined group",
+    currency: null,
+    agency_id: (g.agency_id as string | null) ?? null,
+    notion_url: (g.notion_url as string | null) ?? null,
+    notion_synced_at: (g.notion_synced_at as string | null) ?? null,
+    isGroup: true,
+  });
+
   if (body.account_id) {
-    const { data } = await admin.from("meta_ad_accounts")
-      .select("id, organization_id, account_name, currency, agency_id, notion_url")
-      .eq("id", body.account_id).maybeSingle();
-    if (!data) return json({ error: "Account not found" }, 404);
-    accounts = [data as Acct];
+    if (body.account_id.startsWith("__group__")) {
+      const { data } = await admin.from("account_groups")
+        .select("id, organization_id, name, agency_id, notion_url")
+        .eq("id", body.account_id.replace("__group__", "")).maybeSingle();
+      if (!data) return json({ error: "Group not found" }, 404);
+      accounts = [asGroup(data)];
+    } else {
+      const { data } = await admin.from("meta_ad_accounts")
+        .select("id, organization_id, account_name, currency, agency_id, notion_url")
+        .eq("id", body.account_id).maybeSingle();
+      if (!data) return json({ error: "Account not found" }, 404);
+      accounts = [data as Acct];
+    }
   } else if (body.all) {
-    const { data } = await admin.from("meta_ad_accounts")
-      .select("id, organization_id, account_name, currency, agency_id, notion_url")
-      .not("notion_url", "is", null);
-    accounts = (data ?? []) as Acct[];
+    const [acc, grp] = await Promise.all([
+      admin.from("meta_ad_accounts")
+        .select("id, organization_id, account_name, currency, agency_id, notion_url, notion_synced_at")
+        .not("notion_url", "is", null),
+      admin.from("account_groups")
+        .select("id, organization_id, name, agency_id, notion_url, notion_synced_at")
+        .not("notion_url", "is", null),
+    ]);
+    accounts = [...((acc.data ?? []) as Acct[]), ...((grp.data ?? []).map(asGroup))];
+
+    // Paced at three requests a second, reading every client's whole history
+    // takes longer than one run is allowed. So a run takes the targets that
+    // went longest without a sync -- never-synced first -- and the rest come
+    // round on following nights. Pressing Sync all in the dashboard sends no
+    // limit and does the lot.
+    accounts.sort((a, b) => {
+      const sa = (a as { notion_synced_at?: string | null }).notion_synced_at ?? "";
+      const sb = (b as { notion_synced_at?: string | null }).notion_synced_at ?? "";
+      return sa < sb ? -1 : sa > sb ? 1 : 0;
+    });
+    if (body.limit && body.limit > 0) accounts = accounts.slice(0, body.limit);
   } else {
     return json({ error: "account_id or all is required" }, 400);
   }
@@ -477,6 +548,17 @@ Deno.serve(async (req: Request) => {
         .select("id").eq("organization_id", org).eq("user_id", userId)
         .not("accepted_at", "is", null).maybeSingle();
       if (!member) return json({ error: "Forbidden" }, 403);
+    }
+  }
+
+  // Groups and accounts live in different tables, so the note goes back to
+  // whichever one this target came from.
+  async function noteOn(acct: Acct, note: string) {
+    const patch = { notion_synced_at: new Date().toISOString(), notion_sync_note: note };
+    if (acct.isGroup) {
+      await admin.from("account_groups").update(patch).eq("id", acct.id.replace("__group__", ""));
+    } else {
+      await admin.from("meta_ad_accounts").update(patch).eq("id", acct.id);
     }
   }
 
@@ -496,11 +578,7 @@ Deno.serve(async (req: Request) => {
       const dbs = await findDatabases(token, rootId);
       if (!dbs.length) {
         const note = "Nothing found at that link — no databases under it. Check the page is shared with the integration.";
-        if (!body.dry_run) {
-          await admin.from("meta_ad_accounts")
-            .update({ notion_synced_at: new Date().toISOString(), notion_sync_note: note })
-            .eq("id", acct.id);
-        }
+        if (!body.dry_run) await noteOn(acct, note);
         results.push({ account: acct.account_name, error: "NO_DATABASES", note });
         continue;
       }
@@ -530,9 +608,7 @@ Deno.serve(async (req: Request) => {
         `; left ${applied.kept} already-filled figure${applied.kept === 1 ? "" : "s"} untouched.` +
         (ignored.length ? ` Unrecognised columns: ${ignored.slice(0, 6).join(", ")}.` : "");
 
-      await admin.from("meta_ad_accounts")
-        .update({ notion_synced_at: new Date().toISOString(), notion_sync_note: note })
-        .eq("id", acct.id);
+      await noteOn(acct, note);
 
       results.push({
         account: acct.account_name, databases: dbs.length, rows, undated,
@@ -551,11 +627,7 @@ Deno.serve(async (req: Request) => {
           : msg === "RATE_LIMITED"
           ? "Notion rate-limited the sync; it will catch up on the next run."
           : msg;
-      if (!body.dry_run) {
-        await admin.from("meta_ad_accounts")
-          .update({ notion_synced_at: new Date().toISOString(), notion_sync_note: note })
-          .eq("id", acct.id);
-      }
+      if (!body.dry_run) await noteOn(acct, note);
       results.push({ account: acct.account_name, error: msg, note });
     }
   }
