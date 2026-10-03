@@ -9837,7 +9837,15 @@
         const n = parseFloat(v);
         return isNaN(n) ? null : n;
       })();
-      const brandingSpend = _brandTyped ?? _mhNum(_mhRow?.branding_spend) ?? 0;
+      // Branding spend comes from the sheet's own awareness-spend column --
+      // "Engagement Spending" and the like. Not from Meta's objective: under
+      // its current naming a messaging campaign and a post-engagement campaign
+      // are both OUTCOME_ENGAGEMENT, so splitting on that would count message
+      // spend as branding and quietly depress ROAS on every messaging account.
+      // The sheet already separates them, because the team does it by hand.
+      const brandingSpend = _brandTyped
+        ?? _mhNum(_ndRow?.branding_spend)
+        ?? _mhNum(_mhRow?.branding_spend) ?? 0;
       // Never let branding exceed what was actually spent.
       const _brandCapped  = Math.min(Math.max(0, brandingSpend), spend || 0);
       const conversionSpend = Math.max(0, (spend || 0) - _brandCapped);
@@ -10188,7 +10196,7 @@
                 <input id="kpi-branding-spend-input" type="number" min="0" step="any"
                   value="${brandingSpend || ''}" placeholder="0.00"
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">Engagement, follows, awareness</div>
+                <div class="kpi-sub">${_srcSub(_mkGet(_brandKey), _ndRow?.branding_spend, 'Engagement, follows, awareness')}</div>
               </div>
               ${kpi('c-teal solid', '🎯', 'Conversion Spend',
                   fmt(conversionSpend, curr),

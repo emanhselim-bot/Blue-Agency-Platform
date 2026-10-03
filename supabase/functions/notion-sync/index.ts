@@ -94,8 +94,18 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   revenue:    ["revenue", "totalrevenue", "sales"],
   // The branding card means engagement, follows and awareness — campaigns that
   // buy no orders. Sheets call that spend several things.
-  branding_spend: ["engagementspending", "engagementspend", "brandingspending", "brandingspend",
-                   "awarenessspending", "awarenessspend", "engagementbudget"],
+  // Whatever a sheet calls the spend on campaigns that buy no orders --
+  // engagement, follows, profile visits, reach. Confirmed in use so far:
+  // "Engagement Spending". The others are here so a client who names it
+  // differently is picked up without another deploy; anything still unmatched
+  // shows in that account's unrecognised-columns note.
+  branding_spend: ["engagementspending", "engagementspend", "engagementbudget",
+                   "brandingspending", "brandingspend", "brandspending", "brandspend",
+                   "awarenessspending", "awarenessspend",
+                   "followspending", "followspend", "followersspending", "followersspend",
+                   "pagelikesspending", "likesspending",
+                   "profilevisitspending", "profilevisitsspending",
+                   "reachspending", "reachspend"],
   // Message-channel orders. "No.purchase" is the total the team records; the
   // FB / IG / WhatsApp columns are a breakdown that does not always add up to
   // it (Basma's September: 66 + 39 + 37 = 142 against 147), so the total is
@@ -422,6 +432,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
 const WRITE_FIELDS = [
   "msg_count", "msg_orders", "msg_pieces", "msg_revenue",
   "web_orders_confirmed", "web_pieces_confirmed", "web_revenue_confirmed",
+  "branding_spend",
 ] as const;
 
 /**
