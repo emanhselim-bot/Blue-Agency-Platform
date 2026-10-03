@@ -9791,15 +9791,12 @@
 
       const _mhNum = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
       const _stored = (k) => localStorage.getItem(k);
-      // A number typed into the card for this period wins; otherwise fall back
-      // to the month's stored history.
-      //
-      // Deliberately not from Notion. Only the confirmed order count and the
-      // message count are taken from there; orders, pieces and revenue stay on
-      // Shopify, Clarity and the existing equations.
-      const msgOrders   = parseInt(_stored(_msgKey)    ?? '') || _mhNum(_mhRow?.msg_orders)  || 0;
-      const msgRevenue  = parseFloat(_stored(_revKey)  ?? '') || _mhNum(_mhRow?.msg_revenue) || 0;
-      const msgPieces   = parseInt(_stored(_piecesKey) ?? '') || _mhNum(_mhRow?.msg_pieces)  || 0;
+      // Typed for this period wins, then Notion for exactly these dates, then
+      // the month's recorded history. The whole message block comes from
+      // Notion: nothing else counts an order taken in a chat.
+      const msgOrders   = parseInt(_stored(_msgKey)    ?? '') || _mhNum(_ndRow?.msg_orders)  || _mhNum(_mhRow?.msg_orders)  || 0;
+      const msgPieces   = parseInt(_stored(_piecesKey) ?? '') || _mhNum(_ndRow?.msg_pieces)  || _mhNum(_mhRow?.msg_pieces)  || 0;
+      const msgRevenue  = parseFloat(_stored(_revKey)  ?? '') || _mhNum(_ndRow?.msg_revenue) || _mhNum(_mhRow?.msg_revenue) || 0;
       // Returns % is typed in per period. Kept as its own value rather than
       // derived from Shopify refunds, which only counts refunded orders and
       // misses exchanges and returns handled outside the store.
@@ -9878,8 +9875,16 @@
       const confirmedOrders  = _cfmTyped(_cfmKeyO)
         ?? _mhNum(_ndRow?.web_orders_confirmed)
         ?? _mhNum(_mhRow?.web_orders_confirmed);
-      const confirmedRevenue = _cfmTyped(_cfmKeyR) ?? _mhNum(_mhRow?.web_revenue_confirmed);
-      const confirmedPieces  = _cfmTyped(_cfmKeyP) ?? _mhNum(_mhRow?.web_pieces_confirmed);
+      const confirmedRevenue = _cfmTyped(_cfmKeyR)
+        ?? _mhNum(_ndRow?.web_revenue_confirmed)
+        ?? _mhNum(_mhRow?.web_revenue_confirmed);
+      const confirmedPieces  = _cfmTyped(_cfmKeyP)
+        ?? _mhNum(_ndRow?.web_pieces_confirmed)
+        ?? _mhNum(_mhRow?.web_pieces_confirmed);
+
+      // Marks a confirmed figure that came from Notion rather than being typed.
+      const _cfmFrom = (typedKey, ndVal) =>
+        (_cfmTyped(typedKey) == null && ndVal != null) ? ' · from Notion' : '';
 
       // What the totals count for the website side.
       const webOrdersForTotal  = confirmedOrders  != null ? confirmedOrders  : (shopifyOrders !== null ? shopifyOrders : 0);
@@ -10057,7 +10062,7 @@
               <div class="kpi-label">Orders from Messages</div>
               <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-              <div class="kpi-sub">Manual entry</div>
+              <div class="kpi-sub">${_srcSub(_stored(_msgKey), _ndRow?.msg_orders, 'Manual entry')}</div>
             </div>
             <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
@@ -10065,7 +10070,7 @@
               <div class="kpi-label">Pieces from Messages</div>
               <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-              <div class="kpi-sub">Manual entry</div>
+              <div class="kpi-sub">${_srcSub(_stored(_piecesKey), _ndRow?.msg_pieces, 'Manual entry')}</div>
             </div>
             <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
@@ -10073,7 +10078,7 @@
               <div class="kpi-label">Revenue from Messages</div>
               <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-              <div class="kpi-sub">Manual entry</div>
+              <div class="kpi-sub">${_srcSub(_stored(_revKey), _ndRow?.msg_revenue, 'Manual entry')}</div>
             </div>
             ${kpi('c-teal solid', '🧾', 'Avg Order Value (Messages)',
                 (msgRevenue && msgOrders) ? fmt(msgRevenue / msgOrders, curr) : '—',
@@ -10285,7 +10290,7 @@
                   placeholder="${shopifyOrders != null ? shopifyOrders : '0'}"
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub" id="kpi-confirmed-orders-sub">${confirmedOrders != null
-                  ? `Used in totals · Shopify says ${shopifyOrders != null ? shopifyOrders.toLocaleString('en') : '—'}`
+                  ? `Used in totals · Shopify says ${shopifyOrders != null ? shopifyOrders.toLocaleString('en') : '—'}` + _cfmFrom(_cfmKeyO, _ndRow?.web_orders_confirmed)
                   : 'Manual · blank uses Shopify'}</div>
               </div>
               <div class="kpi-card c-green" data-card-id="confirmed-revenue">
@@ -10297,7 +10302,7 @@
                   placeholder="${revenue != null ? revenue.toFixed(2) : '0.00'}"
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub" id="kpi-confirmed-revenue-sub">${confirmedRevenue != null
-                  ? `Used in totals · Shopify says ${revenue != null ? fmt(revenue, curr) : '—'}`
+                  ? `Used in totals · Shopify says ${revenue != null ? fmt(revenue, curr) : '—'}` + _cfmFrom(_cfmKeyR, _ndRow?.web_revenue_confirmed)
                   : 'Manual · blank uses Shopify'}</div>
               </div>
               <div class="kpi-card c-green" data-card-id="confirmed-pieces">
@@ -10309,7 +10314,7 @@
                   placeholder="${pieces != null ? pieces : '0'}"
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
                 <div class="kpi-sub" id="kpi-confirmed-pieces-sub">${confirmedPieces != null
-                  ? `Used in totals · Shopify says ${pieces != null ? pieces.toLocaleString('en') : '—'}`
+                  ? `Used in totals · Shopify says ${pieces != null ? pieces.toLocaleString('en') : '—'}` + _cfmFrom(_cfmKeyP, _ndRow?.web_pieces_confirmed)
                   : 'Manual · blank uses Shopify'}</div>
               </div>
               ${kpi('c-coral', '🏷️', 'Cost per Confirmed Piece',

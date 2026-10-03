@@ -105,6 +105,10 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   // order figure Notion is the authority on.
   web_orders_confirmed: ["confirmedorders", "confirmedordersfcs", "confirmedorder",
                          "orderconfirmed", "ordersconfirmed", "confirmedwebsiteorders"],
+  web_pieces_confirmed: ["confirmedpieces", "confirmedpiecesfcs", "confirmedpiece",
+                         "piecesconfirmed"],
+  web_revenue_confirmed: ["confirmedrevenue", "confirmedrevenuefcs", "revenueconfirmed",
+                          "confirmedsales"],
   msg_orders_total: ["nopurchase", "nopurchases", "purchases", "noofpurchase"],
   msg_orders_parts: ["fborder", "fborders", "igorder", "igorders", "whatsorder", "whatsorders",
                      "whatsapporder", "whatsapporders"],
@@ -287,6 +291,8 @@ type DaySums = {
   web_spend: number | null;  msg_spend: number | null;
   branding_spend: number | null; total_revenue: number | null;
   web_orders_confirmed: number | null;
+  web_pieces_confirmed: number | null;
+  web_revenue_confirmed: number | null;
 };
 
 type MonthSums = {
@@ -296,6 +302,7 @@ type MonthSums = {
   msg_orders: number | null; msg_pieces: number | null;
   msg_count: number | null;  total_revenue: number | null;
   branding_spend: number | null; web_orders_confirmed: number | null;
+  web_pieces_confirmed: number | null; web_revenue_confirmed: number | null;
   days: number;
 };
 
@@ -303,7 +310,8 @@ const blank = (): MonthSums => ({
   web_orders: null, web_pieces: null, web_revenue: null, msg_revenue: null,
   web_spend: null, msg_spend: null,
   msg_orders: null, msg_pieces: null, msg_count: null, total_revenue: null,
-  branding_spend: null, web_orders_confirmed: null, days: 0,
+  branding_spend: null, web_orders_confirmed: null,
+  web_pieces_confirmed: null, web_revenue_confirmed: null, days: 0,
 });
 
 // null + value = value, so a month keeps null for a column the sheet never had
@@ -344,6 +352,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           web_orders: null, web_pieces: null, web_revenue: null, msg_revenue: null,
           web_spend: null, msg_spend: null,
           branding_spend: null, total_revenue: null, web_orders_confirmed: null,
+          web_pieces_confirmed: null, web_revenue_confirmed: null,
         });
 
         let msgOrdersTotal: number | null = null;
@@ -374,6 +383,12 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
             case "web_orders_confirmed":
               m.web_orders_confirmed = add(m.web_orders_confirmed, v);
               d.web_orders_confirmed = add(d.web_orders_confirmed, v); break;
+            case "web_pieces_confirmed":
+              m.web_pieces_confirmed = add(m.web_pieces_confirmed, v);
+              d.web_pieces_confirmed = add(d.web_pieces_confirmed, v); break;
+            case "web_revenue_confirmed":
+              m.web_revenue_confirmed = add(m.web_revenue_confirmed, v);
+              d.web_revenue_confirmed = add(d.web_revenue_confirmed, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
             case "msg_orders_parts": msgOrdersParts = add(msgOrdersParts, v); break;
             case "msg_pieces_parts":
@@ -405,7 +420,8 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
 // monthly_history, which sits behind cards that are meant to show Shopify,
 // Clarity and the existing equations.
 const WRITE_FIELDS = [
-  "msg_count", "web_orders_confirmed",
+  "msg_count", "msg_orders", "msg_pieces", "msg_revenue",
+  "web_orders_confirmed", "web_pieces_confirmed", "web_revenue_confirmed",
 ] as const;
 
 /**
@@ -498,6 +514,8 @@ async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
     web_spend: d.web_spend, msg_spend: d.msg_spend,
     branding_spend: d.branding_spend, total_revenue: d.total_revenue,
     web_orders_confirmed: d.web_orders_confirmed,
+    web_pieces_confirmed: d.web_pieces_confirmed,
+    web_revenue_confirmed: d.web_revenue_confirmed,
     synced_at: new Date().toISOString(),
   }));
 
