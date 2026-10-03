@@ -85,11 +85,11 @@
     [data-theme="dark"] .modal-header { background: var(--surface); border-bottom-color: var(--border); }
     [data-theme="dark"] .modal-body { background: var(--surface); }
     [data-theme="dark"] .settings-tabs { background: var(--surface); }
-    [data-theme="dark"] .settings-sidebar { background: #0d1117; border-right-color: #30363d; }
-    [data-theme="dark"] .settings-nav-item { color: #8b949e; }
-    [data-theme="dark"] .settings-nav-item:hover { background: rgba(255,255,255,0.06); color: #e6edf3; }
-    [data-theme="dark"] .settings-nav-item.active { background: rgba(88,166,255,0.12); color: #58a6ff; border-right-color: #58a6ff; }
-    [data-theme="dark"] .settings-nav-section { color: #484f58; }
+    [data-theme="dark"] .settings-sidebar { background: #0F1827; border-right-color: #243147; }
+    [data-theme="dark"] .settings-nav-item { color: #94A3B8; }
+    [data-theme="dark"] .settings-nav-item:hover { background: rgba(255,255,255,0.06); color: #E6EDF7; }
+    [data-theme="dark"] .settings-nav-item.active { background: rgba(88,166,255,0.12); color: #60A5FA; border-right-color: #60A5FA; }
+    [data-theme="dark"] .settings-nav-section { color: #94A3B8; }
     [data-theme="dark"] .connect-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
     [data-theme="dark"] .connect-input option { background: var(--surface); }
     /* The sign-in card is .auth-box — this rule named a class that exists
@@ -958,8 +958,22 @@
     .modal-header h2 { font-size: 16px; font-weight: 700; }
     .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 4px 8px; }
     .settings-layout { display: flex; flex: 1; overflow: hidden; }
-    .settings-sidebar { width: 420px; flex-shrink: 0; background: #1c1f26; border-right: 1px solid rgba(255,255,255,0.07); overflow-y: auto; padding: 8px 0; }
+    .settings-sidebar { width: 420px; flex-shrink: 0; background: #141E2E; border-right: 1px solid rgba(255,255,255,0.07); overflow-y: auto; padding: 8px 0; }
     .settings-nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px; color: rgba(255,255,255,0.3); padding: 16px 18px 6px; }
+
+    /* Linked accounts: status filter */
+    .linked-seg { display: inline-flex; background: var(--well); border: 1px solid var(--border); border-radius: 9px; padding: 2px; gap: 2px; }
+    .linked-segbtn { background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 12px;
+      font-weight: 700; padding: 5px 12px; border-radius: 7px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .linked-segbtn:hover { color: var(--text-main); }
+    .linked-segbtn span { font-size: 10.5px; font-weight: 800; background: var(--surface-2); color: var(--text-muted); border-radius: 999px; padding: 1px 6px; }
+    .linked-segbtn.active { background: var(--surface-2); color: var(--text-main); }
+    .linked-segbtn.active span { background: var(--brand-accent); color: #04142C; }
+    /* A switched-off account is still listed, so it has to say so on the row —
+       otherwise it reads as live and someone links a store to a dead account. */
+    .linked-off { font-size: 9.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+      background: #3A1A1C; color: #FCA5A5; border-radius: 999px; padding: 1px 7px; margin-left: 7px; vertical-align: 1px; }
+    html:not([data-theme="dark"]) .linked-off { background: #FEE2E2; color: #B91C1C; }
     .settings-nav-item { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 16px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.55); background: none; border: none; border-right: 2px solid transparent; text-align: left; cursor: pointer; transition: background 0.12s, color 0.12s; white-space: nowrap; font-family: inherit; border-radius: 0; }
     .settings-nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.88); }
     .settings-nav-item.active { background: rgba(5,115,245,0.15); color: #5b9cf6; font-weight: 600; border-right-color: #5b9cf6; }
@@ -3552,7 +3566,7 @@
   <div class="modal-overlay hidden" id="settings-modal">
     <div class="modal">
       <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
-        <h2 style="color:#e6edf3;font-size:15px">⚙ Settings</h2>
+        <h2 style="color:#E6EDF7;font-size:15px">⚙ Settings</h2>
         <button class="modal-close" id="modal-close" style="color:rgba(255,255,255,0.45)">✕</button>
       </div>
 
@@ -3981,7 +3995,7 @@
   <div class="modal-overlay hidden" id="md-share-modal">
     <div class="modal" style="max-width:560px">
       <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
-        <h2 style="color:#e6edf3;font-size:15px">🔗 Share dashboard with client</h2>
+        <h2 style="color:#E6EDF7;font-size:15px">🔗 Share dashboard with client</h2>
         <button class="modal-close" style="color:rgba(255,255,255,0.45)" onclick="document.getElementById('md-share-modal').classList.add('hidden')">✕</button>
       </div>
       <div class="modal-body">
@@ -4039,7 +4053,7 @@
   <div class="modal-overlay hidden" id="add-client-modal">
     <div class="modal" style="max-width:440px">
       <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
-        <h2 style="color:#e6edf3;font-size:15px" id="add-client-modal-title">🔑 Add Client Account</h2>
+        <h2 style="color:#E6EDF7;font-size:15px" id="add-client-modal-title">🔑 Add Client Account</h2>
         <button class="modal-close" onclick="closeAddClientModal()">✕</button>
       </div>
       <div class="modal-body" style="padding:24px">
@@ -4080,7 +4094,7 @@
   <div class="modal-overlay hidden" id="reset-pwd-modal" style="z-index:9999">
     <div class="modal" style="max-width:400px">
       <div class="modal-header" style="background:linear-gradient(135deg,#0573F5 0%,#083BBF 55%,#0A1CA3 100%);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0">
-        <h2 style="color:#e6edf3;font-size:15px">🔒 Reset Password</h2>
+        <h2 style="color:#E6EDF7;font-size:15px">🔒 Reset Password</h2>
         <button class="modal-close" onclick="closeResetPwdModal()">✕</button>
       </div>
       <div class="modal-body" style="padding:24px">
@@ -14845,33 +14859,61 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     // Filter the linked-accounts table by account name or id. Group headers are
     // hidden when every account beneath them is filtered out.
-    function linkedFilter(term) {
-      const q = (term || '').trim().toLowerCase();
+    // Status filter for the linked-accounts table: all | active | inactive.
+    let _linkedStatus = 'active';
+
+    function linkedSetStatus(k) { _linkedStatus = k; linkedApplyFilters(); }
+
+    // Search and status are applied together, so narrowing by one does not quietly
+    // undo the other. Matching is against a prepared data-search string rather
+    // than the row's text, which would otherwise also match every dropdown option
+    // in the row — searching "Lumi" would hit any account whose store list
+    // happens to contain a store called Lumi.
+    function linkedApplyFilters() {
       const table = document.getElementById('linked-accounts-table');
       if (!table) return;
-      let currentHead = null, shownInGroup = 0;
+      const q = (document.getElementById('linked-filter')?.value || '').trim().toLowerCase();
+
+      document.querySelectorAll('.linked-segbtn').forEach(b =>
+        b.classList.toggle('active', b.dataset.k === _linkedStatus));
+
+      let currentHead = null, shownInGroup = 0, shown = 0, total = 0;
       table.querySelectorAll('tbody tr').forEach(tr => {
         if (tr.classList.contains('linked-group-head')) {
           if (currentHead) currentHead.style.display = shownInGroup ? '' : 'none';
           currentHead = tr; shownInGroup = 0;
           return;
         }
-        const hit = !q || (tr.textContent || '').toLowerCase().includes(q);
+        total++;
+        const isActive = tr.dataset.active === '1';
+        const statusOk = _linkedStatus === 'all'
+          || (_linkedStatus === 'active' ? isActive : !isActive);
+        const hit = statusOk && (!q || (tr.dataset.search || '').includes(q));
         tr.style.display = hit ? '' : 'none';
-        if (hit) shownInGroup++;
+        if (hit) { shownInGroup++; shown++; }
       });
       if (currentHead) currentHead.style.display = shownInGroup ? '' : 'none';
+
+      const note = document.getElementById('linked-shown');
+      if (note) note.textContent = shown === total ? '' : `Showing ${shown} of ${total}`;
     }
+
+    // Kept so older callers and the search box's previous signature still work.
+    function linkedFilter() { linkedApplyFilters(); }
 
     async function loadLinkedAccountsTab() {
       const container = document.getElementById('linked-accounts-table');
       container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
 
       const [{ data: metaAccs }, { data: stores }, { data: clarityProjs }] = await Promise.all([
+        // Inactive accounts are loaded too. They used to be filtered out in the
+        // query, so an account that had been switched off simply vanished from
+        // this screen — there was no way to find it, let alone see what it was
+        // still linked to. The Active / Inactive filter below decides what shows.
         sb.from('meta_ad_accounts_safe')
-          .select('id, account_name, meta_account_id, currency, shopify_store_id, clarity_project_id, '
+          .select('id, account_name, meta_account_id, currency, is_active, shopify_store_id, clarity_project_id, '
                 + 'site_tracker_id, ga4_property_id, notion_url, notion_synced_at, notion_sync_note')
-          .eq('organization_id', currentOrgId).eq('is_active', true),
+          .eq('organization_id', currentOrgId),
         sb.from('shopify_stores_safe')
           .select('id, shop_name, shop_domain')
           .eq('organization_id', currentOrgId).eq('is_active', true),
@@ -14897,16 +14939,23 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       _linkPending = {};
       container.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <span style="font-size:12px;color:var(--text-muted);flex:1">
-            Pick a Shopify store and Clarity project for each ad account, then save.</span>
-          <input type="search" id="linked-filter" placeholder="Filter accounts…" oninput="linkedFilter(this.value)"
-            style="width:190px;padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;
-                   background:var(--bg);color:var(--text-main);box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+          <div class="linked-seg" role="group" aria-label="Filter by status">
+            <button class="linked-segbtn" data-k="all"      onclick="linkedSetStatus('all')">All <span>${metaAccs.length}</span></button>
+            <button class="linked-segbtn" data-k="active"   onclick="linkedSetStatus('active')">Active <span>${metaAccs.filter(a => a.is_active).length}</span></button>
+            <button class="linked-segbtn" data-k="inactive" onclick="linkedSetStatus('inactive')">Inactive <span>${metaAccs.filter(a => !a.is_active).length}</span></button>
+          </div>
+          <input type="search" id="linked-filter" placeholder="Search by name or ID…" oninput="linkedApplyFilters()"
+            style="flex:1;min-width:180px;max-width:280px;padding:6px 11px;font-size:12.5px;border:1px solid var(--border);border-radius:8px;
+                   background:var(--surface);color:var(--text-main);box-sizing:border-box">
+          <span id="linked-shown" style="font-size:11.5px;color:var(--text-muted);white-space:nowrap"></span>
+          <span style="flex:1"></span>
           <button class="cpm-btn" id="notion-sync-all-btn" onclick="notionSyncAll()"
             title="Read every linked Notion sheet and fill blank months">⇊ Sync all Notion</button>
           <button class="cpm-btn" id="linked-save-btn" disabled onclick="saveLinkedAccounts()">Save changes</button>
         </div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">
+          Link each ad account to a Shopify store, a Clarity project, a website tracker and its Notion sheet, then save.</div>
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
             <tr style="color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-size:11px;border-bottom:1px solid var(--border)">
@@ -14956,9 +15005,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                     <span style="float:right;color:var(--text-muted);font-weight:500;opacity:.6" title="Drag to reorder">⠿</span>
                   </td>
                 </tr>` + list.map(a => `
-              <tr class="linked-acct-row" data-gid="${escHtml(gid)}" style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
+              <tr class="linked-acct-row" data-gid="${escHtml(gid)}" data-active="${a.is_active ? '1' : '0'}"
+                  data-search="${escHtml(((a.account_name || '') + ' ' + (a.meta_account_id || '') + ' ' + (a.currency || '')).toLowerCase())}"
+                  style="border-bottom:1px solid var(--border)" id="linked-row-${escHtml(a.id)}">
                 <td style="padding:10px 8px">
-                  <div style="font-weight:600;color:var(--text-main)">${escHtml(a.account_name||a.meta_account_id)}</div>
+                  <div style="font-weight:600;color:var(--text-main)">${escHtml(a.account_name||a.meta_account_id)}
+                    ${a.is_active ? '' : '<span class="linked-off">Inactive</span>'}</div>
                   <div style="color:var(--text-muted);font-size:11px">${escHtml(a.meta_account_id)} · ${escHtml(a.currency)}</div>
                 </td>
                 <td style="padding:10px 8px">
@@ -15009,7 +15061,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </table>`;
 
       linkedApplyCollapse();
-      await renderCombinedAccountsBlock(metaAccs || []);
+      linkedApplyFilters();          // apply the current status filter to the fresh rows
+      // Combined groups are built from live accounts only — a switched-off
+      // account should not quietly join a group and drag its history in.
+      await renderCombinedAccountsBlock((metaAccs || []).filter(a => a.is_active));
     }
 
     async function refreshSettingsData() {
