@@ -76,12 +76,30 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 // Normalised Notion column name -> what it means. Several spellings per meaning
 // because each media buyer built their own sheet.
 const FIELD_SYNONYMS: Record<string, string[]> = {
-  web_orders: ["weborders", "weborder", "websiteorders", "websiteorder"],
+  web_orders: ["weborders", "weborder", "websiteorders", "websiteorder",
+               "websiteordersfrommeta", "weborderfrommeta"],
   web_pieces: ["webpieces", "webpiece", "websitepieces"],
   web_spend:  ["websitespending", "spendingweb", "webspending", "spendweb", "websitespend"],
-  msg_spend:  ["spendingsm", "smspending", "messagespending", "spendingmsg", "msgspending"],
-  msg_count:  ["totalnomsgs", "totalmsgs", "totalnomsg", "nomsgs", "messages", "totalmessages"],
+  // "Messages Spending" normalises with the s: the singular spelling alone
+  // missed TR's entire message spend.
+  msg_spend:  ["spendingsm", "smspending", "messagespending", "messagesspending",
+               "spendingmsg", "msgspending", "messagesspend"],
+  // Revenue split by channel, where a sheet keeps it that way. Without these
+  // the only revenue figure was the day's combined total, which could not be
+  // shown on a message-revenue card without claiming website sales as message
+  // sales.
+  web_revenue: ["revwebsite", "revenuewebsite", "websiterevenue", "webrevenue"],
+  msg_revenue: ["revmessage", "revmessages", "revenuemessage", "messagerevenue",
+                "msgrevenue", "revenuefrommessages"],
+  // "No of msgs" normalises to noofmsgs, which the first list missed — Nour
+  // Academy's whole message count was being ignored because of it.
+  msg_count:  ["totalnomsgs", "totalmsgs", "totalnomsg", "nomsgs", "noofmsgs", "totalnoofmsgs",
+               "messages", "totalmessages", "nomsg"],
   revenue:    ["revenue", "totalrevenue", "sales"],
+  // The branding card means engagement, follows and awareness — campaigns that
+  // buy no orders. Sheets call that spend several things.
+  branding_spend: ["engagementspending", "engagementspend", "brandingspending", "brandingspend",
+                   "awarenessspending", "awarenessspend", "engagementbudget"],
   // Message-channel orders. "No.purchase" is the total the team records; the
   // FB / IG / WhatsApp columns are a breakdown that does not always add up to
   // it (Basma's September: 66 + 39 + 37 = 142 against 147), so the total is
@@ -259,17 +277,31 @@ function dateOf(props: Record<string, Record<string, unknown>>): string | null {
 
 // ── Aggregation ───────────────────────────────────────────────────────────────
 
+// What one day's row came to, in the same shape as the monthly totals.
+type DaySums = {
+  day: string;
+  msg_count: number | null; msg_orders: number | null; msg_pieces: number | null;
+  web_orders: number | null; web_pieces: number | null;
+  web_revenue: number | null; msg_revenue: number | null;
+  web_spend: number | null;  msg_spend: number | null;
+  branding_spend: number | null; total_revenue: number | null;
+};
+
 type MonthSums = {
   web_orders: number | null; web_pieces: number | null;
+  web_revenue: number | null; msg_revenue: number | null;
   web_spend: number | null;  msg_spend: number | null;
   msg_orders: number | null; msg_pieces: number | null;
   msg_count: number | null;  total_revenue: number | null;
+  branding_spend: number | null;
   days: number;
 };
 
 const blank = (): MonthSums => ({
-  web_orders: null, web_pieces: null, web_spend: null, msg_spend: null,
-  msg_orders: null, msg_pieces: null, msg_count: null, total_revenue: null, days: 0,
+  web_orders: null, web_pieces: null, web_revenue: null, msg_revenue: null,
+  web_spend: null, msg_spend: null,
+  msg_orders: null, msg_pieces: null, msg_count: null, total_revenue: null,
+  branding_spend: null, days: 0,
 });
 
 // null + value = value, so a month keeps null for a column the sheet never had
@@ -278,6 +310,9 @@ const add = (a: number | null, b: number | null) => b == null ? a : (a ?? 0) + b
 
 async function sumDatabases(token: string, dbs: { id: string; title: string }[], untilMonth: string) {
   const months: Record<string, MonthSums> = {};
+  // Keyed by day so a sheet listing the same date twice adds up rather than
+  // the second row quietly replacing the first.
+  const days: Record<string, DaySums> = {};
   const columnsSeen = new Set<string>();
   const columnsIgnored = new Set<string>();
   let rows = 0, undated = 0;
@@ -302,6 +337,13 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
         const m = (months[month] ||= blank());
         m.days++;
 
+        const d = (days[day] ||= {
+          day, msg_count: null, msg_orders: null, msg_pieces: null,
+          web_orders: null, web_pieces: null, web_revenue: null, msg_revenue: null,
+          web_spend: null, msg_spend: null,
+          branding_spend: null, total_revenue: null,
+        });
+
         let msgOrdersTotal: number | null = null;
         let msgOrdersParts: number | null = null;
 
@@ -317,21 +359,29 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           columnsSeen.add(name.trim());
 
           switch (meaning) {
-            case "web_orders": m.web_orders = add(m.web_orders, v); break;
-            case "web_pieces": m.web_pieces = add(m.web_pieces, v); break;
-            case "web_spend":  m.web_spend  = add(m.web_spend,  v); break;
-            case "msg_spend":  m.msg_spend  = add(m.msg_spend,  v); break;
-            case "msg_count":  m.msg_count  = add(m.msg_count,  v); break;
-            case "revenue":    m.total_revenue = add(m.total_revenue, v); break;
+            case "web_orders": m.web_orders = add(m.web_orders, v); d.web_orders = add(d.web_orders, v); break;
+            case "web_pieces": m.web_pieces = add(m.web_pieces, v); d.web_pieces = add(d.web_pieces, v); break;
+            case "web_revenue": m.web_revenue = add(m.web_revenue, v); d.web_revenue = add(d.web_revenue, v); break;
+            case "msg_revenue": m.msg_revenue = add(m.msg_revenue, v); d.msg_revenue = add(d.msg_revenue, v); break;
+            case "web_spend":  m.web_spend  = add(m.web_spend,  v); d.web_spend  = add(d.web_spend,  v); break;
+            case "msg_spend":  m.msg_spend  = add(m.msg_spend,  v); d.msg_spend  = add(d.msg_spend,  v); break;
+            case "msg_count":  m.msg_count  = add(m.msg_count,  v); d.msg_count  = add(d.msg_count,  v); break;
+            case "revenue":    m.total_revenue = add(m.total_revenue, v); d.total_revenue = add(d.total_revenue, v); break;
+            case "branding_spend":
+              m.branding_spend = add(m.branding_spend, v); d.branding_spend = add(d.branding_spend, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
             case "msg_orders_parts": msgOrdersParts = add(msgOrdersParts, v); break;
-            case "msg_pieces_parts": m.msg_pieces = add(m.msg_pieces, v); break;
+            case "msg_pieces_parts":
+              m.msg_pieces = add(m.msg_pieces, v); d.msg_pieces = add(d.msg_pieces, v); break;
           }
         }
 
         // Per row, not per month: the total wins where the team recorded one.
         const msgOrders = msgOrdersTotal ?? msgOrdersParts;
-        if (msgOrders != null) m.msg_orders = add(m.msg_orders, msgOrders);
+        if (msgOrders != null) {
+          m.msg_orders = add(m.msg_orders, msgOrders);
+          d.msg_orders = add(d.msg_orders, msgOrders);
+        }
       }
 
       if (!res.has_more) break;
@@ -339,7 +389,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
     }
   }
 
-  return { months, rows, undated,
+  return { months, days: Object.values(days), rows, undated,
            columns: [...columnsSeen].sort(), ignored: [...columnsIgnored].sort() };
 }
 
@@ -347,7 +397,8 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
 
 const WRITE_FIELDS = [
   "web_orders", "web_pieces", "web_spend", "msg_spend",
-  "msg_orders", "msg_pieces", "msg_count", "total_revenue",
+  "msg_orders", "msg_pieces", "msg_count", "total_revenue", "branding_spend",
+  "web_revenue", "msg_revenue",
 ] as const;
 
 /**
@@ -418,6 +469,41 @@ async function applyMonths(
   }
 
   return { filled, kept, monthsTouched, detail };
+}
+
+/**
+ * Keep each day as Notion has it.
+ *
+ * Unlike the monthly fill, these are overwritten every run. monthly_history is
+ * shared with figures people type in the dashboard, so filling blanks there is
+ * the only safe rule. notion_daily is Notion's own record and nothing else
+ * writes to it, so a corrected day in the sheet should correct the dashboard.
+ */
+async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
+  if (!days.length) return 0;
+  const rows = days.map(d => ({
+    organization_id: orgId,
+    account_key: accountKey,
+    day: d.day,
+    msg_count: d.msg_count, msg_orders: d.msg_orders, msg_pieces: d.msg_pieces,
+    msg_revenue: d.msg_revenue,
+    web_orders: d.web_orders, web_pieces: d.web_pieces, web_revenue: d.web_revenue,
+    web_spend: d.web_spend, msg_spend: d.msg_spend,
+    branding_spend: d.branding_spend, total_revenue: d.total_revenue,
+    synced_at: new Date().toISOString(),
+  }));
+
+  // Chunked: a client with three years of history is over a thousand rows and
+  // one statement that size is refused.
+  let written = 0;
+  for (let i = 0; i < rows.length; i += 400) {
+    const { error, data } = await admin.from("notion_daily")
+      .upsert(rows.slice(i, i + 400), { onConflict: "organization_id,account_key,day" })
+      .select("id");
+    if (error) throw new Error(error.message);
+    written += data?.length ?? 0;
+  }
+  return written;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -583,7 +669,7 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const { months, rows, undated, columns, ignored } =
+      const { months, days, rows, undated, columns, ignored } =
         await sumDatabases(token, dbs, untilMonth);
 
       if (body.dry_run) {
@@ -600,19 +686,21 @@ Deno.serve(async (req: Request) => {
       const applied = await applyMonths(
         acct.organization_id, acct.id, acct.agency_id, acct.currency, months,
       );
+      const daysWritten = await writeDays(acct.organization_id, acct.id, days);
 
       const note =
         `Read ${rows} day${rows === 1 ? "" : "s"} from ${dbs.length} month sheet${dbs.length === 1 ? "" : "s"}. ` +
         `Filled ${applied.filled} blank figure${applied.filled === 1 ? "" : "s"}` +
         (applied.monthsTouched.length ? ` across ${applied.monthsTouched.join(", ")}` : "") +
-        `; left ${applied.kept} already-filled figure${applied.kept === 1 ? "" : "s"} untouched.` +
+        `; left ${applied.kept} already-filled figure${applied.kept === 1 ? "" : "s"} untouched. ` +
+        `${daysWritten} day${daysWritten === 1 ? "" : "s"} available to the daily cards.` +
         (ignored.length ? ` Unrecognised columns: ${ignored.slice(0, 6).join(", ")}.` : "");
 
       await noteOn(acct, note);
 
       results.push({
         account: acct.account_name, databases: dbs.length, rows, undated,
-        filled: applied.filled, kept: applied.kept,
+        filled: applied.filled, kept: applied.kept, days_written: daysWritten,
         months: applied.monthsTouched, detail: applied.detail,
         columns_used: columns, columns_ignored: ignored, note,
       });
