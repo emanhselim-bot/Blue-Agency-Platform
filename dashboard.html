@@ -114,10 +114,6 @@
     [data-theme="dark"] .agency-tab.active { color: var(--blue-light); border-bottom-color: var(--blue-light); }
     [data-theme="dark"] .onboarding-card { background: var(--surface); }
     [data-theme="dark"] .onboarding-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
-    [data-theme="dark"] .ai-panel { background: var(--surface); border-left-color: var(--border); }
-    [data-theme="dark"] .ai-input-row { background: var(--surface); border-top-color: var(--border); }
-    [data-theme="dark"] .ai-input { background: var(--bg); color: var(--text-main); border-color: var(--border); }
-    [data-theme="dark"] .ai-msg.assistant { background: var(--bg); }
     [data-theme="dark"] select { background: var(--bg); color: var(--text-main); border-color: var(--border); }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Open Sans', 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-main); min-height: 100vh; }
@@ -1235,7 +1231,6 @@
     .bill-del { background: none; border: none; cursor: pointer; font-size: 13px; opacity: .55; }
     .bill-del:hover { opacity: 1; }
 
-    #recs-section { display: none; padding: 0 24px 40px; }
 
     /* ── Agency Targets panel ── */
     #targets-panel {
@@ -1387,24 +1382,6 @@
     .kpi-target { font-size: 10px; font-weight: 700; margin-top: 6px; padding: 2px 8px; border-radius: 20px; display: inline-block; }
     .kpi-target.on-target  { background: rgba(34,197,94,.15);  color: #22c55e; }
     .kpi-target.off-target { background: rgba(248,113,113,.15); color: #f87171; }
-    .recs-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .recs-title {
-      font-size: 11px; font-weight: 700; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 1px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .recs-title::after { content: ''; flex: 1; height: 1px; background: var(--border); min-width: 40px; }
-    .recs-regenerate {
-      padding: 6px 14px; background: white; border: 1.5px solid var(--border);
-      border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;
-      font-family: inherit; color: var(--blue-dark); transition: all 0.15s; white-space: nowrap;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .recs-regenerate:hover { background: var(--blue-dark); color: white; border-color: var(--blue-dark); }
-    .recs-regenerate:disabled { color: var(--text-muted); cursor: not-allowed; background: var(--surface); border-color: var(--border); }
     .recs-grid {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
     }
@@ -1494,7 +1471,6 @@
       .modal-body { padding: 14px 16px 20px; }
 
       /* AI panel */
-      .ai-panel { width: 100% !important; position: fixed; bottom: 0; left: 0; right: 0; height: 60vh; border-left: none; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; z-index: 500; }
 
       /* Analysis section */
       .analysis-grid { grid-template-columns: 1fr !important; }
@@ -1571,7 +1547,6 @@
     .is-installed .content     { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
     .is-installed .hub-inner   { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
     .is-installed .modal       { padding-bottom: env(safe-area-inset-bottom); }
-    .is-installed .ai-panel    { padding-bottom: env(safe-area-inset-bottom); }
     /* No browser chrome to pull down on, so a stray vertical drag on a wide
        table shouldn't bounce the whole app. */
     .is-installed body { overscroll-behavior-y: contain; }
@@ -1587,7 +1562,6 @@
       .content     { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
       .hub-inner   { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
       .modal       { padding-bottom: env(safe-area-inset-bottom); }
-      .ai-panel    { padding-bottom: env(safe-area-inset-bottom); }
       body { overscroll-behavior-y: contain; }
     }
     @media (display-mode: standalone) and (max-width: 768px) {
@@ -1715,90 +1689,6 @@
     }
 
     /* ── ASK CLAUDE SIDEBAR ── */
-    #ai-toggle {
-      position: fixed; right: 0; top: 50%; transform: translateY(-50%);
-      z-index: 400; background: var(--blue-dark); color: white;
-      border: none; border-radius: 10px 0 0 10px;
-      padding: 18px 8px; cursor: grab;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
-      font-size: 10px; font-family: inherit; font-weight: 700; letter-spacing: 0.5px;
-      writing-mode: vertical-rl; text-orientation: mixed; white-space: nowrap;
-      box-shadow: -3px 0 12px rgba(0,0,0,0.18); transition: background 0.15s, opacity 0.2s;
-      user-select: none; touch-action: none;
-    }
-    #ai-toggle:hover { background: var(--blue-mid); }
-    #ai-toggle .ai-icon { writing-mode: horizontal-tb; font-size: 18px; }
-    #ai-panel {
-      position: fixed; right: -380px; top: 0; bottom: 0; width: 360px;
-      background: white; z-index: 450;
-      display: flex; flex-direction: column;
-      box-shadow: -4px 0 24px rgba(0,0,0,0.16);
-      transition: right 0.28s cubic-bezier(.4,0,.2,1);
-    }
-    #ai-panel.open { right: 0; }
-    #ai-toggle.panel-open { opacity: 0; pointer-events: none; }
-    .ai-panel-header {
-      background: var(--blue-dark); color: white;
-      padding: 15px 18px; display: flex; align-items: center; gap: 10px;
-      font-weight: 700; font-size: 14px; flex-shrink: 0;
-    }
-    .ai-panel-header .ai-header-title { flex: 1; display: flex; align-items: center; gap: 8px; }
-    .ai-panel-header .ai-header-title span { font-size: 16px; }
-    .ai-close-btn {
-      background: rgba(255,255,255,0.15); border: none; color: white;
-      width: 28px; height: 28px; border-radius: 6px; font-size: 15px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      transition: background 0.15s;
-    }
-    .ai-close-btn:hover { background: rgba(255,255,255,0.3); }
-    .ai-messages {
-      flex: 1; overflow-y: auto; padding: 14px 14px 8px;
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    .ai-msg {
-      max-width: 88%; padding: 10px 13px; border-radius: 12px;
-      font-size: 13px; line-height: 1.58; word-wrap: break-word;
-    }
-    .ai-msg.user {
-      background: var(--blue-dark); color: white; align-self: flex-end;
-      border-radius: 12px 12px 3px 12px;
-    }
-    .ai-msg.assistant {
-      background: var(--bg); color: var(--text-main); align-self: flex-start;
-      border-radius: 12px 12px 12px 3px; border: 1px solid var(--border);
-    }
-    .ai-msg.thinking { color: var(--text-muted); font-style: italic; }
-    .ai-chips {
-      padding: 8px 14px 4px; display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0;
-    }
-    .ai-chip {
-      padding: 5px 11px; background: white; border: 1.5px solid var(--border);
-      border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer;
-      font-family: inherit; color: var(--blue-dark); transition: all 0.14s;
-      white-space: nowrap;
-    }
-    .ai-chip:hover { background: var(--blue-dark); color: white; border-color: var(--blue-dark); }
-    .ai-input-row {
-      padding: 10px 14px 14px; border-top: 1px solid var(--border);
-      display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0;
-    }
-    #ai-input {
-      flex: 1; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
-      font-family: inherit; font-size: 13px; resize: none; outline: none;
-      color: var(--text-main); line-height: 1.4; max-height: 80px; overflow-y: auto;
-    }
-    #ai-input:focus { border-color: var(--blue-light); }
-    #ai-send {
-      padding: 9px 14px; background: var(--blue-dark); color: white; border: none;
-      border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;
-      font-family: inherit; white-space: nowrap; transition: background 0.15s; flex-shrink: 0;
-    }
-    #ai-send:hover { background: var(--blue-mid); }
-    #ai-send:disabled { background: #c0c9d8; cursor: not-allowed; }
-    .ai-no-data-note {
-      font-size: 12px; color: var(--text-muted); text-align: center;
-      padding: 24px 20px; line-height: 1.6;
-    }
 
     /* ── AGENCY NAVIGATION BAR ── */
     .agency-nav {
@@ -1902,14 +1792,6 @@
     .funnel-arr { font-size: 18px; color: var(--border); font-weight: 300; }
 
     /* ── MARKDOWN in AI chat ── */
-    .ai-msg.assistant strong { font-weight: 700; }
-    .ai-msg.assistant em { font-style: italic; }
-    .ai-msg.assistant code { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 11px; }
-    .ai-msg.assistant pre { background: #1B2638; color: #e2e8f0; padding: 10px 12px; border-radius: 8px; font-size: 11px; overflow-x: auto; white-space: pre; font-family: monospace; margin: 6px 0; }
-    .ai-msg.assistant ul, .ai-msg.assistant ol { padding-left: 16px; margin: 4px 0; }
-    .ai-msg.assistant li { margin: 2px 0; }
-    .ai-msg.assistant .ai-h1, .ai-msg.assistant .ai-h2 { font-weight: 700; display: block; margin-top: 8px; }
-    .ai-msg.assistant .ai-h3 { font-weight: 700; display: block; margin-top: 6px; }
 
     /* ── TEAM CONTROL PANEL ── */
     #team-panel {
@@ -3113,46 +2995,6 @@
     </div>
   </div>
 
-  <!-- CLAUDE RECOMMENDATIONS SECTION -->
-  <div id="recs-section">
-    <div class="recs-header">
-      <div class="recs-title">✦ Claude Recommendations</div>
-      <button class="recs-regenerate" id="recs-regenerate-btn" onclick="loadRecommendations()" disabled>
-        ↻ Regenerate
-      </button>
-    </div>
-    <div class="recs-grid">
-      <div class="rec-card c-blue" id="rec-account">
-        <div class="rec-card-header">
-          <span class="rec-card-icon">📊</span>
-          <span class="rec-card-title">Account Performance</span>
-        </div>
-        <div class="rec-card-body loading" id="rec-account-body">Generating…</div>
-      </div>
-      <div class="rec-card c-teal" id="rec-creative">
-        <div class="rec-card-header">
-          <span class="rec-card-icon">🎨</span>
-          <span class="rec-card-title">Creative Recommendations</span>
-        </div>
-        <div class="rec-card-body loading" id="rec-creative-body">Generating…</div>
-      </div>
-      <div class="rec-card c-gold" id="rec-targeting">
-        <div class="rec-card-header">
-          <span class="rec-card-icon">🎯</span>
-          <span class="rec-card-title">Targeting Recommendations</span>
-        </div>
-        <div class="rec-card-body loading" id="rec-targeting-body">Generating…</div>
-      </div>
-      <div class="rec-card c-green" id="rec-improve">
-        <div class="rec-card-header">
-          <span class="rec-card-icon">🚀</span>
-          <span class="rec-card-title">How to Improve</span>
-        </div>
-        <div class="rec-card-body loading" id="rec-improve-body">Generating…</div>
-      </div>
-    </div>
-    <div class="recs-powered">Powered by Claude AI · Based on live account data</div>
-  </div>
 
   <!-- AUTH OVERLAY -->
   <div class="auth-overlay" id="auth-overlay">
@@ -4406,7 +4248,6 @@
     let accountMap       = {}; // dbId → { meta_account_id, currency, shopify_store_id }
     let currentPlatformTab = ''; // 'meta' | 'google_ads' | 'tiktok_ads' — set by renderPlatformTabs()
     let orgPlatforms       = []; // platforms detected for current org
-    let _recsEnabled       = false; // true only when a Meta account view is active
 
     // ── Per-agency settings helpers ──
     function getAgencySettings(orgId, agencyId) {
@@ -7111,8 +6952,6 @@
              </button>
            </div>`;
       document.getElementById('date-label').textContent = 'Select an account to start';
-      const recsSection = document.getElementById('recs-section');
-      if (recsSection) recsSection.style.display = 'none';
     }
 
     // Switch the active agency: updates state, restores per-agency settings, re-renders.
@@ -8494,8 +8333,6 @@
     async function loadGoogleAdsDashboard(account) {
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
-      _recsEnabled = false;
-      document.getElementById('recs-section').style.display = 'none';
       try { document.getElementById('billing-section').style.display = 'none'; } catch(e) {}
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching Google Ads data…</div>`;
@@ -9057,8 +8894,6 @@
     async function loadTikTokAdsDashboard(account) {
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
-      _recsEnabled = false;
-      document.getElementById('recs-section').style.display = 'none';
       try { document.getElementById('billing-section').style.display = 'none'; } catch(e) {}
       document.getElementById('content').innerHTML =
         `<div class="loading-state"><div class="spinner"></div>Fetching TikTok Ads data…</div>`;
@@ -9600,8 +9435,6 @@
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true; btn.textContent = '⏳ Loading…';
 
-      // Hide recommendations while loading
-      document.getElementById('recs-section').style.display = 'none';
       document.getElementById('billing-section').style.display = 'none';
 
       document.getElementById('content').innerHTML =
@@ -10786,54 +10619,10 @@
       initDragDrop();        // set up drag-drop and ▲▼ buttons
       saveLayout();          // persist current order to localStorage + server
 
-      // ── Capture context for Ask Claude sidebar ──
-      try {
-        _dashContext = {
-          accountName:    account.account_name || account.meta_account_id,
-          period:         periodLabel,
-          currency:       curr.trim(),
-          spend, impressions, reach, clicks, ctr, cpm, cpc, frequency,
-          results:        numMessages,
-          costPerResult:  costPerMessage,
-          shopifyOrders, revenue, roas, pieces, returns, sessions,
-          conversionRate,
-          campaigns: campaigns.slice(0, 10).map(c => ({
-            name:          c.campaign_name,
-            spend:         parseNum(c.spend),
-            impressions:   parseNum(c.impressions),
-            clicks:        parseNum(c.clicks),
-            results:       parseNum(c.results),
-            costPerResult: parseNum(c.cost_per_result),
-          })),
-          platforms: platforms.map(p => ({
-            platform:    p.publisher_platform,
-            spend:       parseNum(p.spend),
-            impressions: parseNum(p.impressions),
-            results:     parseNum(p.results),
-          })),
-          topAds: ads.slice(0, 8).map(a => ({
-            name:          a.ad_name,
-            spend:         parseNum(a.spend),
-            results:       parseNum(a.results),
-            costPerResult: parseNum(a.cost_per_result),
-          })),
-          topRegions: regions.slice(0, 8).map(r => ({
-            region:      r.region,
-            spend:       parseNum(r.spend),
-            impressions: parseNum(r.impressions),
-            results:     parseNum(r.results),
-          })),
-          topProducts: topProductRows.slice(0, 8),
-        };
-      } catch(ctxErr) { console.warn('[context capture]', ctxErr); }
 
       // Billing history (funds + transactions)
       try { renderBillingSection(d, curr.trim(), accountDbId); } catch(bErr) { console.warn('[billing]', bErr); }
       try { applyFlexTargets(); } catch(tErr) { console.warn('[targets]', tErr); }
-
-      // Auto-generate recommendations (non-blocking, Meta only)
-      _recsEnabled = true;
-      loadRecommendations();
 
       btn.disabled = false; btn.textContent = '↻ Refresh';
     } catch (loadErr) {
@@ -11309,7 +11098,6 @@
     function renderProfitability(account) {
       const btn = document.getElementById('refresh-btn');
       if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
-      document.getElementById('recs-section').style.display = 'none';
       document.getElementById('billing-section').style.display = 'none';
       _pfAccountName = account?.name || account?.account_name || 'Account';
       _pfCurrency = (account?.currency || 'EGP') + ' ';
@@ -21577,275 +21365,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       Auth.getSession();
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // ASK CLAUDE SIDEBAR
-    // ─────────────────────────────────────────────────────────────
-    let _dashContext = null; // populated by loadData() on success
 
-    function toggleAISidebar(open) {
-      const panel  = document.getElementById('ai-panel');
-      const toggle = document.getElementById('ai-toggle');
-      const isOpen = panel.classList.contains('open');
-      const shouldOpen = open !== undefined ? open : !isOpen;
-      panel.classList.toggle('open', shouldOpen);
-      toggle.classList.toggle('panel-open', shouldOpen);
-      if (shouldOpen) {
-        setTimeout(() => document.getElementById('ai-input')?.focus(), 290);
-        // Show welcome on first open
-        const msgs = document.getElementById('ai-messages');
-        if (!msgs.children.length) {
-          aiAppendMsg('assistant', _dashContext
-            ? `Hi! I have your ${_dashContext.accountName ?? 'account'} data loaded (${_dashContext.period ?? 'current period'}). Ask me about creatives, targeting, or results.`
-            : 'Hi! Load an account first, then I can analyse your Meta Ads data and give specific recommendations.');
-        }
-      }
-    }
-
-    function aiRenderMarkdown(raw) {
-      if (!raw) return '';
-      // 1. Escape HTML to prevent XSS
-      let s = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      // 2. Fenced code blocks  ``` ... ```
-      s = s.replace(/```[^\n]*\n([\s\S]*?)```/g,
-        (_,c) => `<pre>${c.trimEnd()}</pre>`);
-      // 3. Inline code  `...`
-      s = s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
-      // 4. Bold + italic  ***...*** **...** *...*
-      s = s.replace(/\*\*\*([^*\n]+)\*\*\*/g,'<strong><em>$1</em></strong>');
-      s = s.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
-      s = s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
-      // 5. Headings
-      s = s.replace(/^### (.+)$/gm,'<b class="ai-h3">$1</b>');
-      s = s.replace(/^## (.+)$/gm, '<b class="ai-h2">$1</b>');
-      s = s.replace(/^# (.+)$/gm,  '<b class="ai-h1">$1</b>');
-      // 6. Unordered lists
-      s = s.replace(/^[ \t]*[-•\*] (.+)$/gm,'<li>$1</li>');
-      // 7. Ordered lists
-      s = s.replace(/^[ \t]*\d+\. (.+)$/gm,'<li>$1</li>');
-      // 8. Wrap consecutive <li> in <ul>
-      s = s.replace(/(<li>(?:(?!<li>)[\s\S])*?<\/li>(?:\s*<li>(?:(?!<li>)[\s\S])*?<\/li>)*)/g,
-        '<ul>$1</ul>');
-      // 9. Paragraph breaks
-      s = s.replace(/\n\n+/g,'<br><br>').replace(/\n/g,'<br>');
-      return s;
-    }
-
-    function aiAppendMsg(role, text) {
-      const msgs = document.getElementById('ai-messages');
-      const div  = document.createElement('div');
-      div.className = `ai-msg ${role}`;
-      if (role === 'assistant' || role === 'assistant thinking') {
-        div.innerHTML = role === 'assistant thinking'
-          ? escHtml(text)  // thinking state: plain text, will be replaced
-          : aiRenderMarkdown(text);
-      } else {
-        div.textContent = text;  // user messages always plain text
-      }
-      msgs.appendChild(div);
-      msgs.scrollTop = msgs.scrollHeight;
-      return div;
-    }
-
-    function aiChip(text) {
-      document.getElementById('ai-input').value = text;
-      aiSend();
-    }
-
-    async function aiSend() {
-      const input   = document.getElementById('ai-input');
-      const sendBtn = document.getElementById('ai-send');
-      const msg     = (input.value || '').trim();
-      if (!msg) return;
-      input.value = '';
-      sendBtn.disabled = true;
-      aiAppendMsg('user', msg);
-      const thinkEl = aiAppendMsg('assistant thinking', 'Thinking…');
-      try {
-        const result = await callEdgeFunction('ai-chat', {
-          message: msg,
-          context: _dashContext || {},
-        });
-        thinkEl.classList.remove('thinking');
-        thinkEl.innerHTML = aiRenderMarkdown(result?.reply || result?.error || 'No response received.');
-      } catch (err) {
-        thinkEl.classList.remove('thinking');
-        thinkEl.innerHTML = aiRenderMarkdown('Error: ' + (err?.message || String(err)));
-      }
-      sendBtn.disabled = false;
-      document.getElementById('ai-messages').scrollTop = 9999;
-    }
-
-    document.getElementById('ai-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); }
-    });
-
-    // ─────────────────────────────────────────────────────────────
-    // CLAUDE RECOMMENDATIONS SECTION
-    // ─────────────────────────────────────────────────────────────
-
-    function recsSetLoading() {
-      ['account','creative','targeting','improve'].forEach(k => {
-        const el = document.getElementById(`rec-${k}-body`);
-        if (el) { el.textContent = 'Generating…'; el.className = 'rec-card-body loading'; }
-      });
-      const btn = document.getElementById('recs-regenerate-btn');
-      if (btn) btn.disabled = true;
-    }
-
-    function recsRender(parsed) {
-      const map = { account: 'account', creative: 'creative', targeting: 'targeting', improve: 'improve' };
-      Object.entries(map).forEach(([key, elKey]) => {
-        const el = document.getElementById(`rec-${elKey}-body`);
-        if (!el) return;
-        el.className = 'rec-card-body';
-        el.textContent = parsed[key] || '—';
-      });
-      const btn = document.getElementById('recs-regenerate-btn');
-      if (btn) btn.disabled = false;
-    }
-
-    function recsError(msg) {
-      ['account','creative','targeting','improve'].forEach(k => {
-        const el = document.getElementById(`rec-${k}-body`);
-        if (el) { el.className = 'rec-card-body rec-error'; el.textContent = msg; }
-      });
-      const btn = document.getElementById('recs-regenerate-btn');
-      if (btn) btn.disabled = false;
-    }
-
-    async function loadRecommendations() {
-      if (!_dashContext || !_recsEnabled) return;
-      const REC_PROMPT = `Analyse this Meta Ads account data and respond with ONLY a valid JSON object — no markdown, no explanation, just raw JSON — with exactly these four keys:
-{
-  "account": "2-3 sentences summarising overall account performance: key metrics, what is working, and what is underperforming.",
-  "creative": "2-3 specific creative recommendations based on the ad-level data: which ad types or messages to invest in, which to pause, and why.",
-  "targeting": "2-3 specific targeting recommendations: audiences, platforms, or regions to prioritise or avoid based on the performance data.",
-  "improve": "2-3 concrete next steps the account manager should take this week to improve results."
-}`;
-      document.getElementById('recs-section').style.display = 'block';
-      recsSetLoading();
-      try {
-        const result = await callEdgeFunction('ai-chat', {
-          message: REC_PROMPT,
-          context: _dashContext,
-        });
-        // Race-condition guard: bail if view changed away from Meta while AI was thinking
-        if (!_recsEnabled) { document.getElementById('recs-section').style.display = 'none';
-      try { document.getElementById('billing-section').style.display = 'none'; } catch(e) {} return; }
-        if (result?.error) { recsError('⚠️ ' + result.error); return; }
-        const text = result?.reply || '';
-        // Parse JSON — strip any accidental markdown fences
-        const clean = text.replace(/```json|```/g, '').trim();
-        let parsed;
-        try { parsed = JSON.parse(clean); }
-        catch { recsError('Could not parse recommendations. Try regenerating.'); return; }
-        recsRender(parsed);
-      } catch(err) {
-        recsError('⚠️ ' + (err?.message || String(err)));
-      }
-    }
   </script>
 
-  <!-- ── ASK CLAUDE SIDEBAR ── -->
-  <button id="ai-toggle" aria-label="Ask Claude">
-    <span class="ai-icon">💬</span>Ask Claude
-  </button>
-  <div id="ai-panel">
-    <div class="ai-panel-header">
-      <div class="ai-header-title"><span>💬</span> Ask Claude</div>
-      <button class="ai-close-btn" onclick="toggleAISidebar(false)" aria-label="Close">✕</button>
-    </div>
-    <div class="ai-messages" id="ai-messages"></div>
-    <div class="ai-chips">
-      <button class="ai-chip" onclick="aiChip('Which creative is performing best and why?')">Best creative?</button>
-      <button class="ai-chip" onclick="aiChip('How can I improve my targeting to get better results?')">Improve targeting</button>
-      <button class="ai-chip" onclick="aiChip('Give me your top 3 recommendations to improve campaign performance')">Top recommendations</button>
-      <button class="ai-chip" onclick="aiChip('How can I reduce my CPM and cost per result?')">Reduce CPM</button>
-      <button class="ai-chip" onclick="aiChip('Which platform or region should I scale budget to?')">Where to scale?</button>
-    </div>
-    <div class="ai-input-row">
-      <textarea id="ai-input" placeholder="Ask about targeting, creatives, results…" rows="2"></textarea>
-      <button id="ai-send" onclick="aiSend()">Send ↑</button>
-    </div>
-  </div>
 
-  <script>
-  // ── Draggable Ask Claude button ──────────────────────────────
-  (function() {
-    const btn = document.getElementById('ai-toggle');
-    if (!btn) return;
 
-    // Restore saved position
-    const savedTop = localStorage.getItem('ai-toggle-top');
-    if (savedTop) { btn.style.top = savedTop; btn.style.transform = 'none'; }
-
-    let startY, startBtnTop, hasDragged = false;
-
-    // Capture-phase click guard — fires before inline handlers
-    btn.addEventListener('click', e => {
-      if (hasDragged) { e.stopImmediatePropagation(); hasDragged = false; }
-      else { toggleAISidebar(); }
-    }, true);
-
-    btn.addEventListener('mousedown', e => {
-      if (e.button !== 0) return;
-      startY      = e.clientY;
-      startBtnTop = btn.getBoundingClientRect().top;
-      hasDragged  = false;
-      e.preventDefault();
-
-      const onMove = e => {
-        const dy = e.clientY - startY;
-        if (!hasDragged && Math.abs(dy) < 5) return;
-        hasDragged = true;
-        btn.style.cursor = 'grabbing';
-        btn.style.transition = 'opacity 0.2s';
-        let newTop = Math.max(8, Math.min(window.innerHeight - btn.offsetHeight - 8, startBtnTop + dy));
-        btn.style.top = newTop + 'px';
-        btn.style.transform = 'none';
-      };
-
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        btn.style.cursor = 'grab';
-        btn.style.transition = 'background 0.15s, opacity 0.2s';
-        if (hasDragged) localStorage.setItem('ai-toggle-top', btn.style.top);
-      };
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-
-    // Touch support
-    btn.addEventListener('touchstart', e => {
-      const t = e.touches[0];
-      startY      = t.clientY;
-      startBtnTop = btn.getBoundingClientRect().top;
-      hasDragged  = false;
-
-      const onMove = e => {
-        const t = e.touches[0];
-        const dy = t.clientY - startY;
-        if (!hasDragged && Math.abs(dy) < 5) return;
-        hasDragged = true;
-        e.preventDefault();
-        let newTop = Math.max(8, Math.min(window.innerHeight - btn.offsetHeight - 8, startBtnTop + dy));
-        btn.style.top = newTop + 'px';
-        btn.style.transform = 'none';
-      };
-
-      const onEnd = () => {
-        btn.removeEventListener('touchmove', onMove);
-        btn.removeEventListener('touchend', onEnd);
-        if (hasDragged) localStorage.setItem('ai-toggle-top', btn.style.top);
-      };
-
-      btn.addEventListener('touchmove', onMove, { passive: false });
-      btn.addEventListener('touchend', onEnd);
-    }, { passive: true });
-  })();
-  </script>
 
   <!-- ═══════════════════════════════════════════════════════════
        INSTALLABLE APP
