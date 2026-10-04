@@ -516,6 +516,9 @@
     .cp-datesbtn.on { border-style: solid; border-color: #0573F5; background: #EAF2FE; color: #0573F5; }
     [data-theme="dark"] .cp-datesbtn { border-color: #243147; color: #94A3B8; }
     [data-theme="dark"] .cp-datesbtn.on { background: #16294A; border-color: #2563EB; color: #BFDBFE; }
+    .cp-tbl-detail > td { padding: 4px 10px 10px 36px !important; background: var(--well); }
+    .cp-tbl-detail .cp-units { max-width: 760px; margin: 0; }
+    .cp-tbl .cp-node-date { width: 124px; text-align: left; }
     .cp-units { width: 100%; max-width: 640px; border: 1px solid #E5EAF1; border-radius: 12px; background: #FAFBFD; padding: 8px 10px; margin: 6px 0 2px; }
     .cp-units-head { display: flex; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; color: #6B7280; padding: 2px 2px 8px; }
     .cp-unitrow { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-top: 1px solid #EEF2F7; }
@@ -2088,10 +2091,25 @@
       font-size: 10px; padding: 2px 8px; }
     .cp-node-date { font-size: 10.5px; width: 96px; }
 
-    /* unfilled controls stay out of the way until the row is hovered/focused */
-    .cp-countadd, .cp-link:not(.has), .cp-owner.empty, .cp-node-date.empty, .cp-datesbtn,
-    .cp-cmt-btn:not(.has), .cp-node-del {
+    /* Unfilled controls stay out of the way until the row is hovered/focused --
+       but only inside the flow view, which is what the reveal rules below hang
+       off. Written unscoped, this hid the ▸ dates toggle and the empty
+       owner/date controls in the table and compact views permanently: there is
+       no .cp-node around a table row to hover, so nothing ever brought them
+       back. That is how a step's per-deliverable names and due dates became
+       unreachable when the table became the default view -- the data was never
+       lost, just behind a button at opacity 0. */
+    .cp-node .cp-countadd, .cp-node .cp-link:not(.has), .cp-node .cp-owner.empty,
+    .cp-node .cp-node-date.empty, .cp-node .cp-datesbtn,
+    .cp-node .cp-cmt-btn:not(.has), .cp-node .cp-node-del,
+    .cp-decision .cp-countadd, .cp-decision .cp-link:not(.has), .cp-decision .cp-owner.empty,
+    .cp-decision .cp-node-date.empty, .cp-decision .cp-datesbtn,
+    .cp-decision .cp-cmt-btn:not(.has), .cp-decision .cp-node-del {
       opacity: 0; transition: opacity .12s; }
+    /* In the list views they are always visible, just quiet until used. */
+    .cp-tbl .cp-datesbtn, .cp-compact-row .cp-datesbtn { opacity: .85; }
+    .cp-tbl .cp-datesbtn:hover, .cp-compact-row .cp-datesbtn:hover,
+    .cp-tbl .cp-datesbtn.on, .cp-compact-row .cp-datesbtn.on { opacity: 1; }
     .cp-node:hover .cp-countadd, .cp-node:hover .cp-link:not(.has), .cp-node:hover .cp-owner.empty,
     .cp-node:hover .cp-node-date.empty, .cp-node:hover .cp-datesbtn, .cp-node:hover .cp-cmt-btn:not(.has),
     .cp-node:hover .cp-node-del,
@@ -17395,6 +17413,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     // Viewers (and view-only share links) never see task owners
     const cpHidesOwners = () => cpmRole === 'viewer' || (_cpShareToken && _cpShareMode === 'view');
+    // Someone who can only look does not get fields that look typeable. The
+    // save path has never checked this itself, so the guard has to be here.
+    const cpReadOnly = () => cpmRole === 'viewer' || (_cpShareToken && _cpShareMode !== 'edit' && _cpShareMode !== 'editor');
 
     function renderClientProfile() {
       document.body.classList.toggle('cp-noowner', cpHidesOwners());
@@ -18055,24 +18076,46 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       if (_cpView === 'table') {
         const rows = [];
+        const _cpRO = cpReadOnly();
+
+        // How many columns a full-width detail row has to span. Hard-coding 6
+        // left a gap in the owner-hidden layout.
+        const nCols = cpHidesOwners() ? 5 : 6;
 
         // One row builder for both orderings, so the two cannot drift apart.
+        // Returns one <tr>, plus the per-deliverable panel and the comment
+        // panel when they are open underneath it.
         const rowFor = (g, st, si, it, showStage) => {
             const ii = (st.items || []).indexOf(it);
             const stt = _cpItemState(it);
             const over = it.date && it.date < today && stt !== 'done';
+            const k = si + '-' + ii;
+            const total = _cpTotalOf(it);
+            const done  = _cpDoneOf(it);
+            const unit  = _cpUnitOf(it) || 'items';
+            const open  = !!_cpUnitsOpen[k];
+            // How many of this step's deliverables already carry a date, so the
+            // toggle says whether there is anything behind it before it is
+            // opened. A batch of 20 videos with 3 dates set is worth knowing
+            // about from the list.
+            const dated = _cpUnitRows(it).filter(r => r.due).length;
             return `<tr class="${stt}">
               <td style="width:26px"><span class="cp-dot ${stt}"></span></td>
-              <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}${Number(it.total) ? ` <span style="font-weight:800;color:${(Number(it.doneCount)||0) >= Number(it.total) ? '#16A34A' : '#0557D9'}">${Number(it.doneCount)||0}/${Number(it.total)}</span>` : ''}
+              <td style="font-weight:600">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}${total ? ` <span style="font-weight:800;color:${done >= total ? '#16A34A' : '#0557D9'}">${done}/${total}</span>
+                <button class="cp-datesbtn ${open ? 'on' : ''}" title="${dated ? `${dated} of ${total} ${escHtml(unit)} have a due date` : `Set a name and due date for each ${escHtml(unit)}`}" onclick="cpToggleUnits(${si},${ii})">📅 dates${dated && dated < total ? ` ${dated}/${total}` : ''} ${open ? '▴' : '▾'}</button>` : ''}
                 ${showStage ? `<div class="cp-tbl-from">${escHtml(st.stage || 'Stage')}${g.name && g.name !== 'Custom stages' ? ' · ' + escHtml(g.name) : ''}</div>` : ''}</td>
-              ${cpHidesOwners() ? '' : `<td>${it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>'}</td>`}
+              ${cpHidesOwners() ? '' : `<td>${_cpRO
+                  ? (it.owner ? '👤 ' + escHtml(it.owner) : '<span style="color:#B6BFCC">—</span>')
+                  : `<button class="cp-owner ${it.owner ? '' : 'empty'}" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>`}</td>`}
               <td>${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗 Open</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗 add</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}</td>
-              <td style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</td>
+              <td>${_cpRO
+                ? `<span style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</span>`
+                : `<input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" style="text-align:left;${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">`}</td>
               <td>${it.type === 'decision'
                 ? `<button class="cp-branch-btn ${it.decision === 'yes' ? 'yes active' : (it.decision === 'no' ? 'no active' : 'yes')}" style="margin:0" onclick="cpDecide(${si},${ii},'${it.decision === 'yes' ? 'yes' : 'yes'}')">${it.decision === 'yes' ? '✓ APPROVED' : (it.decision === 'no' ? '✗ REVISING' : 'PENDING')}</button>`
                 : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}</td>
-            </tr>`;
+            </tr>${open && total ? `<tr class="cp-tbl-detail"><td colspan="${nCols}">${_cpUnitsHTML(si, ii, it)}</td></tr>` : ''}${_cpCmtOpen[k] ? `<tr class="cp-tbl-detail"><td colspan="${nCols}">${_cpCommentsHTML(si, ii, it)}</td></tr>` : ''}`;
         };
 
         if (_cpSort === 'deadline') {
@@ -18096,7 +18139,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           groups.forEach(g => g.stages.forEach(({ st, si }) => {
             const items = (st.items || []).filter(_cpMatches);
             if (!items.length) return;
-            rows.push(`<tr class="cp-tbl-phase"><td colspan="6">${escHtml(g.name)} › ${escHtml(st.stage)}</td></tr>`);
+            rows.push(`<tr class="cp-tbl-phase"><td colspan="${nCols}">${escHtml(g.name)} › ${escHtml(st.stage)}</td></tr>`);
             items.forEach(it => rows.push(rowFor(g, st, si, it, false)));
           }));
         }
@@ -18104,7 +18147,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         return `<div class="table-wrapper" style="max-height:60vh;overflow:auto">
           <table class="cp-tbl">
             <thead><tr><th></th><th>Step</th>${cpHidesOwners() ? '' : '<th>Owner</th>'}<th>Link</th><th>Date</th><th>Status</th></tr></thead>
-            <tbody>${rows.join('') || '<tr><td colspan="6" class="cp-empty">Nothing matches these filters.</td></tr>'}</tbody>
+            <tbody>${rows.join('') || `<tr><td colspan="${nCols}" class="cp-empty">Nothing matches these filters.</td></tr>`}</tbody>
           </table></div>`;
       }
 
@@ -18137,7 +18180,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   ${it.type === 'decision'
                     ? `<button class="cp-status ${stt}" onclick="cpDecide(${si},${ii},'yes')">${it.decision === 'yes' ? '✓ Approved' : (it.decision === 'no' ? '✗ Revising' : 'Pending')}</button>`
                     : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}
-                </div>`;
+                </div>${_cpUnitsOpen[si + '-' + ii] && _cpTotalOf(it) ? _cpUnitsHTML(si, ii, it) : ''}${_cpCmtOpen[si + '-' + ii] ? _cpCommentsHTML(si, ii, it) : ''}`;
               }).join('')}
             </div></div>`;
         }).join('');
