@@ -475,6 +475,38 @@
     .cp-del { background: none; border: none; cursor: pointer; opacity: .45; font-size: 12px; }
     .cp-del:hover { opacity: 1; }
     /* month bar */
+    /* ── Pipeline board: the month's steps as columns ── */
+    .cpb-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+    .cpb-col { background: var(--well); border: 1px solid var(--border); border-radius: 14px; padding: 10px; min-height: 120px; transition: border-color .15s, background .15s; }
+    .cpb-col.over { border-color: var(--brand-accent); background: color-mix(in srgb, var(--brand-accent) 8%, var(--well)); }
+    .cpb-colhead { display: flex; align-items: center; gap: 7px; padding: 2px 4px 10px; }
+    .cpb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #94A3B8; }
+    .cpb-dot.in_progress { background: #F59E0B; }
+    .cpb-dot.done { background: #16A34A; }
+    .cpb-coltitle { font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: var(--text-muted); }
+    .cpb-coln { font-size: 11px; font-weight: 800; color: var(--text-main); background: var(--surface-2); border-radius: 999px; padding: 1px 7px; }
+    .cpb-late { margin-left: auto; font-size: 10.5px; font-weight: 800; color: #F87171; }
+    .cpb-cards { display: flex; flex-direction: column; gap: 8px; }
+    .cpb-empty { font-size: 11.5px; color: var(--text-muted); text-align: center; padding: 14px 6px; opacity: .7; }
+    .cpb-card { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 9px 10px; cursor: grab; transition: border-color .15s, transform .08s; }
+    .cpb-card:hover { border-color: var(--brand-mid); }
+    .cpb-card.dragging { opacity: .45; cursor: grabbing; }
+    .cpb-card.done .cpb-name { text-decoration: line-through; opacity: .6; }
+    .cpb-cardtop { display: flex; align-items: flex-start; gap: 6px; }
+    .cpb-name { flex: 1; font-size: 12.5px; font-weight: 700; color: var(--text-main); line-height: 1.35; }
+    .cpb-link { flex-shrink: 0; font-size: 11px; text-decoration: none; opacity: .7; }
+    .cpb-link:hover { opacity: 1; }
+    .cpb-stage { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+    .cpb-prog { height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; margin-top: 7px; }
+    .cpb-prog > span { display: block; height: 100%; background: var(--brand-accent); border-radius: 999px; }
+    .cpb-progn { font-size: 10px; font-weight: 700; color: var(--text-muted); margin-top: 3px; }
+    .cpb-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .cpb-owner, .cpb-date, .cpb-cmt { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 7px; background: var(--surface-2); color: var(--text-muted); white-space: nowrap; }
+    .cpb-date.late { background: rgba(248,113,113,.14); color: #F87171; }
+    .cpb-hint { font-size: 11px; color: var(--text-muted); }
+    @media (max-width: 760px) {
+      .cpb-board { grid-template-columns: 1fr; }
+    }
     .cp-monthbar { display: flex; align-items: center; gap: 8px; background: #F3F6FB; border: 1px solid #E4E9F2; border-radius: 12px; padding: 8px 10px; margin-bottom: 14px; }
     .cp-mnav { background: #fff; border: 1px solid #D6DEE9; border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; color: #0A1CA3; line-height: 1; }
     .cp-mnav:hover { background: #EAF2FE; border-color: #0573F5; }
@@ -16649,8 +16681,16 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         document.getElementById('cpm-sub').innerHTML = '<div class="cp-wrap" id="cp-body"></div>';
         if (_cpClient) renderClientProfile(); else document.getElementById('cp-body').innerHTML = '<div class="cpm-empty">No process map yet.</div>';
       } else {
+        // The board is a second reading of the Process map, not a second place
+        // to type things. cp_pipelines / cp_tasks were the old backing store
+        // and never held a single row in this account, while every client's
+        // real work sits in pipeline_clients.process_by_month -- so the board
+        // reads from there, and a card dragged between columns writes back to
+        // the same month the map is showing.
         document.getElementById('cpm-sub').innerHTML = '<div id="cpm-boardarea"></div>';
-        cpmRenderPipelinesForClient();
+        if (_cpClient) cpBoardRender();
+        else document.getElementById('cpm-boardarea').innerHTML =
+          '<div class="cpm-empty">No process map for this client yet.</div>';
       }
     }
 
@@ -16667,77 +16707,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       cpmRenderClientCards();
     }
 
-    async function cpmRenderPipelinesForClient() {
-      const { data } = await sb.from('cp_pipelines')
-        .select('*, cp_clients(name), cp_services(name)')
-        .eq('organization_id', currentOrgId).eq('client_id', cpmClientId).eq('archived', false)
-        .order('created_at', { ascending: false });
-      cpmData.pipelines = data || [];
-      if (!cpmPipelineId && cpmData.pipelines.length) cpmPipelineId = cpmData.pipelines[0].id;
-      if (cpmPipelineId && !cpmData.pipelines.some(p => p.id === cpmPipelineId)) cpmPipelineId = cpmData.pipelines[0]?.id || null;
-      const sel = cpmData.pipelines.length
-        ? `<select class="cpm-input" style="width:auto;min-width:250px" onchange="cpmOpenPipeline(this.value)">
-            ${cpmData.pipelines.map(p => `<option value="${p.id}" ${p.id === cpmPipelineId ? 'selected' : ''}>${cpmEsc(p.cp_services?.name || 'Pipeline')}${p.period ? ' · ' + p.period : ''}</option>`).join('')}
-           </select>` : '<span class="cpm-sectitle">No pipelines for this client yet</span>';
-      document.getElementById('cpm-boardarea').innerHTML = `
-        <div class="cpm-panel" style="margin-bottom:14px;padding:14px 18px">
-          <div class="cpm-sechead" style="margin-bottom:0">
-            ${sel}<span style="flex:1"></span>
-            ${cpmCanEdit() ? '<button class="cpm-btn" onclick="cpmNewPipeline()">＋ New pipeline</button>' : ''}
-            ${cpmCanEdit() && cpmPipelineId ? '<button class="cpm-btn ghost" onclick="cpmDeletePipeline()">🗑 Delete</button>' : ''}
-          </div>
-        </div>
-        <div id="cpm-boardwrap"></div>`;
-      if (cpmPipelineId) cpmLoadTasks();
-      else document.getElementById('cpm-boardwrap').innerHTML =
-        `<div class="cpm-panel"><div class="cpm-empty">Create a pipeline for ${cpmEsc(cpmData.clients.find(x=>x.id===cpmClientId)?.name||'')} — the ${CPM_STAGES.length} workflow stages are generated automatically.</div></div>`;
-    }
 
-    function cpmOpenPipeline(id) { cpmPipelineId = id; cpmRenderPipelinesForClient(); }
 
-    async function cpmNewPipeline() {
-      const clients  = cpmData.clients.filter(c => !c.archived);
-      const services = cpmData.services.filter(s => !s.archived);
-      if (!clients.length)  return alert('Add a client first in Pipeline Settings → Clients.');
-      let client = clients.find(c => c.id === cpmClientId);
-      if (!client) {
-        const cName = prompt('Client:\n\n' + clients.map((c, i) => `${i + 1}. ${c.name}`).join('\n') + '\n\nType the number:');
-        client = clients[parseInt(cName) - 1];
-      }
-      if (!client) return;
-      const sName = services.length ? prompt('Service:\n\n' + services.map((x, i) => `${i + 1}. ${x.name}`).join('\n') + '\n\nType the number (or leave empty):') : '';
-      const service = services[parseInt(sName) - 1] || null;
-      const period = prompt('Period (YYYY-MM):', new Date().toISOString().slice(0, 7)) || null;
 
-      const { data: pipe, error } = await sb.from('cp_pipelines').insert({
-        organization_id: currentOrgId, client_id: client.id, service_id: service?.id || null,
-        period, created_by: currentUser?.id,
-      }).select().single();
-      if (error) return alert(error.message);
 
-      const tasks = CPM_STAGES.map((stage, i) => ({
-        pipeline_id: pipe.id, organization_id: currentOrgId, stage, sort_order: i, status: 'pending',
-      }));
-      const { error: tErr } = await sb.from('cp_tasks').insert(tasks);
-      if (tErr) alert('Pipeline created but stages failed: ' + tErr.message);
-      cpmPipelineId = pipe.id;
-      cpmClientId = client.id; cpmSub = 'board';
-      cpmRenderClientWorkspace();
-    }
-
-    async function cpmDeletePipeline() {
-      if (!confirm('Delete this pipeline and all its tasks?')) return;
-      const { error } = await sb.from('cp_pipelines').delete().eq('id', cpmPipelineId);
-      if (error) return alert(error.message);
-      cpmPipelineId = null;
-      cpmRenderPipelinesForClient();
-    }
-
-    async function cpmLoadTasks() {
-      const { data } = await sb.from('cp_tasks').select('*').eq('pipeline_id', cpmPipelineId).order('sort_order');
-      cpmTasks = data || [];
-      cpmRenderBoard();
-    }
 
     function _cpmMember(id) { return cpmData.members.find(m => m.id === id); }
 
@@ -16748,85 +16721,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // date would hide where the work actually is. The summary above the list
     // carries what the board used to show at a glance: how many are done, and
     // which deadline is next.
-    function cpmRenderBoard() {
-      const today = new Date().toISOString().slice(0, 10);
-      const ro = !cpmCanEdit();
-
-      const done = cpmTasks.filter(t => t.status === 'done').length;
-      const pct  = cpmTasks.length ? Math.round(done / cpmTasks.length * 100) : 0;
-
-      // The soonest unfinished deadline. Overdue ones sort first naturally,
-      // which is what someone opening this screen needs to see.
-      const nextDue = cpmTasks
-        .filter(t => t.due_date && t.status !== 'done')
-        .map(t => t.due_date).sort()[0];
-
-      const rows = cpmTasks.map((t, i) => {
-        const st = t.status || 'pending';
-        const m = _cpmMember(t.owner_id);
-        const overdue = t.due_date && t.due_date < today && st !== 'done';
-        const opts = CPM_STATUS.map(s =>
-          `<option value="${s}" ${s === st ? 'selected' : ''}>${CPM_STATUS_LABEL[s]}</option>`).join('');
-        return `<div class="cpm-row ${st === 'done' ? 'is-done' : ''}" onclick="cpmOpenTask('${t.id}')">
-          <div class="cpm-row-name">
-            <span class="cpm-row-n">${i + 1}</span>
-            ${cpmEsc(t.stage)}
-            ${t.notes ? '<span title="Has notes" style="opacity:.6">📝</span>' : ''}
-          </div>
-          <select class="cpm-stat ${st}" ${ro ? 'disabled' : ''}
-                  onclick="event.stopPropagation()"
-                  onchange="cpmSetStatus('${t.id}', this.value)">${opts}</select>
-          <div class="cpm-row-owner">${m ? '👤 ' + cpmEsc(m.full_name.split(' ')[0]) : '—'}</div>
-          <div class="cpm-row-due ${overdue ? 'overdue' : ''}">${t.due_date ? (overdue ? '⚠ ' : '') + t.due_date.slice(5) : '—'}</div>
-        </div>`;
-      }).join('');
-
-      document.getElementById('cpm-boardwrap').innerHTML = `
-        <div class="cpm-list-top">
-          <span class="cpm-list-count">${done} of ${cpmTasks.length} done</span>
-          <span class="cpm-list-bar"><span class="cpm-list-fill" style="width:${pct}%"></span></span>
-          <span class="cpm-list-count">${pct}%</span>
-          ${nextDue ? `<span class="cpm-list-next">Next deadline ${nextDue}</span>` : ''}
-        </div>
-        <div class="cpm-list">
-          <div class="cpm-list-head"><span>Task</span><span>Status</span><span>Owner</span><span>Due</span></div>
-          ${rows || '<div class="cpm-empty" style="padding:18px">No tasks in this pipeline yet.</div>'}
-        </div>`;
-    }
 
     // Status used to change by dragging a card between columns. A dropdown does
     // the same thing, works on a phone, and keeps the row in place so you can
     // see what you just changed.
-    async function cpmSetStatus(id, status) {
-      if (!cpmCanEdit()) return;
-      const t = cpmTasks.find(x => x.id === id);
-      if (!t || t.status === status) return;
-      const previous = t.status;
-      t.status = status;
-      cpmRenderBoard();
-      const { error } = await sb.from('cp_tasks')
-        .update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-      if (error) { alert(error.message); t.status = previous; cpmRenderBoard(); }
-    }
 
     // ── Task drawer: owner, due date, status, notes, attachments, comments ──
-    async function cpmOpenTask(id) {
-      cpmTask = cpmTasks.find(t => t.id === id);
-      if (!cpmTask) return;
-      document.getElementById('cpm-drawer').classList.remove('hidden');
-      document.getElementById('cpm-drawer-title').textContent = cpmTask.stage;
-      const p = cpmData.pipelines.find(x => x.id === cpmPipelineId);
-      document.getElementById('cpm-drawer-sub').textContent =
-        [p?.cp_clients?.name, p?.cp_services?.name, p?.period].filter(Boolean).join(' · ');
-      cpmRenderDrawer();
-      const [c, a] = await Promise.all([
-        sb.from('cp_comments').select('*').eq('task_id', id).order('created_at'),
-        sb.from('cp_attachments').select('*').eq('task_id', id).order('created_at'),
-      ]);
-      cpmTask._comments = c.data || [];
-      cpmTask._files = a.data || [];
-      cpmRenderDrawer();
-    }
     function cpmCloseDrawer() { document.getElementById('cpm-drawer').classList.add('hidden'); cpmTask = null; }
 
     function cpmRenderDrawer() {
@@ -17333,8 +17233,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!_cpPending) _cpBaseline = _cpSnapshot();
       Object.assign(_cpClient, patch);
       _cpPending = { ...(_cpPending || {}), ...patch };
-      renderClientProfile();
+      _cpRerender();
       return;
+    }
+
+    // Both sub-tabs edit the same month, so a save from either has to redraw
+    // whichever one is actually on screen. Calling renderClientProfile blindly
+    // threw on the board, where there is no #cp-body to write into.
+    function _cpRerender() {
+      if (typeof cpmSub !== 'undefined' && cpmSub === 'board'
+          && document.getElementById('cpm-boardarea')) return cpBoardRender();
+      renderClientProfile();
     }
 
     function _cpChangeSummary(before, after, month) {
@@ -17469,6 +17378,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     function _renderClientProfileInner() {
+      // Fails quietly rather than throwing: this is called from save paths that
+      // can run while another sub-tab is showing.
+      if (!_cpClient || !document.getElementById('cp-body')) return;
       document.body.classList.toggle('cp-noowner', cpHidesOwners());
       const c = _cpClient;
       document.getElementById('cp-title').textContent = c.name || 'Client';
@@ -18245,6 +18157,162 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <button class="cp-del" onclick="cpRemoveMap('${g.name.replace(/'/g, "\\'")}')">🗑</button>
           </div>${body}</div>`;
       }).join('') || '<div class="cp-empty">Nothing matches these filters.</div>';
+    }
+
+
+    // ── Pipeline board: the month's steps as a Kanban ──────────────────────
+    //
+    // Same data as the Process map, read a different way. The map answers
+    // "what is the sequence and when is it due"; the board answers "what is
+    // sitting on someone right now". Dragging a card writes the status back to
+    // process_by_month, so the two can never disagree.
+    const CP_BOARD_COLS = [
+      ['pending',     'Not started', 'c-slate'],
+      ['in_progress', 'In progress', 'c-amber'],
+      ['done',        'Done',        'c-green'],
+    ];
+    let _cpBoardOwner = '';
+    function cpBoardSetOwner(v) { _cpBoardOwner = v; cpBoardRender(); }
+
+    function cpBoardRender() {
+      const host = document.getElementById('cpm-boardarea');
+      if (!host || !_cpClient) return;
+      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+
+      const proc  = _cpProc();
+      const today = new Date().toISOString().slice(0, 10);
+      const ro    = cpReadOnly();
+
+      // Flattened with their stage index and item index, because that pair is
+      // what every write path takes.
+      const cards = [];
+      proc.forEach((st, si) => (st.items || []).forEach((it, ii) => {
+        if (_cpBoardOwner && (it.owner || '') !== _cpBoardOwner) return;
+        cards.push({ st, si, it, ii, state: _cpItemState(it) });
+      }));
+
+      const owners = cpHidesOwners() ? []
+        : [...new Set(proc.flatMap(st => (st.items || []).map(i => i.owner).filter(Boolean)))].sort();
+
+      const monthChips = (() => {
+        const months = [];
+        for (let i = -3; i <= 3; i++) months.push(_cpShiftMonth(new Date().toISOString().slice(0, 7), i));
+        Object.keys(_cpAllMonths()).forEach(m => { if (!months.includes(m)) months.push(m); });
+        months.sort();
+        return months.map(m => {
+          const has = (_cpAllMonths()[m] || []).length;
+          const [yy, mm] = m.split('-');
+          return `<button class="cp-mchip ${m === _cpMonth ? 'active' : (has ? 'has' : '')}" title="${CP_MONTH_NAMES[+mm - 1]} ${yy}" onclick="cpBoardSetMonth('${m}')">${CP_MONTH_NAMES[+mm - 1].slice(0, 3)}${has ? ' ·' + has : ''}</button>`;
+        }).join('');
+      })();
+
+      const col = ([key, label]) => {
+        const mine = cards.filter(c => c.state === key);
+        const late = mine.filter(c => c.it.date && c.it.date < today && key !== 'done').length;
+        return `<div class="cpb-col" data-col="${key}"
+            ${ro ? '' : `ondragover="cpBoardOver(event)" ondragleave="cpBoardLeave(event)" ondrop="cpBoardDrop(event,'${key}')"`}>
+          <div class="cpb-colhead">
+            <span class="cpb-dot ${key}"></span>
+            <span class="cpb-coltitle">${label}</span>
+            <span class="cpb-coln">${mine.length}</span>
+            ${late ? `<span class="cpb-late" title="${late} past its date">⚠ ${late}</span>` : ''}
+          </div>
+          <div class="cpb-cards">${mine.map(cardHTML).join('') || '<div class="cpb-empty">Nothing here</div>'}</div>
+        </div>`;
+      };
+
+      function cardHTML(c) {
+        const { st, si, it, ii, state } = c;
+        const over  = it.date && it.date < today && state !== 'done';
+        const total = _cpTotalOf(it);
+        const done  = _cpDoneOf(it);
+        const unit  = _cpUnitOf(it) || 'items';
+        const pct   = total ? Math.round(done / total * 100) : null;
+        return `<div class="cpb-card ${state}" ${ro ? '' : `draggable="true" ondragstart="cpBoardDragStart(event,${si},${ii})" ondragend="cpBoardDragEnd(event)"`}>
+          <div class="cpb-cardtop">
+            <span class="cpb-name">${it.type === 'decision' ? '◇ ' : ''}${escHtml(it.name)}</span>
+            ${it.link ? `<a class="cpb-link" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="Open the linked file">🔗</a>` : ''}
+          </div>
+          <div class="cpb-stage">${escHtml(st.stage || 'Stage')}</div>
+          ${total ? `<div class="cpb-prog" title="${done} of ${total} ${escHtml(unit)} done">
+              <span style="width:${pct}%"></span></div>
+            <div class="cpb-progn">${done}/${total} ${escHtml(unit)}</div>` : ''}
+          <div class="cpb-foot">
+            ${it.owner && !cpHidesOwners() ? `<span class="cpb-owner">👤 ${escHtml(it.owner)}</span>` : ''}
+            ${it.date ? `<span class="cpb-date ${over ? 'late' : ''}">${over ? '⚠ ' : ''}${_cpFmtDate(it.date)}</span>` : ''}
+            ${(it.comments || []).length ? `<span class="cpb-cmt">💬 ${(it.comments || []).length}</span>` : ''}
+          </div>
+        </div>`;
+      }
+
+      host.innerHTML = `
+        <div class="cp-monthbar">
+          <button class="cp-mnav" onclick="cpBoardSetMonth(_cpShiftMonth(_cpMonth,-1))" title="Previous month">‹</button>
+          <div class="cp-mlabel">${_cpMonthLabel(_cpMonth)}</div>
+          <button class="cp-mnav" onclick="cpBoardSetMonth(_cpShiftMonth(_cpMonth,1))" title="Next month">›</button>
+          <div class="cp-mchips">${monthChips}</div>
+        </div>
+        ${owners.length ? `<div class="cp-toolbar" style="margin-bottom:12px">
+          <select class="cp-filter" onchange="cpBoardSetOwner(this.value)">
+            <option value="">All owners</option>
+            ${owners.map(o => `<option value="${escHtml(o)}" ${o === _cpBoardOwner ? 'selected' : ''}>${escHtml(o)}</option>`).join('')}
+          </select>
+          <span style="flex:1"></span>
+          <span class="cpb-hint">${ro ? 'Read only' : 'Drag a card between columns to change its status'}</span>
+        </div>` : ''}
+        ${cards.length
+          ? `<div class="cpb-board">${CP_BOARD_COLS.map(col).join('')}</div>`
+          : `<div class="cp-empty">Nothing planned for <strong>${_cpMonthLabel(_cpMonth)}</strong> yet — add it on the <strong>🗺 Process map</strong> and it appears here.</div>`}`;
+
+      window.scrollTo(window.scrollX || 0, scrollY);
+    }
+
+    function cpBoardSetMonth(m) { _cpMonth = m; cpBoardRender(); }
+
+    // Dates are shown the way the rest of the screen shows them.
+    function _cpFmtDate(d) {
+      try {
+        return new Date(d + 'T00:00:00').toLocaleDateString('en-GB',
+          { day: '2-digit', month: 'short' });
+      } catch { return d; }
+    }
+
+    let _cpBoardDrag = null;
+    function cpBoardDragStart(e, si, ii) {
+      _cpBoardDrag = { si, ii };
+      e.currentTarget.classList.add('dragging');
+      // Firefox will not start a drag without data on the transfer.
+      try { e.dataTransfer.setData('text/plain', si + ':' + ii); } catch {}
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    function cpBoardDragEnd(e) {
+      _cpBoardDrag = null;
+      e.currentTarget.classList.remove('dragging');
+      document.querySelectorAll('.cpb-col.over').forEach(el => el.classList.remove('over'));
+    }
+    function cpBoardOver(e)  { e.preventDefault(); e.currentTarget.classList.add('over'); }
+    function cpBoardLeave(e) { e.currentTarget.classList.remove('over'); }
+
+    function cpBoardDrop(e, status) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('over');
+      if (!_cpBoardDrag || cpReadOnly()) return;
+      const { si, ii } = _cpBoardDrag;
+      _cpBoardDrag = null;
+      const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const it = proc[si]?.items?.[ii];
+      if (!it) return;
+      if (_cpItemState(it) === status) return;   // dropped back where it started
+      if (it.type === 'decision') {
+        // A decision has no free-standing status: approved is done, revising is
+        // in progress, and anything else is still waiting on an answer. Writing
+        // status alone would leave the card showing one thing and the map
+        // another.
+        it.decision = status === 'done' ? 'yes' : (status === 'in_progress' ? 'no' : '');
+        if (status === 'in_progress') it.revisions = (it.revisions || 0) + 1;
+      }
+      it.status = status;
+      _cpSaveProc(proc);
     }
 
     function cpSetView(v) { _cpView = v; localStorage.setItem('cp_view', v); renderClientProfile(); }
