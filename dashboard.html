@@ -17417,7 +17417,58 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // save path has never checked this itself, so the guard has to be here.
     const cpReadOnly = () => cpmRole === 'viewer' || (_cpShareToken && _cpShareMode !== 'edit' && _cpShareMode !== 'editor');
 
+    // Ticking a deliverable saves, and saving redraws the whole panel. The
+    // redraw replaces #cp-body wholesale, so every scroll container inside it
+    // is destroyed and rebuilt at the top -- tick an item 15 rows down and the
+    // screen jumps back to the start of the list, which makes working through
+    // a batch of 20 videos impossible.
+    //
+    // So the render is wrapped: where the page and any inner scroller were,
+    // and what was focused, are captured before the write and put back after.
+    // Restored synchronously, before the browser paints, so there is no visible
+    // jump-and-return.
     function renderClientProfile() {
+      const _body = document.getElementById('cp-body');
+      if (!_body) return _renderClientProfileInner();
+
+      const _pageY = window.scrollY || document.documentElement.scrollTop || 0;
+      const _scrolls = {};
+      _body.querySelectorAll('[data-cpscroll]').forEach(el => {
+        _scrolls[el.dataset.cpscroll] = { top: el.scrollTop, left: el.scrollLeft };
+      });
+      // Only our own keyed fields: restoring focus to anything else risks
+      // stealing it from a dialog or a field outside this panel.
+      const _act = document.activeElement;
+      const _focusKey = (_act && _body.contains(_act) && _act.dataset && _act.dataset.cpk) || null;
+      const _selStart = (() => { try { return _act.selectionStart; } catch { return null; } })();
+
+      _renderClientProfileInner();
+
+      const _body2 = document.getElementById('cp-body');
+      if (_body2) {
+        _body2.querySelectorAll('[data-cpscroll]').forEach(el => {
+          const was = _scrolls[el.dataset.cpscroll];
+          if (was) { el.scrollTop = was.top; el.scrollLeft = was.left; }
+        });
+        if (_focusKey) {
+          const el = _body2.querySelector(`[data-cpk="${CSS.escape(_focusKey)}"]`);
+          if (el) {
+            el.focus({ preventScroll: true });
+            // Date inputs throw on setSelectionRange, so this stays optional.
+            if (_selStart != null) { try { el.setSelectionRange(_selStart, _selStart); } catch {} }
+          }
+        }
+      }
+      // Plain two-argument form, not { behavior: 'instant' }: nothing here sets
+      // scroll-behavior: smooth, so this is already instant, and the enum form
+      // throws on older engines. Skipped when the page has not moved, so a
+      // scroll the person is in the middle of is never yanked.
+      if ((window.scrollY || document.documentElement.scrollTop || 0) !== _pageY) {
+        window.scrollTo(window.scrollX || 0, _pageY);
+      }
+    }
+
+    function _renderClientProfileInner() {
       document.body.classList.toggle('cp-noowner', cpHidesOwners());
       const c = _cpClient;
       document.getElementById('cp-title').textContent = c.name || 'Client';
@@ -17748,9 +17799,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         return `<div class="cp-unitrow ${r.d ? 'done' : ''}">
           <button class="cp-unitcheck" title="${r.d ? 'Mark not done' : 'Mark done'}" onclick="cpToggleUnit(${si},${ii},${k})">${r.d ? '✓' : ''}</button>
           <span class="cp-unitname">${escHtml(one)} ${k + 1}</span>
-          <input class="cp-unitlabel" placeholder="name / topic" value="${escHtml(r.t || '')}"
+          <input class="cp-unitlabel" data-cpk="u${si}-${ii}-${k}-t" placeholder="name / topic" value="${escHtml(r.t || '')}"
                  onchange="cpSetUnitLabel(${si},${ii},${k},this.value)">
-          <input type="date" min="2020-01-01" max="2099-12-31" class="cp-unitdue ${r.due ? '' : 'empty'} ${late ? 'late' : ''}"
+          <input type="date" min="2020-01-01" max="2099-12-31" data-cpk="u${si}-${ii}-${k}-due" class="cp-unitdue ${r.due ? '' : 'empty'} ${late ? 'late' : ''}"
                  value="${r.due || ''}" title="Due date" onchange="cpSetUnitDue(${si},${ii},${k},this.value)">
         </div>`;
       }).join('');
@@ -18111,7 +18162,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}</td>
               <td>${_cpRO
                 ? `<span style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</span>`
-                : `<input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" style="text-align:left;${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">`}</td>
+                : `<input type="date" min="2020-01-01" max="2099-12-31" data-cpk="d${si}-${ii}" class="cp-node-date ${it.date ? '' : 'empty'}" style="text-align:left;${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">`}</td>
               <td>${it.type === 'decision'
                 ? `<button class="cp-branch-btn ${it.decision === 'yes' ? 'yes active' : (it.decision === 'no' ? 'no active' : 'yes')}" style="margin:0" onclick="cpDecide(${si},${ii},'${it.decision === 'yes' ? 'yes' : 'yes'}')">${it.decision === 'yes' ? '✓ APPROVED' : (it.decision === 'no' ? '✗ REVISING' : 'PENDING')}</button>`
                 : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}</td>
@@ -18144,7 +18195,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           }));
         }
 
-        return `<div class="table-wrapper" style="max-height:60vh;overflow:auto">
+        return `<div class="table-wrapper" data-cpscroll="tbl" style="max-height:60vh;overflow:auto">
           <table class="cp-tbl">
             <thead><tr><th></th><th>Step</th>${cpHidesOwners() ? '' : '<th>Owner</th>'}<th>Link</th><th>Date</th><th>Status</th></tr></thead>
             <tbody>${rows.join('') || `<tr><td colspan="${nCols}" class="cp-empty">Nothing matches these filters.</td></tr>`}</tbody>
@@ -18176,7 +18227,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   <button class="cp-owner ${it.owner ? '' : 'empty'}" onclick="cpSetOwner(${si},${ii})">${it.owner ? '👤 ' + escHtml(it.owner) : '＋ owner'}</button>
                   ${it.link ? `<a class="cp-link has" href="${escHtml(it.link)}" target="_blank" rel="noopener" title="${escHtml(it.link)}">🔗</a><button class="cp-node-del" style="opacity:.6" title="Edit link" onclick="cpSetLink(${si},${ii})">✎</button>` : `<button class="cp-link" onclick="cpSetLink(${si},${ii})">🔗</button>`}
                   ${(() => { const n = (it.comments || []).length; return `<button class="cp-cmt-btn ${n ? 'has' : ''}" onclick="cpToggleComments(${si},${ii})">💬${n ? ' ' + n : ''}</button>`; })()}
-                  <input type="date" min="2020-01-01" max="2099-12-31" class="cp-node-date ${it.date ? '' : 'empty'}" style="${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">
+                  <input type="date" min="2020-01-01" max="2099-12-31" data-cpk="d${si}-${ii}" class="cp-node-date ${it.date ? '' : 'empty'}" style="${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">
                   ${it.type === 'decision'
                     ? `<button class="cp-status ${stt}" onclick="cpDecide(${si},${ii},'yes')">${it.decision === 'yes' ? '✓ Approved' : (it.decision === 'no' ? '✗ Revising' : 'Pending')}</button>`
                     : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}
