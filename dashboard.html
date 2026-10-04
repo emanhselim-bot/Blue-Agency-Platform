@@ -476,6 +476,11 @@
     .cp-del:hover { opacity: 1; }
     /* month bar */
     /* ── Pipeline board: the month's steps as columns ── */
+    .cp-mspan { flex-shrink: 0; white-space: nowrap; font-size: 10.5px; font-weight: 800; border: 1px dashed var(--border); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 4px 10px; cursor: pointer; transition: all .15s; }
+    .cp-mspan:hover { border-style: solid; color: var(--text-main); }
+    .cp-mspan.on { border-style: solid; border-color: var(--brand-mid); background: rgba(5,115,245,.12); color: var(--brand-mid); }
+    /* a month covered by the project currently open */
+    .cp-mchip.inspan { border-color: var(--brand-mid); color: var(--brand-mid); }
     .cpb-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
     .cpb-col { background: var(--well); border: 1px solid var(--border); border-radius: 14px; padding: 10px; min-height: 120px; transition: border-color .15s, background .15s; }
     .cpb-col.over { border-color: var(--brand-accent); background: color-mix(in srgb, var(--brand-accent) 8%, var(--well)); }
@@ -17085,10 +17090,21 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const now = new Date().toISOString().slice(0, 7);
       const m = client?.process_by_month;
       if (!m || typeof m !== 'object' || Array.isArray(m)) return now;
-      const filled = Object.keys(m).filter(k => Array.isArray(m[k]) && m[k].length);
-      if (!filled.length) return now;
-      if (filled.includes(now)) return now;
-      filled.sort();
+      const owners = Object.keys(m).filter(k => Array.isArray(m[k]) && m[k].length);
+      if (!owners.length) return now;
+      // A month a span covers counts as filled, so a project running Aug-Oct
+      // opens on October in October rather than falling back to August.
+      const spans = (client?.process_spans && typeof client.process_spans === 'object'
+                     && !Array.isArray(client.process_spans)) ? client.process_spans : {};
+      const covered = new Set(owners);
+      owners.forEach(first => {
+        const last = spans[first];
+        if (!last || last <= first) return;
+        let k = first;
+        for (let guard = 0; k <= last && guard < 60; guard++) { covered.add(k); k = _cpShiftMonth(k, 1); }
+      });
+      if (covered.has(now)) return now;
+      const filled = [...covered].sort();
       // Prefer the most recent month that is not in the future: a plan drafted
       // for next month should not hide the one being worked on now.
       const past = filled.filter(k => k <= now);
@@ -17109,15 +17125,73 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const m = _cpClient?.process_by_month;
       return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {};
     }
+
+    // ── Projects that run over more than one month ────────────────────────
+    //
+    // A span says the plan filed under one month also covers the months after
+    // it: { "2026-08": "2026-09" } means August's plan is August and September.
+    // The covered months have no entry of their own in process_by_month, so
+    // there is exactly one set of steps and one set of progress for the whole
+    // project.
+    //
+    // This replaces copying the plan into each month, which drifted the moment
+    // anyone touched it: Dafa Pad AI's September copy sat at 0 progress on all
+    // 12 steps while August held the real work, and the board opened on the
+    // blank one.
+    function _cpSpans() {
+      const sp = _cpClient?.process_spans;
+      return (sp && typeof sp === 'object' && !Array.isArray(sp)) ? sp : {};
+    }
+
+    // Which month actually stores the plan shown for `m`. Itself when it has
+    // one; otherwise the span that covers it.
+    function _cpOwnerMonth(m) {
+      const byMonth = _cpAllMonths();
+      if (byMonth[m]) return m;
+      const spans = _cpSpans();
+      for (const first of Object.keys(spans)) {
+        if (m >= first && m <= spans[first] && byMonth[first]) return first;
+      }
+      return m;
+    }
+
+    // Every month a span covers, the owner included.
+    function _cpSpanMonths(first) {
+      const last = _cpSpans()[first];
+      if (!last || last <= first) return [first];
+      const out = [];
+      let m = first;
+      for (let guard = 0; m <= last && guard < 60; guard++) {
+        out.push(m);
+        m = _cpShiftMonth(m, 1);
+      }
+      return out;
+    }
+
+    // "August 2026" or "August – September 2026" for whatever covers `m`.
+    function _cpRangeLabel(m) {
+      const first = _cpOwnerMonth(m);
+      const last = _cpSpans()[first];
+      if (!last || last <= first) return _cpMonthLabel(first);
+      const [fy, fm] = first.split('-'), [ly, lm] = last.split('-');
+      return fy === ly
+        ? `${CP_MONTH_NAMES[+fm - 1]} – ${CP_MONTH_NAMES[+lm - 1]} ${fy}`
+        : `${_cpMonthLabel(first)} – ${_cpMonthLabel(last)}`;
+    }
+
     function _cpProc() {
       const byMonth = _cpAllMonths();
-      if (byMonth[_cpMonth]) return byMonth[_cpMonth];
+      const owner = _cpOwnerMonth(_cpMonth);
+      if (byMonth[owner]) return byMonth[owner];
       // legacy single-list process → show it on the current month until first edit
       const legacy = Array.isArray(_cpClient?.process) ? _cpClient.process : [];
       return (_cpMonth === new Date().toISOString().slice(0, 7)) ? legacy : [];
     }
     function _cpSaveProc(list) {
-      const byMonth = { ..._cpAllMonths(), [_cpMonth]: list };
+      // Writes to the month that owns the plan, never to a month the span
+      // merely covers — otherwise the first edit made from September would
+      // split the project back into two drifting copies.
+      const byMonth = { ..._cpAllMonths(), [_cpOwnerMonth(_cpMonth)]: list };
       _cpSave({ process_by_month: byMonth, process: [] });
     }
 
@@ -17177,7 +17251,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
 
       _cpSave({
-        process_by_month: { ..._cpAllMonths(), [_cpMonth]: proc },
+        process_by_month: { ..._cpAllMonths(), [_cpOwnerMonth(_cpMonth)]: proc },
         process: [],
         deliverables_by_month: { ..._cpAllDeliv(), [_cpMonth]: next },
       });
@@ -17198,7 +17272,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       Object.keys(plan).forEach(k => { if (_cpNormUnit(k) === u) delete plan[k]; });
 
       _cpSave({
-        process_by_month: { ..._cpAllMonths(), [_cpMonth]: proc },
+        process_by_month: { ..._cpAllMonths(), [_cpOwnerMonth(_cpMonth)]: proc },
         process: [],
         deliverables_by_month: { ..._cpAllDeliv(), [_cpMonth]: plan },
       });
@@ -17260,6 +17334,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function _cpSnapshot() {
       return JSON.parse(JSON.stringify({
         process_by_month: _cpClient?.process_by_month || {},
+        process_spans: _cpClient?.process_spans || {},
         deliverables_by_month: _cpClient?.deliverables_by_month || {},
       }));
     }
@@ -17482,24 +17557,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <div class="cp-picker-foot"><button class="cp-btn" onclick="cpAddStage()">✏️ Custom empty stage</button></div>
             </div>` : ''}
 
-          <div class="cp-monthbar">
-            <button class="cp-mnav" onclick="cpSetMonth(_cpShiftMonth(_cpMonth,-1))" title="Previous month">‹</button>
-            <div class="cp-mlabel">${_cpMonthLabel(_cpMonth)}</div>
-            <button class="cp-mnav" onclick="cpSetMonth(_cpShiftMonth(_cpMonth,1))" title="Next month">›</button>
-            <div class="cp-mchips">
-              ${(() => {
-                const months = [];
-                for (let i = -3; i <= 3; i++) months.push(_cpShiftMonth(new Date().toISOString().slice(0,7), i));
-                Object.keys(_cpAllMonths()).forEach(m => { if (!months.includes(m)) months.push(m); });
-                months.sort();
-                return months.map(m => {
-                  const has = (_cpAllMonths()[m] || []).length;
-                  const [yy, mm] = m.split('-');
-                  return `<button class="cp-mchip ${m === _cpMonth ? 'active' : (has ? 'has' : '')}" title="${CP_MONTH_NAMES[+mm-1]} ${yy}" onclick="cpSetMonth('${m}')">${CP_MONTH_NAMES[+mm-1].slice(0,3)}${has ? ' ·' + has : ''}</button>`;
-                }).join('');
-              })()}
-            </div>
-          </div>
+          ${_cpMonthBarHTML('cpSetMonth')}
 
           ${_cpMapPickerOpen ? `
             <div class="cp-picker">
@@ -17847,7 +17905,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         // reflect it locally
         const local = JSON.parse(JSON.stringify(_cpProc()));
         local[si].items[ii].comments = [...(local[si].items[ii].comments || []), { by, at: new Date().toISOString(), text, ext: true }];
-        const byMonth = { ..._cpAllMonths(), [_cpMonth]: local };
+        const byMonth = { ..._cpAllMonths(), [_cpOwnerMonth(_cpMonth)]: local };
         _cpClient.process_by_month = byMonth;
         el.value = '';
         renderClientProfile();
@@ -18017,6 +18075,84 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       proc[si].items[ii].date = v;
       _cpSaveProc(proc);
     }
+
+    // One month bar for both sub-tabs, so they cannot drift apart. `onPick` is
+    // the function name to call with a month, since the map and the board
+    // redraw differently.
+    function _cpMonthBarHTML(onPick) {
+      const byMonth = _cpAllMonths();
+      const spans   = _cpSpans();
+      const owner   = _cpOwnerMonth(_cpMonth);
+      const inSpan  = new Set();
+      Object.keys(spans).forEach(first => {
+        if (byMonth[first]) _cpSpanMonths(first).forEach(m => inSpan.add(m));
+      });
+
+      const months = [];
+      for (let i = -3; i <= 3; i++) months.push(_cpShiftMonth(new Date().toISOString().slice(0, 7), i));
+      Object.keys(byMonth).forEach(m => { if (!months.includes(m)) months.push(m); });
+      inSpan.forEach(m => { if (!months.includes(m)) months.push(m); });
+      months.sort();
+
+      const chips = months.map(m => {
+        const o = _cpOwnerMonth(m);
+        const n = (byMonth[o] || []).length;
+        const covered = inSpan.has(m) && m !== o;        // part of a range, not its owner
+        const [yy, mm] = m.split('-');
+        const cls = m === _cpMonth ? 'active'
+                  : (_cpOwnerMonth(_cpMonth) === o && n ? 'inspan'
+                  : (n ? 'has' : ''));
+        return `<button class="cp-mchip ${cls}" title="${CP_MONTH_NAMES[+mm - 1]} ${yy}${covered ? ' — part of ' + _cpRangeLabel(m) : ''}" onclick="${onPick}('${m}')">${CP_MONTH_NAMES[+mm - 1].slice(0, 3)}${n ? ' ·' + n : ''}</button>`;
+      }).join('');
+
+      const spanned = spans[owner] && spans[owner] > owner;
+      return `<div class="cp-monthbar">
+        <button class="cp-mnav" onclick="${onPick}(_cpShiftMonth(_cpMonth,-1))" title="Previous month">‹</button>
+        <div class="cp-mlabel">${_cpRangeLabel(_cpMonth)}</div>
+        <button class="cp-mnav" onclick="${onPick}(_cpShiftMonth(_cpMonth,1))" title="Next month">›</button>
+        ${cpReadOnly() ? '' : `<button class="cp-mspan ${spanned ? 'on' : ''}"
+            title="${spanned ? 'This project runs across several months — click to change' : 'Let this project run across more than one month'}"
+            onclick="cpSetSpan()">↔ ${spanned ? _cpSpanMonths(owner).length + ' months' : 'Span months'}</button>`}
+        <div class="cp-mchips">${chips}</div>
+      </div>`;
+    }
+
+    // Set or clear how many months this project covers.
+    function cpSetSpan() {
+      if (cpReadOnly()) return;
+      const owner = _cpOwnerMonth(_cpMonth);
+      if (!(_cpAllMonths()[owner] || []).length) {
+        alert('Add some stages to this month first, then it can be stretched across the months after it.');
+        return;
+      }
+      const cur = _cpSpanMonths(owner).length;
+      const val = prompt(
+        `How many months does this project run for, starting from ${_cpMonthLabel(owner)}?\n\n`
+        + '1 = this month only. 3 = this month and the two after it.\n'
+        + 'The steps and their progress are shared across every month in the range.',
+        String(cur));
+      if (val === null) return;
+      const n = Math.max(1, Math.min(24, parseInt(val) || 1));
+
+      let last = owner;
+      for (let i = 1; i < n; i++) last = _cpShiftMonth(last, 1);
+
+      // A month inside the new range that already holds its own plan would be
+      // shadowed and look deleted. Say so rather than quietly hiding it.
+      const byMonth = _cpAllMonths();
+      const clash = [];
+      let k = owner;
+      for (let i = 1; i < n; i++) { k = _cpShiftMonth(k, 1); if ((byMonth[k] || []).length) clash.push(k); }
+      if (clash.length && !confirm(
+            `${clash.map(_cpMonthLabel).join(' and ')} already ${clash.length > 1 ? 'have' : 'has'} a plan of its own.\n\n`
+            + `Stretching ${_cpMonthLabel(owner)} over ${clash.length > 1 ? 'them' : 'it'} would hide that work — it stays in the database but no longer shows.\n\nGo ahead?`)) return;
+
+      const spans = { ..._cpSpans() };
+      if (n <= 1) delete spans[owner]; else spans[owner] = last;
+      _cpMonth = owner;
+      _cpSave({ process_spans: spans });
+    }
+
     function cpSetMonth(m) { _cpMonth = m; _cpMapPickerOpen = false; renderClientProfile(); }
     function cpCopyPrevMonth() {
       const prev = _cpShiftMonth(_cpMonth, -1);
@@ -18230,18 +18366,6 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const owners = cpHidesOwners() ? []
         : [...new Set(proc.flatMap(st => (st.items || []).map(i => i.owner).filter(Boolean)))].sort();
 
-      const monthChips = (() => {
-        const months = [];
-        for (let i = -3; i <= 3; i++) months.push(_cpShiftMonth(new Date().toISOString().slice(0, 7), i));
-        Object.keys(_cpAllMonths()).forEach(m => { if (!months.includes(m)) months.push(m); });
-        months.sort();
-        return months.map(m => {
-          const has = (_cpAllMonths()[m] || []).length;
-          const [yy, mm] = m.split('-');
-          return `<button class="cp-mchip ${m === _cpMonth ? 'active' : (has ? 'has' : '')}" title="${CP_MONTH_NAMES[+mm - 1]} ${yy}" onclick="cpBoardSetMonth('${m}')">${CP_MONTH_NAMES[+mm - 1].slice(0, 3)}${has ? ' ·' + has : ''}</button>`;
-        }).join('');
-      })();
-
       const col = ([key, label]) => {
         const mine = cards.filter(c => c.state === key);
         const late = mine.filter(c => c.it.date && c.it.date < today && key !== 'done').length;
@@ -18282,12 +18406,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
 
       host.innerHTML = `
-        <div class="cp-monthbar">
-          <button class="cp-mnav" onclick="cpBoardSetMonth(_cpShiftMonth(_cpMonth,-1))" title="Previous month">‹</button>
-          <div class="cp-mlabel">${_cpMonthLabel(_cpMonth)}</div>
-          <button class="cp-mnav" onclick="cpBoardSetMonth(_cpShiftMonth(_cpMonth,1))" title="Next month">›</button>
-          <div class="cp-mchips">${monthChips}</div>
-        </div>
+        ${_cpMonthBarHTML('cpBoardSetMonth')}
         ${owners.length ? `<div class="cp-toolbar" style="margin-bottom:12px">
           <select class="cp-filter" onchange="cpBoardSetOwner(this.value)">
             <option value="">All owners</option>
@@ -18463,6 +18582,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (error || !data?.before_state) { alert('Could not load that version.'); return; }
       _cpSave({
         process_by_month: data.before_state.process_by_month || {},
+        // Restoring a point in time has to restore the ranges too, or a
+        // revert would leave a span pointing at a month that no longer holds
+        // a plan. Absent on history written before spans existed: keep what
+        // is there rather than wiping it.
+        process_spans: data.before_state.process_spans || _cpClient?.process_spans || {},
         deliverables_by_month: data.before_state.deliverables_by_month || {},
       });
       document.getElementById('cp-hist-modal').classList.add('hidden');
