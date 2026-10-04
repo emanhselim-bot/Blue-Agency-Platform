@@ -16658,6 +16658,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         _cpClient = created || null;
         if (_cpClient) await sb.from('cp_clients').update({ legacy_id: _cpClient.id }).eq('id', id);
       }
+      // Land on a month that has something on it, not a blank October.
+      _cpMonth = _cpDefaultMonth(_cpClient);
       cpmRenderClientWorkspace();
     }
     function cpmBackToClients() { cpmClientId = null; cpmPipelineId = null; cpmRenderClientCards(); }
@@ -17058,6 +17060,31 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     let _cpMapPickerOpen = false;
     let _cpMonth = new Date().toISOString().slice(0, 7);   // YYYY-MM
+
+    // Which month to open a client on.
+    //
+    // This used to be today's month, always. Today is October 2026 and the
+    // newest month anyone has planned is September -- most clients stop at
+    // August -- so every client opened on an empty month, on both sub-tabs and
+    // through a shared link, and looked broken. The team got to their work by
+    // clicking back through the month chips every single time.
+    //
+    // So: the current month when it has something in it, otherwise the most
+    // recent month that does. Falls back to today for a client with no plan at
+    // all, which is the right place to start writing one.
+    function _cpDefaultMonth(client) {
+      const now = new Date().toISOString().slice(0, 7);
+      const m = client?.process_by_month;
+      if (!m || typeof m !== 'object' || Array.isArray(m)) return now;
+      const filled = Object.keys(m).filter(k => Array.isArray(m[k]) && m[k].length);
+      if (!filled.length) return now;
+      if (filled.includes(now)) return now;
+      filled.sort();
+      // Prefer the most recent month that is not in the future: a plan drafted
+      // for next month should not hide the one being worked on now.
+      const past = filled.filter(k => k <= now);
+      return past.length ? past[past.length - 1] : filled[0];
+    }
     const CP_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     function _cpMonthLabel(m) { const [y, mo] = m.split('-'); return `${CP_MONTH_NAMES[+mo - 1]} ${y}`; }
     function _cpShiftMonth(m, delta) {
@@ -18262,7 +18289,19 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         </div>` : ''}
         ${cards.length
           ? `<div class="cpb-board">${CP_BOARD_COLS.map(col).join('')}</div>`
-          : `<div class="cp-empty">Nothing planned for <strong>${_cpMonthLabel(_cpMonth)}</strong> yet — add it on the <strong>🗺 Process map</strong> and it appears here.</div>`}`;
+          : (() => {
+              // An empty month is usually the wrong month, not an empty client.
+              // Saying which months do have a plan, with a button straight to
+              // the nearest, beats "nothing here" and a row of chips to hunt
+              // through.
+              const filled = Object.keys(_cpAllMonths())
+                .filter(k => (_cpAllMonths()[k] || []).length).sort();
+              if (!filled.length) return `<div class="cp-empty">Nothing planned for this client yet — add stages on the <strong>🗺 Process map</strong> and they appear here as cards.</div>`;
+              const near = filled.filter(k => k <= _cpMonth).pop() || filled[0];
+              return `<div class="cp-empty">Nothing planned for <strong>${_cpMonthLabel(_cpMonth)}</strong>.
+                <div style="margin-top:10px">${filled.map(m =>
+                  `<button class="cp-btn ${m === near ? '' : 'ghost'}" style="margin:0 6px 6px 0" onclick="cpBoardSetMonth('${m}')">${_cpMonthLabel(m)} · ${(_cpAllMonths()[m] || []).reduce((n, st) => n + (st.items || []).length, 0)} steps</button>`).join('')}</div></div>`;
+            })()}`;
 
       window.scrollTo(window.scrollX || 0, scrollY);
     }
@@ -18531,7 +18570,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       window.cpmOpenClient = () => {};
       window.openPipeModal = () => {};
       _cpClient = data.client;
-      _cpMonth = new Date().toISOString().slice(0, 7);
+      // A client following a share link has no month chips to hunt through, so
+      // landing them on an empty month is the whole page as far as they know.
+      _cpMonth = _cpDefaultMonth(_cpClient);
       renderClientProfile();
 
       if (_cpShareMode === 'editor') {
