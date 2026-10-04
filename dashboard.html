@@ -6095,6 +6095,41 @@
     // ask for it.
     const _ndCache = {};
 
+    // How much of a shared sheet's branding spend belongs to one account.
+    //
+    // Nuya and Ibriz each run two ad accounts off a single Notion sheet, so the
+    // sheet's branding total is the pair's combined figure and it arrives
+    // identically on both accounts. Subtracting all of it from each one deducts
+    // it twice: each account's conversion spend comes out too low and its ROAS
+    // reads better than it was. On Ibriz BlueAd1 that was roughly 18,000 a
+    // month against 87,000-337,000 of spend, so 5-21% off the denominator,
+    // twice over. Split it evenly across the group's members instead.
+    //
+    // A group or all-accounts view covers every member at once, so the whole
+    // figure is right there and is left alone. A figure someone typed by hand
+    // is also left alone — they typed what they meant for that account.
+    function _brandShare(accountKey, value) {
+      if (value == null || value === '') return value;
+      const v = Number(value);
+      if (!isFinite(v) || v === 0) return value;
+      if (!accountKey || accountKey === '__all__'
+          || String(accountKey).startsWith('__group__')) return v;
+      const n = _brandSharers(accountKey);
+      return n > 1 ? v / n : v;
+    }
+
+    // How many accounts the figure is spread across. A combined group is the
+    // first answer, since that is what the team set up deliberately. Failing
+    // that, the sheet itself: Retaj and Retaj 2 carry one sheet with no group
+    // behind them, and the duplicate figure double-counts there just the same.
+    function _brandSharers(accountKey) {
+      const g = (_acctGroups || []).find(x => (x.account_ids || []).includes(accountKey));
+      if (g && (g.account_ids || []).length > 1) return g.account_ids.length;
+      const url = accountMap[accountKey]?.notion_url;
+      if (!url) return 1;
+      return Object.values(accountMap).filter(a => a && a.notion_url === url).length || 1;
+    }
+
     async function ndForPeriod(accountKey, period) {
       if (!accountKey || !currentOrgId) return null;
       const range = _cmpRange(period === 'custom'
@@ -6481,7 +6516,7 @@
     // chain the dashboard itself uses for this selection — the single-account
     // view prefers confirmed figures, the combined view does not, and Compare
     // has to agree with whichever card is on screen.
-    function _cmpDerive({ shop, mh, get, isGroup, spend }) {
+    function _cmpDerive({ shop, mh, get, isGroup, spend, acctKey }) {
       const num   = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
       const typed = k => num(get(k));
 
@@ -6521,7 +6556,10 @@
 
       // Engagement and follower campaigns buy no orders, so they come out of the
       // denominator — the same split the ROAS card makes.
-      const branding    = typed('branding-spend') ?? num(mh?.branding_spend) ?? 0;
+      // Shared between two accounts on one sheet, so only this account's share
+      // of it comes out here — see _brandShare.
+      const branding    = typed('branding-spend')
+                       ?? _brandShare(acctKey, num(mh?.branding_spend)) ?? 0;
       const brandCapped = Math.min(Math.max(0, branding), spend || 0);
       const convSpend   = Math.max(0, (spend || 0) - brandCapped) || spend;
 
@@ -6573,7 +6611,7 @@
       if (!ok.length) return null;
 
       const withTotals = (base) =>
-        ({ ...base, ..._cmpDerive({ shop, mh, get, isGroup, spend: base.spend }) });
+        ({ ...base, ..._cmpDerive({ shop, mh, get, isGroup, spend: base.spend, acctKey: mhKey }) });
 
       if (ok.length === 1) return withTotals(ok[0]);
 
@@ -7517,7 +7555,9 @@
       // Show all connected active accounts (accounts appear as soon as access is granted)
       const { data: accounts } = await sb
         .from('meta_ad_accounts_safe')  // safe view, no tokens
-        .select('id, meta_account_id, account_name, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id, campaigns_last_synced_at, agency_id')
+        // notion_url is here because branding spend on a shared sheet has to be
+        // split between the accounts that share it — see _brandShare.
+        .select('id, meta_account_id, account_name, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id, campaigns_last_synced_at, agency_id, notion_url')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true)
         .order('account_name');
@@ -9843,9 +9883,20 @@
       // are both OUTCOME_ENGAGEMENT, so splitting on that would count message
       // spend as branding and quietly depress ROAS on every messaging account.
       // The sheet already separates them, because the team does it by hand.
+      //
+      // Divided by the group's member count when this account shares a sheet
+      // with another — see _brandShare.
       const brandingSpend = _brandTyped
-        ?? _mhNum(_ndRow?.branding_spend)
-        ?? _mhNum(_mhRow?.branding_spend) ?? 0;
+        ?? _brandShare(accountDbId, _mhNum(_ndRow?.branding_spend))
+        ?? _brandShare(accountDbId, _mhNum(_mhRow?.branding_spend)) ?? 0;
+      // So the card explains itself rather than looking like half the sheet
+      // went missing.
+      const _brandSplitN = (() => {
+        if (_brandTyped != null) return 1;
+        if (_mhNum(_ndRow?.branding_spend) == null
+            && _mhNum(_mhRow?.branding_spend) == null) return 1;
+        return _brandSharers(accountDbId);
+      })();
       // Never let branding exceed what was actually spent.
       const _brandCapped  = Math.min(Math.max(0, brandingSpend), spend || 0);
       const conversionSpend = Math.max(0, (spend || 0) - _brandCapped);
@@ -10196,7 +10247,7 @@
                 <input id="kpi-branding-spend-input" type="number" min="0" step="any"
                   value="${brandingSpend || ''}" placeholder="0.00"
                   style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
-                <div class="kpi-sub">${_srcSub(_mkGet(_brandKey), _ndRow?.branding_spend, 'Engagement, follows, awareness')}</div>
+                <div class="kpi-sub">${_srcSub(_mkGet(_brandKey), _ndRow?.branding_spend, 'Engagement, follows, awareness')}${_brandSplitN > 1 ? ` · ${_brandSplitN === 2 ? 'half' : '1/' + _brandSplitN} of the shared sheet` : ''}</div>
               </div>
               ${kpi('c-teal solid', '🎯', 'Conversion Spend',
                   fmt(conversionSpend, curr),
