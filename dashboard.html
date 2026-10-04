@@ -6165,6 +6165,47 @@
       return sum;
     }
 
+    // Branding spend for a whole selection — the all-accounts view and any
+    // combined client. One query rather than one per account, and each
+    // account's figure goes through _brandShare on the way in: Ibriz's sheet
+    // writes the same total to both its accounts, so adding the raw numbers
+    // would report double the branding the client actually bought. Shared, the
+    // parts add back up to the sheet.
+    //
+    // Returns null when no account in the selection had the column at all, so
+    // the caller can tell "no branding" from "nothing recorded".
+    async function ndBrandingForAccounts(accountKeys, period) {
+      const keys = [...new Set((accountKeys || []).filter(Boolean))];
+      if (!keys.length || !currentOrgId) return null;
+      const range = _cmpRange(period === 'custom'
+        ? { key: 'custom', from: customFrom, to: customTo }
+        : { key: period });
+      if (!range?.from || !range?.to) return null;
+
+      const cacheKey = `brand|${currentOrgId}|${keys.slice().sort().join(',')}|${range.from}|${range.to}`;
+      if (_ndCache[cacheKey] !== undefined) return _ndCache[cacheKey];
+
+      const { data, error } = await sb.from('notion_daily')
+        .select('account_key, branding_spend')
+        .eq('organization_id', currentOrgId)
+        .in('account_key', keys)
+        .gte('day', range.from).lte('day', range.to);
+
+      if (error || !data?.length) { _ndCache[cacheKey] = null; return null; }
+
+      const perAccount = {};
+      data.forEach(r => {
+        if (r.branding_spend == null) return;
+        perAccount[r.account_key] = (perAccount[r.account_key] || 0) + Number(r.branding_spend);
+      });
+      const accts = Object.keys(perAccount);
+      if (!accts.length) { _ndCache[cacheKey] = null; return null; }
+
+      const total = accts.reduce((s, k) => s + Number(_brandShare(k, perAccount[k]) || 0), 0);
+      _ndCache[cacheKey] = total;
+      return total;
+    }
+
     async function mhForPeriod(accountKey, period) {
       // Only whole calendar months can be matched to a stored row.
       const now = new Date();
@@ -10508,23 +10549,27 @@
 
           // Orders
           upd('kpi-total-orders-val',      newTotalOrders.toLocaleString('en'));
-          upd('kpi-avg-cost-per-order-val',(spend && newTotalOrders)  ? fmt(spend / newTotalOrders, curr)  : na);
+          // _spendForMetrics, not spend: these are the same cards the render
+          // above drew from conversion spend. Using total spend here meant
+          // typing a single message order flipped ROAS, CPO and CPC back to the
+          // branding-inclusive figures without anything on screen saying so.
+          upd('kpi-avg-cost-per-order-val',(_spendForMetrics && newTotalOrders)  ? fmt(_spendForMetrics / newTotalOrders, curr)  : na);
           upd('kpi-total-cr-val',          (newTotalOrders && numLinkClicks) ? fmt(newTotalOrders / numLinkClicks * 100, '', 2) + '%' : na);
           if (el('funnel-purchase-val')) el('funnel-purchase-val').textContent = newTotalOrders.toLocaleString('en');
           if (el('funnel-purchase-src')) el('funnel-purchase-src').textContent = newMsgOrders > 0 ? 'Shopify + Messages' : 'Shopify';
 
           // Pieces
           upd('kpi-total-pieces-val',      newTotalPieces.toLocaleString('en'));
-          upd('kpi-avg-cost-per-piece-val',(spend && newTotalPieces)  ? fmt(spend / newTotalPieces, curr)  : na);
+          upd('kpi-avg-cost-per-piece-val',(_spendForMetrics && newTotalPieces)  ? fmt(_spendForMetrics / newTotalPieces, curr)  : na);
 
           // Revenue & ROAS
           const _revText = (shopifyEnabled || newMsgRevenue > 0) ? curr + newTotalRevenue.toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
           upd('kpi-total-revenue-val', _revText);
-          upd('kpi-roas-val',          (newTotalRevenue && spend) ? fmt(newTotalRevenue / spend, '', 2) + 'x' : na);
+          upd('kpi-roas-val',          (newTotalRevenue && _spendForMetrics) ? fmt(newTotalRevenue / _spendForMetrics, '', 2) + 'x' : na);
 
           // Messages derived
-          upd('kpi-msg-cost-per-order-val',(spend && newMsgOrders)  ? fmt(spend / newMsgOrders, curr)  : '—');
-          upd('kpi-msg-cost-per-piece-val',(spend && newMsgPieces)  ? fmt(spend / newMsgPieces, curr)  : '—');
+          upd('kpi-msg-cost-per-order-val',(_spendForMetrics && newMsgOrders)  ? fmt(_spendForMetrics / newMsgOrders, curr)  : '—');
+          upd('kpi-msg-cost-per-piece-val',(_spendForMetrics && newMsgPieces)  ? fmt(_spendForMetrics / newMsgPieces, curr)  : '—');
         };
 
         let _curMsgOrders  = msgOrders;
@@ -11001,9 +11046,39 @@
         ? `Net of ${fmt(aggReturned, curr)} returns (${aggRetPct}%)`
         : _aggSourceLabel;
 
-      const avgCostPerOrder = (totSpend && totOrders)  ? totSpend / totOrders  : null;
-      const avgCostPerPiece = (totSpend && totPieces)  ? totSpend / totPieces  : null;
-      const roas            = (totRevenue && totSpend) ? totRevenue / totSpend : null;
+      // ── Branding vs conversion spend, across the selection ──
+      // The same split the single-account cards make. Engagement, follower and
+      // reach campaigns buy no orders, so leaving them in the denominator makes
+      // ROAS and cost per order read worse than the selling campaigns managed.
+      // Without this the all-accounts view and a combined client disagreed with
+      // their own member accounts, which is how a number stops being trusted.
+      //
+      // A combined client's own Notion row is preferred, because that is the
+      // sheet's figure as the team wrote it. Summing the members is the
+      // fallback and the only option under "All accounts"; _brandShare keeps a
+      // sheet that sits on two accounts from counting twice.
+      const _aggScopeIsGroup = String(sel?.value || '').startsWith('__group__');
+      const _aggBrandRaw = (_aggScopeIsGroup
+            ? _num((await ndForPeriod(sel.value, currentPeriod).catch(() => null))?.branding_spend)
+            : null)
+        ?? await ndBrandingForAccounts(allAccounts.map(a => a.id), currentPeriod).catch(() => null)
+        ?? _num(_mhGroup?.branding_spend)
+        ?? 0;
+      // Never more than was actually spent.
+      const aggBranding   = Math.min(Math.max(0, _aggBrandRaw), totSpend || 0);
+      const aggConvSpend  = Math.max(0, (totSpend || 0) - aggBranding);
+      // A selection that is all branding still needs a denominator rather than
+      // a row of dashes.
+      const _aggSpendForMetrics = aggConvSpend > 0 ? aggConvSpend : totSpend;
+      // Says which spend the ratio used, so nobody reconciles it against the
+      // Total Spend card by hand and concludes the card is broken.
+      const _aggDenomNote = (base) => aggBranding > 0
+        ? base.replace('Spend', 'Conversion spend') + ` · ${fmt(aggBranding, curr)} branding excluded`
+        : base;
+
+      const avgCostPerOrder = (_aggSpendForMetrics && totOrders)  ? _aggSpendForMetrics / totOrders  : null;
+      const avgCostPerPiece = (_aggSpendForMetrics && totPieces)  ? _aggSpendForMetrics / totPieces  : null;
+      const roas            = (totRevenue && _aggSpendForMetrics) ? totRevenue / _aggSpendForMetrics : null;
 
       const allCampaigns = campaignResults.flatMap(r =>
         (r.status === 'fulfilled' && !r.value?.error) ? (r.value?.campaigns || []) : []
@@ -11063,17 +11138,17 @@
         </div>` : ''}
         <div class="section-label">Primary KPIs · All Accounts Aggregated</div>
         <div class="kpi-grid">
-          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(totSpend, curr),  `${currLabel} · ${accountsWithData} account(s)` + _aggCxSpendNote)}
+          ${kpi('c-blue',   '💰', 'Total Spend',        fmt(totSpend, curr),  `${currLabel} · ${accountsWithData} account(s)` + _aggCxSpendNote + (aggBranding > 0 ? ` · incl. ${fmt(aggBranding, curr)} branding` : ''))}
           ${kpi('c-sky',    '🛒', 'Total Orders',        sfmt(totOrders, v => v.toLocaleString('en')), _aggSourceLabel + _aggCxOrdersNote)}
-          ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub('Spend ÷ Orders'))}
+          ${kpi('c-sky',    '📦', 'Avg Cost per Order',  sfmt(avgCostPerOrder, v => fmt(v, curr)), sfmtSub(_aggDenomNote('Spend ÷ Orders')))}
           ${/* Sits beside cost per order on purpose: what an order costs to win,
                 next to what an order is worth. It used to be first on the second
                 row, where it was easy to miss entirely. */''}
           ${kpi('c-teal',   '🧾', 'Average Order Value', (totRevenue && totOrders) ? fmt(totRevenue / totOrders, curr) : '—', 'Total Revenue ÷ Total Orders')}
           ${kpi('c-teal',   '🧮', 'Total Pieces',        sfmt(totPieces, v => v.toLocaleString('en')), _aggSourceLabel + _aggCxPiecesNote)}
-          ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub('Spend ÷ Units sold'))}
+          ${kpi('c-teal',   '🏷️', 'Avg Cost per Piece', sfmt(avgCostPerPiece, v => fmt(v, curr)), sfmtSub(_aggDenomNote('Spend ÷ Units sold')))}
           ${kpi('c-gold',   '💵', 'Total Revenue',       sfmt(totRevenue, v => curr + v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})), _aggRevenueLabel)}
-          ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub('Revenue ÷ Spend'))}
+          ${kpi('c-orange', '📈', 'ROAS',                sfmt(roas, v => fmt(v,'',2) + 'x'), sfmtSub(_aggDenomNote('Revenue ÷ Spend')))}
           ${kpi('c-coral',  '↩️', 'Returns %',
                 (aggRetPct != null && !isNaN(aggRetPct)) ? Number(aggRetPct).toFixed(2) + '%' : '—',
                 aggReturned > 0
@@ -11379,7 +11454,10 @@
       const storeOf = _pfStoreMap();
 
       const months = PF_MONTHS.map(() => ({
-        spend: 0, orders: 0, pieces: 0, revenue: 0,
+        // brand is carried alongside spend rather than taken out of it: profit
+        // has to see every pound that left the account, while ROAS and
+        // break-even only make sense against the campaigns that sell.
+        spend: 0, brand: 0, orders: 0, pieces: 0, revenue: 0,
         retWeighted: 0, retBase: 0, accounts: 0,
         costWeighted: 0, costBase: 0,   // cost % weighted by revenue, as returns are
         cfmByStore: {},          // confirmed orders per Shopify store, for cancellation
@@ -11396,9 +11474,13 @@
         const revenue   = _pfN(r.total_revenue) ?? (msgRev + webRev);
         // Branding is spend too — performance ratios exclude it, but the money
         // still left the account, so a cost table has to carry it.
-        const spend = (_pfN(r.msg_spend) ?? 0) + (_pfN(r.web_spend) ?? 0) + (_pfN(r.branding_spend) ?? 0);
+        const brand = _pfN(r.branding_spend) ?? 0;
+        const spend = (_pfN(r.msg_spend) ?? 0) + (_pfN(r.web_spend) ?? 0) + brand;
 
         m.spend   += spend;
+        // No _brandShare here: _pfDedupe has already dropped the member rows
+        // for any month its group covers, so a shared sheet appears once.
+        m.brand   += brand;
         m.orders  += (_pfN(r.msg_orders) ?? 0) + webOrders;
         m.pieces  += (_pfN(r.msg_pieces) ?? 0) + webPieces;
         m.revenue += revenue;
@@ -11525,10 +11607,16 @@
       if (!live.length) return head + `<div class="pf-note">No months recorded for ${_pfYear} yet.</div>`;
 
       const tot = _pfYearRows.reduce((a, m) => ({
-        spend: a.spend + m.spend, orders: a.orders + m.orders, pieces: a.pieces + m.pieces,
+        spend: a.spend + m.spend, brand: a.brand + (m.brand || 0),
+        orders: a.orders + m.orders, pieces: a.pieces + m.pieces,
         revenue: a.revenue + m.revenue, retWeighted: a.retWeighted + m.retWeighted, retBase: a.retBase + m.retBase,
         costWeighted: a.costWeighted + m.costWeighted, costBase: a.costBase + m.costBase,
-      }), { spend: 0, orders: 0, pieces: 0, revenue: 0, retWeighted: 0, retBase: 0, costWeighted: 0, costBase: 0 });
+      }), { spend: 0, brand: 0, orders: 0, pieces: 0, revenue: 0, retWeighted: 0, retBase: 0, costWeighted: 0, costBase: 0 });
+
+      // Conversion spend: what the selling campaigns cost. A month that was
+      // nothing but branding keeps its total as the denominator, so the column
+      // shows a ratio rather than a dash.
+      const convOf = m => Math.max(0, (m.spend || 0) - (m.brand || 0)) || (m.spend || 0);
 
       // Profit runs on revenue after returns: goods that came back earned
       // nothing, so charging cost against their revenue would flatter the
@@ -11548,19 +11636,31 @@
       // Expressed on gross revenue so it can be read straight against the ROAS
       // column next to it. Undefined once cost reaches 100%: no amount of
       // revenue breaks even when the goods cost everything they sell for.
+      //
+      // Measured against conversion spend, to match the ROAS beside it. Total
+      // spend is still what has to be earned back, so the selling campaigns
+      // have to clear a higher bar when branding is running:
+      //   revenue/conv = (conv + brand) / (conv × (1−returns)(1−cost))
+      // Leaving the bar where it was would have marked a month green on a ROAS
+      // that cannot actually pay for the branding sitting next to it.
       const beRoasOf = m => {
         const ret  = m.retBase  ? m.retWeighted  / m.retBase  : 0;
         const cost = m.costBase ? m.costWeighted / m.costBase : null;
         if (cost == null) return null;
         const denom = (1 - ret / 100) * (1 - cost / 100);
-        return denom > 0 ? 1 / denom : null;
+        if (denom <= 0) return null;
+        const conv = convOf(m);
+        const uplift = conv > 0 ? (m.spend || 0) / conv : 1;
+        return uplift / denom;
       };
       const totBeRoas = beRoasOf(tot);
 
       // Cost as a share of revenue — the inverse of ROAS, and the figure that
       // says how much of every pound earned went back into ads.
       const costPct = tot.revenue > 0 ? tot.spend / tot.revenue * 100 : null;
-      const roasAll = tot.spend   > 0 ? tot.revenue / tot.spend : null;
+      // Conversion spend only — branding buys no orders, so it is out of the
+      // denominator exactly as it is on the KPI cards.
+      const roasAll = convOf(tot) > 0 ? tot.revenue / convOf(tot) : null;
       const retAll  = tot.retBase > 0 ? tot.retWeighted / tot.retBase : null;
       const cx      = _pfCxCache[_pfYear + '|' + _pfScope().id] || null;
       const cxLoading = !!(cx && cx._loading);
@@ -11617,7 +11717,7 @@
         const cpo  = m.orders  ? m.spend / m.orders  : null;
         const cpc  = m.pieces  ? m.spend / m.pieces  : null;
         const aov  = m.orders  ? m.revenue / m.orders : null;
-        const roas = m.spend   ? m.revenue / m.spend  : null;
+        const roas = convOf(m) ? m.revenue / convOf(m) : null;
         const ret  = m.retBase ? m.retWeighted / m.retBase : null;
         const cost = m.costBase ? m.costWeighted / m.costBase : null;
         const p    = profitOf(m);
@@ -11680,8 +11780,8 @@
               <th title="Revenue after returns">Net revenue</th>
               <th title="Net revenue − cost of goods − ad spend">Profit</th>
               <th title="Profit ÷ net revenue">Margin</th>
-              <th>ROAS</th>
-              <th title="ROAS needed to break even: 1 ÷ ((1 − returns) × (1 − cost %))">BE-ROAS</th>
+              <th title="Revenue ÷ conversion spend — branding is excluded">ROAS</th>
+              <th title="ROAS on conversion spend needed to break even: (total spend ÷ conversion spend) ÷ ((1 − returns) × (1 − cost %))">BE-ROAS</th>
             </tr></thead>
             <tbody>${_pfYearRows.map(row).join('')}</tbody>
             <tfoot><tr>
@@ -11705,8 +11805,10 @@
           </table>
         </div>
         <div class="pf-note">
-          Spend includes branding. Profit is net revenue − cost of goods − ad spend, where net revenue
-          is after returns. ${editable
+          Total spending and profit include branding — the money left the account either way.
+          ROAS and BE-ROAS divide by conversion spend only, since engagement and follower
+          campaigns buy no orders.${tot.brand > 0 ? ` Branding this year: ${mny(tot.brand)}.` : ''}
+          Profit is net revenue − cost of goods − ad spend, where net revenue is after returns. ${editable
             ? 'Type a cost % into any month to get its profit.'
             : 'Cost % is a revenue-weighted average here — select a single account to edit it.'}
           ${cxLoading ? ' Cancellation figures are still loading from Shopify.' : ''}
