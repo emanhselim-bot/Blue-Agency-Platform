@@ -15941,6 +15941,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // ─────────────────────────────────────────────────────────────
     // Guard against concurrent loadOrgs() calls (e.g. TOKEN_REFRESHED during initial load)
     let _orgsLoading = false;
+    // Which user the dashboard has already been set up for.
+    //
+    // Supabase re-emits SIGNED_IN whenever the tab regains focus and it
+    // revalidates the stored session -- it is not only a real sign-in. Acting
+    // on every one of those called showHomeHub() and threw the person back to
+    // the Home cards from wherever they were working, every time they looked at
+    // another tab and came back. TOKEN_REFRESHED was already guarded for the
+    // same reason; this is the case that guard missed.
+    let _authBootedFor = null;
 
     // ── BILLING HISTORY (funds + transactions) ────
     let _billAccountKey = null;
@@ -21757,6 +21766,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         // TOKEN_REFRESHED fires periodically and must not re-run loadOrgs()
         // while the user is actively using the dashboard.
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+          // Already running for this user: this is a tab regaining focus, not
+          // somebody signing in. Leave the screen exactly as they left it.
+          if (_authBootedFor === session.user.id) return;
+          _authBootedFor = session.user.id;
           showHomeHub();
           if (_orgsLoading) return;
           _orgsLoading = true;
@@ -21792,6 +21805,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       } else {
         currentUser = null;
         _orgsLoading = false;
+        // Signed out: the next session, whoever it belongs to, is a real one.
+        _authBootedFor = null;
         if (timer) clearInterval(timer);
         overlay.classList.remove('hidden');
         document.getElementById('home-hub').classList.add('hidden');
