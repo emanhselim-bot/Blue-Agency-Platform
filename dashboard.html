@@ -3074,6 +3074,15 @@
       border: 1px solid rgba(74,222,128,.45);
       vertical-align: middle;
     }
+
+    /* The card's name in brand yellow.
+       !important is not decoration here: a blanket dark-theme rule further up
+       sets [data-theme="dark"] .kpi-label to #D3DEFA with !important, and an
+       important declaration beats any amount of specificity. Without it the
+       labels stayed pale blue and the rule looked like it had not applied. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-label {
+      color: #FCB900 !important;
+    }
 </style>
 </head>
 <body>
