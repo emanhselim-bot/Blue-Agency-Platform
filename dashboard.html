@@ -2961,6 +2961,9 @@
       border-radius: 6px; font-size: 12px; font-weight: 800;
       font-family: 'Open Sans', system-ui, sans-serif; letter-spacing: .5px;
       line-height: 1;
+      /* Both markers are inline boxes inside a font-size:0 parent; aligning
+         them the same way keeps the $ and the source badge on one line. */
+      vertical-align: middle;
     }
 
     /* From Meta Ads. */
@@ -3027,6 +3030,49 @@
       content: "+ − =";
       background: rgba(252,185,0,.16); color: #FCB900;
       border: 1px solid rgba(252,185,0,.45);
+    }
+
+    /* A money card is marked with a green $ beside its source badge, so the
+       kind of number is readable at a glance without reading the label.
+       Only on the three tagged groups, and only where the value really is
+       money: ROAS is a multiple, cancellation and confirmation are
+       percentages, and orders, pieces and messages are counts.
+
+       ::before, because ::after is already carrying the source badge. The
+       icon is font-size:0 on these cards, so the size is set here. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="branding-spend"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spend"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spending"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cpc"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-conversion"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-purchase"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ad-account-fund"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="daily-budget"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-icon::before {
+      content: "$";
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; margin-right: 5px;
+      border-radius: 6px; font-size: 13px; font-weight: 800; line-height: 1;
+      color: #4ADE80;
+      background: rgba(74,222,128,.16);
+      border: 1px solid rgba(74,222,128,.45);
+      vertical-align: middle;
     }
 </style>
 </head>
