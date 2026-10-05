@@ -85,9 +85,13 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   web_spend:  ["websitespending", "spendingweb", "webspending", "spendweb", "websitespend",
                "dailyspendingweb"],
   // "Messages Spending" normalises with the s: the singular spelling alone
-  // missed TR's entire message spend.
+  // missed TR's entire message spend. "Messsage Spending" with three s's is a
+  // typo in VANGUARD's own sheet -- fixing the sheet would break the formulas
+  // built on that column, so the typo is matched here instead and their whole
+  // message spend stops being ignored.
   msg_spend:  ["spendingsm", "smspending", "messagespending", "messagesspending",
-               "spendingmsg", "msgspending", "messagesspend", "dailyspendingsm"],
+               "spendingmsg", "msgspending", "messagesspend", "dailyspendingsm",
+               "messsagespending", "messsagespend"],
   // Revenue split by channel, where a sheet keeps it that way. Without these
   // the only revenue figure was the day's combined total, which could not be
   // shown on a message-revenue card without claiming website sales as message
@@ -95,10 +99,13 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   web_revenue: ["revwebsite", "revenuewebsite", "websiterevenue", "webrevenue"],
   msg_revenue: ["revmessage", "revmessages", "revenuemessage", "messagerevenue",
                 "msgrevenue", "revenuefrommessages"],
-  // "No of msgs" normalises to noofmsgs, which the first list missed — Nour
-  // Academy's whole message count was being ignored because of it.
+  // The same mistake twice, so both spellings are here now: "No of msgs"
+  // normalises to noofmsgs, which the first list missed and lost Nour Academy's
+  // whole message count; "No.Messages" normalises to nomessages, which the
+  // second list missed and lost VANGUARD's.
   msg_count:  ["totalnomsgs", "totalmsgs", "totalnomsg", "nomsgs", "noofmsgs", "totalnoofmsgs",
-               "messages", "totalmessages", "nomsg"],
+               "messages", "totalmessages", "nomsg", "nomessages", "noofmessages",
+               "totalnomessages"],
   revenue:    ["revenue", "totalrevenue", "sales"],
   // The branding card means engagement, follows and awareness — campaigns that
   // buy no orders. Sheets call that spend several things.
@@ -796,5 +803,5 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  return json({ ok: true, until: untilMonth, accounts: results.length, results });
+  return json({ ok: true, from: floorMonth, until: untilMonth, accounts: results.length, results });
 });

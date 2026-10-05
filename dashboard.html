@@ -6863,7 +6863,13 @@
 
       const { data, error } = await sb.from('notion_daily')
         .select('msg_count, msg_orders, msg_pieces, msg_revenue, web_orders, web_pieces, '
-              + 'web_revenue, web_spend, msg_spend, branding_spend, total_revenue')
+              + 'web_revenue, web_spend, msg_spend, branding_spend, total_revenue, '
+              // The three confirmed columns were missing from this list while the
+              // cards below read _ndRow.web_*_confirmed, so every confirmed figure
+              // Notion holds came back undefined and the cards fell through to
+              // Shopify or showed nothing. They are the team's own count, which is
+              // the whole reason Notion is consulted for them.
+              + 'web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey)
         .gte('day', range.from).lte('day', range.to);
@@ -6874,7 +6880,8 @@
       // has no Pieces shows a blank rather than a confident 0.
       const sum = {};
       ['msg_count','msg_orders','msg_pieces','msg_revenue','web_orders','web_pieces',
-       'web_revenue','web_spend','msg_spend','branding_spend','total_revenue'].forEach(f => {
+       'web_revenue','web_spend','msg_spend','branding_spend','total_revenue',
+       'web_orders_confirmed','web_pieces_confirmed','web_revenue_confirmed'].forEach(f => {
         let t = null;
         data.forEach(r => { if (r[f] != null) t = (t ?? 0) + Number(r[f]); });
         sum[f] = t;
