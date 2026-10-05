@@ -2847,10 +2847,19 @@
        !important, so a one-class selector loses to them whatever the order.
 
        Dark theme only, which is what the app opens in. */
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card {
-      background: #011C69 !important;
-      border: 1px solid #0C3C9E;
+[data-theme="dark"] .kpi-card.kpi-card.kpi-card {
+      /* Sampled off the corner wedge rather than guessed: in the zoomed
+         screenshot it is #263678 against a #081B65 card. The whole card is
+         that colour now, which also lifts it off the #011C69 page instead of
+         disappearing into it. */
+      background: #263678 !important;
+      border: 1px solid #38488F;
     }
+
+    /* The wedge has to go with it. It is white at 12% over the card, so on the
+       new colour it would just make the corner lighter again -- the exact
+       patch this was meant to remove. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card::before { opacity: 0 !important; }
 
     /* The emoji is replaced rather than removed, so the badge keeps the same
        place in the layout and nothing below it shifts. */
