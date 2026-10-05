@@ -9,7 +9,7 @@
 // Bump this on any deploy that changes dashboard.html. The old caches are
 // deleted on activate, so an installed app that was holding a stale shell
 // drops it instead of serving yesterday's dashboard indefinitely.
-const VERSION    = 'v25';
+const VERSION    = 'v26';
 const SHELL      = `blue-ad-shell-${VERSION}`;
 const VENDOR     = `blue-ad-vendor-${VERSION}`;
 
@@ -20,6 +20,10 @@ const SHELL_URLS = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
+  // The logo is part of the shell: without it cached, the sign-in card opens
+  // with an empty space where the wordmark should be on a slow connection.
+  '/assets/blue-ad-logo-white.png',
+  '/assets/blue-ad-logo-blue.png',
 ];
 
 // Third-party files the page needs to boot. Same-version copies are fine to

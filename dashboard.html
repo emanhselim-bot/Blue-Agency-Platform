@@ -121,6 +121,33 @@
     /* ── TOP HEADER ── */
     .header { background: linear-gradient(135deg, #0573F5 0%, #083BBF 55%, #0A1CA3 100%); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
     .brand { display: flex; align-items: center; gap: 14px; }
+    /* ── Blue Ad logo ──────────────────────────────────────────────────
+       Four separate places used to draw a stand-in made of coloured bars:
+       the header, the home hub, the sign-in card and the client share bar.
+       They all now show the real wordmark, keyed out of the brand artwork
+       with a transparent background so it sits on any surface.
+
+       Swapped by theme rather than baked in: the white mark disappears on
+       the white sign-in card in light mode. Set as a variable so every
+       place that shows the logo follows the theme without repeating it. */
+    :root        { --logo-img: url('/assets/blue-ad-logo-blue.png'); }
+    [data-theme="dark"] { --logo-img: url('/assets/blue-ad-logo-white.png'); }
+    .brand-logo, .hub-logo, .cp-sharebar-logo {
+      background: var(--logo-img) left center / contain no-repeat;
+      flex-shrink: 0;
+    }
+    /* On the dark header and share bar the white mark is always right,
+       whatever the page theme is. */
+    .brand-logo, .cp-sharebar-logo { background-image: url('/assets/blue-ad-logo-white.png'); }
+    .brand-logo span, .hub-logo span, .cp-sharebar-logo i, .auth-logo span { display: none !important; }
+    .brand-logo      { width: 104px; height: 26px; }
+    .hub-logo        { width: 190px; height: 48px; background-image: url('/assets/blue-ad-logo-white.png'); margin-bottom: 14px; }
+    .cp-sharebar-logo{ width: 87px;  height: 22px; }
+    .auth-logo {
+      width: 180px; height: 46px; margin: 0 auto 18px;
+      background: var(--logo-img) center / contain no-repeat;
+    }
+
     .brand-logo { display: flex; align-items: center; gap: 3px; }
     .brand-logo span { display: inline-block; width: 7px; height: 26px; border-radius: 2px; background: white; opacity: 0.95; }
     .brand-logo span:nth-child(1) { height: 14px; background: var(--gold); opacity: 1; }
@@ -334,7 +361,18 @@
     .shopify-badge { display: inline-flex; align-items: center; gap: 4px; background: #F0FDF4; color: #166534; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
 
     /* ── AUTH OVERLAY ── */
-    .auth-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #0573F5 0%, #083BBF 55%, #0A1CA3 100%); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    /* The sign-in screen used its own blue gradient, so signing in and
+       landing on the dashboard looked like two different products. It is the
+       dashboard's own background now, lifted by a little brand colour in the
+       corners so it is not a flat rectangle. */
+    .auth-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background:
+        radial-gradient(900px 520px at 15% 12%, rgba(5,115,245,.20), transparent 60%),
+        radial-gradient(760px 520px at 88% 88%, rgba(8,59,191,.22), transparent 62%),
+        var(--bg);
+    }
     .auth-overlay.hidden { display: none; }
 
     /* ── HOME HUB ─────────────────────────────────── */
@@ -962,7 +1000,7 @@
     .hub-modal-actions .primary:hover { background: #083BBF; }
     .hub-modal-actions .ghost { background: none; border: 1.5px solid #D6DEE9; padding: 10px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
     .hub-modal-actions .danger { background: none; border: 1.5px solid #FCA5A5; color: #DC2626; padding: 10px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
-    .auth-box { background: white; border-radius: 16px; padding: 40px 36px 36px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
+    .auth-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 36px 36px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
     .auth-logo { display: flex; align-items: center; justify-content: center; gap: 3px; margin-bottom: 20px; }
     .auth-logo span { display: inline-block; width: 7px; border-radius: 2px; background: var(--blue-dark); }
     .auth-logo span:nth-child(1) { height: 14px; background: var(--gold); }
@@ -3054,8 +3092,7 @@
   <!-- AUTH OVERLAY -->
   <div class="auth-overlay" id="auth-overlay">
     <div class="auth-box">
-      <div class="auth-logo"><span></span><span></span><span></span><span></span></div>
-      <div class="auth-title">Blue Ad</div>
+      <div class="auth-logo" role="img" aria-label="Blue Ad"></div>
       <div class="auth-sub">DIGITAL PERFORMANCE MARKETING AGENCY</div>
       <div id="auth-form-login">
         <!-- Username / email + password -->
