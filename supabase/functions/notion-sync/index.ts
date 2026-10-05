@@ -5,17 +5,15 @@
  * pieces, revenue and the spend split between website and message campaigns.
  * Nobody then retypes it into the dashboard.
  *
- * Only two of those figures are read by the dashboard:
- *
- *   web_orders_confirmed  the team's own count of orders that actually stuck.
- *                         Shopify counts an order when it is placed and cannot
- *                         know which were later confirmed.
- *   msg_count             how many messages came in.
+ * What the dashboard takes from Notion: the message block (count, orders,
+ * pieces, revenue and the spend behind them), the confirmed website figures
+ * (orders, pieces and revenue), and branding spend. Cost per message is worked
+ * out from the message spend and count rather than read, because several sheets
+ * use "CPM" for cost per mille and others for cost per message.
  *
  * Everything else on screen stays on Shopify, Clarity and the existing
  * equations. The sync still reads and stores the rest of each sheet in
- * notion_daily, for reference and for reconciling a disagreement, but it is not
- * shown and does not reach monthly_history.
+ * notion_daily for reference, but it is not shown.
  *
  * Two outputs:
  *   notion_daily     one row per account per day, overwritten each run, so the
@@ -48,9 +46,18 @@ const MAX_DEPTH = 5;
 const MAX_NODES = 300;
 const MAX_DB_PAGES = 20;          // 100 rows a page; a month is one page
 
-// Earliest month a sync will touch. Sheets older than this use yet more column
-// spellings and are not worth trusting.
-const FLOOR_MONTH = "2025-01";
+// Earliest month a sync will touch.
+//
+// This was 2025-01 on the assumption that older sheets used column names the
+// matcher would not know. Checked against a real one before moving it: Ibriz's
+// September 2024 rows carry Total No.Msgs, FB/IG/What's Orders, Confirmed
+// Orders FCS, Web Spending and SM Spending -- every one already understood.
+// What 2024 does not have is a Revenue column, so those months fill in
+// messages, orders and spend and leave revenue empty, which is honest.
+//
+// Overridable per request so a future change of mind costs a call, not a
+// deploy.
+const DEFAULT_FLOOR_MONTH = "2024-01";
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -75,11 +82,12 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   web_orders: ["weborders", "weborder", "websiteorders", "websiteorder",
                "websiteordersfrommeta", "weborderfrommeta"],
   web_pieces: ["webpieces", "webpiece", "websitepieces"],
-  web_spend:  ["websitespending", "spendingweb", "webspending", "spendweb", "websitespend"],
+  web_spend:  ["websitespending", "spendingweb", "webspending", "spendweb", "websitespend",
+               "dailyspendingweb"],
   // "Messages Spending" normalises with the s: the singular spelling alone
   // missed TR's entire message spend.
   msg_spend:  ["spendingsm", "smspending", "messagespending", "messagesspending",
-               "spendingmsg", "msgspending", "messagesspend"],
+               "spendingmsg", "msgspending", "messagesspend", "dailyspendingsm"],
   // Revenue split by channel, where a sheet keeps it that way. Without these
   // the only revenue figure was the day's combined total, which could not be
   // shown on a message-revenue card without claiming website sales as message
@@ -356,7 +364,7 @@ const blank = (): MonthSums => ({
 // rather than reporting a confident 0.
 const add = (a: number | null, b: number | null) => b == null ? a : (a ?? 0) + b;
 
-async function sumDatabases(token: string, dbs: { id: string; title: string }[], untilMonth: string) {
+async function sumDatabases(token: string, dbs: { id: string; title: string }[], untilMonth: string, floorMonth: string) {
   const months: Record<string, MonthSums> = {};
   // Keyed by day so a sheet listing the same date twice adds up rather than
   // the second row quietly replacing the first.
@@ -379,7 +387,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
         const day = dateOf(props);
         if (!day) { undated++; continue; }
         const month = day.slice(0, 7);
-        if (month < FLOOR_MONTH || month > untilMonth) continue;
+        if (month < floorMonth || month > untilMonth) continue;
         rows++;
 
         const m = (months[month] ||= blank());
@@ -460,7 +468,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
 const WRITE_FIELDS = [
   "msg_count", "msg_orders", "msg_pieces", "msg_revenue",
   "web_orders_confirmed", "web_pieces_confirmed", "web_revenue_confirmed",
-  "branding_spend",
+  "branding_spend", "msg_spend", "web_spend",
 ] as const;
 
 /**
@@ -593,10 +601,12 @@ Deno.serve(async (req: Request) => {
     until?: string;
     cron_secret?: string;
     limit?: number;
+    from?: string;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
 
   const untilMonth = (body.until || new Date().toISOString().slice(0, 7));
+  const floorMonth = (body.from || DEFAULT_FLOOR_MONTH);
 
   // Two callers: a signed-in person testing or syncing one account, and the
   // nightly cron doing every linked account. The cron has no user to speak for,
@@ -735,7 +745,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const { months, days, rows, undated, columns, ignored } =
-        await sumDatabases(token, dbs, untilMonth);
+        await sumDatabases(token, dbs, untilMonth, floorMonth);
 
       if (body.dry_run) {
         results.push({
@@ -754,12 +764,13 @@ Deno.serve(async (req: Request) => {
       const daysWritten = await writeDays(acct.organization_id, acct.id, days);
 
       const note =
-        `Read ${rows} day${rows === 1 ? "" : "s"} from ${dbs.length} month sheet${dbs.length === 1 ? "" : "s"}. ` +
+        `Read ${rows} day${rows === 1 ? "" : "s"} from ${dbs.length} month sheet${dbs.length === 1 ? "" : "s"} ` +
+        `(${floorMonth} to ${untilMonth}). ` +
         `Filled ${applied.filled} blank figure${applied.filled === 1 ? "" : "s"}` +
         (applied.monthsTouched.length ? ` across ${applied.monthsTouched.join(", ")}` : "") +
         `; left ${applied.kept} already-filled figure${applied.kept === 1 ? "" : "s"} untouched. ` +
         `${daysWritten} day${daysWritten === 1 ? "" : "s"} available to the daily cards.` +
-        (ignored.length ? ` Unrecognised columns: ${ignored.slice(0, 6).join(", ")}.` : "");
+        (ignored.length ? ` Unrecognised columns: ${ignored.slice(0, 12).join(", ")}.` : "");
 
       await noteOn(acct, note);
 
