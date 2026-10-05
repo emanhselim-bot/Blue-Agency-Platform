@@ -3208,6 +3208,31 @@
       border: 1px solid rgba(125,211,252,.45);
       vertical-align: middle;
     }
+
+    /* Confirmed figures -- the orders that actually stuck, and what they cost.
+       On the name line, which is free again now the T and the bubble are gone,
+       because the badge row is full on these: Confirmed Revenue carries Notion
+       and a $, and the per-confirmed costs carry + - = and a $.
+       Boxed so it reads as a mark rather than the first letter of the label.
+       Confirmation Rate is not here -- that is a rate about confirming, not a
+       confirmed amount, and it already carries a %. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-label::before {
+      content: "C";
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; margin-right: 5px;
+      border-radius: 4px; font-size: 9.5px; font-weight: 800; line-height: 1;
+      color: #E6EDF7;
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.38);
+      vertical-align: middle;
+      /* or the label's yellow fill wins over colour on the pseudo-element in
+         WebKit, and the C comes out gold on iPhone only */
+      -webkit-text-fill-color: #E6EDF7;
+    }
 </style>
 </head>
 <body>
