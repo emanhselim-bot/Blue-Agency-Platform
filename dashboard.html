@@ -3193,6 +3193,29 @@
       vertical-align: baseline;
       -webkit-text-fill-color: initial;   /* emoji keeps its own colour, not the label's yellow */
     }
+
+    /* Totals -- a figure that adds the channels together rather than
+       describing one of them.
+       On the name for the same reason the message bubble is: the badge row is
+       full on every one of these. Total Spend carries Meta and a $, Total
+       Revenue carries + - = and a $, Total Conversion Rate carries + - = and
+       a %. Boxed rather than a bare letter, so it reads as a mark and not as
+       the first letter of the label. No card is both a total and a message
+       card, so the two share this slot safely. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-label::before {
+      content: "T";
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; margin-right: 5px;
+      border-radius: 4px; font-size: 9px; font-weight: 800; line-height: 1;
+      color: #0B1220;
+      background: #E6EDF7;
+      vertical-align: middle;
+      -webkit-text-fill-color: #0B1220;
+    }
 </style>
 </head>
 <body>
