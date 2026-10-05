@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const port = process.env.PORT || 3000;
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -199,15 +200,40 @@ http.createServer((req, res) => {
       data = data.replace(AUTH_DEADLOCK_OLD, AUTH_DEADLOCK_NEW);
       data = data.replace(CREATE_CLIENT_OLD, CREATE_CLIENT_NEW);
     }
+    // An ETag on everything, computed after the substitutions above so it
+    // describes what is actually sent. Without one there was nothing for a
+    // browser to revalidate against.
+    const etag = '"' + crypto.createHash('sha1').update(data).digest('base64') + '"';
+
     const headers = {
       'Content-Type': contentType,
+      'ETag': etag,
       // Allow Shopify Admin to embed this page in an iframe
       'Content-Security-Policy': "frame-ancestors https://admin.shopify.com https://*.myshopify.com 'self'",
     };
-    // The service worker decides what every other file caches, so it must never
-    // be served stale itself — otherwise a bad version outlives the deploy.
+
+    // HTML carried no caching headers at all -- no Cache-Control, no ETag, no
+    // Last-Modified -- so a browser or an edge cache was free to decide for
+    // itself how long to keep dashboard.html, and keep serving it. That is why
+    // a deploy could land correctly on the server and change nothing on the
+    // screen: the page being read was an old copy nobody ever revalidated.
+    //
+    // no-cache does not mean "do not store"; it means "ask first". The copy is
+    // still kept, and a 304 below makes checking cost nothing when it has not
+    // changed. The manifest goes with it so an icon change is not held for a
+    // week, and the service worker still covers being offline.
     if (urlPath === '/sw.js') headers['Cache-Control'] = 'no-cache, max-age=0';
+    else if (ext === '.html' || ext === '.json' || ext === '.webmanifest') {
+      headers['Cache-Control'] = 'no-cache, max-age=0, must-revalidate';
+    }
     else if (ext === '.png' || ext === '.ico' || ext === '.woff2') headers['Cache-Control'] = 'public, max-age=604800';
+
+    // Unchanged since the browser last asked: send the headers and nothing else.
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+
     res.writeHead(200, headers);
     res.end(data);
   });
