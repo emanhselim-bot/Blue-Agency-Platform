@@ -181,6 +181,29 @@ http.createServer((req, res) => {
     res.writeHead(405); return res.end('POST only');
   }
 
+  // Send the page to a URL that carries the build number.
+  //
+  // Telling people to clear their cache has not worked, and it should not be
+  // their job. A browser that has stored an old /dashboard.html will keep
+  // serving it; it will not have stored /dashboard.html?b=v51, because that URL
+  // did not exist until this deploy. So the plain address redirects to the
+  // versioned one and the stale entry is stepped around rather than argued
+  // with. Every deploy changes the number, so every deploy lands.
+  //
+  // The rest of the query string is kept: OAuth comes back to / with a code on
+  // it, and dropping that would break signing in through Meta or Shopify.
+  if (req.method === 'GET' && (urlPath === '/' || urlPath === '' || urlPath === '/dashboard.html')) {
+    const qs = new URLSearchParams(req.url.split('?')[1] || '');
+    if (qs.get('b') !== BUILD) {
+      qs.set('b', BUILD);
+      res.writeHead(302, {
+        Location: '/dashboard.html?' + qs.toString(),
+        'Cache-Control': 'no-store',
+      });
+      return res.end();
+    }
+  }
+
   if (urlPath === '/' || urlPath === '') urlPath = '/dashboard.html';
   try { urlPath = decodeURIComponent(urlPath); } catch { /* leave it as-is */ }
 
