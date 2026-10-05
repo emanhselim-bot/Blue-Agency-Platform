@@ -22329,7 +22329,36 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.body.appendChild(el);
     }
 
+    // Is there work on screen that a reload would throw away?
+    function pwaBusy() {
+      try {
+        if (typeof cpHasPending === 'function' && cpHasPending()) return true;
+        if (typeof Pending !== 'undefined' && Pending._items && Pending._items.size) return true;
+        if (document.querySelector('.modal-overlay:not(.hidden), .hub-modal:not(.hidden), ' +
+            '#cpm-drawer:not(.hidden), #team-panel:not(.hidden), .onboarding-overlay:not(.hidden)')) return true;
+        var a = document.activeElement;
+        if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value) return true;
+      } catch (e) { return true; }   // unsure: do not reload under someone
+      return false;
+    }
+
     if ('serviceWorker' in navigator) {
+      // A new worker taking control means a deploy has landed. The page is
+      // still showing the HTML and CSS it was opened with, so without this it
+      // keeps looking exactly as it did -- which is what "nothing changed"
+      // after a deploy actually is. The old flow only offered a Reload button
+      // beside a Later button, and Later meant staying behind indefinitely.
+      //
+      // Reloads itself when nothing is in progress, and falls back to asking
+      // when something would be lost. Guarded so the swap cannot loop.
+      var _pwaReloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (_pwaReloaded) return;
+        _pwaReloaded = true;
+        if (pwaBusy()) { pwaOfferReload(); return; }
+        location.reload();
+      });
+
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('/sw.js').then(function (reg) {
           // A deploy lands while the app is open: take the new worker as soon
