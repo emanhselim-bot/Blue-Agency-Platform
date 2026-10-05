@@ -3117,6 +3117,19 @@
       border: 1px solid rgba(196,181,253,.45);
       vertical-align: middle;
     }
+
+    /* Section headings in brand coral. Last in the stylesheet and important,
+       because two rules further up already set this colour -- a shared rule
+       with .cp-sec-title and friends, and a dark-theme one setting #8FB4FF --
+       and the later of those would otherwise win. */
+    [data-theme="dark"] .section-label {
+      color: #FF5758 !important;
+    }
+    /* The rule that draws the line trailing off each heading reads its own
+       colour, so it stays on the border grey rather than turning coral. */
+    [data-theme="dark"] .section-label::after {
+      background: var(--border);
+    }
 </style>
 </head>
 <body>
