@@ -3209,12 +3209,17 @@
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-label::before {
       content: "T";
       display: inline-flex; align-items: center; justify-content: center;
-      width: 14px; height: 14px; margin-right: 5px;
-      border-radius: 4px; font-size: 9px; font-weight: 800; line-height: 1;
-      color: #0B1220;
-      background: #E6EDF7;
+      width: 15px; height: 15px; margin-right: 5px;
+      border-radius: 4px; font-size: 9.5px; font-weight: 800; line-height: 1;
+      /* Red, in the same shape the $ and % marks use: the colour on a tinted
+         background of itself with a matching border, rather than a solid
+         block. -webkit-text-fill-color is set too, or the label's own fill
+         colour wins over `color` on the pseudo-element in WebKit. */
+      color: #FF5758;
+      background: rgba(255,87,88,.16);
+      border: 1px solid rgba(255,87,88,.50);
       vertical-align: middle;
-      -webkit-text-fill-color: #0B1220;
+      -webkit-text-fill-color: #FF5758;
     }
 </style>
 </head>
