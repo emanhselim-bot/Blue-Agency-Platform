@@ -396,7 +396,7 @@
     .hub-logo span:nth-child(3) { height: 36px; opacity: .95; }
     .hub-logo span:nth-child(4) { height: 22px; opacity: .8; }
     .hub-title { color: #fff; font-size: 30px; font-weight: 800; letter-spacing: 4px; }
-    .hub-sub { color: rgba(255,255,255,.75); font-size: 11px; letter-spacing: 3px; margin-bottom: 44px; }
+    .hub-sub { color: rgba(255,255,255,.75); font-size: 11px; letter-spacing: 3px; margin-top: 10px; margin-bottom: 44px; }
     .hub-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
     .hub-card { background: rgba(255,255,255,.97); border-radius: 18px; padding: 34px 26px 30px; cursor: pointer; text-align: center; transition: transform .18s, box-shadow .18s; box-shadow: 0 8px 30px rgba(0,0,0,.25); border: 2px solid transparent; }
     .hub-card:hover { transform: translateY(-6px); box-shadow: 0 16px 44px rgba(0,0,0,.35); border-color: #0573F5; }
@@ -2787,9 +2787,8 @@
   <!-- HEADER (unchanged visually) -->
   <div class="header">
     <div class="brand">
-      <div class="brand-logo"><span></span><span></span><span></span><span></span></div>
+      <div class="brand-logo" role="img" aria-label="Blue Ad"></div>
       <div class="brand-text">
-        <div class="agency-name">Blue Ad</div>
         <div class="agency-sub">DIGITAL PERFORMANCE MARKETING AGENCY</div>
       </div>
     </div>
@@ -3140,8 +3139,7 @@
   <div class="home-hub hidden" id="home-hub">
     <div class="hub-inner">
       <div id="hub-cards-view">
-        <div class="hub-logo"><span></span><span></span><span></span><span></span></div>
-        <div class="hub-title">BLUE AD</div>
+        <div class="hub-logo" role="img" aria-label="Blue Ad"></div>
         <div class="hub-sub">DIGITAL PERFORMANCE MARKETING AGENCY</div>
         <div class="hub-cards">
           <div class="hub-card" data-mod="pipeline" onclick="hubOpen('pipeline')">
@@ -18761,7 +18759,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const bar = document.createElement('div');
       bar.className = 'cp-sharebar';
       bar.innerHTML = `<span class="cp-sharebar-logo"><i></i><i></i><i></i><i></i></span>
-        <span><b>Blue Ad</b> · ${escHtml(_cpClient.name || '')} timeline</span>
+        <span>${escHtml(_cpClient.name || '')} timeline</span>
         <span class="cp-sharebar-mode">${_cpShareMode === 'editor' ? '✎ You can edit this timeline' : (_cpShareMode === 'edit' ? '💬 You can leave comments' : '👁 View only')}</span>`;
       document.getElementById('hub-client-view').prepend(bar);
     }
