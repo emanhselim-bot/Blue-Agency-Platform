@@ -2836,136 +2836,49 @@
     #linked-save-btn:disabled { opacity: .45; cursor: default; }
   
     /* ── Where a figure comes from, shown on the card ──────────────────────
-       Grey is Notion, #12123A is Meta, #FCB900 is a figure this dashboard
-       works out itself, and #011C69 is everything else -- Shopify, Clarity,
-       TikTok and anything typed in by hand.
+       Every card is the page's own navy. What marks the source is the badge
+       that sits where the emoji used to, above the value: a Meta badge for
+       Meta's figures, a Notion badge for the team's sheet, and + - = for a
+       number this dashboard works out itself. Everything else -- Shopify,
+       Clarity, TikTok, anything typed in -- keeps its own emoji.
 
-       The class is repeated to win on specificity. The c-*.solid rules are
-       .kpi-card.c-blue.solid -- three classes -- and set their background
-       with !important, so a one-class selector loses to them whatever order
-       it is in: the solid cards kept green, blue, orange and teal while only
-       the plain ones took their source colour.
+       The class is repeated to win on specificity: the c-*.solid rules are
+       .kpi-card.c-blue.solid, three classes, and set their background with
+       !important, so a one-class selector loses to them whatever the order.
 
-       Dark only. These are the brand's own colours against the navy page;
-       pinning them on in light mode would put dark cards on a white sheet. */
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card { background: #011C69 !important; border: 1px solid #0C3C9E; }
-
-    /* From Notion -- typed by the media buying team in their daily sheet.
-       Cost per message is here rather than with the equations because it is
-       Notion's own messages spend over Notion's own message count: both halves
-       come from the sheet. */
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="branding-spend"] {
-      background: #4F5768 !important; border-color: #697186;
+       Dark theme only, which is what the app opens in. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card {
+      background: #011C69 !important;
+      border: 1px solid #0C3C9E;
     }
 
-    /* Straight from Meta Ads. */
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spend"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spending"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="reach"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="impressions"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="clicks"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="no-of-clicks"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ctr"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cpc"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversions"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-conversion"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-purchase"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ad-account-fund"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="daily-budget"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="days-remaining"] {
-      background: #12123A !important; border-color: #2A2A5E;
-    }
-
-    /* Worked out here from the figures around it. */
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"],
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] {
-      background: #FCB900 !important; border-color: #D79E00;
-    }
-    /* Dark type on the yellow: white on #FCB900 is unreadable. */
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-value,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-value,
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-label,
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-sub,
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-icon,
+    /* The emoji is replaced rather than removed, so the badge keeps the same
+       place in the layout and nothing below it shifts. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="branding-spend"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spend"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spending"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="reach"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="impressions"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="clicks"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="no-of-clicks"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ctr"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cpc"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversions"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-conversion"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-purchase"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ad-account-fund"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="daily-budget"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="days-remaining"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-icon,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-icon,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-icon,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-icon,
@@ -2983,69 +2896,127 @@
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-icon,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-icon,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-icon,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-icon,
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .drag-handle,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .drag-handle {
-      color: #011C69 !important;
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-icon {
+      font-size: 0;
+      line-height: 0;
+      margin-bottom: 10px;
     }
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-label,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-label,
-[data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-sub,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-sub {
-      opacity: .78;
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="branding-spend"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spend"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spending"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="reach"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="impressions"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="clicks"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="no-of-clicks"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ctr"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cpc"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversions"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-conversion"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-purchase"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ad-account-fund"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="daily-budget"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="days-remaining"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-icon::after {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 22px; height: 22px; padding: 0 6px;
+      border-radius: 6px; font-size: 12px; font-weight: 800;
+      font-family: 'Open Sans', system-ui, sans-serif; letter-spacing: .5px;
+      line-height: 1;
     }
-  </style>
+
+    /* From Meta Ads. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spend"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="spending"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="reach"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="impressions"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="clicks"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="no-of-clicks"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ctr"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cpc"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversions"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-conversion"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-purchase"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ad-account-fund"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="daily-budget"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="days-remaining"] .kpi-icon::after {
+      content: "Meta";
+      background: rgba(5,115,245,.20); color: #7FB9FF;
+      border: 1px solid rgba(5,115,245,.45);
+      font-size: 10px; letter-spacing: .3px;
+    }
+
+    /* From the team's Notion sheet. Cost per message is here rather than with
+       the equations because both halves are Notion's own -- its messages
+       spend over its message count -- so the badge points at the sheet if the
+       number looks wrong. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="branding-spend"] .kpi-icon::after {
+      content: "Notion";
+      background: rgba(255,255,255,.12); color: #E6EDF7;
+      border: 1px solid rgba(255,255,255,.28);
+      font-size: 10px; letter-spacing: .3px;
+    }
+
+    /* Worked out here from the figures around it. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="roas"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="conversion-spend"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-order"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-cost-per-piece"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="average-order-value"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-website"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-order"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-icon::after {
+      content: "+ − =";
+      background: rgba(252,185,0,.16); color: #FCB900;
+      border: 1px solid rgba(252,185,0,.45);
+    }
+</style>
 </head>
 <body>
 
