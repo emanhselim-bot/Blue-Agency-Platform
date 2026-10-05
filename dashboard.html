@@ -3210,17 +3210,17 @@
     }
 
     /* Confirmed figures -- the orders that actually stuck, and what they cost.
-       On the name line, which is free again now the T and the bubble are gone,
-       because the badge row is full on these: Confirmed Revenue carries Notion
-       and a $, and the per-confirmed costs carry + - = and a $.
-       Boxed so it reads as a mark rather than the first letter of the label.
+       In the badge row with everything else: the marks were split across two
+       lines because two pseudo-elements cannot carry three marks, so the icon
+       row now has a real span to hold this one.
+       Boxed so it reads as a mark rather than a stray letter.
        Confirmation Rate is not here -- that is a rate about confirming, not a
        confirmed amount, and it already carries a %. */
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-label::before {
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-marks::before {
       content: "C";
       display: inline-flex; align-items: center; justify-content: center;
       width: 15px; height: 15px; margin-right: 5px;
@@ -3235,18 +3235,15 @@
     }
 
     /* Message values, marked on the card's name.
-       The badge row is full on these -- the source badge holds one slot and
-       the green $ holds the other on Cost per Message, Revenue from Messages
-       and the per-message costs -- so the channel goes by the name, where it
-       reads with the label. */
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-label::before {
+       Sits in the badge row beside the source badge and the $. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-marks::before {
       content: "💬";
       margin-right: 5px;
       font-size: 11px;
@@ -3256,13 +3253,14 @@
     }
 
     /* Totals -- a figure that adds the channels together rather than
-       describing one of them. Same slot, and safe: the assertion that builds
-       these rules fails if a card is ever both a total and a message figure. */
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-label::before {
+       describing one of them. Shares the slot with the bubble and the C, and
+       the assertion that builds these rules fails if a card is ever in two of
+       those groups. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-marks::before {
       content: "T";
       display: inline-flex; align-items: center; justify-content: center;
       width: 15px; height: 15px; margin-right: 5px;
@@ -3272,6 +3270,12 @@
       border: 1px solid rgba(255,87,88,.50);
       vertical-align: middle;
       -webkit-text-fill-color: #FF5758;
+    }
+
+    /* The slot itself: inline, and only takes up room when it is carrying
+       something, so an untagged card's icon row is unchanged. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-marks {
+      display: inline-flex; align-items: center; vertical-align: middle;
     }
 </style>
 </head>
@@ -5244,7 +5248,7 @@
       el.dataset.cardId = card.id;
       el.innerHTML = `
         <span class="drag-handle" title="Drag to reorder">⠿</span>
-        <div class="kpi-icon">📝</div>
+        <div class="kpi-icon"><span class="kpi-marks"></span>📝</div>
         <div class="kpi-label">${card.name}</div>
         <input type="number" min="0" step="any" placeholder="Enter value…"
           value="${card.value || ''}"
@@ -7883,7 +7887,7 @@
       }
       return `<div class="kpi-card ${colorClass}" data-card-id="${cardId}">
         <span class="drag-handle" title="Drag to reorder">⠿</span>
-        <div class="kpi-icon">${icon}</div>
+        <div class="kpi-icon"><span class="kpi-marks"></span>${icon}</div>
         <div class="kpi-label">${label}</div>
         <div class="kpi-value"${valueId ? ` id="${valueId}"` : ''}>${value}</div>
         ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
@@ -9147,7 +9151,7 @@
         const gaKpi = (color, icon, label, value, sub, valId) =>
           `<div class="kpi-card ${color}" data-card-id="ga-${label.toLowerCase().replace(/[^a-z0-9]+/g,'-')}">
             <span class="drag-handle" title="Drag to reorder">⠿</span>
-            <div class="kpi-icon">${icon}</div>
+            <div class="kpi-icon"><span class="kpi-marks"></span>${icon}</div>
             <div class="kpi-label">${label}</div>
             <div class="kpi-value"${valId?` id="${valId}"`:''}>${value}</div>
             <div class="kpi-sub">${sub}</div>
@@ -9157,7 +9161,7 @@
         const gaManual = (color, icon, label, storeKey, sub = 'Manual entry') =>
           `<div class="kpi-card ${color}" data-card-id="ga-m-${storeKey.toLowerCase().replace(/[^a-z0-9]+/g,'-')}">
             <span class="drag-handle" title="Drag to reorder">⠿</span>
-            <div class="kpi-icon">${icon}</div>
+            <div class="kpi-icon"><span class="kpi-marks"></span>${icon}</div>
             <div class="kpi-label">${label}</div>
             <input class="ga-m-input" data-store-key="${storeKey}" type="number" min="0" value="${_gaInit(storeKey)}" placeholder="0"
               style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -9184,7 +9188,7 @@
                 ${gaKpi('c-blue solid', '💰', 'Total Spend',  fmtAds(gaSpend, curr),                               'Google Ads')}
                 <div class="kpi-card c-green" data-card-id="ga-daily-budget">
                   <span class="drag-handle" title="Drag to reorder">⠿</span>
-                  <div class="kpi-icon">📅</div>
+                  <div class="kpi-icon"><span class="kpi-marks"></span>📅</div>
                   <div class="kpi-label">Daily Budget</div>
                   <input id="ga-daily-budget-input" type="number" min="0" step="0.01" value="${_gaInit('dailyBudget')}" placeholder="0"
                     style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -9204,7 +9208,7 @@
 
                 <div class="kpi-card c-blue" data-card-id="ga-no-of-leads">
                   <span class="drag-handle" title="Drag to reorder">⠿</span>
-                  <div class="kpi-icon">📋</div>
+                  <div class="kpi-icon"><span class="kpi-marks"></span>📋</div>
                   <div class="kpi-label">No. of Leads</div>
                   <input id="ga-leads-total" type="number" min="0" value="${_gaInit('total')}" placeholder="0"
                     style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -9216,7 +9220,7 @@
 
                 <div class="kpi-card c-teal" data-card-id="ga-prospects">
                   <span class="drag-handle" title="Drag to reorder">⠿</span>
-                  <div class="kpi-icon">🤝</div>
+                  <div class="kpi-icon"><span class="kpi-marks"></span>🤝</div>
                   <div class="kpi-label">Prospects</div>
                   <input id="ga-leads-prospects" type="number" min="0" value="${_gaInit('prospects')}" placeholder="0"
                     style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -9225,7 +9229,7 @@
 
                 <div class="kpi-card c-sky" data-card-id="ga-suppliers">
                   <span class="drag-handle" title="Drag to reorder">⠿</span>
-                  <div class="kpi-icon">🏭</div>
+                  <div class="kpi-icon"><span class="kpi-marks"></span>🏭</div>
                   <div class="kpi-label">Suppliers</div>
                   <input id="ga-leads-suppliers" type="number" min="0" value="${_gaInit('suppliers')}" placeholder="0"
                     style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -9234,7 +9238,7 @@
 
                 <div class="kpi-card c-green" data-card-id="ga-job">
                   <span class="drag-handle" title="Drag to reorder">⠿</span>
-                  <div class="kpi-icon">👷</div>
+                  <div class="kpi-icon"><span class="kpi-marks"></span>👷</div>
                   <div class="kpi-label">Job</div>
                   <input id="ga-leads-job" type="number" min="0" value="${_gaInit('job')}" placeholder="0"
                     style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -10729,7 +10733,7 @@
         const t = totVal ?? '—', f = fbVal ?? '—', g = igVal ?? '—';
         return `<div class="kpi-card ${color}" data-card-id="aw-${cId}" data-av-t="${String(t).replace(/"/g,'&quot;')}" data-av-f="${String(f).replace(/"/g,'&quot;')}" data-av-i="${String(g).replace(/"/g,'&quot;')}">
           <span class="drag-handle" title="Drag to reorder">⠿</span>
-          <div class="kpi-icon">${icon}</div>
+          <div class="kpi-icon"><span class="kpi-marks"></span>${icon}</div>
           <div class="kpi-label">${label}</div>
           <div class="kpi-value aw-kv">${t}</div>
           <div class="kpi-sub">${sub}</div>
@@ -10778,7 +10782,7 @@
           <div class="kpi-grid" data-grid-id="messages-analysis">
             <div class="kpi-card c-orange" data-card-id="number-of-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💬</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
               <div class="kpi-label">Number of Messages</div>
               <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '')}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -10786,7 +10790,7 @@
             </div>
             <div class="kpi-card c-coral" data-card-id="cost-per-message">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💬</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
               <div class="kpi-label">Cost per Message</div>
               <input id="kpi-cost-per-message-input" type="number" min="0" step="0.01" value="${_cpmDispVal !== null ? _cpmDispVal.toFixed(2) : ''}" placeholder="0.00"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -10794,7 +10798,7 @@
             </div>
             <div class="kpi-card c-teal" data-card-id="orders-from-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💬</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
               <div class="kpi-label">Orders from Messages</div>
               <input id="kpi-msg-orders-input" type="number" min="0" value="${msgOrders || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -10802,7 +10806,7 @@
             </div>
             <div class="kpi-card c-teal" data-card-id="pieces-from-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💬</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
               <div class="kpi-label">Pieces from Messages</div>
               <input id="kpi-msg-pieces-input" type="number" min="0" value="${msgPieces || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -10810,7 +10814,7 @@
             </div>
             <div class="kpi-card c-gold" data-card-id="revenue-from-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💬</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
               <div class="kpi-label">Revenue from Messages</div>
               <input id="kpi-msg-revenue-input" type="number" min="0" step="0.01" value="${msgRevenue || ''}" placeholder="0"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;background:transparent;outline:none;width:100%;padding:0;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
@@ -10834,42 +10838,42 @@
           <div class="kpi-grid" data-grid-id="messages-service">
             <div class="kpi-card c-orange" data-card-id="svc-number-of-messages">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💬</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
               <div class="kpi-label">Number of Messages</div>
               ${_msgInput('kpi-svc-messages-input', _storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : ''), numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '0')}
               <div class="kpi-sub">Manual entry</div>
             </div>
             <div class="kpi-card c-coral" data-card-id="svc-cost-per-message">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💸</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💸</div>
               <div class="kpi-label">Cost per Message</div>
               <div class="kpi-value" id="kpi-svc-cpm-val">—</div>
               <div class="kpi-sub">Spend ÷ Messages</div>
             </div>
             <div class="kpi-card c-teal" data-card-id="svc-number-of-leads">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">📋</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>📋</div>
               <div class="kpi-label">Number of Leads</div>
               ${_msgInput('kpi-svc-leads-input', msgLeads)}
               <div class="kpi-sub">Manual entry</div>
             </div>
             <div class="kpi-card c-purple solid" data-card-id="svc-cost-per-lead">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">🎯</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>🎯</div>
               <div class="kpi-label">Cost per Lead</div>
               <div class="kpi-value" id="kpi-svc-cpl-val">—</div>
               <div class="kpi-sub">Spend ÷ Leads</div>
             </div>
             <div class="kpi-card c-green" data-card-id="svc-deals">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">🤝</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>🤝</div>
               <div class="kpi-label">Deals</div>
               ${_msgInput('kpi-svc-deals-input', msgDeals)}
               <div class="kpi-sub">Manual entry</div>
             </div>
             <div class="kpi-card c-navy solid" data-card-id="svc-cost-per-deal">
               <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon">💰</div>
+              <div class="kpi-icon"><span class="kpi-marks"></span>💰</div>
               <div class="kpi-label">Cost per Deal</div>
               <div class="kpi-value" id="kpi-svc-cpd-val">—</div>
               <div class="kpi-sub">Spend ÷ Deals</div>
@@ -10919,7 +10923,7 @@
               ${kpi('c-blue solid', '💰', 'Total Spend', fmt(spend, curr), (_spendFromHistory ? 'Recorded · website + messages' : 'Meta Ads') + _cxSpendNote, spend, _t.spend, false)}
               <div class="kpi-card c-purple" data-card-id="branding-spend">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">📣</div>
+                <div class="kpi-icon"><span class="kpi-marks"></span>📣</div>
                 <div class="kpi-label">Branding Spend</div>
                 <input id="kpi-branding-spend-input" type="number" min="0" step="any"
                   value="${brandingSpend || ''}" placeholder="0.00"
@@ -10970,7 +10974,7 @@
               ${kpi('c-navy solid',   '💵', 'Total Revenue',          (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
               <div class="kpi-card c-red solid" data-card-id="returns-rate">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">↩️</div>
+                <div class="kpi-icon"><span class="kpi-marks"></span>↩️</div>
                 <div class="kpi-label">Returns %</div>
                 <input id="kpi-returns-rate-input" type="number" min="0" max="100" step="0.01"
                   value="${returnsRate !== null ? returnsRate : ''}" placeholder="0.00"
@@ -11019,7 +11023,7 @@
             <div class="kpi-grid" data-grid-id="confirmed-results">
               <div class="kpi-card c-green" data-card-id="confirmed-orders">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">✅</div>
+                <div class="kpi-icon"><span class="kpi-marks"></span>✅</div>
                 <div class="kpi-label">Confirmed Orders</div>
                 <input id="kpi-confirmed-orders-input" type="number" min="0" step="any"
                   value="${confirmedOrders != null ? confirmedOrders : ''}"
@@ -11031,7 +11035,7 @@
               </div>
               <div class="kpi-card c-green" data-card-id="confirmed-revenue">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">✅</div>
+                <div class="kpi-icon"><span class="kpi-marks"></span>✅</div>
                 <div class="kpi-label">Confirmed Revenue</div>
                 <input id="kpi-confirmed-revenue-input" type="number" min="0" step="any"
                   value="${confirmedRevenue != null ? confirmedRevenue : ''}"
@@ -11043,7 +11047,7 @@
               </div>
               <div class="kpi-card c-green" data-card-id="confirmed-pieces">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
-                <div class="kpi-icon">✅</div>
+                <div class="kpi-icon"><span class="kpi-marks"></span>✅</div>
                 <div class="kpi-label">Confirmed Pieces</div>
                 <input id="kpi-confirmed-pieces-input" type="number" min="0" step="any"
                   value="${confirmedPieces != null ? confirmedPieces : ''}"
