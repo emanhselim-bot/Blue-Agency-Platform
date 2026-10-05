@@ -3170,6 +3170,29 @@
       border: 1px solid rgba(125,211,252,.45);
       vertical-align: middle;
     }
+
+    /* Values about the message channel, marked on the card's name rather than
+       in the badge row.
+       The badge row is full on these: the source badge holds one slot and the
+       green $ holds the other on Cost per Message, Revenue from Messages and
+       the per-message costs. Putting the channel by the name keeps it on every
+       message card instead of only the ones that happen to have a free slot,
+       and it reads with the label -- "messages: orders from messages". */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-label::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-label::before {
+      content: "💬";
+      margin-right: 5px;
+      font-size: 11px;
+      line-height: 1;
+      vertical-align: baseline;
+      -webkit-text-fill-color: initial;   /* emoji keeps its own colour, not the label's yellow */
+    }
 </style>
 </head>
 <body>
