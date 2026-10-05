@@ -1491,7 +1491,17 @@
        ═══════════════════════════════════════════════════ */
     @media (max-width: 768px) {
       /* Header */
-      .header { padding: 10px 14px; gap: 8px; }
+      .header { padding: 10px 14px; gap: 8px; justify-content: center; }
+      /* On a phone the header wraps into rows anyway, and the brand was
+         sitting hard left with the tagline squeezed into the gap beside it,
+         wrapping onto two lines. Stacked and centred it reads as a masthead:
+         the logo on its own line with the tagline centred underneath, which
+         also gives the tagline the width to stay on one line. */
+      .brand { width: 100%; flex-direction: column; align-items: center; gap: 7px; }
+      .brand-logo { margin: 0 auto; }
+      .brand-text { text-align: center; }
+      .brand-text .agency-sub { margin-top: 0; }
+      .header-right { width: 100%; justify-content: center; }
       .brand-text .agency-name { font-size: 15px; letter-spacing: 4px; }
       .header-right { gap: 5px; flex-wrap: wrap; }
       /* These were being made smaller on a phone, which is backwards: a
