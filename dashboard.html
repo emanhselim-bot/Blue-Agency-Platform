@@ -6763,6 +6763,25 @@
       document.getElementById('mh-partial-note')?.remove();
       if (!_mhPartial || !bar) return;
       const { y, m, last, accountKey } = _mhPartial;
+
+      // Notion covers these exact dates, so the daily rows already answer the
+      // range and widening to the whole month would make the figures worse,
+      // not better. This notice was written when the month was the only thing
+      // recorded; now that notion_daily exists, offering "use the full month"
+      // for a range the daily data covers is advice in the wrong direction --
+      // and it is what stands between picking a single day and trusting what
+      // comes back.
+      if (currentOrgId && customFrom && customTo) {
+        let q = sb.from('notion_daily').select('day')
+          .eq('organization_id', currentOrgId)
+          .gte('day', customFrom).lte('day', customTo).limit(1);
+        // '__all__' is not a stored key: on that view any account having the
+        // days is enough, so the account filter is simply left off.
+        if (accountKey && accountKey !== '__all__') q = q.eq('account_key', accountKey);
+        const { data: nd } = await q;
+        if (nd?.length) return;
+      }
+
       const { data } = await sb.from('monthly_history').select('month')
         .eq('organization_id', currentOrgId).eq('account_key', accountKey)
         .eq('month', mhMonthStr(y, m)).limit(1);
