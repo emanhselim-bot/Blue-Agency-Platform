@@ -11,6 +11,16 @@ const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || '';
 // Set this as a Railway env var: SHOPIFY_CLIENT_ID=your_api_key_here
 const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '';
 
+// The build this deploy is serving, taken from the service worker's own
+// VERSION so there is one number and it cannot drift. Stamped into the page so
+// "nothing changed" can be checked in one look: if the footer does not match
+// the latest deploy, the page is a cached copy.
+let BUILD = 'dev';
+try {
+  const swSrc = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
+  BUILD = (swSrc.match(/VERSION\s*=\s*'(v\d+)'/) || [])[1] || 'dev';
+} catch { /* keep 'dev' */ }
+
 const mime = {
   '.html': 'text/html',
   '.js':   'text/javascript',
@@ -194,6 +204,7 @@ http.createServer((req, res) => {
       if (SHOPIFY_CLIENT_ID) {
         data = data.replace(/YOUR_SHOPIFY_CLIENT_ID/g, SHOPIFY_CLIENT_ID);
       }
+      data = data.replace(/__BUILD_VERSION__/g, BUILD);
       data = data.replace(GOOGLE_BTN,        '        <!-- Email / password -->');
       data = data.replace(GOOGLE_JS_OLD,     "    document.getElementById('auth-btn')");
       data = data.replace(SIGNUP_OLD,        SIGNUP_NEW);

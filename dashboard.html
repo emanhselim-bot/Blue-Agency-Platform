@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta id="theme-color-meta" name="theme-color" content="#011C69">
+  <!-- Replaced by server.js with the version in sw.js, so the page can say
+       which build it is without anyone keeping two files in step by hand. -->
+  <script>window.__SW_BUILD__ = "__BUILD_VERSION__";</script>
   <title>Blue Ad · Performance Dashboard</title>
 
   <!-- Installable app: home-screen icon, standalone window, offline shell. -->
@@ -4269,7 +4272,10 @@
     </div>
     <div id="mdc-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"></div>
     <div id="mdc-campaigns" style="margin-top:22px"></div>
-    <div style="margin-top:26px;font-size:11px;color:var(--text-muted);text-align:center">Live data · Blue Ad</div>
+    <!-- The build stamp is here so "nothing changed" can be answered in one
+         look instead of a round trip: if this does not match the latest
+         deploy, the page is a cached copy and nothing else needs debugging. -->
+    <div style="margin-top:26px;font-size:11px;color:var(--text-muted);text-align:center">Live data · Blue Ad · <span id="build-stamp">build —</span></div>
   </div>
 
   <!-- ADD CLIENT MODAL -->
@@ -22321,6 +22327,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       } catch (e) { return true; }   // unsure: do not reload under someone
       return false;
     }
+
+    // Shows which build this page actually is. Read from sw.js rather than
+    // hard-coded here, so it cannot drift from the file that does the caching.
+    (function () {
+      var el = document.getElementById('build-stamp');
+      if (!el) return;
+      fetch('/sw.js', { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+          var live = (t.match(/VERSION\s*=\s*'(v\d+)'/) || [])[1] || '?';
+          var mine = (window.__SW_BUILD__ || '?');
+          el.textContent = 'build ' + mine + (live !== mine ? ' \u2014 ' + live + ' available' : '');
+          el.title = live === mine ? 'Up to date' : 'This page is a cached copy; reload to get ' + live;
+        })
+        .catch(function () { el.textContent = 'build ' + (window.__SW_BUILD__ || '?'); });
+    })();
 
     if ('serviceWorker' in navigator) {
       // A new worker taking control means a deploy has landed. The page is
