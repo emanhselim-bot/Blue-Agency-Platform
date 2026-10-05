@@ -6893,16 +6893,37 @@
       return sum;
     }
 
-    // Branding spend for a whole selection — the all-accounts view and any
-    // combined client. One query rather than one per account, and each
-    // account's figure goes through _brandShare on the way in: Ibriz's sheet
-    // writes the same total to both its accounts, so adding the raw numbers
-    // would report double the branding the client actually bought. Shared, the
-    // parts add back up to the sheet.
+    // Every Notion figure for a whole selection — the all-accounts view and any
+    // combined client.
     //
-    // Returns null when no account in the selection had the column at all, so
-    // the caller can tell "no branding" from "nothing recorded".
-    async function ndBrandingForAccounts(accountKeys, period) {
+    // This replaces an earlier ndBrandingForAccounts, which did exactly this
+    // for branding spend alone.
+    //
+    // loadAllAccounts only ever asked Notion for branding spend, so under "All
+    // accounts" — and on any combined client falling back to its members — the
+    // message block and all three confirmed figures were never fetched at all.
+    // They fell through to monthly_history, which holds whole months, so a day
+    // or a seven-day range showed nothing however healthy the sync was. That is
+    // the real "Notion data doesn't appear in the dashboard".
+    //
+    // Same dedupe as branding, and for the same reason: Ibriz's sheet is
+    // written to both its ad accounts, so the raw rows hold 163 messages twice.
+    // _brandShare divides each account's figure by the number of accounts
+    // sharing that sheet, so the parts add back up to what the sheet says.
+    // Counts are rounded only at the end, so halves pair up instead of each
+    // rounding to 82 and summing to 164.
+    const ND_SUM_FIELDS = [
+      'msg_count', 'msg_orders', 'msg_pieces', 'msg_revenue',
+      'web_orders', 'web_pieces', 'web_revenue', 'web_spend', 'msg_spend',
+      'web_orders_confirmed', 'web_pieces_confirmed', 'web_revenue_confirmed',
+      'total_revenue', 'branding_spend',
+    ];
+    const ND_WHOLE_FIELDS = new Set([
+      'msg_count', 'msg_orders', 'msg_pieces',
+      'web_orders', 'web_pieces', 'web_orders_confirmed', 'web_pieces_confirmed',
+    ]);
+
+    async function ndSumForAccounts(accountKeys, period) {
       const keys = [...new Set((accountKeys || []).filter(Boolean))];
       if (!keys.length || !currentOrgId) return null;
       const range = _cmpRange(period === 'custom'
@@ -6910,28 +6931,47 @@
         : { key: period });
       if (!range?.from || !range?.to) return null;
 
-      const cacheKey = `brand|${currentOrgId}|${keys.slice().sort().join(',')}|${range.from}|${range.to}`;
+      const cacheKey = `ndsum|${currentOrgId}|${keys.slice().sort().join(',')}|${range.from}|${range.to}`;
       if (_ndCache[cacheKey] !== undefined) return _ndCache[cacheKey];
 
       const { data, error } = await sb.from('notion_daily')
-        .select('account_key, branding_spend')
+        .select('account_key, day, ' + ND_SUM_FIELDS.join(', '))
         .eq('organization_id', currentOrgId)
         .in('account_key', keys)
         .gte('day', range.from).lte('day', range.to);
 
       if (error || !data?.length) { _ndCache[cacheKey] = null; return null; }
 
+      // Per account first, so each account's total can be shared before the
+      // selection is added up.
       const perAccount = {};
       data.forEach(r => {
-        if (r.branding_spend == null) return;
-        perAccount[r.account_key] = (perAccount[r.account_key] || 0) + Number(r.branding_spend);
+        const a = (perAccount[r.account_key] ||= {});
+        ND_SUM_FIELDS.forEach(f => {
+          if (r[f] == null) return;
+          a[f] = (a[f] ?? 0) + Number(r[f]);
+        });
       });
-      const accts = Object.keys(perAccount);
-      if (!accts.length) { _ndCache[cacheKey] = null; return null; }
 
-      const total = accts.reduce((s, k) => s + Number(_brandShare(k, perAccount[k]) || 0), 0);
-      _ndCache[cacheKey] = total;
-      return total;
+      const sum = {};
+      ND_SUM_FIELDS.forEach(f => {
+        let t = null;
+        Object.keys(perAccount).forEach(k => {
+          const v = perAccount[k][f];
+          if (v == null) return;
+          t = (t ?? 0) + Number(_brandShare(k, v) || 0);
+        });
+        // null stays null: a selection whose sheets never had Pieces shows a
+        // blank, not a confident 0.
+        sum[f] = (t != null && ND_WHOLE_FIELDS.has(f)) ? Math.round(t) : t;
+      });
+
+      sum._days = new Set(data.map(r => r.day)).size;
+      sum._accounts = Object.keys(perAccount).length;
+      sum._from = range.from;
+      sum._to   = range.to;
+      _ndCache[cacheKey] = sum;
+      return sum;
     }
 
     async function mhForPeriod(accountKey, period) {
@@ -11781,6 +11821,18 @@
       // group rather than per ad account.
       const _mhGroup = await mhForPeriod(sel?.value || '__all__', currentPeriod).catch(() => null);
       const _num = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
+
+      // Notion for the whole selection, for exactly the dates on screen.
+      //
+      // A combined client's own row is preferred where it exists, because that
+      // is the sheet as the team wrote it; summing the members is the fallback
+      // and the only option under "All accounts". Same order branding spend
+      // already uses, so the two cannot disagree about which source won.
+      const _aggIsGroup = String(sel?.value || '').startsWith('__group__');
+      const _aggNd = (_aggIsGroup
+            ? await ndForPeriod(sel.value, currentPeriod).catch(() => null)
+            : null)
+        ?? await ndSumForAccounts(allAccounts.map(a => a.id), currentPeriod).catch(() => null);
       if (_mhGroup) {
         if (totOrders  == null && _num(_mhGroup.web_orders)  != null) totOrders  = _num(_mhGroup.web_orders);
         if (totRevenue == null && _num(_mhGroup.web_revenue) != null) totRevenue = _num(_mhGroup.web_revenue);
@@ -11799,9 +11851,12 @@
       // placed orders while the same client viewed one account at a time showed
       // the confirmed ones — two different revenues for the same month, and the
       // numbers typed against the group were never used at all.
-      const _aggCfmO = _num(_mhGroup?.web_orders_confirmed);
-      const _aggCfmR = _num(_mhGroup?.web_revenue_confirmed);
-      const _aggCfmP = _num(_mhGroup?.web_pieces_confirmed);
+      // Notion for these exact dates first, then the month's recorded history.
+      // The monthly row covers a whole month, so on Yesterday or Last 7 days it
+      // either said nothing or would have reported a month as the period.
+      const _aggCfmO = _num(_aggNd?.web_orders_confirmed)  ?? _num(_mhGroup?.web_orders_confirmed);
+      const _aggCfmR = _num(_aggNd?.web_revenue_confirmed) ?? _num(_mhGroup?.web_revenue_confirmed);
+      const _aggCfmP = _num(_aggNd?.web_pieces_confirmed)  ?? _num(_mhGroup?.web_pieces_confirmed);
       if (_aggCfmO != null) totOrders  = _aggCfmO;
       if (_aggCfmR != null) totRevenue = _aggCfmR;
       if (_aggCfmP != null) totPieces  = _aggCfmP;
@@ -11811,10 +11866,12 @@
       // website — a total that quietly omits a whole sales channel.
       const _aggPeriodKey = `${currentOrgId}-${currentAgencyId}-${currentPeriod === 'custom' ? `${customFrom}_${customTo}` : currentPeriod}`;
       const _typed = (k) => { const v = localStorage.getItem(k); return (v === null || v === '') ? null : parseFloat(v); };
-      // Typed figure for this period wins; otherwise the month's stored history.
-      const aggMsgOrders  = _typed(`msg-orders-${_aggPeriodKey}`)  ?? _num(_mhGroup?.msg_orders)  ?? 0;
-      const aggMsgPieces  = _typed(`msg-pieces-${_aggPeriodKey}`)  ?? _num(_mhGroup?.msg_pieces)  ?? 0;
-      const aggMsgRevenue = _typed(`msg-revenue-${_aggPeriodKey}`) ?? _num(_mhGroup?.msg_revenue) ?? 0;
+      // Typed figure for this period wins, then Notion for exactly these dates,
+      // then the month's stored history — the same order the single-account
+      // cards use, so the two views cannot report different totals.
+      const aggMsgOrders  = _typed(`msg-orders-${_aggPeriodKey}`)  ?? _num(_aggNd?.msg_orders)  ?? _num(_mhGroup?.msg_orders)  ?? 0;
+      const aggMsgPieces  = _typed(`msg-pieces-${_aggPeriodKey}`)  ?? _num(_aggNd?.msg_pieces)  ?? _num(_mhGroup?.msg_pieces)  ?? 0;
+      const aggMsgRevenue = _typed(`msg-revenue-${_aggPeriodKey}`) ?? _num(_aggNd?.msg_revenue) ?? _num(_mhGroup?.msg_revenue) ?? 0;
       const aggHasMsg = (aggMsgOrders || aggMsgPieces || aggMsgRevenue) > 0;
 
       if (aggMsgOrders)  totOrders  = (totOrders  || 0) + aggMsgOrders;
@@ -11855,15 +11912,11 @@
       // Without this the all-accounts view and a combined client disagreed with
       // their own member accounts, which is how a number stops being trusted.
       //
-      // A combined client's own Notion row is preferred, because that is the
-      // sheet's figure as the team wrote it. Summing the members is the
-      // fallback and the only option under "All accounts"; _brandShare keeps a
-      // sheet that sits on two accounts from counting twice.
-      const _aggScopeIsGroup = String(sel?.value || '').startsWith('__group__');
-      const _aggBrandRaw = (_aggScopeIsGroup
-            ? _num((await ndForPeriod(sel.value, currentPeriod).catch(() => null))?.branding_spend)
-            : null)
-        ?? await ndBrandingForAccounts(allAccounts.map(a => a.id), currentPeriod).catch(() => null)
+      // Branding now comes off _aggNd with everything else, rather than from a
+      // second query of its own. It already resolved the group's own row
+      // against the summed members in that one place, so this cannot pick a
+      // different source from the cards above and quietly disagree with them.
+      const _aggBrandRaw = _num(_aggNd?.branding_spend)
         ?? _num(_mhGroup?.branding_spend)
         ?? 0;
       // Never more than was actually spent.
