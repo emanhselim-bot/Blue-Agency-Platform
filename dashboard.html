@@ -10054,7 +10054,37 @@
         ? parseInt(_storedNumMsg)
         : (_ndMsgs != null ? Math.round(_ndMsgs)
                            : (numMessages != null ? Math.round(numMessages) : 0));
-      const _autoCpmVal   = (_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null);
+      // Cost per message is derived, not read. Several sheets carry both "CPM"
+      // and "CPM (messages)" -- the first is cost per mille, the second cost
+      // per message -- and Ibriz has only "CPM" meaning cost per message, so
+      // matching that header by name picks up the wrong number on some
+      // accounts. Notion's own messages spend divided by its own message count
+      // reproduces Ibriz's CPM exactly (8.03, 9.36, 8.15) and cannot pick the
+      // wrong column. Total spend is the last resort, for an account whose
+      // sheet has no split.
+      const _ndMsgSpend   = _mhNum(_ndRow?.msg_spend);
+      const _autoCpmVal   = (_autoMsgsBase > 0 && _ndMsgSpend != null && _ndMsgSpend > 0)
+        ? _ndMsgSpend / _autoMsgsBase
+        : ((_autoMsgsBase > 0 && spend > 0) ? spend / _autoMsgsBase
+          : (costPerMessage != null && !isNaN(costPerMessage) ? costPerMessage : null));
+
+      // Website-only clients. When the sheet carries neither message spend nor
+      // message revenue for the period, this account did not run message
+      // campaigns and the whole Messages block is left out rather than shown as
+      // a row of zeros that reads like failure.
+      const _ndMsgRevenue = _mhNum(_ndRow?.msg_revenue);
+      // The message count counts as evidence too, deliberately. Going on spend
+      // and revenue alone would have hidden the block on Nour Academy, which
+      // records 5,829 messages in a month but no message spend, and on Retaj,
+      // IBRA and Maree for the same reason -- their sheets track the messages
+      // without splitting the spend. Hiding a channel that is plainly running
+      // is worse than showing it with one figure missing, so the block goes
+      // only when the sheet shows no message activity of any kind.
+      const _runsMessages = (_ndMsgSpend != null && _ndMsgSpend > 0)
+                         || (_ndMsgRevenue != null && _ndMsgRevenue > 0)
+                         || (_mhNum(_ndRow?.msg_count) ?? 0) > 0
+                         || (_mhNum(_ndRow?.msg_orders) ?? 0) > 0
+                         || !_ndRow;   // no Notion data at all: leave as it was
       const _cpmDispVal   = (_cpmIsManual && _storedCpm !== null) ? parseFloat(_storedCpm) : _autoCpmVal;
       // ── Branding vs conversion spend ──
       // Engagement and follower campaigns buy no orders. Leaving them in the
@@ -10125,9 +10155,15 @@
       const confirmedOrders  = _cfmTyped(_cfmKeyO)
         ?? _mhNum(_ndRow?.web_orders_confirmed)
         ?? _mhNum(_mhRow?.web_orders_confirmed);
+      // Most sheets have Confirmed Orders and Confirmed Pieces but no confirmed
+      // revenue column at all -- Ibriz keeps only a plain "Revenue" -- so the
+      // card sat empty on every account. The day's own revenue stands in when
+      // there is no confirmed figure, which is what the team reads it as.
       const confirmedRevenue = _cfmTyped(_cfmKeyR)
         ?? _mhNum(_ndRow?.web_revenue_confirmed)
-        ?? _mhNum(_mhRow?.web_revenue_confirmed);
+        ?? _mhNum(_mhRow?.web_revenue_confirmed)
+        ?? _mhNum(_ndRow?.total_revenue)
+        ?? _mhNum(_mhRow?.total_revenue);
       const confirmedPieces  = _cfmTyped(_cfmKeyP)
         ?? _mhNum(_ndRow?.web_pieces_confirmed)
         ?? _mhNum(_mhRow?.web_pieces_confirmed);
@@ -10286,7 +10322,7 @@
         </div>`;
 
       // ── Messages Analysis section (shared by 'full' and 'messages' templates) ──
-      const _messagesSection = `
+      const _messagesSection = !_runsMessages ? '' : `
         <div class="kpi-section" data-section-id="messages-analysis">
           <div class="section-label">Messages Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
           <div class="kpi-grid" data-grid-id="messages-analysis">

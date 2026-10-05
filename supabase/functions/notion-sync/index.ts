@@ -132,6 +132,34 @@ for (const [meaning, names] of Object.entries(FIELD_SYNONYMS)) {
   for (const n of names) MEANING_OF[n] = meaning;
 }
 
+// Branding spend, matched by shape rather than by an exact list.
+//
+// The list could not keep up with how these sheets are actually named. Ibriz
+// writes "Follow FB Spending", which is not "Follow Spending"; its reach column
+// is spelt "Reach Spenping"; and the only one the list caught was "Profile
+// visit Spending". Measured on 1 October that meant 717.16 of branding counted
+// out of 1,076.67 actually spent -- a third of it missing, which lifts
+// conversion spend and flatters ROAS.
+//
+// So: a column is branding when it names something that buys no orders AND
+// reads as a spend column. The spend test tolerates the typo. Deliberately not
+// matched: "SM Spending" is messages spending on these sheets, and "Courses
+// Spending" and "Daily Spending Web" are selling campaigns -- counting either
+// as branding would take real conversion spend out of ROAS.
+const BRANDING_SUBJECT = /follow|reach|profilevisit|profilevisits|engagement|engagment|awareness|pagelike|likes|brand/;
+const BRANDING_SPENDISH = /spend|spenping|budget/;
+const NOT_BRANDING = /^(sm|web|website|total|courses|dailyspendingweb|dailyspendingsm)spend/;
+
+function meaningOf(rawName: string): string | undefined {
+  const n = norm(rawName);
+  const direct = MEANING_OF[n];
+  if (direct) return direct;
+  if (!NOT_BRANDING.test(n) && BRANDING_SUBJECT.test(n) && BRANDING_SPENDISH.test(n)) {
+    return "branding_spend";
+  }
+  return undefined;
+}
+
 // ── Notion plumbing ───────────────────────────────────────────────────────────
 
 function idFromUrl(raw: string): string | null {
@@ -369,7 +397,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
         let msgOrdersParts: number | null = null;
 
         for (const [name, prop] of Object.entries(props)) {
-          const meaning = MEANING_OF[norm(name)];
+          const meaning = meaningOf(name);
           if (!meaning) {
             // Only worth reporting if it actually held a number.
             if (numberOf(prop) != null) columnsIgnored.add(name.trim());
