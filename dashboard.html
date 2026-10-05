@@ -3221,6 +3221,42 @@
       vertical-align: middle;
       -webkit-text-fill-color: #FF5758;
     }
+
+    /* The website's conversion rate was missed by everything above, and the
+       reason is worth keeping: its label is built at render time --
+       `_webSource + ' Conversion Rate'` -- so the card id is
+       shopify-conversion-rate, ga4-conversion-rate, recorded-conversion-rate
+       or website-conversion-rate depending on where the orders came from.
+       Every rule here matches an exact id, so none of them ever hit it.
+       Matching the end of the id covers all four and anything added later.
+    */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id$="conversion-rate"] .kpi-icon {
+      font-size: 0;
+      line-height: 0;
+      margin-bottom: 10px;
+    }
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id$="conversion-rate"] .kpi-icon::before {
+      content: "%";
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; margin-right: 5px;
+      border-radius: 6px; font-size: 12px; font-weight: 800; line-height: 1;
+      color: #C4B5FD;
+      background: rgba(196,181,253,.16);
+      border: 1px solid rgba(196,181,253,.45);
+      vertical-align: middle;
+    }
+    /* The website one is read from the store; the total is worked out here and
+       already carries + - =, so it is excluded from the globe. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id$="conversion-rate"]:not([data-card-id="total-conversion-rate"]) .kpi-icon::after {
+      content: "🌐";
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 22px; height: 22px; padding: 0 5px;
+      border-radius: 6px; font-size: 12px; line-height: 1;
+      color: #7DD3FC;
+      background: rgba(125,211,252,.16);
+      border: 1px solid rgba(125,211,252,.45);
+      vertical-align: middle;
+    }
 </style>
 </head>
 <body>
