@@ -22746,26 +22746,69 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return false;
     }
 
-    // Shows which build this page actually is. Read from sw.js rather than
-    // hard-coded here, so it cannot drift from the file that does the caching.
+    // Shows which build this page actually is, and gets the page onto the
+    // current one by itself.
+    //
+    // This ran once, on load, and only coloured the stamp yellow. A tab opened
+    // in the morning therefore sat on an old build all day: the service worker
+    // is only re-checked by the browser on navigation, so controllerchange
+    // below never fires for a tab nobody navigates, and the versioned redirect
+    // only applies to a load that is already happening. Every "nothing
+    // changed" after a deploy has been this. So the check now repeats -- on
+    // focus and every two minutes -- and reloads when the page is idle,
+    // deferring to pwaOfferReload when something would be lost.
     (function () {
+      var mine = (window.__SW_BUILD__ || '?');
       var el = document.getElementById('build-stamp');
-      if (!el) return;
-      fetch('/sw.js', { cache: 'no-store' })
-        .then(function (r) { return r.text(); })
-        .then(function (t) {
-          var live = (t.match(/VERSION\s*=\s*'(v\d+)'/) || [])[1] || '?';
-          var mine = (window.__SW_BUILD__ || '?');
-          var stale = live !== mine;
-          el.textContent = stale ? ('build ' + mine + ' \u2014 OLD, ' + live + ' is live') : ('build ' + mine);
-          el.title = stale ? 'This page is a stored copy. Reload to get ' + live : 'Up to date';
-          if (stale) {
-            el.style.color = '#FCB900';
-            el.style.borderColor = 'rgba(252,185,0,.6)';
-            el.style.background = 'rgba(252,185,0,.14)';
+      var asked = false;
+
+      // /build is one short line; sw.js is the fallback for a server deployed
+      // before /build existed, so this keeps working during that one rollout.
+      function liveBuild() {
+        return fetch('/build', { cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('no /build');
+            return r.text();
+          })
+          .then(function (t) {
+            t = (t || '').trim();
+            if (!/^v\d+$/.test(t)) throw new Error('bad /build');
+            return t;
+          })
+          .catch(function () {
+            return fetch('/sw.js', { cache: 'no-store' })
+              .then(function (r) { return r.text(); })
+              .then(function (t) { return (t.match(/VERSION\s*=\s*'(v\d+)'/) || [])[1] || '?'; });
+          });
+      }
+
+      function check() {
+        if (document.hidden) return;
+        liveBuild().then(function (live) {
+          var stale = live !== '?' && mine !== '?' && live !== mine;
+          if (el) {
+            el.textContent = stale ? ('build ' + mine + ' \u2014 OLD, ' + live + ' is live') : ('build ' + mine);
+            el.title = stale ? 'This page is a stored copy. Reload to get ' + live : 'Up to date';
+            el.style.color       = stale ? '#FCB900' : '';
+            el.style.borderColor = stale ? 'rgba(252,185,0,.6)' : '';
+            el.style.background  = stale ? 'rgba(252,185,0,.14)' : '';
           }
-        })
-        .catch(function () { el.textContent = 'build ' + (window.__SW_BUILD__ || '?'); });
+          if (!stale || asked) return;
+          if (pwaBusy()) { asked = true; pwaOfferReload(); return; }
+          // Drop the old ?b= so the server's redirect sends this tab to the
+          // current build rather than back to the URL it already has.
+          var u = new URL(location.href);
+          u.searchParams.set('b', live);
+          location.replace(u.toString());
+        }).catch(function () {
+          if (el && el.textContent === '') el.textContent = 'build ' + mine;
+        });
+      }
+
+      check();
+      setInterval(check, 120000);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+      window.addEventListener('focus', check);
     })();
 
     if ('serviceWorker' in navigator) {

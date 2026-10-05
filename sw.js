@@ -9,7 +9,7 @@
 // Bump this on any deploy that changes dashboard.html. The old caches are
 // deleted on activate, so an installed app that was holding a stale shell
 // drops it instead of serving yesterday's dashboard indefinitely.
-const VERSION    = 'v59';
+const VERSION    = 'v60';
 const SHELL      = `blue-ad-shell-${VERSION}`;
 const VENDOR     = `blue-ad-vendor-${VERSION}`;
 
@@ -72,6 +72,9 @@ self.addEventListener('fetch', e => {
   if (!sameOrigin && !isVendor(url)) return;
   // Our own API relay is data, not a static file.
   if (sameOrigin && url.pathname.startsWith('/hooks/')) return;
+  // The build probe must never be cached -- a cached answer would say the page
+  // is current forever, which is the exact problem it exists to solve.
+  if (sameOrigin && url.pathname === '/build') return;
 
   // Vendor libraries: serve from cache, refresh in the background.
   if (isVendor(url)) {

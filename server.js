@@ -192,6 +192,22 @@ http.createServer((req, res) => {
   //
   // The rest of the query string is kept: OAuth comes back to / with a code on
   // it, and dropping that would break signing in through Meta or Shopify.
+  // What build is live, in the cheapest form there is. The versioned redirect
+  // above only helps a page that is being loaded; a tab left open all morning
+  // keeps running whatever it started with, and the browser only re-checks the
+  // service worker on navigation, so controllerchange never fires either. That
+  // is why a deploy could land and the dashboard still look unchanged. The page
+  // asks this on focus and on a timer, and reloads itself when the answer has
+  // moved on. No store, no ETag: the whole point is a fresh answer.
+  if (req.method === 'GET' && urlPath === '/build') {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'no-store, max-age=0',
+      'Access-Control-Allow-Origin': '*',
+    });
+    return res.end(BUILD);
+  }
+
   if (req.method === 'GET' && (urlPath === '/' || urlPath === '' || urlPath === '/dashboard.html')) {
     const qs = new URLSearchParams(req.url.split('?')[1] || '');
     if (qs.get('b') !== BUILD) {
