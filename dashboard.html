@@ -3222,13 +3222,9 @@
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-marks::before,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-marks::before {
       content: "C";
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 15px; height: 15px; margin-right: 5px;
-      border-radius: 4px; font-size: 9.5px; font-weight: 800; line-height: 1;
       color: #E6EDF7;
       background: rgba(255,255,255,.16);
       border: 1px solid rgba(255,255,255,.38);
-      vertical-align: middle;
       /* or the label's yellow fill wins over colour on the pseudo-element in
          WebKit, and the C comes out gold on iPhone only */
       -webkit-text-fill-color: #E6EDF7;
@@ -3262,13 +3258,9 @@
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-marks::before,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-marks::before {
       content: "T";
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 15px; height: 15px; margin-right: 5px;
-      border-radius: 4px; font-size: 9.5px; font-weight: 800; line-height: 1;
       color: #FF5758;
       background: rgba(255,87,88,.16);
       border: 1px solid rgba(255,87,88,.50);
-      vertical-align: middle;
       -webkit-text-fill-color: #FF5758;
     }
 
@@ -3276,6 +3268,63 @@
        something, so an untagged card's icon row is unchanged. */
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-marks {
       display: inline-flex; align-items: center; vertical-align: middle;
+    }
+
+    /* ── One shape for every mark ──────────────────────────────────────────
+       They had grown apart: the $ and % were 22px squares, the T and C were
+       15px, the speech bubble was a bare emoji with no box at all, and the
+       word badges carried their own padding. Same box for all of them now,
+       set last so it wins over whatever each rule above asked for.
+
+       Three slots on the icon row: ::before is the type ($ or %),
+       .kpi-marks::before is the group (bubble, T or C), ::after is the source.
+    */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-icon::after {
+      display: inline-flex; align-items: center; justify-content: center;
+      box-sizing: border-box;
+      height: 22px; min-width: 22px;
+      border-radius: 6px;
+      border: 1px solid transparent;      /* each mark paints its own */
+      font-size: 11px; font-weight: 800; line-height: 1; letter-spacing: 0;
+      vertical-align: middle;
+      margin: 0 5px 0 0;
+    }
+    /* Single-character marks are exact squares; the word badges cannot be
+       without losing the word, so they keep the same height and grow sideways. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-marks::before {
+      width: 22px; padding: 0;
+    }
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-icon::after {
+      padding: 0 6px;
+      margin-right: 0;                     /* last in the row */
+    }
+
+    /* The bubble had no box because it was written as a bare emoji. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-marks::before {
+      background: rgba(255,255,255,.10);
+      border-color: rgba(255,255,255,.26);
+    }
+    /* The T and C set their own colours, so those win over the line above. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-marks::before {
+      background: rgba(255,87,88,.16);
+      border-color: rgba(255,87,88,.50);
+      font-size: 11px;
+    }
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-orders"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-pieces"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmed-revenue"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-marks::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-marks::before {
+      background: rgba(255,255,255,.16);
+      border-color: rgba(255,255,255,.38);
+      font-size: 11px;
     }
 </style>
 </head>
