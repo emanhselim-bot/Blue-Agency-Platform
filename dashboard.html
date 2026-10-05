@@ -10939,7 +10939,14 @@
               <span class="drag-handle" title="Drag to reorder">⠿</span>
               <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
               <div class="kpi-label">Number of Messages</div>
-              <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '')}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
+              <!-- Shows _autoMsgsBase, the same count cost per message divides
+                   by. It used to show Meta's numMessages while the label said
+                   "From Notion" and the card beside it divided by Notion's: on
+                   Ibriz, 4 Oct, that read 6 messages at 8.60 each, where 8.60
+                   is 1,402.56 over Notion's 163. Meta counts conversations
+                   started, not the messages the team logs, so it stays only as
+                   the last resort inside _autoMsgsBase. -->
+              <input id="kpi-num-messages-input" type="number" min="0" value="${_storedNumMsg !== null ? _storedNumMsg : (_ndMsgs != null ? Math.round(_ndMsgs) : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : ''))}" placeholder="${numMessages != null && !isNaN(numMessages) ? numMessages.toLocaleString('en') : '0'}"
                 style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">
               <div class="kpi-sub">${_srcSub(_storedNumMsg, _ndRow?.msg_count, 'Manual entry')}</div>
             </div>
