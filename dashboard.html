@@ -3087,6 +3087,13 @@
       </div>
     </div>
     <div class="header-right">
+      <!-- Which build this page is. In the header because the first place I put
+           it was inside #md-client-view, which is display:none unless a client
+           opens a shared link -- so it could not be found when it was needed. -->
+      <span id="build-stamp" title="Build running in this tab"
+            style="font-size:10px;font-weight:700;letter-spacing:.4px;color:rgba(255,255,255,.45);
+                   padding:3px 7px;border:1px solid rgba(255,255,255,.18);border-radius:6px;
+                   white-space:nowrap">build —</span>
       <!-- Active agency badge — always visible, shows current workspace context -->
       <div class="agency-badge" id="header-agency-badge">
         <span class="agency-badge-icon" id="header-agency-icon" style="display:none"></span>
@@ -4321,7 +4328,7 @@
     <!-- The build stamp is here so "nothing changed" can be answered in one
          look instead of a round trip: if this does not match the latest
          deploy, the page is a cached copy and nothing else needs debugging. -->
-    <div style="margin-top:26px;font-size:11px;color:var(--text-muted);text-align:center">Live data · Blue Ad · <span id="build-stamp">build —</span></div>
+    <div style="margin-top:26px;font-size:11px;color:var(--text-muted);text-align:center">Live data · Blue Ad</div>
   </div>
 
   <!-- ADD CLIENT MODAL -->
@@ -22384,8 +22391,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         .then(function (t) {
           var live = (t.match(/VERSION\s*=\s*'(v\d+)'/) || [])[1] || '?';
           var mine = (window.__SW_BUILD__ || '?');
-          el.textContent = 'build ' + mine + (live !== mine ? ' \u2014 ' + live + ' available' : '');
-          el.title = live === mine ? 'Up to date' : 'This page is a cached copy; reload to get ' + live;
+          var stale = live !== mine;
+          el.textContent = stale ? ('build ' + mine + ' \u2014 OLD, ' + live + ' is live') : ('build ' + mine);
+          el.title = stale ? 'This page is a stored copy. Reload to get ' + live : 'Up to date';
+          if (stale) {
+            el.style.color = '#FCB900';
+            el.style.borderColor = 'rgba(252,185,0,.6)';
+            el.style.background = 'rgba(252,185,0,.14)';
+          }
         })
         .catch(function () { el.textContent = 'build ' + (window.__SW_BUILD__ || '?'); });
     })();
