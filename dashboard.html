@@ -10604,9 +10604,25 @@
       // Typed for this period wins, then Notion for exactly these dates, then
       // the month's recorded history. The whole message block comes from
       // Notion: nothing else counts an order taken in a chat.
-      const msgOrders   = parseInt(_stored(_msgKey)    ?? '') || _mhNum(_ndRow?.msg_orders)  || _mhNum(_mhRow?.msg_orders)  || 0;
-      const msgPieces   = parseInt(_stored(_piecesKey) ?? '') || _mhNum(_ndRow?.msg_pieces)  || _mhNum(_mhRow?.msg_pieces)  || 0;
-      const msgRevenue  = parseFloat(_stored(_revKey)  ?? '') || _mhNum(_ndRow?.msg_revenue) || _mhNum(_mhRow?.msg_revenue) || 0;
+      //
+      // Each link is ?? rather than ||, and the chain ends in null rather than
+      // 0. With || a real zero was falsy, so a day the client genuinely took no
+      // chat orders fell through to the month's total and reported it as the
+      // day's; and a day Notion has not been written for yet ended at `|| 0`
+      // and showed a confident 0 -- the exact thing the rest of this file is
+      // careful not to do. Null reaches the card as a blank, and _srcSub says
+      // how far the sheet goes.
+      const _pickNum = (parse, raw, ...rest) => {
+        if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+          const t = parse(raw);
+          if (!isNaN(t)) return t;
+        }
+        for (const v of rest) if (v != null) return v;
+        return null;
+      };
+      const msgOrders   = _pickNum(parseInt,   _stored(_msgKey),    _mhNum(_ndRow?.msg_orders),  _mhNum(_mhRow?.msg_orders));
+      const msgPieces   = _pickNum(parseInt,   _stored(_piecesKey), _mhNum(_ndRow?.msg_pieces),  _mhNum(_mhRow?.msg_pieces));
+      const msgRevenue  = _pickNum(parseFloat, _stored(_revKey),    _mhNum(_ndRow?.msg_revenue), _mhNum(_mhRow?.msg_revenue));
       // Returns % is typed in per period. Kept as its own value rather than
       // derived from Shopify refunds, which only counts refunded orders and
       // misses exchanges and returns handled outside the store.
@@ -10706,7 +10722,13 @@
       // wins, so the label only claims Notion when nothing was typed and Notion
       // actually had it for these dates.
       const _srcSub = (typedVal, ndVal, fallback) => {
-        const typed = typedVal !== null && typedVal !== undefined && typedVal !== '';
+        // Must agree with how the number itself was chosen above. Testing only
+        // for a non-empty string said "Manual entry" for a stored "0" or a
+        // leftover unparseable key, while the value path skipped it and used
+        // Notion -- so the card showed Notion's figure and blamed the label on
+        // someone typing it.
+        const typed = typedVal !== null && typedVal !== undefined
+                   && String(typedVal).trim() !== '' && !isNaN(Number(typedVal));
         if (typed) return 'Manual entry';
         if (ndVal != null && _ndRow) {
           const n = _ndRow._days || 0;
@@ -10718,6 +10740,8 @@
         if (!_ndRow && _ndLatest) {
           return `Notion has nothing for this period · sheet ends ${_cpFmtDate ? _cpFmtDate(_ndLatest) : _ndLatest}`;
         }
+        // The sheet reaches these dates but this column was left empty on them.
+        if (_ndRow && ndVal == null) return 'Not filled in Notion for these dates';
         return fallback;
       };
 
