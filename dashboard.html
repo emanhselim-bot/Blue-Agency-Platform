@@ -3083,6 +3083,40 @@
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card .kpi-label {
       color: #FCB900 !important;
     }
+
+    /* A percentage is marked with a % beside the source badge, the same way
+       money is marked with a $. No card is both, so both can share ::before --
+       ::after is already carrying the source badge.
+
+       Returns % is typed in by hand and carries no source badge, so its emoji
+       has to be switched off here as well; the tagged cards already had it
+       off. Violet rather than the money green, so the two never read as the
+       same kind of number at a glance. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ctr"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="returns"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="returns-rate"] .kpi-icon {
+      font-size: 0;
+      line-height: 0;
+      margin-bottom: 10px;
+    }
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="ctr"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancellation"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="confirmation-rate"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="returns"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="returns-rate"] .kpi-icon::before {
+      content: "%";
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; margin-right: 5px;
+      border-radius: 6px; font-size: 12px; font-weight: 800; line-height: 1;
+      color: #C4B5FD;
+      background: rgba(196,181,253,.16);
+      border: 1px solid rgba(196,181,253,.45);
+      vertical-align: middle;
+    }
 </style>
 </head>
 <body>
