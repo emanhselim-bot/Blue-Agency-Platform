@@ -3064,7 +3064,9 @@
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-website-piece"] .kpi-icon::before,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-order"] .kpi-icon::before,
     [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-confirmed-piece"] .kpi-icon::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-icon::before {
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-revenue"] .kpi-icon::before,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-website"] .kpi-icon::before {
       content: "$";
       display: inline-flex; align-items: center; justify-content: center;
       width: 22px; height: 22px; margin-right: 5px;
@@ -3129,6 +3131,44 @@
        colour, so it stays on the border grey rather than turning coral. */
     [data-theme="dark"] .section-label::after {
       background: var(--border);
+    }
+
+    /* From the website -- the store's own orders, pieces and revenue, and the
+       site's sessions. The fourth source badge, so a card now says Meta,
+       Notion, web or + - = rather than leaving the website ones unlabelled
+       while everything around them was marked.
+
+       Not here: Cost per Website Order and Avg Order Value (Website). Those
+       are worked out from these figures rather than read from the store, so
+       they keep + - =. */
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-orders"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-pieces"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-revenue"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-website"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-website"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="sessions"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-sessions"] .kpi-icon,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancelled-in-shopify"] .kpi-icon {
+      font-size: 0;
+      line-height: 0;
+      margin-bottom: 10px;
+    }
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-orders"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-pieces"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-revenue"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-website"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-website"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="sessions"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="website-sessions"] .kpi-icon::after,
+    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cancelled-in-shopify"] .kpi-icon::after {
+      content: "🌐";
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 22px; height: 22px; padding: 0 5px;
+      border-radius: 6px; font-size: 12px; line-height: 1;
+      color: #7DD3FC;
+      background: rgba(125,211,252,.16);
+      border: 1px solid rgba(125,211,252,.45);
+      vertical-align: middle;
     }
 </style>
 </head>
