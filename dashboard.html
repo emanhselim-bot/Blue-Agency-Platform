@@ -3326,6 +3326,52 @@
       border-color: rgba(255,255,255,.38);
       font-size: 11px;
     }
+
+    /* ── Phone layout: centring and symmetry ──────────────────────────────
+       Measured at 375px before changing anything. */
+    @media (max-width: 768px) {
+      /* The logo looked off to the left, and it was. The box is 190px wide,
+         but at the phone's 30px height the artwork only draws 118px of that,
+         and it was pinned to the left edge of the box -- about 35px adrift of
+         where it looked like it should be. Centring the artwork inside its own
+         box fixes it wherever the height lands. */
+      .hub-logo, .brand-logo, .auth-logo, .cp-sharebar-logo {
+        background-position: center center;
+      }
+      /* The hub logo can also just be the width it draws, so the box and the
+         picture are the same thing. */
+      .hub-logo { width: 150px; height: 38px; }
+
+      /* The tagline was capped at 22em, which at 9px is 198px -- narrower than
+         the text, so it broke into two ragged lines under a one-line logo.
+         Given the width it fits on one line. */
+      .hub-sub {
+        max-width: none;
+        font-size: 8.5px;
+        letter-spacing: 1.8px;
+        white-space: nowrap;
+      }
+
+      /* The save bar wraps its buttons onto a second row, and its message was
+         being squeezed into a four-line column beside them. Full width for the
+         message, buttons side by side underneath. */
+      .pend-bar { flex-wrap: wrap; row-gap: 8px; }
+      .pend-txt { flex: 1 0 100%; line-height: 1.35; }
+      .pend-btn, .pend-ghost { flex: 1; min-height: 40px; }
+
+      /* The floating theme button sat on top of the save bar's Save button.
+         Lifted above it while the bar is on screen. */
+      body:has(.pend-bar) .theme-fab {
+        bottom: calc(86px + env(safe-area-inset-bottom));
+      }
+    }
+
+    /* A phone narrow enough that the tagline would still not fit: let it
+       shrink rather than wrap, so the block under the logo stays one line. */
+    @media (max-width: 360px) {
+      .hub-sub { font-size: 7.5px; letter-spacing: 1.2px; }
+      .hub-logo { width: 132px; height: 34px; }
+    }
 </style>
 </head>
 <body>
