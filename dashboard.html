@@ -3171,56 +3171,7 @@
       vertical-align: middle;
     }
 
-    /* Values about the message channel, marked on the card's name rather than
-       in the badge row.
-       The badge row is full on these: the source badge holds one slot and the
-       green $ holds the other on Cost per Message, Revenue from Messages and
-       the per-message costs. Putting the channel by the name keeps it on every
-       message card instead of only the ones that happen to have a free slot,
-       and it reads with the label -- "messages: orders from messages". */
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="number-of-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-message"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="orders-from-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="pieces-from-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="revenue-from-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-order-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="cost-per-piece-messages"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="avg-order-value-messages"] .kpi-label::before {
-      content: "💬";
-      margin-right: 5px;
-      font-size: 11px;
-      line-height: 1;
-      vertical-align: baseline;
-      -webkit-text-fill-color: initial;   /* emoji keeps its own colour, not the label's yellow */
-    }
 
-    /* Totals -- a figure that adds the channels together rather than
-       describing one of them.
-       On the name for the same reason the message bubble is: the badge row is
-       full on every one of these. Total Spend carries Meta and a $, Total
-       Revenue carries + - = and a $, Total Conversion Rate carries + - = and
-       a %. Boxed rather than a bare letter, so it reads as a mark and not as
-       the first letter of the label. No card is both a total and a message
-       card, so the two share this slot safely. */
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-spend"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-orders"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-pieces"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-revenue"] .kpi-label::before,
-    [data-theme="dark"] .kpi-card.kpi-card.kpi-card[data-card-id="total-conversion-rate"] .kpi-label::before {
-      content: "T";
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 15px; height: 15px; margin-right: 5px;
-      border-radius: 4px; font-size: 9.5px; font-weight: 800; line-height: 1;
-      /* Red, in the same shape the $ and % marks use: the colour on a tinted
-         background of itself with a matching border, rather than a solid
-         block. -webkit-text-fill-color is set too, or the label's own fill
-         colour wins over `color` on the pseudo-element in WebKit. */
-      color: #FF5758;
-      background: rgba(255,87,88,.16);
-      border: 1px solid rgba(255,87,88,.50);
-      vertical-align: middle;
-      -webkit-text-fill-color: #FF5758;
-    }
 
     /* The website's conversion rate was missed by everything above, and the
        reason is worth keeping: its label is built at render time --
