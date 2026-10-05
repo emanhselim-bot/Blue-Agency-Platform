@@ -373,6 +373,9 @@
     .auth-overlay {
       position: fixed; inset: 0; z-index: 9999;
       display: flex; align-items: center; justify-content: center;
+      /* A phone keyboard halves the viewport; without this the card's buttons
+         end up underneath it with no way to scroll to them. */
+      overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px 0;
       /* Flat navy with two soft lifts, so it is the dashboard's own colour
          rather than a second background that merely resembles it. */
       background:
@@ -995,7 +998,9 @@
     [data-theme="dark"] .cpm-readonly-note { background: #422006; color: #FCD34D; }
 
     /* hub modal */
-    .hub-modal { position: fixed; inset: 0; background: rgba(10,20,60,.55); z-index: 9500; display: flex; align-items: center; justify-content: center; }
+    /* Centring a panel taller than the screen puts its top and bottom out of
+       reach, so these overlays scroll themselves. */
+    .hub-modal { position: fixed; inset: 0; background: rgba(10,20,60,.55); z-index: 9500; display: flex; align-items: center; justify-content: center; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 0; }
     .hub-modal.hidden { display: none; }
     .hub-modal-box { background: #fff; border-radius: 16px; padding: 26px 26px 22px; width: 420px; max-width: 92vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
     .hub-modal-box h3 { font-size: 17px; font-weight: 800; color: #0A1CA3; margin-bottom: 16px; }
@@ -1032,7 +1037,7 @@
     .auth-social-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
     /* ── SETTINGS MODAL ── */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 8888; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 8888; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
     .modal-overlay.hidden { display: none; }
     .modal { background: white; border-radius: 16px; width: 100%; max-width: 1100px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
     .modal-header { padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -1088,7 +1093,15 @@
     .settings-nav-item.active { background: rgba(5,115,245,0.15); color: #5b9cf6; font-weight: 600; border-right-color: #5b9cf6; }
     .settings-nav-icon { font-size: 15px; opacity: 0.85; }
     .settings-content { flex: 1; overflow-y: auto; }
-    .modal-body { padding: 20px 24px 28px; }
+    /* The modal is capped at 90vh (95vh on a phone) with overflow:hidden, so
+       anything past that was clipped with no way to reach it -- measured on a
+       phone, a 771px modal was hiding 906px of its own content and neither the
+       modal nor the page would scroll. The body is the scrolling part now.
+
+       min-height:0 is what makes it work: a flex child defaults to
+       min-height:auto, which refuses to shrink below its content, so
+       overflow-y:auto never engages and the clipping stays exactly as it was. */
+    .modal-body { padding: 20px 24px 28px; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
     .modal-section { margin-bottom: 24px; }
     .modal-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; }
     .connect-row { display: flex; gap: 8px; }
@@ -1116,7 +1129,7 @@
     #org-select option { background: #083BBF; color: white; }
 
     /* ── ONBOARDING OVERLAY ── */
-    .onboarding-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(3px); }
+    .onboarding-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(3px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
     .onboarding-overlay.hidden { display: none; }
     .onboarding-card { background: white; border-radius: 20px; width: 100%; max-width: 480px; padding: 40px; box-shadow: 0 24px 80px rgba(0,0,0,0.3); }
     .onboarding-steps { display: flex; justify-content: center; gap: 8px; margin-bottom: 32px; }
@@ -1481,7 +1494,11 @@
       .header { padding: 10px 14px; gap: 8px; }
       .brand-text .agency-name { font-size: 15px; letter-spacing: 4px; }
       .header-right { gap: 5px; flex-wrap: wrap; }
-      .header-btn { padding: 4px 9px; font-size: 10px; }
+      /* These were being made smaller on a phone, which is backwards: a
+          finger needs more room than a cursor, not less. Measured at 375px the
+          header buttons were 24px tall and the period buttons 20px, against a
+          44px touch guideline. Sized for a thumb now. */
+      .header-btn { padding: 9px 13px; font-size: 11.5px; min-height: 38px; }
       #auto-refresh-label { display: none; }
 
       /* Agency nav — scrolls sideways instead of stretching the page */
@@ -1494,7 +1511,17 @@
       .controls-bar { padding: 8px 12px; gap: 8px; }
       .period-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
       .period-tabs::-webkit-scrollbar { display: none; }
-      .period-btn { font-size: 10px; padding: 5px 10px; white-space: nowrap; flex-shrink: 0; }
+      .period-btn { font-size: 12px; padding: 9px 14px; min-height: 38px; white-space: nowrap; flex-shrink: 0; }
+      .targets-btn { padding: 9px 13px; font-size: 12px; min-height: 38px; }
+      .layout-edit-btn { padding: 9px 12px; min-height: 38px; }
+      /* Close buttons were the worst of the lot -- the Targets panel's was
+         14x18, which is a miss on a phone, and missing a close button means
+         being stuck in a panel. Given a real hit area without changing how
+         big the glyph looks. */
+      .modal-close, .team-panel-close, .tgt-close, .pwa-install-x, .pf-x, .al-comp-x {
+        min-width: 40px; min-height: 40px; display: inline-flex;
+        align-items: center; justify-content: center; padding: 0;
+      }
       #account-select { font-size: 12px; max-width: 160px; }
 
       /* Content area */
@@ -1613,7 +1640,7 @@
       .kpi-sub { font-size: 8px; }
       .kpi-card input[type="number"] { font-size: 15px !important; }
 
-      .period-btn { font-size: 9px; padding: 4px 8px; }
+      .period-btn { font-size: 11.5px; padding: 8px 11px; min-height: 36px; }
       #account-select { max-width: 130px; font-size: 11px; }
 
       .funnel-step { min-width: 80px; }
@@ -1651,6 +1678,22 @@
     }
     @media (display-mode: standalone) and (max-width: 768px) {
       .header { padding-top: calc(10px + env(safe-area-inset-top)); }
+    }
+
+    /* iOS Safari zooms the whole page in whenever you focus a field smaller
+       than 16px, and once it has zoomed the layout is wider than the screen
+       and scrolling goes sideways and feels broken. 27 of this app's fields
+       were under 16px and nothing guarded against it. Raising them on phones
+       is the only fix that does not involve blocking pinch-zoom, which would
+       take the control away from anyone who needs to magnify the page.
+
+       !important because most of these fields are styled by class rules that
+       are more specific than an element selector. Checkbox, radio and range
+       are excluded: font-size does not affect them, and the sizing rules they
+       do have should not be overridden. */
+    @media (max-width: 768px) {
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+      select, textarea { font-size: 16px !important; }
     }
 
     /* Backstop. One unexpectedly wide element used to make iOS scale the whole
