@@ -6829,6 +6829,28 @@
       return Object.values(accountMap).filter(a => a && a.notion_url === url).length || 1;
     }
 
+    // The newest day Notion holds for an account, cached per account.
+    //
+    // A blank Notion card is almost never a broken sync -- it is the team not
+    // having written that day into the sheet yet. On 5 October not one account
+    // had the 4th or the 5th, because the sheets stop at the 3rd. Saying so on
+    // the card turns a silent zero into something answerable.
+    const _ndLatestCache = {};
+    async function ndLatestDay(accountKey) {
+      if (!accountKey || !currentOrgId) return null;
+      const key = currentOrgId + '|' + accountKey;
+      if (_ndLatestCache[key] !== undefined) return _ndLatestCache[key];
+      const { data } = await sb.from('notion_daily')
+        .select('day')
+        .eq('organization_id', currentOrgId)
+        .eq('account_key', accountKey)
+        .order('day', { ascending: false })
+        .limit(1);
+      const d = data && data.length ? data[0].day : null;
+      _ndLatestCache[key] = d;
+      return d;
+    }
+
     async function ndForPeriod(accountKey, period) {
       if (!accountKey || !currentOrgId) return null;
       const range = _cmpRange(period === 'custom'
@@ -10523,6 +10545,7 @@
       // typed figure and the month's history: more precise than the month,
       // still overridden by anything someone typed for this period.
       const _ndRow = await ndForPeriod(accountDbId, currentPeriod).catch(() => null);
+      const _ndLatest = _ndRow ? null : await ndLatestDay(accountDbId).catch(() => null);
       mhPartialNotice();   // flags a range that stops short of a recorded month
       if (_mhRow) {
         // No live store for this month — show what was recorded rather than a
@@ -10681,6 +10704,12 @@
         if (ndVal != null && _ndRow) {
           const n = _ndRow._days || 0;
           return `From Notion · ${n} day${n === 1 ? '' : 's'}`;
+        }
+        // Nothing in Notion for these dates, but the sheet does exist: say how
+        // far it goes, so an empty card reads as "not written yet" rather than
+        // as a figure of zero.
+        if (!_ndRow && _ndLatest) {
+          return `Notion has nothing for this period · sheet ends ${_cpFmtDate ? _cpFmtDate(_ndLatest) : _ndLatest}`;
         }
         return fallback;
       };
