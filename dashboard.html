@@ -19238,11 +19238,48 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             return da < db ? -1 : da > db ? 1 : 0;
           });
           flat.forEach(x => rows.push(rowFor(x.g, x.st, x.si, x.it, true)));
+
+          // By date is a flat list of steps, so a stage holding none of them is
+          // invisible here — and this is the default view, so a newly added
+          // stage simply never appeared. They are listed at the end, where they
+          // can be filled, rather than silently dropped.
+          if (!_cpRO && !_cpFiltersOn()) {
+            const empties = [];
+            groups.forEach(g => g.stages.forEach(({ st, si }) => {
+              if (!(st.items || []).length) empties.push({ g, st, si });
+            }));
+            if (empties.length) {
+              rows.push(`<tr class="cp-tbl-phase"><td colspan="${nCols}">Stages with no steps yet</td></tr>`);
+              empties.forEach(({ g, st, si }) => rows.push(
+                `<tr><td colspan="${nCols}" style="padding:8px 14px">
+                  <span style="opacity:.85">${escHtml(g.name)} › <strong>${escHtml(st.stage)}</strong></span>
+                  <span style="float:right;display:inline-flex;gap:6px">
+                    <button class="cp-addnode" style="min-width:auto;padding:2px 8px" onclick="cpAddItem(${si})">＋ Step</button>
+                    <button class="cp-addnode" style="min-width:auto;padding:2px 8px" onclick="cpAddDecision(${si})">◇ Decision</button>
+                    <button class="cp-node-del" title="Delete this stage" onclick="cpRemoveStage(${si})">🗑</button>
+                  </span></td></tr>`));
+            }
+          }
         } else {
           groups.forEach(g => g.stages.forEach(({ st, si }) => {
             const items = (st.items || []).filter(_cpMatches);
-            if (!items.length) return;
-            rows.push(`<tr class="cp-tbl-phase"><td colspan="${nCols}">${escHtml(g.name)} › ${escHtml(st.stage)}</td></tr>`);
+            // A stage with no steps used to be skipped entirely, so pressing
+            // ＋ Add stage in this view appeared to do nothing at all: the stage
+            // was created and saved, but the table only ever drew steps and
+            // there was no way to add one. Now the stage is shown with the
+            // controls to fill it. Still hidden while filters are on, where an
+            // empty stage really is "nothing matches".
+            if (!items.length && _cpFiltersOn()) return;
+            rows.push(`<tr class="cp-tbl-phase"><td colspan="${nCols}">${escHtml(g.name)} › ${escHtml(st.stage)}${
+              _cpRO ? '' : `<span style="float:right;display:inline-flex;gap:6px">
+                <button class="cp-addnode" style="min-width:auto;padding:2px 8px" onclick="cpAddItem(${si})">＋ Step</button>
+                <button class="cp-addnode" style="min-width:auto;padding:2px 8px" onclick="cpAddDecision(${si})">◇ Decision</button>
+                <button class="cp-node-del" title="Delete this stage" onclick="cpRemoveStage(${si})">🗑</button>
+              </span>`}</td></tr>`);
+            if (!items.length) {
+              rows.push(`<tr><td colspan="${nCols}" class="cp-empty" style="padding:10px 14px">No steps in this stage yet — click ＋ Step to add one.</td></tr>`);
+              return;
+            }
             items.forEach(it => rows.push(rowFor(g, st, si, it, false)));
           }));
         }
@@ -19258,7 +19295,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return groups.map(g => {
         const body = g.stages.map(({ st, si }) => {
           const items = (st.items || []).filter(_cpMatches);
-          if (!items.length) return '';
+          // Same as the table: an empty stage was dropped, so adding one here
+          // looked like nothing happened. Shown unless filters are on.
+          if (!items.length && _cpFiltersOn()) return '';
           const key = g.name + '|' + st.stage;
           const d = (st.items || []).filter(i => _cpItemState(i) === 'done').length;
           const open = !_cpCollapsed[key];
@@ -19266,8 +19305,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <div class="cp-compact-phase" onclick="cpToggleCollapse('${key.replace(/'/g, "\\'")}')">
               <span>${open ? '▾' : '▸'}</span><span style="flex:1">${escHtml(st.stage)}</span>
               <span style="font-weight:700">${d}/${(st.items || []).length}</span>
+              ${cpReadOnly() ? '' : `<span style="display:inline-flex;gap:6px" onclick="event.stopPropagation()">
+                <button class="cp-addnode" style="min-width:auto;padding:2px 8px" onclick="cpAddItem(${si})">＋ Step</button>
+                <button class="cp-addnode" style="min-width:auto;padding:2px 8px" onclick="cpAddDecision(${si})">◇ Decision</button>
+                <button class="cp-node-del" title="Delete this stage" onclick="cpRemoveStage(${si})">🗑</button>
+              </span>`}
             </div>
             <div class="${open ? '' : 'cp-hidden'}">
+              ${!items.length ? '<div class="cp-empty" style="padding:10px 14px">No steps in this stage yet — click ＋ Step to add one.</div>' : ''}
               ${items.map(it => {
                 const ii = (st.items || []).indexOf(it);
                 const stt = _cpItemState(it);
