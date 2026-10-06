@@ -19207,9 +19207,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <td>${_cpRO
                 ? `<span style="${over ? 'color:#DC2626;font-weight:700' : ''}">${it.date || '<span style="color:#B6BFCC">—</span>'}</span>`
                 : `<input type="date" min="2020-01-01" max="2099-12-31" data-cpk="d${si}-${ii}" class="cp-node-date ${it.date ? '' : 'empty'}" style="text-align:left;${over ? 'color:#DC2626;font-weight:700' : ''}" value="${it.date || ''}" onchange="cpSetItemDate(${si},${ii},this.value)">`}</td>
-              <td>${it.type === 'decision'
+              <td><span style="display:inline-flex;align-items:center;gap:6px">${it.type === 'decision'
                 ? `<button class="cp-branch-btn ${it.decision === 'yes' ? 'yes active' : (it.decision === 'no' ? 'no active' : 'yes')}" style="margin:0" onclick="cpDecide(${si},${ii},'${it.decision === 'yes' ? 'yes' : 'yes'}')">${it.decision === 'yes' ? '✓ APPROVED' : (it.decision === 'no' ? '✗ REVISING' : 'PENDING')}</button>`
-                : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}</td>
+                : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}${
+                // Deleting a step was only ever possible in the Flow view, so
+                // on Deadlines and List -- the default and the one most people
+                // use -- there was simply no way to remove a row. It read as a
+                // permissions problem to anyone who tried. Same cpRemoveItem
+                // the flow uses, and the real indices, since `ii` above is
+                // resolved with indexOf rather than the sorted position.
+                _cpRO ? '' : `<button class="cp-node-del" title="Remove this step" onclick="cpRemoveItem(${si},${ii})">✕</button>`
+              }</span></td>
             </tr>${open && total ? `<tr class="cp-tbl-detail"><td colspan="${nCols}">${_cpUnitsHTML(si, ii, it)}</td></tr>` : ''}${_cpCmtOpen[k] ? `<tr class="cp-tbl-detail"><td colspan="${nCols}">${_cpCommentsHTML(si, ii, it)}</td></tr>` : ''}`;
         };
 
@@ -19275,6 +19283,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                   ${it.type === 'decision'
                     ? `<button class="cp-status ${stt}" onclick="cpDecide(${si},${ii},'yes')">${it.decision === 'yes' ? '✓ Approved' : (it.decision === 'no' ? '✗ Revising' : 'Pending')}</button>`
                     : `<button class="cp-status ${stt}" onclick="cpCycleStatus(${si},${ii})">${CP_STATUS_LABEL[stt]}</button>`}
+                  ${cpReadOnly() ? '' : `<button class="cp-node-del" title="Remove this step" onclick="cpRemoveItem(${si},${ii})">✕</button>`}
                 </div>${_cpUnitsOpen[si + '-' + ii] && _cpTotalOf(it) ? _cpUnitsHTML(si, ii, it) : ''}${_cpCmtOpen[si + '-' + ii] ? _cpCommentsHTML(si, ii, it) : ''}`;
               }).join('')}
             </div></div>`;
@@ -19939,6 +19948,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
     function cpRemoveItem(si, ii) {
       const proc = JSON.parse(JSON.stringify(_cpProc()));
+      const it = proc?.[si]?.items?.[ii];
+      if (!it) return;
+      // Named, because the table puts this ✕ in a dense row of small controls
+      // next to the status button, and an undone deletion costs a step's
+      // comments, link and dates. Deleting still only stages the change --
+      // nothing leaves the browser until Save changes is pressed.
+      if (!confirm(`Remove "${it.name || 'this step'}" from ${proc[si].stage || 'this stage'}?`)) return;
       proc[si].items.splice(ii, 1);
       _cpSaveProc(proc);
     }
