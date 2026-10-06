@@ -6270,8 +6270,16 @@
       const year = parseInt(document.getElementById('mh-year').value, 10) || new Date().getFullYear();
       const status = document.getElementById('mh-status');
       status.textContent = 'Loading…'; status.style.color = 'var(--text-muted)';
+      // Built from MH_FIELDS rather than typed out, because the two had drifted:
+      // the list was missing web_spend, msg_spend and every meta_spend / aw_ /
+      // fb_ / ig_ column that MH_FIELDS declares. Those cells therefore rendered
+      // blank whatever was stored -- which is why the Spend column looked empty
+      // on an account where Notion had filled every month -- and because mhSave
+      // writes back every field in MH_FIELDS and nulls the blank ones, pressing
+      // Save wiped the spend split and the Meta delivery figures. Deriving the
+      // select from the same list is the only version of this that cannot rot.
       const { data, error } = await sb.from('monthly_history')
-        .select('month, web_orders, web_pieces, web_revenue, web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, msg_orders, msg_pieces, msg_revenue, branding_spend, returns_pct')
+        .select(['month', ...MH_FIELDS.map(([k]) => k)].join(', '))
         .eq('organization_id', currentOrgId)
         .eq('account_key', _mhScopeKey)
         .gte('month', `${year}-01-01`).lte('month', `${year}-12-01`);
@@ -6712,6 +6720,16 @@
       const status = document.getElementById('mh-status');
       status.textContent = 'Saving…'; status.style.color = 'var(--text-muted)';
 
+      // A field with no input on screen was never shown, so this save has no
+      // business clearing it. Those keys are left out of the payload entirely
+      // and the upsert keeps whatever is stored, since it only writes columns
+      // it is given. Decided once, not per month: every row in one upsert must
+      // carry the same keys or PostgREST rejects the batch.
+      const shownKeys = MH_FIELDS
+        .map(([k]) => k)
+        .filter(k => document.querySelector(`#mh-table input[data-k="${k}"]`));
+      const allShown = shownKeys.length === MH_FIELDS.length;
+
       const rows = [], emptyMonths = [];
       for (let m = 0; m < 12; m++) {
         const row = { organization_id: currentOrgId, agency_id: currentAgencyId || 'x',
@@ -6719,14 +6737,19 @@
                       currency: (accountMap[sel?.value]?.currency || null),
                       updated_by: currentUser?.id || null, updated_at: new Date().toISOString() };
         let any = false;
-        MH_FIELDS.forEach(([key]) => {
+        shownKeys.forEach((key) => {
           const el = document.querySelector(`#mh-table input[data-m="${m}"][data-k="${key}"]`);
           const raw = (el?.value ?? '').trim();
           const num = raw === '' ? null : Number(raw);
           row[key] = (num == null || isNaN(num)) ? null : num;
           if (row[key] != null) any = true;
         });
-        if (any) rows.push(row); else emptyMonths.push(mhMonthStr(year, m));
+        // Only safe to call a month empty when every field was on screen.
+        // Otherwise its row may still hold figures this editor never displayed,
+        // and deleting it would throw them away on the strength of blanks the
+        // user was never shown.
+        if (any) rows.push(row);
+        else if (allShown) emptyMonths.push(mhMonthStr(year, m));
       }
 
       try {
