@@ -3591,6 +3591,10 @@
           <button id="mh-fill-btn" onclick="mhFillFromLive()" title="Pull spend, orders, pieces, revenue and messages from Meta and Shopify for any cell still empty"
                   style="padding:8px 14px;background:transparent;color:var(--text-main);border:1px solid var(--border);
                          border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">⤓ Fill blanks from live data</button>
+          <button id="mh-fill-daily-btn" onclick="mhFillFromDaily()"
+                  title="Fill empty cells from the daily figures the dashboard already holds, rather than asking Meta again. Website revenue is only filled where Notion recorded it as website revenue in its own right."
+                  style="padding:8px 14px;background:transparent;color:var(--text-main);border:1px solid var(--border);
+                         border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📅 Fill blanks from daily figures</button>
           <button id="mh-backfill-btn" onclick="mhBackfillAll()"
                   title="Pull every month Meta still holds, for every ad account, straight into this history. Runs once; safe to re-run."
                   style="padding:8px 14px;background:transparent;color:var(--text-main);border:1px solid var(--border);
@@ -6410,6 +6414,120 @@
 
     function _mhScopeAccounts() {
       return _scopeAccounts(_mhScopeKey, { metaOnly: true });
+    }
+
+    // ── Fill blanks from the daily figures ───────────────────────────────
+    // The same idea as the Meta pull above, but the source is notion_daily —
+    // the rows the dashboard's own cards already read. Notion has filled those
+    // for every account, so for anything it records there is no reason to ask
+    // Meta a second time and no reason to retype a month by hand.
+    //
+    // Deliberately does NOT touch website revenue from Notion's Revenue column.
+    // That column is the day's combined total, both channels together, which is
+    // why the sync stores it as total_revenue and keeps web_revenue out of what
+    // it writes. The dashboard then builds Total Revenue as website + messages,
+    // so putting a combined total into the website box counts message sales
+    // twice: VANGUARD sell through messages alone, and August's 4,820,500 would
+    // have been reported as 9,641,000. Only a figure Notion recorded as website
+    // revenue in its own right is used.
+    //
+    // Writes into the inputs, never the database, so nothing is committed until
+    // Save is pressed and a wrong fill is discarded by closing the dialog.
+    const MH_FROM_DAILY = [
+      'web_orders', 'web_pieces', 'web_revenue',
+      'web_orders_confirmed', 'web_pieces_confirmed', 'web_revenue_confirmed',
+      'msg_orders', 'msg_pieces', 'msg_revenue',
+      'web_spend', 'msg_spend', 'branding_spend',
+    ];
+
+    async function mhFillFromDaily() {
+      const btn    = document.getElementById('mh-fill-daily-btn');
+      const status = document.getElementById('mh-status');
+      const year   = parseInt(document.getElementById('mh-year').value, 10) || new Date().getFullYear();
+      if (!currentOrgId || !_mhScopeKey) return;
+
+      const orig = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = 'Reading daily figures…'; }
+      status.textContent = ''; status.style.color = 'var(--text-muted)';
+
+      try {
+        // A single account and a saved combination both exist as keys in
+        // notion_daily, so they are read directly — a group's own sheet is the
+        // team's figure and beats re-adding its members. All Accounts has no
+        // such key, so its members are summed, shared the same way the cards
+        // share them so one sheet on two accounts is not counted twice.
+        const direct = _mhScopeKey !== '__all__';
+        let q = sb.from('notion_daily')
+          .select('account_key, day, ' + MH_FROM_DAILY.join(', '))
+          .eq('organization_id', currentOrgId)
+          .gte('day', `${year}-01-01`).lte('day', `${year}-12-31`);
+        q = direct ? q.eq('account_key', _mhScopeKey)
+                   : q.in('account_key', Object.values(accountMap).map(a => a.id).filter(Boolean));
+        const { data, error } = await q;
+        if (error) throw error;
+        if (!data?.length) {
+          status.textContent = `Nothing recorded in the daily figures for ${year}.`;
+          status.style.color = 'var(--text-muted)';
+          return;
+        }
+
+        // month -> account -> field, so each account's total can be shared
+        // before the months are added up.
+        const byMonth = {};
+        data.forEach(r => {
+          const mi = Number(String(r.day).slice(5, 7)) - 1;
+          const perAcct = (byMonth[mi] ||= {});
+          const acct = (perAcct[r.account_key] ||= {});
+          MH_FROM_DAILY.forEach(f => {
+            if (r[f] == null) return;
+            acct[f] = (acct[f] ?? 0) + Number(r[f]);
+          });
+        });
+
+        const whole = new Set(['web_orders', 'web_pieces', 'msg_orders', 'msg_pieces',
+                               'web_orders_confirmed', 'web_pieces_confirmed']);
+        let filled = 0, kept = 0;
+        const monthsTouched = new Set();
+
+        Object.keys(byMonth).forEach(mi => {
+          const perAcct = byMonth[mi];
+          MH_FROM_DAILY.forEach(f => {
+            let t = null;
+            Object.keys(perAcct).forEach(k => {
+              const v = perAcct[k][f];
+              if (v == null) return;
+              t = (t ?? 0) + (direct ? Number(v) : Number(_brandShare(k, v) || 0));
+            });
+            if (t == null) return;
+            const el = document.querySelector(`#mh-table input[data-m="${mi}"][data-k="${f}"]`);
+            if (!el) return;
+            // Blanks only. Anything already there was typed, confirmed or
+            // filled before, and is not this button's to overwrite.
+            if ((el.value ?? '').trim() !== '') { kept++; return; }
+            el.value = whole.has(f) ? String(Math.round(t)) : String(Math.round(t * 100) / 100);
+            filled++;
+            monthsTouched.add(Number(mi));
+          });
+        });
+
+        const months = [...monthsTouched].sort((a, b) => a - b).map(i => MH_MONTHS[i]);
+        status.innerHTML = filled
+          ? `Filled <strong>${filled}</strong> empty cell${filled === 1 ? '' : 's'}` +
+            (months.length ? ` across ${months.length} month${months.length === 1 ? '' : 's'}` : '') +
+            `. ${kept ? `Left ${kept} cell${kept === 1 ? '' : 's'} that already had a figure. ` : ''}` +
+            `Press Save to keep them.` +
+            `<div style="margin-top:6px;color:var(--text-muted);font-size:11.5px">` +
+            `Website revenue is only filled where Notion recorded it as website revenue. ` +
+            `Where Notion has one combined total it is left blank on purpose — that total ` +
+            `includes message sales, and the dashboard adds message revenue on top of this box.</div>`
+          : `Nothing to fill — every cell the daily figures cover already has a value.`;
+        status.style.color = filled ? '#16A34A' : 'var(--text-muted)';
+      } catch (e) {
+        status.textContent = '⚠️ ' + (e.message || e);
+        status.style.color = '#F87171';
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig; }
+      }
     }
 
     async function mhFillFromLive() {
