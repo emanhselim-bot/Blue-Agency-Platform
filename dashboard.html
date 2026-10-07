@@ -1756,7 +1756,11 @@
     /* ── TEMPLATE PICKER ── */
     #template-btn { position: relative; }
     .tmpl-picker-wrap { position: relative; display: inline-block; }
-    .tmpl-picker { position: absolute; right: 0; top: calc(100% + 5px); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 5px; z-index: 300; box-shadow: 0 8px 30px rgba(0,0,0,0.35); min-width: 230px; }
+    /* min-width used to be the only sizing, so on a narrow window the menu kept
+       its 230px and overhung the viewport. The cap and the scroll are the
+       static half of keeping it reachable; _tmplFit() nudges it back on top. */
+    .tmpl-picker { position: absolute; right: 0; top: calc(100% + 5px); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 5px; z-index: 300; box-shadow: 0 8px 30px rgba(0,0,0,0.35); min-width: 230px;
+      max-width: calc(100vw - 16px); max-height: calc(100vh - 120px); overflow-y: auto; overscroll-behavior: contain; }
     .tmpl-option { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 7px; cursor: pointer; transition: background 0.12s; font-size: 12px; color: var(--text-main); }
     .tmpl-option:hover { background: rgba(255,255,255,0.06); }
     .tmpl-option.active { background: rgba(5,115,245,0.15); color: var(--accent); }
@@ -4990,12 +4994,39 @@
       const p = document.getElementById('template-picker');
       if (!p) return;
       const open = p.style.display !== 'none';
+      // Clear any nudge from last time before measuring, or the correction
+      // compounds each time it is opened.
+      p.style.marginLeft = '';
       p.style.display = open ? 'none' : 'block';
       if (!open) {
         const cur = _getTemplate();
         p.querySelectorAll('.tmpl-option').forEach(el => el.classList.toggle('active', el.dataset.tmpl === cur));
+        _tmplFit(p);
       }
     }
+
+    // Keep the menu on screen.
+    //
+    // It hangs off the button with right:0, so it opens leftwards. On a narrow
+    // window the Template button sits near the left edge and 230px of menu went
+    // straight off it -- the options were drawn, just past the edge of the
+    // screen where they could not be read or tapped. Anchoring is left to CSS;
+    // this only nudges it back by however much it overhangs, so the common case
+    // is untouched.
+    function _tmplFit(p) {
+      const pad = 8;
+      p.style.maxWidth = Math.max(180, document.documentElement.clientWidth - pad * 2) + 'px';
+      const r = p.getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      let shift = 0;
+      if (r.left < pad) shift = pad - r.left;                  // off the left
+      else if (r.right > vw - pad) shift = (vw - pad) - r.right;  // off the right
+      if (shift) p.style.marginLeft = shift + 'px';
+    }
+    window.addEventListener('resize', () => {
+      const p = document.getElementById('template-picker');
+      if (p && p.style.display !== 'none') { p.style.marginLeft = ''; _tmplFit(p); }
+    });
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.tmpl-picker-wrap')) {
         const p = document.getElementById('template-picker');
