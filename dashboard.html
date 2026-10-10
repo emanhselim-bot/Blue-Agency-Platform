@@ -3904,7 +3904,7 @@
           <h3>Import tasks from Notion</h3>
           <p style="font-size:13px;line-height:1.6;color:var(--text-muted)">Paste a Notion task database link. The Blue Ad Notion integration must have access to that database. Re-importing updates matching tasks without creating duplicates.</p>
           <label>NOTION TASK DATABASE LINK</label>
-          <input class="hub-input" id="bat-notion-url" type="url" placeholder="https://www.notion.so/…">
+          <input class="hub-input" id="bat-notion-url" type="url" placeholder="https://app.notion.com/p/… or https://www.notion.so/…">
           <div id="bat-notion-result" style="font-size:12px;line-height:1.5;margin-top:10px"></div>
           <div class="hub-modal-actions">
             <button class="ghost" onclick="batCloseNotionImport()">Close</button>
@@ -21433,7 +21433,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const url = document.getElementById('bat-notion-url').value.trim();
       const resultBox = document.getElementById('bat-notion-result');
       const button = document.getElementById('bat-notion-sync');
-      if (!/^https:\/\/(www\.)?notion\.so\//i.test(url)) {
+      let validNotionUrl = false;
+      try {
+        const host = new URL(url).hostname.toLowerCase();
+        validNotionUrl = host === 'notion.so' || host.endsWith('.notion.so') || host === 'notion.com' || host.endsWith('.notion.com');
+      } catch (_) {}
+      if (!validNotionUrl) {
         resultBox.textContent = 'Paste a valid Notion database link.';
         return;
       }

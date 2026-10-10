@@ -66,7 +66,14 @@ Deno.serve(async (req) => {
   const orgId = String(body.organization_id || "");
   const databaseUrl = String(body.database_url || "").trim();
   const databaseId = notionId(databaseUrl);
-  if (!orgId || !databaseId || !/^https:\/\/(www\.)?notion\.so\//i.test(databaseUrl)) {
+  let notionHost = "";
+  try {
+    const parsed = new URL(databaseUrl);
+    if (parsed.protocol === "https:") notionHost = parsed.hostname.toLowerCase();
+  } catch { /* Invalid URL is reported below. */ }
+  const validNotionHost = notionHost === "notion.so" || notionHost.endsWith(".notion.so") ||
+    notionHost === "notion.com" || notionHost.endsWith(".notion.com");
+  if (!orgId || !databaseId || !validNotionHost) {
     return json({ error: "Provide a valid Notion database link and organization." }, 400);
   }
   const { data: member } = await admin.from("organization_members").select("id")
