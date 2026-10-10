@@ -463,6 +463,23 @@
     .pipe-col.drag-over { background: var(--surface-2); border-color: var(--brand-accent); }
     .pipe-col-head { color: var(--text-main); font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .pipe-count { background: var(--surface-2); color: var(--text-muted); border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+    /* Blue Ad Tasks */
+    .bat-toolbar { display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 16px; }
+    .bat-board { display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;align-items:start; }
+    .bat-column { background:var(--well);border:1px solid var(--border);border-radius:14px;padding:12px;min-height:260px; }
+    .bat-column-head { display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:var(--text-main);margin-bottom:10px; }
+    .bat-count { color:var(--text-muted);background:var(--surface-2);border-radius:10px;padding:2px 7px;font-size:10px; }
+    .bat-card { background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--brand-accent);border-radius:10px;padding:11px;margin:0 0 8px;cursor:pointer; }
+    .bat-card:hover { border-color:var(--brand-accent);transform:translateY(-1px); }
+    .bat-card-title { font-size:13px;font-weight:700;color:var(--text-main);line-height:1.4; }
+    .bat-card-meta { display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;color:var(--text-muted);font-size:10.5px; }
+    .bat-chip { display:inline-flex;align-items:center;border-radius:10px;padding:2px 7px;background:var(--surface-2); }
+    .bat-priority-high,.bat-priority-urgent { color:#dc2626;background:rgba(239,68,68,.12); }
+    .bat-priority-medium { color:#b7791f;background:rgba(245,158,11,.14); }
+    .bat-priority-low { color:#15803d;background:rgba(34,197,94,.12); }
+    .bat-empty { padding:22px 10px;text-align:center;color:var(--text-muted);font-size:12px; }
+    @media (max-width: 1000px) { .bat-board { grid-template-columns:repeat(2,minmax(220px,1fr)); } }
+    @media (max-width: 560px) { .bat-board { grid-template-columns:1fr; } }
     .pipe-col-total { color: var(--text-muted); font-size: 11px; margin-bottom: 10px; min-height: 14px; }
     .pipe-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: grab; transition: transform .12s, border-color .12s; }
     .pipe-card:hover { transform: translateY(-2px); border-color: var(--brand-accent); }
@@ -3779,6 +3796,12 @@
             <div class="hub-card-desc">Calendar of client and internal meetings, with attendees, notes and follow-up tasks.</div>
             <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
           </div>
+          <div class="hub-card" data-mod="tasks" onclick="hubOpen('tasks')">
+            <div class="hub-card-icon">✅</div>
+            <div class="hub-card-title">Blue Ad Tasks</div>
+            <div class="hub-card-desc">Plan today’s work, assign tasks to your team, and track every deadline in one place.</div>
+            <div class="hub-card-badge" style="background:#EAF2FE;color:#0573F5">NEW</div>
+          </div>
           <div class="hub-card" id="hub-card-access" data-mod="access" onclick="hubOpen('access')" style="display:none">
             <div class="hub-card-icon">🔐</div>
             <div class="hub-card-title">Access</div>
@@ -3832,6 +3855,47 @@
         </div>
         <div class="mt-grid" id="mt-grid"></div>
         <div id="mt-day" style="margin-top:18px"></div>
+      </div>
+
+      <!-- Blue Ad Tasks -->
+      <div id="hub-tasks-view" style="display:none">
+        <div class="mod-sticky" style="position:sticky;top:0;z-index:20;background:var(--page-bg,#1B2A6B);padding:6px 0 10px">
+          <div class="hub-mod-head" style="margin-bottom:10px">
+            <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+            <h2>✅ Blue Ad Tasks</h2>
+            <button class="hub-mod-btn" id="bat-new-task-btn" onclick="batOpenTask()">＋ New task</button>
+            <button class="hub-mod-btn" onclick="batLoad()">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="bat-toolbar">
+          <button class="hub-mod-btn" id="bat-scope-mine" onclick="batSetScope('mine')">☀ My Day</button>
+          <button class="hub-mod-btn" id="bat-scope-team" onclick="batSetScope('team')">👥 Team board</button>
+          <select id="bat-filter-client" class="connect-input" onchange="batRender()" style="min-width:170px"><option value="">All clients</option></select>
+          <select id="bat-filter-person" class="connect-input" onchange="batRender()" style="min-width:170px"><option value="">Everyone</option></select>
+        </div>
+        <div id="bat-summary" style="font-size:12px;color:var(--text-muted);margin:0 0 12px"></div>
+        <div class="bat-board" id="bat-board"><div class="hub-loading">Open Blue Ad Tasks to load your work.</div></div>
+      </div>
+
+      <div class="hub-modal hidden" id="bat-modal">
+        <div class="hub-modal-box" style="max-width:560px">
+          <h3 id="bat-modal-title">New task</h3>
+          <label>TASK *</label><input class="hub-input" id="bat-title" maxlength="180" placeholder="What needs to get done?">
+          <label>CLIENT</label><select class="hub-input" id="bat-client"><option value="">Internal / no client</option></select>
+          <label>ASSIGNEE</label><select class="hub-input" id="bat-assignee"><option value="">Unassigned</option></select>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label>DUE DATE</label><input class="hub-input" id="bat-due" type="date"></div>
+            <div><label>PRIORITY</label><select class="hub-input" id="bat-priority"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+          </div>
+          <label>CATEGORY</label><select class="hub-input" id="bat-category"><option>Media Buying</option><option>Design</option><option>Content</option><option>Social Media</option><option>Website</option><option>Other</option></select>
+          <label>NOTES</label><textarea class="hub-input" id="bat-description" rows="3" maxlength="2000" placeholder="Add context or instructions"></textarea>
+          <label>STATUS</label><select class="hub-input" id="bat-status"><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="done">Done</option></select>
+          <div class="hub-modal-actions">
+            <button class="ghost" onclick="batCloseTask()">Cancel</button>
+            <button class="primary" id="bat-save" onclick="batSaveTask()">Save task</button>
+          </div>
+          <div class="auth-error" id="bat-error"></div>
+        </div>
       </div>
 
       <!-- Access module (owner only) -->
@@ -20741,6 +20805,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (xv) xv.style.display = v === 'access' ? '' : 'none';
       const mv = document.getElementById('hub-meetings-view');
       if (mv) mv.style.display = v === 'meetings' ? '' : 'none';
+      const tv = document.getElementById('hub-tasks-view');
+      if (tv) tv.style.display = v === 'tasks' ? '' : 'none';
+      const batNew = document.getElementById('bat-new-task-btn');
+      if (batNew) batNew.style.display = batCanEdit() ? '' : 'none';
       const cv = document.getElementById('hub-client-view');
       if (cv) cv.style.display = v === 'client' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
@@ -20749,6 +20817,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (v === 'activity') renderHubActivity();
       if (v === 'access')   acxInit();
       if (v === 'meetings') mtInit();
+      if (v === 'tasks') batLoad();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -21303,6 +21372,171 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function mtDelTask(taskId, meetingId) {
       await sb.from('meeting_tasks').delete().eq('id', taskId);
       mtLoadDetail(meetingId);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // BLUE AD TASKS — organization-wide team task board
+    // Uses the dashboard's existing client and team directories. Assignee
+    // details are stored as a snapshot so tasks survive member archiving.
+    // ══════════════════════════════════════════════════════════════
+    const BAT_STATUSES = [
+      ['todo', 'To Do'], ['in_progress', 'In Progress'], ['review', 'Review'], ['done', 'Done'],
+    ];
+    let _batTasks = [], _batClients = [], _batMembers = [], _batScope = 'mine', _batEditing = null;
+    const batEsc = v => escHtml(v == null ? '' : String(v));
+    const batToday = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+    const batDateLabel = iso => iso
+      ? new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric' })
+      : 'No due date';
+
+    function batSetScope(scope) {
+      _batScope = scope;
+      document.getElementById('bat-scope-mine').style.opacity = scope === 'mine' ? '1' : '.65';
+      document.getElementById('bat-scope-team').style.opacity = scope === 'team' ? '1' : '.65';
+      batRender();
+    }
+
+    function batCanEdit() {
+      if (!_myAccess) return true;
+      return Object.values(_myAccess.roles || {}).some(role => ['editor', 'admin', 'owner'].includes(role));
+    }
+
+    async function batLoad() {
+      const board = document.getElementById('bat-board');
+      if (!board) return;
+      board.innerHTML = '<div class="hub-loading">Loading tasks…</div>';
+      if (!await _hubWaitOrg()) {
+        board.innerHTML = '<div class="hub-loading">No organisation loaded. Please sign in again and retry.</div>';
+        return;
+      }
+      const [{ data: tasks, error }, { data: clients }, { data: members }] = await Promise.all([
+        sb.from('blue_ad_tasks').select('*').eq('organization_id', currentOrgId)
+          .order('due_date', { ascending:true, nullsFirst:false }).order('created_at', { ascending:false }),
+        sb.from('pipeline_clients').select('id, name').eq('organization_id', currentOrgId).order('name'),
+        sb.from('cp_members').select('id, full_name, email').eq('organization_id', currentOrgId)
+          .eq('archived', false).order('full_name'),
+      ]);
+      if (error) {
+        board.innerHTML = `<div class="hub-loading">${batEsc(error.message)}<br><span style="font-size:12px">If the task table is not set up yet, apply the new Supabase migration first.</span></div>`;
+        return;
+      }
+      _batTasks = tasks || []; _batClients = clients || []; _batMembers = members || [];
+      batFillSelectors(); batRender();
+    }
+
+    function batFillSelectors() {
+      const clientOptions = '<option value="">All clients</option>' + _batClients.map(c =>
+        `<option value="${batEsc(c.id)}">${batEsc(c.name)}</option>`).join('');
+      const clientFilter = document.getElementById('bat-filter-client');
+      const oldClient = clientFilter.value; clientFilter.innerHTML = clientOptions; clientFilter.value = oldClient;
+      const clientSelect = document.getElementById('bat-client');
+      clientSelect.innerHTML = '<option value="">Internal / no client</option>' + _batClients.map(c =>
+        `<option value="${batEsc(c.id)}">${batEsc(c.name)}</option>`).join('');
+      const memberOptions = _batMembers.map(m =>
+        `<option value="${batEsc(m.id)}">${batEsc(m.full_name || m.email)}</option>`).join('');
+      const personFilter = document.getElementById('bat-filter-person');
+      const oldPerson = personFilter.value;
+      personFilter.innerHTML = '<option value="">Everyone</option>' + memberOptions;
+      personFilter.value = oldPerson;
+      document.getElementById('bat-assignee').innerHTML = '<option value="">Unassigned</option>' + memberOptions;
+    }
+
+    function batRender() {
+      const board = document.getElementById('bat-board');
+      if (!board) return;
+      const clientId = document.getElementById('bat-filter-client')?.value || '';
+      const personId = document.getElementById('bat-filter-person')?.value || '';
+      const today = batToday();
+      let rows = _batTasks;
+      if (_batScope === 'mine') rows = rows.filter(t =>
+        (t.assignee_email || '').toLowerCase() === (currentUser?.email || '').toLowerCase() &&
+        t.status !== 'done' && (!t.due_date || t.due_date <= today));
+      if (clientId) rows = rows.filter(t => t.client_id === clientId);
+      if (personId) rows = rows.filter(t => t.assignee_member_id === personId);
+      const openCount = rows.filter(t => t.status !== 'done').length;
+      const overdue = rows.filter(t => t.status !== 'done' && t.due_date && t.due_date < today).length;
+      document.getElementById('bat-summary').textContent = `${openCount} open task${openCount === 1 ? '' : 's'}${overdue ? ` · ${overdue} overdue` : ''}`;
+      board.innerHTML = BAT_STATUSES.map(([status, label]) => {
+        const cards = rows.filter(t => t.status === status);
+        return `<section class="bat-column"><div class="bat-column-head">${label}<span class="bat-count">${cards.length}</span></div>` +
+          (cards.length ? cards.map(t => {
+            const late = t.status !== 'done' && t.due_date && t.due_date < today;
+            return `<article class="bat-card" onclick="batOpenTask('${batEsc(t.id)}')">
+              <div class="bat-card-title">${batEsc(t.title)}</div>
+              <div class="bat-card-meta">
+                ${t.client_name ? `<span class="bat-chip">🤝 ${batEsc(t.client_name)}</span>` : ''}
+                ${t.assignee_name ? `<span class="bat-chip">👤 ${batEsc(t.assignee_name)}</span>` : '<span class="bat-chip">Unassigned</span>'}
+                ${t.due_date ? `<span class="bat-chip" style="${late ? 'color:#dc2626' : ''}">${late ? '⚠ ' : '◷ '}${batDateLabel(t.due_date)}</span>` : ''}
+                <span class="bat-chip bat-priority-${batEsc(t.priority)}">${batEsc(t.priority)}</span>
+                ${t.category ? `<span class="bat-chip">${batEsc(t.category)}</span>` : ''}
+              </div>
+              ${t.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:8px;white-space:pre-wrap">${batEsc(t.description)}</div>` : ''}
+              <select class="connect-input" aria-label="Task status" ${batCanEdit() ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="batUpdateStatus('${batEsc(t.id)}',this.value)" style="margin-top:9px;padding:5px 7px;font-size:11px;width:100%">
+                ${BAT_STATUSES.map(([s, name]) => `<option value="${s}" ${t.status === s ? 'selected' : ''}>Move to ${name}</option>`).join('')}
+              </select>
+            </article>`;
+          }).join('') : '<div class="bat-empty">Nothing here</div>') + '</section>';
+      }).join('');
+    }
+
+    function batOpenTask(id = null) {
+      if (!batCanEdit()) return;
+      _batEditing = id ? _batTasks.find(t => t.id === id) : null;
+      const t = _batEditing || {};
+      document.getElementById('bat-modal-title').textContent = _batEditing ? 'Edit task' : 'New task';
+      document.getElementById('bat-title').value = t.title || '';
+      document.getElementById('bat-client').value = t.client_id || '';
+      document.getElementById('bat-assignee').value = t.assignee_member_id || '';
+      document.getElementById('bat-due').value = t.due_date || '';
+      document.getElementById('bat-priority').value = t.priority || 'medium';
+      document.getElementById('bat-category').value = t.category || 'Media Buying';
+      document.getElementById('bat-description').value = t.description || '';
+      document.getElementById('bat-status').value = t.status || 'todo';
+      document.getElementById('bat-error').textContent = '';
+      document.getElementById('bat-modal').classList.remove('hidden');
+      document.getElementById('bat-title').focus();
+    }
+
+    function batCloseTask() { document.getElementById('bat-modal').classList.add('hidden'); _batEditing = null; }
+
+    async function batSaveTask() {
+      if (!batCanEdit()) return;
+      const title = document.getElementById('bat-title').value.trim();
+      const errorBox = document.getElementById('bat-error');
+      if (!title) { errorBox.textContent = 'Please enter a task name.'; return; }
+      const client = _batClients.find(c => c.id === document.getElementById('bat-client').value);
+      const member = _batMembers.find(m => m.id === document.getElementById('bat-assignee').value);
+      const row = {
+        organization_id: currentOrgId, title,
+        description: document.getElementById('bat-description').value.trim() || null,
+        client_id: client?.id || null, client_name: client?.name || null,
+        assignee_member_id: member?.id || null, assignee_name: member?.full_name || null,
+        assignee_email: member?.email || null,
+        due_date: document.getElementById('bat-due').value || null,
+        priority: document.getElementById('bat-priority').value,
+        category: document.getElementById('bat-category').value,
+        status: document.getElementById('bat-status').value,
+        updated_at: new Date().toISOString(),
+      };
+      const save = document.getElementById('bat-save'); save.disabled = true; save.textContent = 'Saving…';
+      const result = _batEditing
+        ? await sb.from('blue_ad_tasks').update(row).eq('id', _batEditing.id).eq('organization_id', currentOrgId)
+        : await sb.from('blue_ad_tasks').insert({ ...row, created_by: currentUser?.id || null });
+      save.disabled = false; save.textContent = 'Save task';
+      if (result.error) { errorBox.textContent = result.error.message; return; }
+      batCloseTask(); await batLoad();
+    }
+
+    async function batUpdateStatus(id, status) {
+      if (!batCanEdit()) return;
+      const { error } = await sb.from('blue_ad_tasks').update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id).eq('organization_id', currentOrgId);
+      if (error) { alert(error.message); return batLoad(); }
+      const task = _batTasks.find(t => t.id === id); if (task) task.status = status;
+      batRender();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -22728,6 +22962,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function canOpenModule(m) {
       // Owner-only modules are never part of a member's module list.
       if (m === 'activity' || m === 'access') return currentRole === 'owner';
+      // Tasks are a team workspace. Anyone who has at least one dashboard
+      // module may open it; task editing follows the member's existing role.
+      if (m === 'tasks') return !!(_cpModules && _cpModules.length);
       // Until the permissions are actually known, the answer is no. This used
       // to be "yes to everything", which is why a slow load or a failed lookup
       // briefly showed every section to everyone.
@@ -22777,7 +23014,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       loadMyModules().then(applyModuleAccess);
     }
     function hubOpen(section) {
-      if (!canOpenModule(section)) { alert('You do not have access to this section.'); return; }
+      const permissionSection = section === 'tasks' ? 'pipeline' : section;
+      if (!canOpenModule(permissionSection)) { alert('You do not have access to this section.'); return; }
       if (section === 'media') {
         document.getElementById('home-hub').classList.add('hidden');
         return;
