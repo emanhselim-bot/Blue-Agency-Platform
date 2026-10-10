@@ -33,7 +33,9 @@ blue-agency-platform/
 │       ├── 20240101000000_initial_schema.sql
 │       ├── 20240102000000_webhook_tables.sql
 │       ├── 20240103000000_create_org_rpc.sql
-│       └── 20240104000000_security_fixes.sql
+│       ├── 20240104000000_security_fixes.sql
+│       ├── 20240105000000_member_access.sql
+│       └── 20240106000000_blue_ad_tasks.sql
 ├── tests/
 │   ├── unit/                   # HMAC, state signing, webhook routing
 │   ├── integration/            # Auth, orgs, invitations, RLS policies
@@ -134,3 +136,4 @@ See `tests/TESTING.md` for the full test runner guide.
 - **Meta token refresh** — scheduled cron job extends tokens before the 60-day expiry
 - **Invitation flow** — email invitations with role assignment and expiry
 - **All Accounts view** — aggregate KPIs across all connected ad accounts
+- **Blue Ad Tasks** — team task board with My Day, assignments, client labels, priorities, due dates and workflow status
