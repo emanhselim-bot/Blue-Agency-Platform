@@ -21541,7 +21541,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     const BAT_STATUSES = [
       ['todo', 'To Do'], ['in_progress', 'In Progress'], ['review', 'Review'], ['done', 'Done'],
     ];
-    let _batTasks = [], _batClients = [], _batMembers = [], _batScope = 'team', _batEditing = null;
+    let _batTasks = [], _batClients = [], _batMembers = [], _batAssignees = [], _batScope = 'team', _batEditing = null;
     let _batPage = 'tasks', _batCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const batEsc = v => escHtml(v == null ? '' : String(v));
     const batToday = () => {
@@ -21627,7 +21627,24 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         return;
       }
       _batTasks = tasks || []; _batClients = clients || []; _batMembers = members || [];
+      batBuildAssignees();
       batFillSelectors(); batRender();
+    }
+
+    function batBuildAssignees() {
+      const knownNames = new Set(_batMembers.flatMap(m => [m.full_name, m.email]
+        .filter(Boolean).map(value => value.trim().toLowerCase())));
+      const imported = new Map();
+      _batTasks.forEach(t => {
+        const name = String(t.assignee_name || '').trim();
+        const key = name.toLowerCase();
+        if (!name || knownNames.has(key) || imported.has(key)) return;
+        imported.set(key, { id: null, full_name: name, email: t.assignee_email || null, taskPersonKey: `notion:${key}` });
+      });
+      _batAssignees = [
+        ..._batMembers.map(m => ({ ...m, taskPersonKey: `member:${m.id}` })),
+        ...imported.values(),
+      ];
     }
 
     function batFillSelectors() {
@@ -21638,8 +21655,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const clientSelect = document.getElementById('bat-client');
       clientSelect.innerHTML = '<option value="">Internal / no client</option>' + _batClients.map(c =>
         `<option value="${batEsc(c.id)}">${batEsc(c.name)}</option>`).join('');
-      const memberOptions = _batMembers.map(m =>
-        `<option value="${batEsc(m.id)}">${batEsc(m.full_name || m.email)}</option>`).join('');
+      const memberOptions = _batAssignees.map(m =>
+        `<option value="${batEsc(m.taskPersonKey)}">${batEsc(m.full_name || m.email)}</option>`).join('');
       const personFilter = document.getElementById('bat-filter-person');
       const oldPerson = personFilter.value;
       personFilter.innerHTML = '<option value="">Everyone</option>' + memberOptions;
@@ -21660,7 +21677,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         (t.assignee_email || '').toLowerCase() === (currentUser?.email || '').toLowerCase() &&
         t.status !== 'done' && (!t.due_date || t.due_date <= today));
       if (clientId) rows = rows.filter(t => t.client_id === clientId);
-      if (personId) rows = rows.filter(t => t.assignee_member_id === personId);
+      if (personId) rows = rows.filter(t => {
+        const person = _batAssignees.find(m => m.taskPersonKey === personId);
+        return person && (person.id
+          ? t.assignee_member_id === person.id
+          : String(t.assignee_name || '').trim().toLowerCase() === person.full_name.toLowerCase());
+      });
       if (query) rows = rows.filter(t => [t.title, t.description, t.client_name, t.assignee_name, t.category].some(v => String(v || '').toLowerCase().includes(query)));
       if (dueFilter === 'today') rows = rows.filter(t => t.due_date === today);
       if (dueFilter === 'week') { const end = new Date(); end.setDate(end.getDate() + 7); const until = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`; rows = rows.filter(t => t.due_date && t.due_date >= today && t.due_date <= until); }
@@ -21741,9 +21763,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const open = _batTasks.filter(t=>t.status !== 'done').length;
       const done = _batTasks.filter(t=>t.status === 'done').length;
       const overdue = _batTasks.filter(t=>t.status !== 'done' && t.due_date && t.due_date < batToday()).length;
-      document.getElementById('bat-report-summary').innerHTML = [['Open Tasks',open],['Completed',done],['Overdue',overdue],['Team Members',_batMembers.length]].map(([label,value])=>`<div class="bat-stat"><div class="bat-stat-label">${label}</div><div class="bat-stat-value">${value}</div></div>`).join('');
+      document.getElementById('bat-report-summary').innerHTML = [['Open Tasks',open],['Completed',done],['Overdue',overdue],['Team Members',_batAssignees.length]].map(([label,value])=>`<div class="bat-stat"><div class="bat-stat-label">${label}</div><div class="bat-stat-value">${value}</div></div>`).join('');
       const head = `<div class="bat-list-row" style="font-weight:800;background:#f7f8fb"><div>Team member</div><div>Open tasks</div><div>Review</div><div>Overdue</div></div>`;
-      const memberRows = _batMembers.map(m=>{const tasks=_batTasks.filter(t=>t.assignee_member_id===m.id && t.status!=='done');return `<div class="bat-list-row"><div class="bat-list-title">${batEsc(m.full_name||m.email)}</div><div>${tasks.length}</div><div>${tasks.filter(t=>t.status==='review').length}</div><div>${tasks.filter(t=>t.due_date&&t.due_date<batToday()).length}</div></div>`;});
+      const memberRows = _batAssignees.map(m=>{const tasks=_batTasks.filter(t=>(m.id ? t.assignee_member_id===m.id : String(t.assignee_name||'').trim().toLowerCase()===m.full_name.toLowerCase()) && t.status!=='done');return `<div class="bat-list-row"><div class="bat-list-title">${batEsc(m.full_name||m.email)}</div><div>${tasks.length}</div><div>${tasks.filter(t=>t.status==='review').length}</div><div>${tasks.filter(t=>t.due_date&&t.due_date<batToday()).length}</div></div>`;});
       document.getElementById('bat-report-list').innerHTML = head + (memberRows.join('') || '<div class="bat-empty">No team members found.</div>');
     }
 
@@ -21754,7 +21776,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.getElementById('bat-modal-title').textContent = _batEditing ? 'Edit task' : 'New task';
       document.getElementById('bat-title').value = t.title || '';
       document.getElementById('bat-client').value = t.client_id || '';
-      document.getElementById('bat-assignee').value = t.assignee_member_id || '';
+      const selectedAssignee = _batAssignees.find(m => m.id
+        ? m.id === t.assignee_member_id
+        : !t.assignee_member_id && String(t.assignee_name || '').trim().toLowerCase() === m.full_name.toLowerCase());
+      document.getElementById('bat-assignee').value = selectedAssignee?.taskPersonKey || '';
       document.getElementById('bat-due').value = t.due_date || '';
       document.getElementById('bat-priority').value = t.priority || 'medium';
       document.getElementById('bat-category').value = t.category || 'Media Buying';
@@ -21773,7 +21798,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const errorBox = document.getElementById('bat-error');
       if (!title) { errorBox.textContent = 'Please enter a task name.'; return; }
       const client = _batClients.find(c => c.id === document.getElementById('bat-client').value);
-      const member = _batMembers.find(m => m.id === document.getElementById('bat-assignee').value);
+      const member = _batAssignees.find(m => m.taskPersonKey === document.getElementById('bat-assignee').value);
       const row = {
         organization_id: currentOrgId, title,
         description: document.getElementById('bat-description').value.trim() || null,
