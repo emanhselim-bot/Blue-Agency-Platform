@@ -463,23 +463,87 @@
     .pipe-col.drag-over { background: var(--surface-2); border-color: var(--brand-accent); }
     .pipe-col-head { color: var(--text-main); font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .pipe-count { background: var(--surface-2); color: var(--text-muted); border-radius: 10px; padding: 1px 8px; font-size: 11px; }
-    /* Blue Ad Tasks */
-    .bat-toolbar { display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 16px; }
-    .bat-board { display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;align-items:start; }
-    .bat-column { background:var(--well);border:1px solid var(--border);border-radius:14px;padding:12px;min-height:260px; }
-    .bat-column-head { display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:var(--text-main);margin-bottom:10px; }
-    .bat-count { color:var(--text-muted);background:var(--surface-2);border-radius:10px;padding:2px 7px;font-size:10px; }
-    .bat-card { background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--brand-accent);border-radius:10px;padding:11px;margin:0 0 8px;cursor:pointer; }
-    .bat-card:hover { border-color:var(--brand-accent);transform:translateY(-1px); }
-    .bat-card-title { font-size:13px;font-weight:700;color:var(--text-main);line-height:1.4; }
-    .bat-card-meta { display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;color:var(--text-muted);font-size:10.5px; }
-    .bat-chip { display:inline-flex;align-items:center;border-radius:10px;padding:2px 7px;background:var(--surface-2); }
-    .bat-priority-high,.bat-priority-urgent { color:#dc2626;background:rgba(239,68,68,.12); }
-    .bat-priority-medium { color:#b7791f;background:rgba(245,158,11,.14); }
-    .bat-priority-low { color:#15803d;background:rgba(34,197,94,.12); }
-    .bat-empty { padding:22px 10px;text-align:center;color:var(--text-muted);font-size:12px; }
-    @media (max-width: 1000px) { .bat-board { grid-template-columns:repeat(2,minmax(220px,1fr)); } }
-    @media (max-width: 560px) { .bat-board { grid-template-columns:1fr; } }
+    /* Blue Ad Tasks workspace */
+    .bat-shell { display:grid;grid-template-columns:166px minmax(0,1fr);min-height:calc(100vh - 56px);background:#f4f6fa;border:1px solid #e2e7ef;border-radius:18px;overflow:hidden;color:#172033;box-shadow:0 10px 30px rgba(8,21,46,.12); }
+    .bat-rail { background:#101d2b;color:#d8e1ec;padding:20px 12px 16px;display:flex;flex-direction:column;gap:6px; }
+    .bat-brand { display:flex;align-items:center;gap:9px;font-size:13px;font-weight:800;color:#fff;padding:3px 8px 24px; }
+    .bat-brand-mark { display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#2877e8;color:#fff;font-size:13px; }
+    .bat-nav-label { color:#8494a8;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;padding:10px 9px 5px; }
+    .bat-nav-btn { border:0;background:transparent;color:#c4ceda;text-align:left;border-radius:8px;padding:10px 9px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:9px; }
+    .bat-nav-btn:hover,.bat-nav-btn.active { background:#263748;color:#fff; }
+    .bat-nav-btn .bat-nav-icon { width:17px;text-align:center;font-size:14px; }
+    .bat-rail-bottom { margin-top:auto;border-top:1px solid rgba(255,255,255,.12);padding:14px 8px 0;font-size:11px;color:#98a7b8; }
+    .bat-main { min-width:0;padding:22px 22px 30px; }
+    .bat-main-head { display:flex;align-items:center;gap:12px;margin-bottom:15px; }
+    .bat-main-head h2 { color:#172033;font-size:22px;font-weight:800;letter-spacing:-.3px;margin:0 auto 0 0; }
+    .bat-main-head .hub-mod-back { color:#334155;border-color:#d8e0ea; }
+    .bat-main-head .hub-mod-back:hover { background:#e9eef5; }
+    .bat-view { display:none; }
+    .bat-view.active { display:block; }
+    .bat-toolbar { display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 15px; }
+    .bat-search { min-width:180px;flex:1;max-width:310px;background:#fff;border:1px solid #dce3ed;border-radius:8px;padding:8px 11px;color:#172033;font-size:12px; }
+    .bat-filter { min-width:105px;background:#fff;border:1px solid #dce3ed;border-radius:8px;padding:8px 10px;color:#334155;font-size:11px; }
+    .bat-action { background:#14253a!important;color:#fff!important;border:0!important;padding:9px 14px!important;border-radius:8px!important;font-size:12px!important; }
+    .bat-action:hover { background:#203d5e!important; }
+    .bat-board { display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:10px;align-items:start; }
+    .bat-column { background:#edf0f5;border:1px solid #e4e8ef;border-radius:12px;padding:9px;min-height:360px;height:calc(100vh - 225px);overflow:auto; }
+    .bat-column[data-status="todo"] { background:#f0f2f6; }
+    .bat-column[data-status="in_progress"] { background:#edf2fc; }
+    .bat-column[data-status="review"] { background:#fcf4e5; }
+    .bat-column[data-status="done"] { background:#eef5ec; }
+    .bat-column-head { display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;color:#263247;margin:1px 1px 9px;padding:2px 3px; }
+    .bat-column[data-status="todo"] .bat-column-head { color:#344155; }
+    .bat-column[data-status="in_progress"] .bat-column-head { color:#2457cb; }
+    .bat-column[data-status="review"] .bat-column-head { color:#a56a14; }
+    .bat-column[data-status="done"] .bat-column-head { color:#3d7542; }
+    .bat-count { color:#617086;background:rgba(255,255,255,.7);border-radius:10px;padding:2px 7px;font-size:10px; }
+    .bat-col-menu { margin-left:auto;color:#66758b;font-size:17px;line-height:1; }
+    .bat-card { position:relative;background:#fff;border:1px solid #e5e9f0;border-radius:9px;padding:10px 10px 9px;margin:0 0 7px;cursor:pointer;box-shadow:0 2px 4px rgba(15,23,42,.035);transition:box-shadow .12s,border-color .12s,transform .12s; }
+    .bat-card:hover { border-color:#a9c4ee;box-shadow:0 5px 12px rgba(15,23,42,.08);transform:translateY(-1px); }
+    .bat-card-top { display:flex;align-items:flex-start;gap:7px; }
+    .bat-check { flex:0 0 14px;width:14px;height:14px;margin:1px 0 0;border:1px solid #aab4c2;border-radius:3px;background:#fff;color:#fff;padding:0;font-size:10px;line-height:12px;cursor:pointer; }
+    .bat-check:hover { border-color:#2877e8; }
+    .bat-card[data-done="true"] .bat-check { background:#2877e8;border-color:#2877e8; }
+    .bat-card-title { font-size:11px;font-weight:750;color:#202b3b;line-height:1.35;flex:1; }
+    .bat-card-client { color:#7b8797;font-size:10px;margin:3px 0 0 21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .bat-card-meta { display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:8px 0 0 21px;color:#586679;font-size:9px; }
+    .bat-chip { display:inline-flex;align-items:center;border-radius:6px;padding:3px 6px;background:#eaf0f8;white-space:nowrap; }
+    .bat-category { background:#e9e3ff;color:#5632a1; }
+    .bat-category[data-category="Content"] { background:#e0effb;color:#28619d; }
+    .bat-category[data-category="Media Buying"] { background:#dfe9ff;color:#2450b2; }
+    .bat-category[data-category="Social Media"] { background:#fce6e7;color:#9b3943; }
+    .bat-category[data-category="Strategy"] { background:#d9edf1;color:#25616d; }
+    .bat-priority-high,.bat-priority-urgent { color:#b83737;background:#fde9e8; }
+    .bat-priority-medium { color:#98651c;background:#fff2dc; }
+    .bat-priority-low { color:#34733c;background:#e5f4e7; }
+    .bat-card-person { width:21px;height:21px;border-radius:50%;display:grid;place-items:center;background:#e3eaf4;color:#314358;font-size:9px;font-weight:800;margin-left:auto; }
+    .bat-quick-status { position:absolute;right:8px;top:8px;width:20px;opacity:0;pointer-events:none; }
+    .bat-card:hover .bat-quick-status,.bat-quick-status:focus { opacity:1;pointer-events:auto; }
+    .bat-empty { padding:27px 8px;text-align:center;color:#8994a3;font-size:11px; }
+    .bat-view-summary { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 15px; }
+    .bat-stat { background:#fff;border:1px solid #e4e8ef;border-radius:10px;padding:12px 14px; }
+    .bat-stat-label { font-size:9px;font-weight:800;letter-spacing:.8px;color:#748198;text-transform:uppercase; }
+    .bat-stat-value { font-size:20px;font-weight:800;color:#172033;margin-top:5px; }
+    .bat-list { background:#fff;border:1px solid #e4e8ef;border-radius:11px;overflow:hidden; }
+    .bat-list-row { display:grid;grid-template-columns:minmax(180px,1.8fr) 1fr 100px 90px;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid #edf0f4;font-size:11px;color:#405066; }
+    .bat-list-row:last-child { border-bottom:0; }
+    .bat-list-title { font-weight:700;color:#1d293b; }
+    .bat-form-grid { display:grid;grid-template-columns:1fr 1fr;gap:5px 12px; }
+    .bat-form-grid .bat-field { min-width:0; }
+    .bat-modal-head { display:flex;align-items:center;gap:12px; }
+    .bat-modal-head h3 { flex:1;text-align:left!important;margin-bottom:6px!important; }
+    .bat-modal-close { border:0;background:transparent;color:#718096;font-size:20px;cursor:pointer;padding:3px 7px; }
+    .bat-calendar-wrap { overflow-x:auto;background:#fff;border:1px solid #e4e8ef;border-radius:11px; }
+    .bat-calendar-grid { display:grid;grid-template-columns:repeat(7,minmax(86px,1fr));min-width:650px; }
+    .bat-calendar-dow { padding:9px 7px;text-align:center;color:#748198;font-size:9px;font-weight:800;text-transform:uppercase;border-bottom:1px solid #e8ecf2; }
+    .bat-calendar-cell { min-height:92px;padding:6px;border-right:1px solid #edf0f4;border-bottom:1px solid #edf0f4; }
+    .bat-calendar-day { color:#637187;font-size:10px;font-weight:700;margin-bottom:5px; }
+    .bat-calendar-event { border-radius:5px;background:#e7efff;color:#2457a9;font-size:9px;padding:4px 5px;margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer; }
+    .bat-calendar-event[data-status="review"] { background:#fff1d6;color:#8f5f13; }
+    .bat-calendar-event[data-status="done"] { background:#e4f2e4;color:#397243; }
+    @media (max-width: 1100px) { .bat-board { grid-template-columns:repeat(2,minmax(180px,1fr)); } }
+    @media (max-width: 720px) { .bat-shell { grid-template-columns:1fr;min-height:0; } .bat-rail { padding:9px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px; } .bat-brand,.bat-nav-label,.bat-rail-bottom { display:none; } .bat-nav-btn { justify-content:center;padding:8px 3px;font-size:10px;flex-direction:column;gap:3px; } .bat-nav-btn .bat-nav-icon { font-size:16px; } .bat-main { padding:14px 10px 22px; } .bat-main-head { flex-wrap:wrap; } .bat-main-head h2 { font-size:19px; } .bat-board { grid-template-columns:1fr; } .bat-column { min-height:120px; } .bat-view-summary { grid-template-columns:repeat(2,1fr); } .bat-list-row { grid-template-columns:minmax(120px,1.4fr) 1fr 75px; } .bat-list-row > :nth-child(3) { display:none; } }
+    @media (max-width: 500px) { .bat-form-grid { grid-template-columns:1fr;gap:0; } }
     .pipe-col-total { color: var(--text-muted); font-size: 11px; margin-bottom: 10px; min-height: 14px; }
     .pipe-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: grab; transition: transform .12s, border-color .12s; }
     .pipe-card:hover { transform: translateY(-2px); border-color: var(--brand-accent); }
@@ -2441,6 +2505,10 @@
     .hub-modal-box h3, .modal-header h3 { text-align: center; color: var(--brand-ink); }
     .hub-modal-box > p { text-align: center; }
     .hub-modal-box label, .cpm-field label { text-align: center; display: block; }
+    .bat-modal-head h3 { text-align:left!important;color:#172033!important; }
+    .hub-modal-box:has(.bat-modal-head) { background:#fff!important;color:#172033!important; }
+    .hub-modal-box:has(.bat-modal-head) label { text-align:left;letter-spacing:0;text-transform:none;color:#394558; }
+    .hub-modal-box:has(.bat-modal-head) .hub-input { background:#fff!important;border-color:#d6dee9;color:#172033; }
 
     /* cards centre their content */
     .cp-stat, .cpm-ccard, .fin-sum-card, .bill-fund-card, .cpm-empty, .cp-empty, .cp-deliv-empty {
@@ -3859,37 +3927,64 @@
 
       <!-- Blue Ad Tasks -->
       <div id="hub-tasks-view" style="display:none">
-        <div class="mod-sticky" style="position:sticky;top:0;z-index:20;background:var(--page-bg,#1B2A6B);padding:6px 0 10px">
-          <div class="hub-mod-head" style="margin-bottom:10px">
-            <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
-            <h2>✅ Blue Ad Tasks</h2>
-            <button class="hub-mod-btn" id="bat-new-task-btn" onclick="batOpenTask()">＋ New task</button>
-            <button class="hub-mod-btn" id="bat-import-notion-btn" onclick="batOpenNotionImport()">↥ Import from Notion</button>
-            <button class="hub-mod-btn" onclick="batLoad()">↻ Refresh</button>
-          </div>
+        <div class="bat-shell">
+          <aside class="bat-rail">
+            <div class="bat-brand"><span class="bat-brand-mark">B</span><span>Blue<br>Agency</span></div>
+            <button class="bat-nav-btn" onclick="hubShowView('cards')"><span class="bat-nav-icon">⌂</span>Home</button>
+            <div class="bat-nav-label">Workspace</div>
+            <button class="bat-nav-btn active" id="bat-nav-tasks" onclick="batSetPage('tasks')"><span class="bat-nav-icon">▤</span>Tasks</button>
+            <button class="bat-nav-btn" id="bat-nav-day" onclick="batSetPage('day')"><span class="bat-nav-icon">☀</span>My Day</button>
+            <button class="bat-nav-btn" id="bat-nav-calendar" onclick="batSetPage('calendar')"><span class="bat-nav-icon">▦</span>Calendar</button>
+            <button class="bat-nav-btn" id="bat-nav-reports" onclick="batSetPage('reports')"><span class="bat-nav-icon">▥</span>Team & Reports</button>
+            <div class="bat-nav-label">Manage</div>
+            <button class="bat-nav-btn" id="bat-import-notion-btn" onclick="batOpenNotionImport()"><span class="bat-nav-icon">↥</span>Import from Notion</button>
+            <div class="bat-rail-bottom">Blue Ad Task Workspace</div>
+          </aside>
+          <main class="bat-main">
+            <div class="bat-main-head">
+              <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+              <h2 id="bat-page-title">Tasks</h2>
+              <button class="hub-mod-btn" onclick="batLoad()" title="Refresh tasks">↻</button>
+            </div>
+            <section class="bat-view active" id="bat-view-tasks">
+              <div class="bat-toolbar">
+                <input class="bat-search" id="bat-search" type="search" placeholder="⌕  Search tasks…" oninput="batRender()">
+                <select id="bat-filter-client" class="bat-filter" onchange="batRender()"><option value="">All clients</option></select>
+                <select id="bat-filter-person" class="bat-filter" onchange="batRender()"><option value="">All members</option></select>
+                <select id="bat-filter-due" class="bat-filter" onchange="batRender()"><option value="">Any due date</option><option value="today">Due today</option><option value="week">Next 7 days</option><option value="overdue">Overdue</option></select>
+                <button class="hub-mod-btn bat-action" id="bat-new-task-btn" onclick="batOpenTask()">＋ Add Task</button>
+              </div>
+              <div id="bat-summary" style="font-size:11px;color:#748198;margin:0 0 9px"></div>
+              <div class="bat-board" id="bat-board"><div class="hub-loading">Open Blue Ad Tasks to load your work.</div></div>
+            </section>
+            <section class="bat-view" id="bat-view-day">
+              <div class="bat-view-summary" id="bat-day-summary"></div>
+              <div class="bat-list" id="bat-day-list"></div>
+            </section>
+            <section class="bat-view" id="bat-view-calendar">
+              <div class="bat-toolbar"><button class="hub-mod-btn" onclick="batCalendarShift(-1)">‹</button><strong id="bat-calendar-label"></strong><button class="hub-mod-btn" onclick="batCalendarShift(1)">›</button><button class="hub-mod-btn" onclick="batCalendarShift(0)">Today</button></div>
+              <div class="bat-calendar-wrap" id="bat-calendar-list"></div>
+            </section>
+            <section class="bat-view" id="bat-view-reports">
+              <div class="bat-view-summary" id="bat-report-summary"></div>
+              <div class="bat-list" id="bat-report-list"></div>
+            </section>
+          </main>
         </div>
-        <div class="bat-toolbar">
-          <button class="hub-mod-btn" id="bat-scope-mine" onclick="batSetScope('mine')">☀ My Day</button>
-          <button class="hub-mod-btn" id="bat-scope-team" onclick="batSetScope('team')">👥 Team board</button>
-          <select id="bat-filter-client" class="connect-input" onchange="batRender()" style="min-width:170px"><option value="">All clients</option></select>
-          <select id="bat-filter-person" class="connect-input" onchange="batRender()" style="min-width:170px"><option value="">Everyone</option></select>
-        </div>
-        <div id="bat-summary" style="font-size:12px;color:var(--text-muted);margin:0 0 12px"></div>
-        <div class="bat-board" id="bat-board"><div class="hub-loading">Open Blue Ad Tasks to load your work.</div></div>
       </div>
 
       <div class="hub-modal hidden" id="bat-modal">
-        <div class="hub-modal-box" style="max-width:560px">
-          <h3 id="bat-modal-title">New task</h3>
+        <div class="hub-modal-box" style="width:520px;max-width:92vw">
+          <div class="bat-modal-head"><h3 id="bat-modal-title">Create Task</h3><button class="bat-modal-close" onclick="batCloseTask()" aria-label="Close">×</button></div>
           <label>TASK *</label><input class="hub-input" id="bat-title" maxlength="180" placeholder="What needs to get done?">
-          <label>CLIENT</label><select class="hub-input" id="bat-client"><option value="">Internal / no client</option></select>
-          <label>ASSIGNEE</label><select class="hub-input" id="bat-assignee"><option value="">Unassigned</option></select>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div><label>DUE DATE</label><input class="hub-input" id="bat-due" type="date"></div>
-            <div><label>PRIORITY</label><select class="hub-input" id="bat-priority"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+          <div class="bat-form-grid">
+            <div class="bat-field"><label>CLIENT</label><select class="hub-input" id="bat-client"><option value="">Internal / no client</option></select></div>
+            <div class="bat-field"><label>DESCRIPTION</label><textarea class="hub-input" id="bat-description" rows="2" maxlength="2000" placeholder="Add context or instructions"></textarea></div>
+            <div class="bat-field"><label>ASSIGN TO</label><select class="hub-input" id="bat-assignee"><option value="">Unassigned</option></select></div>
+            <div class="bat-field"><label>DUE DATE</label><input class="hub-input" id="bat-due" type="date"></div>
+            <div class="bat-field"><label>PRIORITY</label><select class="hub-input" id="bat-priority"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+            <div class="bat-field"><label>CATEGORY</label><select class="hub-input" id="bat-category"><option>Media Buying</option><option>Design</option><option>Content</option><option>Social Media</option><option>Website</option><option>Strategy</option><option>Other</option></select></div>
           </div>
-          <label>CATEGORY</label><select class="hub-input" id="bat-category"><option>Media Buying</option><option>Design</option><option>Content</option><option>Social Media</option><option>Website</option><option>Other</option></select>
-          <label>NOTES</label><textarea class="hub-input" id="bat-description" rows="3" maxlength="2000" placeholder="Add context or instructions"></textarea>
           <label>STATUS</label><select class="hub-input" id="bat-status"><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="done">Done</option></select>
           <div class="hub-modal-actions">
             <button class="ghost" onclick="batCloseTask()">Cancel</button>
@@ -21399,7 +21494,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     const BAT_STATUSES = [
       ['todo', 'To Do'], ['in_progress', 'In Progress'], ['review', 'Review'], ['done', 'Done'],
     ];
-    let _batTasks = [], _batClients = [], _batMembers = [], _batScope = 'mine', _batEditing = null;
+    let _batTasks = [], _batClients = [], _batMembers = [], _batScope = 'team', _batEditing = null;
+    let _batPage = 'tasks', _batCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const batEsc = v => escHtml(v == null ? '' : String(v));
     const batToday = () => {
       const d = new Date();
@@ -21411,8 +21507,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     function batSetScope(scope) {
       _batScope = scope;
-      document.getElementById('bat-scope-mine').style.opacity = scope === 'mine' ? '1' : '.65';
-      document.getElementById('bat-scope-team').style.opacity = scope === 'team' ? '1' : '.65';
+      batRender();
+    }
+
+    function batSetPage(page) {
+      _batPage = page;
+      _batScope = page === 'day' ? 'mine' : 'team';
+      const titles = { tasks: 'Tasks', day: 'My Day', calendar: 'Calendar', reports: 'Team & Reports' };
+      document.getElementById('bat-page-title').textContent = titles[page] || 'Tasks';
+      document.querySelectorAll('.bat-view').forEach(view => view.classList.toggle('active', view.id === `bat-view-${page}`));
+      document.querySelectorAll('.bat-nav-btn[id^="bat-nav-"]').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`bat-nav-${page}`)?.classList.add('active');
       batRender();
     }
 
@@ -21500,6 +21605,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!board) return;
       const clientId = document.getElementById('bat-filter-client')?.value || '';
       const personId = document.getElementById('bat-filter-person')?.value || '';
+      const dueFilter = document.getElementById('bat-filter-due')?.value || '';
+      const query = (document.getElementById('bat-search')?.value || '').trim().toLowerCase();
       const today = batToday();
       let rows = _batTasks;
       if (_batScope === 'mine') rows = rows.filter(t =>
@@ -21507,30 +21614,90 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         t.status !== 'done' && (!t.due_date || t.due_date <= today));
       if (clientId) rows = rows.filter(t => t.client_id === clientId);
       if (personId) rows = rows.filter(t => t.assignee_member_id === personId);
+      if (query) rows = rows.filter(t => [t.title, t.description, t.client_name, t.assignee_name, t.category].some(v => String(v || '').toLowerCase().includes(query)));
+      if (dueFilter === 'today') rows = rows.filter(t => t.due_date === today);
+      if (dueFilter === 'week') { const end = new Date(); end.setDate(end.getDate() + 7); const until = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`; rows = rows.filter(t => t.due_date && t.due_date >= today && t.due_date <= until); }
+      if (dueFilter === 'overdue') rows = rows.filter(t => t.status !== 'done' && t.due_date && t.due_date < today);
       const openCount = rows.filter(t => t.status !== 'done').length;
       const overdue = rows.filter(t => t.status !== 'done' && t.due_date && t.due_date < today).length;
       document.getElementById('bat-summary').textContent = `${openCount} open task${openCount === 1 ? '' : 's'}${overdue ? ` · ${overdue} overdue` : ''}`;
       board.innerHTML = BAT_STATUSES.map(([status, label]) => {
         const cards = rows.filter(t => t.status === status);
-        return `<section class="bat-column"><div class="bat-column-head">${label}<span class="bat-count">${cards.length}</span></div>` +
+        return `<section class="bat-column" data-status="${status}"><div class="bat-column-head">${label}<span class="bat-count">${cards.length}</span><span class="bat-col-menu">···</span></div>` +
           (cards.length ? cards.map(t => {
             const late = t.status !== 'done' && t.due_date && t.due_date < today;
-            return `<article class="bat-card" onclick="batOpenTask('${batEsc(t.id)}')">
-              <div class="bat-card-title">${batEsc(t.title)}</div>
-              <div class="bat-card-meta">
-                ${t.client_name ? `<span class="bat-chip">🤝 ${batEsc(t.client_name)}</span>` : ''}
-                ${t.assignee_name ? `<span class="bat-chip">👤 ${batEsc(t.assignee_name)}</span>` : '<span class="bat-chip">Unassigned</span>'}
-                ${t.due_date ? `<span class="bat-chip" style="${late ? 'color:#dc2626' : ''}">${late ? '⚠ ' : '◷ '}${batDateLabel(t.due_date)}</span>` : ''}
-                <span class="bat-chip bat-priority-${batEsc(t.priority)}">${batEsc(t.priority)}</span>
-                ${t.category ? `<span class="bat-chip">${batEsc(t.category)}</span>` : ''}
+            const initials = (t.assignee_name || '?').split(/\s+/).map(p => p[0]).slice(0,2).join('').toUpperCase();
+            return `<article class="bat-card" data-done="${t.status === 'done'}" onclick="batOpenTask('${batEsc(t.id)}')">
+              <div class="bat-card-top"><button class="bat-check" aria-label="Mark ${batEsc(t.title)} ${t.status === 'done' ? 'not done' : 'done'}" onclick="event.stopPropagation();batToggleDone('${batEsc(t.id)}')">${t.status === 'done' ? '✓' : ''}</button><div class="bat-card-title">${batEsc(t.title)}</div>
+                <select class="bat-quick-status" aria-label="Move task" ${batCanEdit() ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="event.stopPropagation();batUpdateStatus('${batEsc(t.id)}',this.value)">${BAT_STATUSES.map(([s, name]) => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${name}</option>`).join('')}</select>
               </div>
-              ${t.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:8px;white-space:pre-wrap">${batEsc(t.description)}</div>` : ''}
-              <select class="connect-input" aria-label="Task status" ${batCanEdit() ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="batUpdateStatus('${batEsc(t.id)}',this.value)" style="margin-top:9px;padding:5px 7px;font-size:11px;width:100%">
-                ${BAT_STATUSES.map(([s, name]) => `<option value="${s}" ${t.status === s ? 'selected' : ''}>Move to ${name}</option>`).join('')}
-              </select>
+              ${t.client_name ? `<div class="bat-card-client">${batEsc(t.client_name)}</div>` : ''}
+              <div class="bat-card-meta">
+                ${t.category ? `<span class="bat-chip bat-category" data-category="${batEsc(t.category)}">${batEsc(t.category)}</span>` : ''}
+                ${t.due_date ? `<span class="bat-chip" style="${late ? 'color:#c43e3e;background:#fde9e8' : ''}">▣ ${late ? 'Overdue' : batDateLabel(t.due_date)}</span>` : ''}
+                ${t.priority ? `<span class="bat-chip bat-priority-${batEsc(t.priority)}">● ${batEsc(t.priority)}</span>` : ''}
+                <span class="bat-card-person" title="${batEsc(t.assignee_name || 'Unassigned')}">${t.assignee_name ? batEsc(initials) : '—'}</span>
+              </div>
             </article>`;
           }).join('') : '<div class="bat-empty">Nothing here</div>') + '</section>';
       }).join('');
+      batRenderDay(); batRenderCalendar(); batRenderReports();
+    }
+
+    function batToggleDone(id) {
+      const task = _batTasks.find(t => t.id === id);
+      if (task) batUpdateStatus(id, task.status === 'done' ? 'todo' : 'done');
+    }
+
+    function batListRows(rows, empty = 'No tasks to show') {
+      return rows.length ? rows.map(t => `<div class="bat-list-row"><div class="bat-list-title">${batEsc(t.title)}<div style="font-size:9px;font-weight:400;color:#7b8797;margin-top:3px">${batEsc(t.client_name || 'Internal task')}</div></div><div>${batEsc(t.assignee_name || 'Unassigned')}</div><div>${batEsc(t.priority || 'medium')}</div><div>${t.due_date ? batDateLabel(t.due_date) : 'No due date'}</div></div>`).join('') : `<div class="bat-empty">${empty}</div>`;
+    }
+
+    function batRenderDay() {
+      const today = batToday();
+      const mine = _batTasks.filter(t => (t.assignee_email || '').toLowerCase() === (currentUser?.email || '').toLowerCase());
+      const due = mine.filter(t => t.due_date === today && t.status !== 'done');
+      const active = due.filter(t => t.status === 'in_progress').length;
+      const review = due.filter(t => t.status === 'review').length;
+      const overdue = mine.filter(t => t.status !== 'done' && t.due_date && t.due_date < today).length;
+      document.getElementById('bat-day-summary').innerHTML = [
+        ['Tasks Today', due.length], ['In Progress', active], ['In Review', review], ['Overdue', overdue],
+      ].map(([label, value]) => `<div class="bat-stat"><div class="bat-stat-label">${label}</div><div class="bat-stat-value">${value}</div></div>`).join('');
+      document.getElementById('bat-day-list').innerHTML = batListRows([...due, ...mine.filter(t => !t.due_date && t.status !== 'done')].sort((a,b) => (a.due_date || '9999').localeCompare(b.due_date || '9999')),'You’re all caught up for today.');
+    }
+
+    function batCalendarShift(amount) {
+      if (!amount) _batCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      else _batCalendarMonth = new Date(_batCalendarMonth.getFullYear(), _batCalendarMonth.getMonth() + amount, 1);
+      batRenderCalendar();
+    }
+    function batRenderCalendar() {
+      const month = _batCalendarMonth; const first = new Date(month.getFullYear(), month.getMonth(), 1);
+      const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+      document.getElementById('bat-calendar-label').textContent = month.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+      const key = day => `${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const due = new Map();
+      _batTasks.filter(t => t.due_date && t.due_date >= key(1) && t.due_date <= key(last.getDate())).forEach(t => {
+        if (!due.has(t.due_date)) due.set(t.due_date, []);
+        due.get(t.due_date).push(t);
+      });
+      const cells = Array.from({length:first.getDay()+last.getDate()},(_,index) => {
+        const day = index-first.getDay()+1;
+        if (day < 1 || day > last.getDate()) return '<div class="bat-calendar-cell" aria-hidden="true"></div>';
+        const events = due.get(key(day)) || [];
+        return `<div class="bat-calendar-cell"><div class="bat-calendar-day">${day}</div>${events.slice(0,4).map(t=>`<div class="bat-calendar-event" data-status="${batEsc(t.status)}" title="${batEsc(t.title)} · ${batEsc(t.assignee_name||'Unassigned')}" onclick="batOpenTask('${batEsc(t.id)}')">${batEsc(t.title)}</div>`).join('')}${events.length>4?`<div style="font-size:9px;color:#778397">+${events.length-4} more</div>`:''}</div>`;
+      }).join('');
+      document.getElementById('bat-calendar-list').innerHTML = `<div class="bat-calendar-grid">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=>`<div class="bat-calendar-dow">${day}</div>`).join('')}${cells}</div>`;
+    }
+
+    function batRenderReports() {
+      const open = _batTasks.filter(t=>t.status !== 'done').length;
+      const done = _batTasks.filter(t=>t.status === 'done').length;
+      const overdue = _batTasks.filter(t=>t.status !== 'done' && t.due_date && t.due_date < batToday()).length;
+      document.getElementById('bat-report-summary').innerHTML = [['Open Tasks',open],['Completed',done],['Overdue',overdue],['Team Members',_batMembers.length]].map(([label,value])=>`<div class="bat-stat"><div class="bat-stat-label">${label}</div><div class="bat-stat-value">${value}</div></div>`).join('');
+      const head = `<div class="bat-list-row" style="font-weight:800;background:#f7f8fb"><div>Team member</div><div>Open tasks</div><div>Review</div><div>Overdue</div></div>`;
+      const memberRows = _batMembers.map(m=>{const tasks=_batTasks.filter(t=>t.assignee_member_id===m.id && t.status!=='done');return `<div class="bat-list-row"><div class="bat-list-title">${batEsc(m.full_name||m.email)}</div><div>${tasks.length}</div><div>${tasks.filter(t=>t.status==='review').length}</div><div>${tasks.filter(t=>t.due_date&&t.due_date<batToday()).length}</div></div>`;});
+      document.getElementById('bat-report-list').innerHTML = head + (memberRows.join('') || '<div class="bat-empty">No team members found.</div>');
     }
 
     function batOpenTask(id = null) {
