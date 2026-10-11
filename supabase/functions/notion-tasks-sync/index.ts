@@ -99,10 +99,51 @@ Deno.serve(async (req) => {
   };
 
   try {
-    const database = await notionRequest(`/databases/${databaseId}`);
-    const databaseTitle = plain(database.title) || "Notion task database";
-    const dataSourceId = database.data_sources?.[0]?.id;
-    if (!dataSourceId) throw new Error("No task data source was found in that Notion database.");
+    // Accept either a database link or a page link. The Blue Ad HQ URL users
+    // commonly copy is a page containing the task database, so discover
+    // databases below that page instead of sending the page ID to /databases.
+    const databases: any[] = [];
+    try {
+      const database = await notionRequest(`/databases/${databaseId}`);
+      databases.push(database);
+    } catch (databaseError) {
+      // A page ID is expected to fail the database endpoint. Confirm it is an
+      // accessible page, then walk its nested pages and inline databases.
+      const rootPage = await notionRequest(`/pages/${databaseId}`);
+      const queue: { id: string; depth: number }[] = [{ id: rootPage.id || databaseId, depth: 0 }];
+      const visited = new Set<string>();
+      const maxDepth = 8;
+      const maxPages = 500;
+      while (queue.length && visited.size < maxPages) {
+        const node = queue.shift()!;
+        if (visited.has(node.id) || node.depth > maxDepth) continue;
+        visited.add(node.id);
+        let cursor: string | undefined;
+        do {
+          const params = new URLSearchParams({ page_size: "100" });
+          if (cursor) params.set("start_cursor", cursor);
+          const children = await notionRequest(`/blocks/${node.id}/children?${params}`);
+          for (const block of children.results || []) {
+            if (block.type === "child_database") {
+              const id = block.id;
+              if (!databases.some((item) => item.id === id)) {
+                databases.push(await notionRequest(`/databases/${id}`));
+              }
+            } else if (block.type === "child_page" && node.depth < maxDepth) {
+              queue.push({ id: block.id, depth: node.depth + 1 });
+            }
+          }
+          cursor = children.has_more ? children.next_cursor : undefined;
+        } while (cursor);
+      }
+      if (!databases.length) {
+        const original = databaseError instanceof Error ? databaseError.message : "";
+        throw new Error(original.includes("could not access")
+          ? "Notion could not access this page. Share the page and its task database with the Blue Ad Notion integration, then try again."
+          : "No task database was found on this Notion page or its nested pages. Open the task database in Notion and paste its link, or move it under this page.");
+      }
+    }
+
     const { data: clients } = await admin.from("pipeline_clients").select("id,name").eq("organization_id", orgId);
     const { data: members } = await admin.from("cp_members").select("id,full_name,email")
       .eq("organization_id", orgId).eq("archived", false);
@@ -114,14 +155,25 @@ Deno.serve(async (req) => {
     }
 
     const pages: any[] = [];
-    let cursor: string | undefined;
-    for (let i = 0; i < 20; i++) {
-      const page = await notionRequest(`/data_sources/${dataSourceId}/query`, {
-        method: "POST", body: JSON.stringify({ page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }),
-      });
-      pages.push(...(page.results || []));
-      if (!page.has_more || !page.next_cursor) break;
-      cursor = page.next_cursor;
+    const taskDatabaseIds = new Map<string, string>();
+    for (const database of databases) {
+      const dataSourceId = database.data_sources?.[0]?.id;
+      if (!dataSourceId) continue;
+      let cursor: string | undefined;
+      for (let i = 0; i < 20; i++) {
+        const result = await notionRequest(`/data_sources/${dataSourceId}/query`, {
+          method: "POST", body: JSON.stringify({ page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }),
+        });
+        for (const page of result.results || []) {
+          pages.push(page);
+          taskDatabaseIds.set(page.id, database.id);
+        }
+        if (!result.has_more || !result.next_cursor) break;
+        cursor = result.next_cursor;
+      }
+    }
+    if (!databases.some((database) => database.data_sources?.length)) {
+      throw new Error("No task data source was found in the accessible Notion database(s).");
     }
 
     const pageIds = pages.map((p) => p.id);
@@ -155,7 +207,8 @@ Deno.serve(async (req) => {
         assignee_email: matchMember?.email || (person?.type === "email" ? person.email : null),
         due_date: due?.date?.start ? String(due.date.start).slice(0, 10) : null,
         category: (category || "Other").slice(0, 80), priority: priorityValue(priority), status: statusValue(status),
-        created_by: auth.user!.id, notion_page_id: page.id, notion_database_id: databaseId,
+        created_by: auth.user!.id, notion_page_id: page.id,
+        notion_database_id: taskDatabaseIds.get(page.id) || databases[0].id,
       };
     });
 
@@ -165,15 +218,21 @@ Deno.serve(async (req) => {
       });
       if (error) throw new Error(`Could not save imported tasks: ${error.message}`);
     }
-    const { error: sourceError } = await admin.from("blue_ad_task_sources").upsert({
-      organization_id: orgId, notion_database_id: databaseId, database_url: databaseUrl,
-      database_title: databaseTitle, created_by: auth.user.id,
-      last_synced_at: new Date().toISOString(), sync_note: `Imported ${rows.length} tasks`,
-    }, { onConflict: "organization_id,notion_database_id" });
+    const sourceRows = databases.filter((database) => database.data_sources?.length).map((database) => ({
+      organization_id: orgId, notion_database_id: database.id,
+      database_url: database.id === databaseId ? databaseUrl : `https://www.notion.so/${database.id.replaceAll("-", "")}`,
+      database_title: plain(database.title) || "Notion task database", created_by: auth.user.id,
+      last_synced_at: new Date().toISOString(),
+      sync_note: `Imported ${pages.filter((page) => taskDatabaseIds.get(page.id) === database.id).length} tasks`,
+    }));
+    const { error: sourceError } = await admin.from("blue_ad_task_sources").upsert(sourceRows, {
+      onConflict: "organization_id,notion_database_id",
+    });
     if (sourceError) throw new Error(`Tasks imported, but source details could not be saved: ${sourceError.message}`);
 
     const updated = rows.filter((row) => existing.has(row.notion_page_id)).length;
-    return json({ ok: true, imported: rows.length - updated, updated, total: rows.length, database_title: databaseTitle });
+    return json({ ok: true, imported: rows.length - updated, updated, total: rows.length,
+      databases: databases.length, database_titles: databases.map((database) => plain(database.title) || "Notion task database") });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Notion import failed." }, 400);
   }
