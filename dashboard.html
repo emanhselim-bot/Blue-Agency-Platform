@@ -3461,6 +3461,43 @@
       .hub-sub { font-size: 7.5px; letter-spacing: 1.2px; }
       .hub-logo { width: 132px; height: 34px; }
     }
+
+    /* Blue Ad Tasks shares the dashboard's navy shell, blue controls and
+       surface tokens while keeping its compact board and status tints. */
+    .bat-shell { background:var(--surface);border-color:var(--border);color:var(--text-main);box-shadow:0 10px 30px rgba(1,28,105,.16); }
+    .bat-rail { background:linear-gradient(180deg,#011C69 0%,#083BBF 100%); }
+    .bat-brand-mark { background:#0573F5;box-shadow:0 0 0 3px rgba(255,255,255,.12); }
+    .bat-nav-label { color:rgba(226,237,255,.62); }
+    .bat-nav-btn { color:rgba(255,255,255,.82); }
+    .bat-nav-btn:hover,.bat-nav-btn.active { background:rgba(5,115,245,.34);color:#fff; }
+    .bat-rail-bottom { border-top-color:rgba(255,255,255,.2);color:rgba(255,255,255,.65); }
+    .bat-main-head h2 { color:var(--blue-navy); }
+    .bat-main-head .hub-mod-back { color:var(--blue-navy);border-color:var(--border); }
+    .bat-main-head .hub-mod-back:hover { background:var(--well); }
+    .bat-search,.bat-filter { background:var(--surface);border-color:var(--border);color:var(--text-main); }
+    .bat-search:focus,.bat-filter:focus { outline:2px solid rgba(5,115,245,.22);border-color:var(--blue-light); }
+    .bat-action { background:linear-gradient(135deg,#0573F5,#083BBF)!important;box-shadow:0 2px 6px rgba(8,59,191,.2); }
+    .bat-action:hover { background:#083BBF!important; }
+    .bat-card { border-color:var(--border); }
+    .bat-card:hover { border-color:#0573F5;box-shadow:0 5px 14px rgba(5,115,245,.14); }
+    .bat-check:hover,.bat-card[data-done="true"] .bat-check { border-color:#0573F5;background:#0573F5; }
+    .bat-card-title { color:var(--text-main); }
+    .bat-card-client,.bat-card-meta { color:var(--text-muted); }
+    .bat-stat,.bat-list,.bat-calendar-wrap { background:var(--surface);border-color:var(--border); }
+    .bat-stat-label,.bat-calendar-dow { color:var(--text-muted); }
+    .bat-stat-value,.bat-list-title,.bat-calendar-day { color:var(--text-main); }
+    .bat-list-row { border-bottom-color:var(--border);color:var(--text-muted); }
+    .bat-calendar-dow,.bat-calendar-cell { border-color:var(--border); }
+    .bat-calendar-event { background:#EAF2FE;color:#083BBF; }
+    [data-theme="dark"] .bat-main-head h2 { color:var(--text-main); }
+    [data-theme="dark"] .bat-main-head .hub-mod-back { color:var(--text-main); }
+    [data-theme="dark"] .bat-column { background:var(--well)!important;border-color:var(--border); }
+    [data-theme="dark"] .bat-column-head,
+    [data-theme="dark"] .bat-column[data-status] .bat-column-head { color:var(--text-main); }
+    [data-theme="dark"] .bat-count { color:var(--text-main);background:var(--surface-2); }
+    [data-theme="dark"] .bat-card { background:var(--surface); }
+    [data-theme="dark"] .bat-card-person { background:var(--surface-2);color:var(--text-main); }
+    [data-theme="dark"] .bat-calendar-event { background:#0A3590;color:#BFDBFE; }
 </style>
 </head>
 <body>
