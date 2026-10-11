@@ -58,7 +58,8 @@ function blockText(block: any): string {
 }
 
 function personFromText(value: string): { name: string; email: string | null } | null {
-  let text = value.replace(/^\s*[-*•\d.)]+\s*/, "").trim();
+  let text = value.replace(/^\s*[-*•\d.)]+\s*/, "").replace(/^📋\s*/, "").trim();
+  text = text.replace(/\s+tasks?\s*$/i, "").trim();
   if (!text || /^(name|member|team member|role|email|department|media buying team|social media team)$/i.test(text)) return null;
   const email = text.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || null;
   if (email) text = text.replace(email, "").replace(/[()<>]/g, "").trim();
@@ -106,58 +107,22 @@ async function notionTeamRoster(notionRequest: (path: string, init?: RequestInit
   for (const team of pages) {
     try {
     const blocks = [{ id: team.id, depth: 0 }];
-    const seen = new Set<string>();
-    const teamPeople = new Map<string, { name: string; email: string | null }>();
+      const seen = new Set<string>();
+      const teamPeople = new Map<string, { name: string; email: string | null }>();
     while (blocks.length && seen.size < 200) {
       const current = blocks.shift()!;
       if (seen.has(current.id) || current.depth > 4) continue;
       seen.add(current.id);
       for (const block of await blockChildren(current.id)) {
-        const node = block?.[block?.type] || {};
-        const candidates: string[] = [];
-        const rawText = blockText(block);
-        if (["bulleted_list_item", "numbered_list_item", "to_do", "table_row", "paragraph", "quote", "callout", "heading_1", "heading_2", "heading_3"].includes(block.type)) {
-          if (rawText) candidates.push(rawText);
-          const rich = node.rich_text || (node.cells || []).flat();
-          for (const part of rich) {
-            const user = part?.mention?.user;
-            if (part?.type === "mention" && user?.name) {
-              teamPeople.set(String(user.id || user.name), { name: String(user.name), email: user.person?.email || null });
-            }
-          }
-        }
-        for (const candidate of candidates) {
-          const person = personFromText(candidate);
-          if (person) teamPeople.set((person.email || person.name).toLowerCase(), person);
-        }
-        if (block.type === "child_page" && block.child_page?.title) {
-          const person = personFromText(block.child_page.title);
+        const isMemberTaskPage = block.type === "child_page" && /\btasks?\s*$/i.test(String(block.child_page?.title || ""));
+        if (isMemberTaskPage) {
+          const person = personFromText(String(block.child_page.title));
           if (person) teamPeople.set(person.name.toLowerCase(), person);
+          continue;
         }
-        if (block.type === "child_database") {
-          try {
-            const database = await notionRequest(`/databases/${block.id}`);
-            for (const source of database.data_sources || []) {
-              let cursor: string | undefined;
-              for (let i = 0; i < 10; i++) {
-                const params = { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) };
-                const result = await notionRequest(`/data_sources/${source.id}/query`, { method: "POST", body: JSON.stringify(params) });
-                for (const row of result.results || []) {
-                  const props = row.properties || {};
-                  const titleProp = Object.values(props).find((p: any) => p?.type === "title") as any;
-                  const title = plain(titleProp?.title);
-                  const personProp = pick(props, /member|person|name|assignee|email/i, ["people", "email", "rich_text", "select"]);
-                  const name = propText(personProp) || title;
-                  const person = personFromText(name);
-                  if (person) teamPeople.set((person.email || person.name).toLowerCase(), person);
-                }
-                if (!result.has_more || !result.next_cursor) break;
-                cursor = result.next_cursor;
-              }
-            }
-          } catch { /* A non-roster linked database should not block task import. */ }
+        if (block.has_children && current.depth < 4 && !isMemberTaskPage) {
+          blocks.push({ id: block.id, depth: current.depth + 1 });
         }
-        if (block.has_children && current.depth < 4) blocks.push({ id: block.id, depth: current.depth + 1 });
       }
     }
     for (const person of teamPeople.values()) {
@@ -336,9 +301,12 @@ Deno.serve(async (req) => {
       } else if (!teamRoster.foundTeams) {
         teamRosterWarning = "No Social Media Team or Media Buying Team page was found under Blue Ad HQ.";
       } else if (!teamMembers.length) {
-        teamRosterWarning = "The team pages were found, but no member names could be read. Add names as list items, person mentions, or rows in a team database.";
+        teamRosterWarning = "The team pages were found, but no member task pages such as “Eman Tasks” could be read.";
       }
       if (teamMembers.length) {
+        const { error: clearRosterError } = await admin.from("blue_ad_task_assignees").delete()
+          .eq("organization_id", orgId);
+        if (clearRosterError) throw new Error(`The old Notion member list could not be cleared. ${clearRosterError.message}`);
         const { error: rosterError } = await admin.from("blue_ad_task_assignees").upsert(
           teamMembers.map((person) => ({ organization_id: orgId, ...person, updated_at: new Date().toISOString() })),
           { onConflict: "organization_id,notion_person_key" },

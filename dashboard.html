@@ -21642,7 +21642,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         assignees.push(person);
         [m.full_name, m.email].filter(Boolean).forEach(value => knownNames.add(value.trim().toLowerCase()));
       });
-      _batTasks.forEach(t => {
+      // When Notion has supplied its team directory, keep the member selector
+      // to real team members only. Task titles and imported pages are not people.
+      if (!_batNotionRoster.length) _batTasks.forEach(t => {
         const name = String(t.assignee_name || '').trim();
         const key = name.toLowerCase();
         const email = String(t.assignee_email || '').trim().toLowerCase();
