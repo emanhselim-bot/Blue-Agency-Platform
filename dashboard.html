@@ -21604,6 +21604,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         return;
       }
       resultBox.textContent = `Imported ${result.imported || 0} new tasks, updated ${result.updated || 0}, and synced ${result.team_members || 0} Notion team members.`;
+      if (result.team_roster_warning) resultBox.textContent += ` ${result.team_roster_warning}`;
       await batLoad();
     }
 

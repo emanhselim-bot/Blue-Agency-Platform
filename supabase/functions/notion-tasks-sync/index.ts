@@ -102,7 +102,9 @@ async function notionTeamRoster(notionRequest: (path: string, init?: RequestInit
   }
 
   const roster: any[] = [];
+  const inaccessibleTeams: string[] = [];
   for (const team of pages) {
+    try {
     const blocks = [{ id: team.id, depth: 0 }];
     const seen = new Set<string>();
     const teamPeople = new Map<string, { name: string; email: string | null }>();
@@ -165,8 +167,11 @@ async function notionTeamRoster(notionRequest: (path: string, init?: RequestInit
         full_name: person.name, email: person.email, department: team.department,
       });
     }
+    } catch {
+      inaccessibleTeams.push(team.name);
+    }
   }
-  return roster;
+  return { roster, inaccessibleTeams, foundTeams: pages.length };
 }
 
 Deno.serve(async (req) => {
@@ -322,8 +327,17 @@ Deno.serve(async (req) => {
     }
 
     let teamMembers: any[] = [];
+    let teamRosterWarning: string | null = null;
     if (teamRootPageId) {
-      teamMembers = await notionTeamRoster(notionRequest, teamRootPageId);
+      const teamRoster = await notionTeamRoster(notionRequest, teamRootPageId);
+      teamMembers = teamRoster.roster;
+      if (teamRoster.inaccessibleTeams.length) {
+        teamRosterWarning = `Share these Notion pages with the Blue Ad integration, then import again: ${teamRoster.inaccessibleTeams.join(", ")}.`;
+      } else if (!teamRoster.foundTeams) {
+        teamRosterWarning = "No Social Media Team or Media Buying Team page was found under Blue Ad HQ.";
+      } else if (!teamMembers.length) {
+        teamRosterWarning = "The team pages were found, but no member names could be read. Add names as list items, person mentions, or rows in a team database.";
+      }
       if (teamMembers.length) {
         const { error: rosterError } = await admin.from("blue_ad_task_assignees").upsert(
           teamMembers.map((person) => ({ organization_id: orgId, ...person, updated_at: new Date().toISOString() })),
@@ -395,7 +409,7 @@ Deno.serve(async (req) => {
 
     const updated = rows.filter((row) => existing.has(row.notion_page_id)).length;
     return json({ ok: true, imported: rows.length - updated, updated, total: rows.length,
-      databases: databases.length, team_members: teamMembers.length,
+      databases: databases.length, team_members: teamMembers.length, team_roster_warning: teamRosterWarning,
       database_titles: databases.map((database) => plain(database.title) || "Notion task database") });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Notion import failed." }, 400);
