@@ -50,6 +50,125 @@ function priorityValue(value: string) {
   return "medium";
 }
 
+function blockText(block: any): string {
+  const value = block?.[block?.type];
+  if (block?.type === "table_row") return (value?.cells || []).map((cell: any) => plain(cell)).filter(Boolean).join(" | ");
+  const richText = value?.rich_text || value?.title || [];
+  return plain(richText);
+}
+
+function personFromText(value: string): { name: string; email: string | null } | null {
+  let text = value.replace(/^\s*[-*•\d.)]+\s*/, "").trim();
+  if (!text || /^(name|member|team member|role|email|department|media buying team|social media team)$/i.test(text)) return null;
+  const email = text.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || null;
+  if (email) text = text.replace(email, "").replace(/[()<>]/g, "").trim();
+  text = text.replace(/\s*\([^)]*\)\s*$/, "").replace(/\s*(?:—|–|\||•|\s-\s|:)\s*.*$/, "").trim();
+  text = text.replace(/^(?:name|member|team member)\s*:\s*/i, "").trim();
+  if (!text && email) text = email;
+  if (!text || text.length > 100 || /^(media buying|social media|team|members?)$/i.test(text)) return null;
+  if (text.split(/\s+/).length > 6 || /[.!?]/.test(text)) return null;
+  return { name: text, email };
+}
+
+async function notionTeamRoster(notionRequest: (path: string, init?: RequestInit) => Promise<any>, rootPageId: string) {
+  const blockChildren = async (id: string) => {
+    const rows: any[] = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ page_size: "100" });
+      if (cursor) params.set("start_cursor", cursor);
+      const result = await notionRequest(`/blocks/${id}/children?${params}`);
+      rows.push(...(result.results || []));
+      cursor = result.has_more ? result.next_cursor : undefined;
+    } while (cursor);
+    return rows;
+  };
+
+  const pages: { id: string; name: string; department: string }[] = [];
+  const queue = [{ id: rootPageId, depth: 0 }];
+  const visited = new Set<string>();
+  while (queue.length && visited.size < 100) {
+    const current = queue.shift()!;
+    if (visited.has(current.id) || current.depth > 4) continue;
+    visited.add(current.id);
+    for (const block of await blockChildren(current.id)) {
+      if (block.type !== "child_page") continue;
+      const title = String(block.child_page?.title || "").trim();
+      const department = /media\s*buying/i.test(title) ? "Media Buying" :
+        /social\s*media/i.test(title) ? "Social Media" : "";
+      if (department && /team/i.test(title)) pages.push({ id: block.id, name: title, department });
+      else if (current.depth < 4) queue.push({ id: block.id, depth: current.depth + 1 });
+    }
+  }
+
+  const roster: any[] = [];
+  for (const team of pages) {
+    const blocks = [{ id: team.id, depth: 0 }];
+    const seen = new Set<string>();
+    const teamPeople = new Map<string, { name: string; email: string | null }>();
+    while (blocks.length && seen.size < 200) {
+      const current = blocks.shift()!;
+      if (seen.has(current.id) || current.depth > 4) continue;
+      seen.add(current.id);
+      for (const block of await blockChildren(current.id)) {
+        const node = block?.[block?.type] || {};
+        const candidates: string[] = [];
+        const rawText = blockText(block);
+        if (["bulleted_list_item", "numbered_list_item", "to_do", "table_row", "paragraph", "quote", "callout", "heading_1", "heading_2", "heading_3"].includes(block.type)) {
+          if (rawText) candidates.push(rawText);
+          const rich = node.rich_text || (node.cells || []).flat();
+          for (const part of rich) {
+            const user = part?.mention?.user;
+            if (part?.type === "mention" && user?.name) {
+              teamPeople.set(String(user.id || user.name), { name: String(user.name), email: user.person?.email || null });
+            }
+          }
+        }
+        for (const candidate of candidates) {
+          const person = personFromText(candidate);
+          if (person) teamPeople.set((person.email || person.name).toLowerCase(), person);
+        }
+        if (block.type === "child_page" && block.child_page?.title) {
+          const person = personFromText(block.child_page.title);
+          if (person) teamPeople.set(person.name.toLowerCase(), person);
+        }
+        if (block.type === "child_database") {
+          try {
+            const database = await notionRequest(`/databases/${block.id}`);
+            for (const source of database.data_sources || []) {
+              let cursor: string | undefined;
+              for (let i = 0; i < 10; i++) {
+                const params = { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) };
+                const result = await notionRequest(`/data_sources/${source.id}/query`, { method: "POST", body: JSON.stringify(params) });
+                for (const row of result.results || []) {
+                  const props = row.properties || {};
+                  const titleProp = Object.values(props).find((p: any) => p?.type === "title") as any;
+                  const title = plain(titleProp?.title);
+                  const personProp = pick(props, /member|person|name|assignee|email/i, ["people", "email", "rich_text", "select"]);
+                  const name = propText(personProp) || title;
+                  const person = personFromText(name);
+                  if (person) teamPeople.set((person.email || person.name).toLowerCase(), person);
+                }
+                if (!result.has_more || !result.next_cursor) break;
+                cursor = result.next_cursor;
+              }
+            }
+          } catch { /* A non-roster linked database should not block task import. */ }
+        }
+        if (block.has_children && current.depth < 4) blocks.push({ id: block.id, depth: current.depth + 1 });
+      }
+    }
+    for (const person of teamPeople.values()) {
+      roster.push({
+        notion_page_id: team.id,
+        notion_person_key: `${team.id}:${(person.email || person.name).toLowerCase()}`,
+        full_name: person.name, email: person.email, department: team.department,
+      });
+    }
+  }
+  return roster;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
@@ -76,6 +195,7 @@ Deno.serve(async (req) => {
   if (!orgId || !databaseId || !validNotionHost) {
     return json({ error: "Provide a valid Notion database link and organization." }, 400);
   }
+  let teamRootPageId: string | null = null;
   const { data: member } = await admin.from("organization_members").select("id")
     .eq("organization_id", orgId).eq("user_id", auth.user.id).not("accepted_at", "is", null).maybeSingle();
   if (!member) return json({ error: "You do not have access to this organization." }, 403);
@@ -112,6 +232,7 @@ Deno.serve(async (req) => {
       // task databases before walking the page tree. The search API is much
       // cheaper for large workspace home pages.
       const rootPage = await notionRequest(`/pages/${databaseId}`);
+      teamRootPageId = rootPage.id || databaseId;
       const search = await notionRequest("/search", {
         method: "POST",
         body: JSON.stringify({
@@ -200,6 +321,23 @@ Deno.serve(async (req) => {
       throw new Error("No task data source was found in the accessible Notion database(s).");
     }
 
+    let teamMembers: any[] = [];
+    if (teamRootPageId) {
+      teamMembers = await notionTeamRoster(notionRequest, teamRootPageId);
+      if (teamMembers.length) {
+        const { error: rosterError } = await admin.from("blue_ad_task_assignees").upsert(
+          teamMembers.map((person) => ({ organization_id: orgId, ...person, updated_at: new Date().toISOString() })),
+          { onConflict: "organization_id,notion_person_key" },
+        );
+        if (rosterError) throw new Error(`The Notion team roster could not be saved. Apply migration 20240108000000_blue_ad_notion_team_roster.sql in Supabase, then retry. ${rosterError.message}`);
+      }
+    }
+    const notionPersonMap = new Map<string, any>();
+    for (const person of teamMembers) {
+      if (person.full_name) notionPersonMap.set(norm(person.full_name), person);
+      if (person.email) notionPersonMap.set(norm(person.email), person);
+    }
+
     const pageIds = pages.map((p) => p.id);
     const existing = new Set<string>();
     for (let i = 0; i < pageIds.length; i += 200) {
@@ -222,13 +360,14 @@ Deno.serve(async (req) => {
       const description = propText(pick(props, /description|notes|details|brief/i, ["rich_text"]));
       const personName = propText(person);
       const matchMember = memberMap.get(norm(personName));
+      const matchNotionPerson = notionPersonMap.get(norm(personName));
       const clientName = propText(clientProp);
       const matchClient = clientMap.get(norm(clientName));
       return {
         organization_id: orgId, title: title.slice(0, 180), description: description.slice(0, 2000) || null,
         client_id: matchClient?.id || null, client_name: clientName || matchClient?.name || null,
         assignee_member_id: matchMember?.id || null, assignee_name: matchMember?.full_name || personName || null,
-        assignee_email: matchMember?.email || (person?.type === "email" ? person.email : null),
+        assignee_email: matchMember?.email || matchNotionPerson?.email || (person?.type === "email" ? person.email : null),
         due_date: due?.date?.start ? String(due.date.start).slice(0, 10) : null,
         category: (category || "Other").slice(0, 80), priority: priorityValue(priority), status: statusValue(status),
         created_by: auth.user!.id, notion_page_id: page.id,
@@ -256,7 +395,8 @@ Deno.serve(async (req) => {
 
     const updated = rows.filter((row) => existing.has(row.notion_page_id)).length;
     return json({ ok: true, imported: rows.length - updated, updated, total: rows.length,
-      databases: databases.length, database_titles: databases.map((database) => plain(database.title) || "Notion task database") });
+      databases: databases.length, team_members: teamMembers.length,
+      database_titles: databases.map((database) => plain(database.title) || "Notion task database") });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Notion import failed." }, 400);
   }
