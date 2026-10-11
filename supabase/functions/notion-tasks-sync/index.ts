@@ -108,33 +108,57 @@ Deno.serve(async (req) => {
       databases.push(database);
     } catch (databaseError) {
       // A page ID is expected to fail the database endpoint. Confirm it is an
-      // accessible page, then walk its nested pages and inline databases.
+      // accessible page, then search the connection's shared data sources for
+      // task databases before walking the page tree. The search API is much
+      // cheaper for large workspace home pages.
       const rootPage = await notionRequest(`/pages/${databaseId}`);
-      const queue: { id: string; depth: number }[] = [{ id: rootPage.id || databaseId, depth: 0 }];
-      const visited = new Set<string>();
-      const maxDepth = 8;
-      const maxPages = 500;
-      while (queue.length && visited.size < maxPages) {
-        const node = queue.shift()!;
-        if (visited.has(node.id) || node.depth > maxDepth) continue;
-        visited.add(node.id);
-        let cursor: string | undefined;
-        do {
-          const params = new URLSearchParams({ page_size: "100" });
-          if (cursor) params.set("start_cursor", cursor);
-          const children = await notionRequest(`/blocks/${node.id}/children?${params}`);
-          for (const block of children.results || []) {
-            if (block.type === "child_database") {
-              const id = block.id;
-              if (!databases.some((item) => item.id === id)) {
-                databases.push(await notionRequest(`/databases/${id}`));
+      const search = await notionRequest("/search", {
+        method: "POST",
+        body: JSON.stringify({
+          query: "Task", page_size: 100,
+          filter: { property: "object", value: "data_source" },
+        }),
+      });
+      for (const source of search.results || []) {
+        if (!/task/i.test(plain(source.title))) continue;
+        const parentDatabaseId = source.parent?.database_id;
+        if (!parentDatabaseId || databases.some((item) => item.id === parentDatabaseId)) continue;
+        databases.push({
+          id: parentDatabaseId,
+          title: source.title,
+          data_sources: [{ id: source.id }],
+        });
+      }
+
+      // Search only returns title matches. If none match, inspect the linked
+      // page hierarchy as a fallback for databases with unrelated names.
+      if (!databases.length) {
+        const queue: { id: string; depth: number }[] = [{ id: rootPage.id || databaseId, depth: 0 }];
+        const visited = new Set<string>();
+        const maxDepth = 8;
+        const maxPages = 500;
+        while (queue.length && visited.size < maxPages) {
+          const node = queue.shift()!;
+          if (visited.has(node.id) || node.depth > maxDepth) continue;
+          visited.add(node.id);
+          let cursor: string | undefined;
+          do {
+            const params = new URLSearchParams({ page_size: "100" });
+            if (cursor) params.set("start_cursor", cursor);
+            const children = await notionRequest(`/blocks/${node.id}/children?${params}`);
+            for (const block of children.results || []) {
+              if (block.type === "child_database") {
+                const id = block.id;
+                if (!databases.some((item) => item.id === id)) {
+                  databases.push(await notionRequest(`/databases/${id}`));
+                }
+              } else if (block.type === "child_page" && node.depth < maxDepth) {
+                queue.push({ id: block.id, depth: node.depth + 1 });
               }
-            } else if (block.type === "child_page" && node.depth < maxDepth) {
-              queue.push({ id: block.id, depth: node.depth + 1 });
             }
-          }
-          cursor = children.has_more ? children.next_cursor : undefined;
-        } while (cursor);
+            cursor = children.has_more ? children.next_cursor : undefined;
+          } while (cursor);
+        }
       }
       if (!databases.length) {
         const original = databaseError instanceof Error ? databaseError.message : "";
