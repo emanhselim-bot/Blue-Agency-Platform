@@ -12307,8 +12307,18 @@
       // Notion for these exact dates first, then the month's recorded history.
       // The monthly row covers a whole month, so on Yesterday or Last 7 days it
       // either said nothing or would have reported a month as the period.
+      //
+      // Revenue carries the same last two steps as the single-account chain:
+      // where no confirmed figure exists, Notion's combined total is the
+      // revenue the team recorded for the period. Without them this path
+      // stopped at web_revenue_confirmed -- null on every Ibriz row -- and fell
+      // back to Shopify, so the group showed 1,092,554 where the account showed
+      // 1,779,404, and ROAS read 3.24 against 5.28 for the same client in the
+      // same month. Two views of one client must not disagree about its
+      // revenue.
       const _aggCfmO = _num(_aggNd?.web_orders_confirmed)  ?? _num(_mhGroup?.web_orders_confirmed);
-      const _aggCfmR = _num(_aggNd?.web_revenue_confirmed) ?? _num(_mhGroup?.web_revenue_confirmed);
+      const _aggCfmR = _num(_aggNd?.web_revenue_confirmed) ?? _num(_mhGroup?.web_revenue_confirmed)
+                    ?? _num(_aggNd?.total_revenue)         ?? _num(_mhGroup?.total_revenue);
       const _aggCfmP = _num(_aggNd?.web_pieces_confirmed)  ?? _num(_mhGroup?.web_pieces_confirmed);
       if (_aggCfmO != null) totOrders  = _aggCfmO;
       if (_aggCfmR != null) totRevenue = _aggCfmR;
