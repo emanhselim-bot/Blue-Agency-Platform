@@ -11166,8 +11166,37 @@
       })();
       // Never let branding exceed what was actually spent.
       const _brandCapped  = Math.min(Math.max(0, brandingSpend), spend || 0);
-      const conversionSpend = Math.max(0, (spend || 0) - _brandCapped);
+
+      // Conversion spend, preferring the sheet's own figure.
+      //
+      // Every ratio here used to divide a Notion number by a Meta number, and
+      // on a client whose sheet is shared across two ad accounts those are not
+      // the same scope: the sheet is written whole onto both accounts, so
+      // revenue was the whole client's while spend was one account's. Ibriz
+      // September showed ROAS 3.8 that way, against 5.28 from the sheet alone.
+      // Branding made it worse by being the one Notion figure that IS shared,
+      // so a single ratio mixed whole-client revenue, half-client branding and
+      // one account's spend.
+      //
+      // Notion's web_spend + msg_spend is already conversion spend -- branding
+      // is a separate column -- so nothing is subtracted here and branding
+      // cannot be double-counted. Meta's figure stays the fallback for every
+      // account whose sheet does not record spend, which is most of them.
+      const _ndWebSpend = _mhNum(_ndRow?.web_spend) ?? _mhNum(_mhRow?.web_spend);
+      const _ndMsgSpendC = _mhNum(_ndRow?.msg_spend) ?? _mhNum(_mhRow?.msg_spend);
+      const _ndConvSpend = (_ndWebSpend == null && _ndMsgSpendC == null)
+        ? null : (_ndWebSpend ?? 0) + (_ndMsgSpendC ?? 0);
+
+      const _spendBasisIsNotion = _ndConvSpend != null && _ndConvSpend > 0;
+      const conversionSpend = _spendBasisIsNotion
+        ? _ndConvSpend
+        : Math.max(0, (spend || 0) - _brandCapped);
       const _spendForMetrics = conversionSpend > 0 ? conversionSpend : spend;
+      // Named once so every card that shows a ratio can say which spend it
+      // used, rather than leaving people to reconcile it by hand.
+      const _spendBasisLabel = _spendBasisIsNotion
+        ? 'Notion conversion spend (website + messages)'
+        : (brandingSpend > 0 ? 'Meta conversion spend' : 'Meta spend');
 
       // What a card should say under its number. A figure someone typed still
       // wins, so the label only claims Notion when nothing was typed and Notion
@@ -11372,7 +11401,7 @@
             )}
             ${includeRevenue ? `
             ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
-            ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+            ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ ' + _spendBasisLabel), roas, _t.roas, true, 'kpi-roas-val')}
             ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${kpi('c-teal solid', '🧾', 'Average Order Value',
                   (totalRevenue && totalOrders) ? fmt(totalRevenue / totalOrders, curr) : '—',
@@ -11568,7 +11597,7 @@
                   : 'Fund ÷ Daily Budget'
               )}
               ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
-              ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ Meta Spend'), roas, _t.roas, true, 'kpi-roas-val')}
+              ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ ' + _spendBasisLabel), roas, _t.roas, true, 'kpi-roas-val')}
               ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${kpi('c-teal solid', '🧾', 'Average Order Value',
                   (totalRevenue && totalOrders) ? fmt(totalRevenue / totalOrders, curr) : '—',
@@ -12332,15 +12361,30 @@
         ?? 0;
       // Never more than was actually spent.
       const aggBranding   = Math.min(Math.max(0, _aggBrandRaw), totSpend || 0);
-      const aggConvSpend  = Math.max(0, (totSpend || 0) - aggBranding);
+
+      // Same basis as a single account: the sheet's own conversion spend where
+      // it has one, Meta's figure otherwise. _aggNd already deduped a sheet
+      // shared across two ad accounts, so this is the client's spend once, and
+      // a group now reconciles with its members instead of dividing a Notion
+      // revenue by a Meta spend.
+      const _aggNdConv = (() => {
+        const w = _num(_aggNd?.web_spend), m = _num(_aggNd?.msg_spend);
+        return (w == null && m == null) ? null : (w ?? 0) + (m ?? 0);
+      })();
+      const _aggBasisIsNotion = _aggNdConv != null && _aggNdConv > 0;
+      const aggConvSpend  = _aggBasisIsNotion
+        ? _aggNdConv
+        : Math.max(0, (totSpend || 0) - aggBranding);
       // A selection that is all branding still needs a denominator rather than
       // a row of dashes.
       const _aggSpendForMetrics = aggConvSpend > 0 ? aggConvSpend : totSpend;
       // Says which spend the ratio used, so nobody reconciles it against the
       // Total Spend card by hand and concludes the card is broken.
-      const _aggDenomNote = (base) => aggBranding > 0
-        ? base.replace('Spend', 'Conversion spend') + ` · ${fmt(aggBranding, curr)} branding excluded`
-        : base;
+      const _aggDenomNote = (base) => _aggBasisIsNotion
+        ? base.replace('Spend', 'Notion conversion spend').replace('spend', 'Notion conversion spend')
+        : (aggBranding > 0
+            ? base.replace('Spend', 'Conversion spend') + ` · ${fmt(aggBranding, curr)} branding excluded`
+            : base);
 
       const avgCostPerOrder = (_aggSpendForMetrics && totOrders)  ? _aggSpendForMetrics / totOrders  : null;
       const avgCostPerPiece = (_aggSpendForMetrics && totPieces)  ? _aggSpendForMetrics / totPieces  : null;
