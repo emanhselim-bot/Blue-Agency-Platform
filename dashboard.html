@@ -11077,8 +11077,21 @@
       // Returns % is typed in per period. Kept as its own value rather than
       // derived from Shopify refunds, which only counts refunded orders and
       // misses exchanges and returns handled outside the store.
-      const _retKey     = `returns-rate-${_periodKey}`;
-      const _storedRet  = _mkGet(_retKey);
+      // Returns belongs to the brand, not to an ad account. A brand running two
+      // ad accounts returns one percentage for both, because it is one set of
+      // customers sending goods back — so it is keyed on the group where the
+      // account belongs to one, and Ibriz 1 and Ibriz 2 read and write the same
+      // figure instead of each keeping its own.
+      //
+      // It is NOT read from the account-less legacy key any more. That key
+      // predates figures being tied to anything, so it cannot say which brand
+      // it was typed for, and _mkGet's fallback was handing one brand's rate to
+      // every other: Ibriz 2 inherited 38.6% for September, which it has never
+      // had recorded, cutting its revenue by 686,850 and its ROAS from 5.28 to
+      // 3.24. A rate that silently belongs to nobody must not be applied to
+      // everybody. Nothing is deleted — it still shows wherever it was typed.
+      const _retKey     = `returns-rate-${_retScopeKey(_periodKey)}`;
+      const _storedRet  = _mkGetStrict(_retKey);
       const returnsRate = (_storedRet !== null && _storedRet !== '')
         ? parseFloat(_storedRet)
         : (typeof _mhReturnsPct !== 'undefined' ? _mhReturnsPct : null);
@@ -12320,7 +12333,18 @@
 
       // Returns reduce revenue here too, so a monthly report reads the same
       // whether you view one account or the whole group.
-      const aggRetPct = _num(_mhGroup?.returns_pct) ?? _typed(`returns-rate-${_aggPeriodKey}`);
+      // Scoped like the single-account card, so selecting a brand reads that
+      // brand's returns rather than the unscoped figure typed on All accounts.
+      // _aggPeriodKey carries no scope, so reading returns under it gave the
+      // Ibriz group the same 38.6% that was leaking onto its member accounts.
+      // _mkGetStrict, not _typed: the legacy key is exactly what must not be
+      // inherited here.
+      const _aggRetKey = `returns-rate-${_mkPeriodKey()}`;
+      const _aggRetTyped = (() => {
+        const v = _mkGetStrict(_aggRetKey);
+        return (v === null || v === '') ? null : parseFloat(v);
+      })();
+      const aggRetPct = _num(_mhGroup?.returns_pct) ?? _aggRetTyped;
       const aggReturned = (aggRetPct && totRevenue) ? totRevenue * Math.min(100, Math.max(0, aggRetPct)) / 100 : 0;
       if (aggReturned) totRevenue = totRevenue - aggReturned;
 
@@ -15193,6 +15217,30 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function _mkLegacyName(key) {
       if (!_mkLoadedFor || !_mkLegacyFor) return null;
       return key.endsWith(_mkLoadedFor) ? key.slice(0, -_mkLoadedFor.length) + _mkLegacyFor : null;
+    }
+
+    // Like _mkGet, without the legacy fallback.
+    //
+    // For a figure that belongs to one brand, inheriting an account-less value
+    // is not a kindness, it is a wrong number: the old key records no scope, so
+    // it cannot say whose rate it was, and handing it to every account made one
+    // brand's returns cut every other brand's revenue.
+    function _mkGetStrict(key) {
+      if (Object.prototype.hasOwnProperty.call(_mkValues, key)) {
+        const v = _mkValues[key];
+        return v == null ? null : String(v);
+      }
+      return localStorage.getItem(key);
+    }
+
+    // The brand a figure belongs to. An account inside a saved combination is
+    // keyed on that combination, so every ad account under one brand reads and
+    // writes a single value; anything else keys on itself.
+    function _retScopeKey(periodKey) {
+      const v = sel?.value || '';
+      if (!v || v === '__all__' || String(v).startsWith('__group__')) return periodKey;
+      const g = (_acctGroups || []).find(x => (x.account_ids || []).includes(v));
+      return g ? periodKey.split(v).join('__group__' + g.id) : periodKey;
     }
 
     let _mkDirty = {};
