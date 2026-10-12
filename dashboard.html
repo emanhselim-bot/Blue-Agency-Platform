@@ -3751,6 +3751,7 @@
         <table id="mh-table" style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px"></table>
       </div>
       <div id="mh-status" style="font-size:12px;margin-top:10px;min-height:18px"></div>
+      <div id="mh-hidden-note" style="font-size:11.5px;margin-top:4px;color:var(--text-muted);min-height:16px"></div>
     </div>
   </div>
 
@@ -6488,6 +6489,7 @@
     const MH_MONTHS = ['January','February','March','April','May','June',
                        'July','August','September','October','November','December'];
     let _mhCache = {};      // { 'YYYY-MM': row }  for the year on screen
+    let _mhNdCache = {};   // { 'YYYY-MM': {revenue, convSpend} } from notion_daily, for the ROAS column
     let _mhScopeKey = null;
 
     // Built from parts: toISOString() would roll back a day east of Greenwich
@@ -6541,11 +6543,72 @@
       if (error) { status.textContent = '⚠️ ' + error.message; status.style.color = '#F87171'; return; }
       _mhCache = {};
       (data || []).forEach(r => { _mhCache[String(r.month).slice(0, 7)] = r; });
+
+      // The daily figures for the same year, so the ROAS column can be built on
+      // the same chain the dashboard cards use. Without this it would divide
+      // monthly_history's own revenue, which is empty on almost every row, and
+      // the column would read blank beside a card showing 5.28.
+      _mhNdCache = {};
+      try {
+        const { data: nd } = await sb.from('notion_daily')
+          .select('day, web_revenue_confirmed, total_revenue, web_spend, msg_spend')
+          .eq('organization_id', currentOrgId)
+          .eq('account_key', _mhScopeKey)
+          .gte('day', `${year}-01-01`).lte('day', `${year}-12-31`);
+        (nd || []).forEach(r => {
+          const k = String(r.day).slice(0, 7);
+          const a = (_mhNdCache[k] ||= { cfm: null, total: null, convSpend: null });
+          const add = (cur, v) => v == null ? cur : (cur ?? 0) + Number(v);
+          a.cfm   = add(a.cfm, r.web_revenue_confirmed);
+          a.total = add(a.total, r.total_revenue);
+          a.convSpend = add(a.convSpend, (r.web_spend ?? 0) + (r.msg_spend ?? 0));
+        });
+        Object.values(_mhNdCache).forEach(a => { a.revenue = a.cfm ?? a.total; });
+      } catch { /* the column simply falls back to this row's own figures */ }
+
       mhRender(year);
       status.textContent = '';
     }
 
+    // The column groups, named once so the headers and the cells cannot
+    // disagree about which field sits under which span. The order matches
+    // MH_FIELDS, which is the order the cells are drawn in.
+    const MH_GROUPS = [
+      { label: '🌐 Website',  color: '#60A5FA',
+        keys: ['web_orders', 'web_pieces', 'web_revenue', 'web_spend',
+               'web_orders_confirmed', 'web_pieces_confirmed', 'web_revenue_confirmed'] },
+      { label: '💬 Messages', color: '#34D399',
+        keys: ['msg_orders', 'msg_pieces', 'msg_revenue', 'msg_spend'] },
+      { label: '📣 Awareness', color: '#FBBF24',
+        keys: ['meta_spend', 'aw_impressions', 'aw_engagement', 'aw_video_views',
+               'aw_profile_visits', 'aw_follows'] },
+      { label: '📘 Facebook · 📷 Instagram', color: '#A5B4FC',
+        keys: ['fb_spend', 'fb_impressions', 'fb_results', 'ig_spend', 'ig_impressions', 'ig_results'] },
+    ];
+
+    // Website and Messages are typed in by hand, so they stay whatever the year
+    // holds: hiding an empty one would leave a new account with nothing to type
+    // into. Awareness and the placement split are written by Meta's backfill, so
+    // they are only worth the width when that account and year actually have
+    // them — which, measured across every row stored, is never so far.
+    const MH_ALWAYS = new Set([...MH_GROUPS[0].keys, ...MH_GROUPS[1].keys, 'branding_spend', 'returns_pct']);
+
+    let _mhShowAll = false;
+    function mhToggleAllColumns() { _mhShowAll = !_mhShowAll; mhRender(_mhYearOnScreen); }
+
+    // Which fields earn a column for the account and year on screen.
+    function _mhVisible() {
+      if (_mhShowAll) return MH_FIELDS.map(([k]) => k);
+      const has = (k) => Object.values(_mhCache).some(r => r && r[k] != null && r[k] !== '');
+      return MH_FIELDS.map(([k]) => k).filter(k => MH_ALWAYS.has(k) || has(k));
+    }
+
+    let _mhYearOnScreen = new Date().getFullYear();
+
     function mhRender(year) {
+      _mhYearOnScreen = year;
+      const vis = new Set(_mhVisible());
+      const hiddenCount = MH_FIELDS.length - vis.size;
       const cell = (y, m, key) => {
         const row = _mhCache[`${year}-${String(m + 1).padStart(2, '0')}`] || {};
         const v = row[key];
@@ -6560,22 +6623,24 @@
         <thead>
           <tr style="position:sticky;top:0;background:var(--bg-card,#063087);z-index:1">
             <th rowspan="2" style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Month</th>
-            <th colspan="7" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#60A5FA">🌐 Website</th>
-            <th colspan="4" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#34D399">💬 Messages</th>
-            <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#FBBF24">📣 Awareness</th>
-            <th colspan="6" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#A5B4FC">📘 Facebook · 📷 Instagram</th>
+            ${/* Each span counts only the columns still on screen, so a hidden
+                  group takes its header with it instead of leaving an empty
+                  span that shifts every label one cell to the left. */''}
+            ${MH_GROUPS.map(g => {
+              const n = g.keys.filter(k => vis.has(k)).length;
+              return n ? `<th colspan="${n}" style="padding:8px 10px;border-bottom:1px solid var(--border);color:${g.color}">${g.label}</th>` : '';
+            }).join('')}
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#C4B5FD">📣 Branding spend</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#F87171">↩️ Returns %</th>
             <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600">Net revenue</th>
+            <th rowspan="2" style="padding:8px 10px;border-bottom:1px solid var(--border);color:#FCB900;font-weight:700">📈 ROAS</th>
           </tr>
           <tr style="position:sticky;top:32px;background:var(--bg-card,#063087);z-index:1">
-            ${/* Only the columns sitting under the Website and Messages spans.
-                  Branding, Returns and Net revenue each own a rowspan header of
+            ${/* Only the columns sitting under the group spans. Branding,
+                  Returns, Net revenue and ROAS each own a rowspan header of
                   their own, so listing them here pushed this row one cell wide
                   and shifted every label off its column. */''}
-            ${MH_FIELDS.filter(([k]) => k.startsWith('web_') || k.startsWith('msg_')
-                                    || k === 'meta_spend' || k.startsWith('aw_')
-                                    || k.startsWith('fb_') || k.startsWith('ig_')).map(([, label]) =>
+            ${MH_FIELDS.filter(([k]) => vis.has(k) && MH_GROUPS.some(g => g.keys.includes(k))).map(([, label]) =>
                 `<th style="padding:6px 8px;font-size:11px;color:var(--text-muted);
                  border-bottom:1px solid var(--border);font-weight:600">${label}</th>`).join('')}
           </tr>
@@ -6587,15 +6652,63 @@
               <td style="padding:5px 10px;border-bottom:1px solid var(--border);white-space:nowrap">
                 ${name}${future ? ' <span style="font-size:10px;color:var(--text-muted)">(future)</span>' : ''}
               </td>
-              ${MH_FIELDS.map(([key]) => cell(year, m, key)).join('')}
+              ${MH_FIELDS.filter(([k]) => vis.has(k)).map(([key]) => cell(year, m, key)).join('')}
               <td id="mh-net-${m}" style="padding:5px 10px;border-bottom:1px solid var(--border);
                   font-size:11.5px;color:var(--text-muted);white-space:nowrap"></td>
+              <td id="mh-roas-${m}" style="padding:5px 10px;border-bottom:1px solid var(--border);
+                  font-size:12px;font-weight:700;white-space:nowrap"></td>
             </tr>`;
           }).join('')}
         </tbody>`;
       document.querySelectorAll('#mh-table input').forEach(el =>
-        el.addEventListener('input', () => mhNet(parseInt(el.dataset.m, 10))));
-      for (let m = 0; m < 12; m++) mhNet(m);
+        el.addEventListener('input', () => { const m = parseInt(el.dataset.m, 10); mhNet(m); mhRoas(m); }));
+      for (let m = 0; m < 12; m++) { mhNet(m); mhRoas(m); }
+
+      const note = document.getElementById('mh-hidden-note');
+      if (note) {
+        note.innerHTML = _mhShowAll
+          ? `Showing every column. <button onclick="mhToggleAllColumns()" style="background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;text-decoration:underline;padding:0">Hide the empty ones</button>`
+          : (hiddenCount
+              ? `${hiddenCount} column${hiddenCount === 1 ? '' : 's'} hidden — empty for this account in ${year}. <button onclick="mhToggleAllColumns()" style="background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;text-decoration:underline;padding:0">Show all</button>`
+              : '');
+      }
+    }
+
+    // ROAS per month, on the same chain the dashboard cards use, so the two
+    // cannot report different figures for the same client and month: a
+    // confirmed revenue first, then Notion's combined total, over Notion's own
+    // conversion spend. Falls back to what this row holds where Notion has
+    // nothing for that month.
+    //
+    // Read live from the inputs, not from _mhCache, so editing a spend or a
+    // revenue moves it immediately rather than after a save and a reload.
+    function mhRoas(m) {
+      const cellEl = document.getElementById('mh-roas-' + m);
+      if (!cellEl) return;
+      const val = (k) => {
+        const el = document.querySelector(`#mh-table input[data-m="${m}"][data-k="${k}"]`);
+        if (!el) return null;
+        const n = parseFloat((el.value ?? '').trim());
+        return isNaN(n) ? null : n;
+      };
+      const nd = _mhNdCache[`${_mhYearOnScreen}-${String(m + 1).padStart(2, '0')}`] || null;
+
+      const revenue = val('web_revenue_confirmed')
+        ?? (nd && nd.revenue != null ? nd.revenue : null)
+        ?? val('web_revenue');
+      const msgRev = val('msg_revenue') ?? 0;
+      const spend = (nd && nd.convSpend != null && nd.convSpend > 0)
+        ? nd.convSpend
+        : ((val('web_spend') || 0) + (val('msg_spend') || 0));
+
+      if (!revenue || !spend) { cellEl.textContent = ''; cellEl.title = ''; return; }
+      const gross = Number(revenue) + Number(msgRev);
+      const r = gross / spend;
+      cellEl.textContent = r.toFixed(2) + 'x';
+      cellEl.style.color = r >= 3 ? '#34D399' : (r >= 1.5 ? '#FCB900' : '#F87171');
+      cellEl.title = `${gross.toLocaleString('en', {maximumFractionDigits: 2})} revenue ÷ `
+        + `${spend.toLocaleString('en', {maximumFractionDigits: 2})} conversion spend`
+        + (nd ? ' · from the daily figures' : ' · from this row');
     }
 
     // Gross revenue minus the returns percentage, shown per row so the
@@ -7383,6 +7496,40 @@
       sum._to   = range.to;
       _ndCache[cacheKey] = sum;
       return sum;
+    }
+
+    // The cost of goods percentage for whatever period is on screen.
+    //
+    // Lives in profitability_costs, one row per account per month, and is the
+    // same figure the Profitability tab reads — so the Profit card and that tab
+    // cannot disagree. A period spanning several months averages the months
+    // that have one; months without are left out rather than counted as zero,
+    // which would read as "these goods cost nothing" and overstate profit.
+    const _costCache = {};
+    async function costPctForPeriod(accountKey, period) {
+      if (!accountKey || !currentOrgId) return null;
+      const range = _cmpRange(period === 'custom'
+        ? { key: 'custom', from: customFrom, to: customTo }
+        : { key: period });
+      if (!range?.from || !range?.to) return null;
+
+      const key = `${currentOrgId}|${accountKey}|${range.from}|${range.to}`;
+      if (_costCache[key] !== undefined) return _costCache[key];
+
+      const firstMonth = range.from.slice(0, 7) + '-01';
+      const lastMonth  = range.to.slice(0, 7) + '-01';
+      const { data, error } = await sb.from('profitability_costs')
+        .select('month, cost_pct')
+        .eq('organization_id', currentOrgId)
+        .eq('account_key', accountKey)
+        .gte('month', firstMonth).lte('month', lastMonth);
+
+      if (error || !data?.length) { _costCache[key] = null; return null; }
+      const vals = data.map(r => Number(r.cost_pct)).filter(v => !isNaN(v));
+      if (!vals.length) { _costCache[key] = null; return null; }
+      const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+      _costCache[key] = { pct: avg, months: vals.length };
+      return _costCache[key];
     }
 
     async function mhForPeriod(accountKey, period) {
@@ -11004,6 +11151,9 @@
       // still overridden by anything someone typed for this period.
       const _ndRow = await ndForPeriod(accountDbId, currentPeriod).catch(() => null);
       const _ndLatest = _ndRow ? null : await ndLatestDay(accountDbId).catch(() => null);
+      // Cost of goods for the Profit card. Never fatal: without it the card
+      // explains what is missing rather than the render failing.
+      const _costInfo = await costPctForPeriod(accountDbId, currentPeriod).catch(() => null);
       mhPartialNotice();   // flags a range that stops short of a recorded month
       if (_mhRow) {
         // No live store for this month — show what was recorded rather than a
@@ -11312,6 +11462,32 @@
       const _retPct        = (returnsRate != null && !isNaN(returnsRate)) ? Math.min(100, Math.max(0, returnsRate)) : null;
       const returnedAmount = _retPct ? grossRevenue * _retPct / 100 : 0;
       const totalRevenue   = grossRevenue - returnedAmount;
+
+      // ── Profit ──
+      // The same arithmetic as the Profitability tab, deliberately: revenue
+      // after returns, less the cost of the goods, less everything spent.
+      // Branding is included in the spend here while ROAS excludes it, because
+      // profit has to see every pound that left the account whereas a
+      // performance ratio should only be charged the campaigns that sell.
+      //
+      // One scope throughout. Where the figures come from Notion the spend does
+      // too, and Notion's own branding is used rather than the shared figure —
+      // mixing a whole-client conversion spend with a half-client branding is
+      // what made ROAS wrong in the first place.
+      const _ndBrandRaw = _mhNum(_ndRow?.branding_spend) ?? _mhNum(_mhRow?.branding_spend);
+      const _spendAllIn = _spendBasisIsNotion
+        ? _ndConvSpend + (_ndBrandRaw ?? 0)
+        : (spend || 0);
+      const _costPct = _costInfo?.pct ?? null;
+      const _cogs    = _costPct != null ? totalRevenue * _costPct / 100 : null;
+      const profit   = _cogs != null ? totalRevenue - _cogs - _spendAllIn : null;
+      const _profitMargin = (profit != null && totalRevenue > 0) ? (profit / totalRevenue) * 100 : null;
+      // A missing cost % is the one thing standing between this card and a
+      // number, so the card says so instead of showing a dash that looks broken.
+      const _profitSub = _costPct == null
+        ? 'Add a cost % in Profitability to see this'
+        : `Revenue after returns − ${_costPct.toFixed(1)}% goods − ${fmt(_spendAllIn, curr)} spend`
+          + (_costInfo?.months > 1 ? ` · ${_costInfo.months} months averaged` : '');
       // Say so on the card, otherwise a net figure looks like missing revenue.
       const _revSubLabel = returnedAmount > 0
         ? `Net of ${fmt(returnedAmount, curr)} returns (${_retPct}%)`
@@ -11415,6 +11591,12 @@
             ${includeRevenue ? `
             ${kpi('c-navy solid', '💵', 'Total Revenue', (shopifyEnabled || _webSource || msgRevenue > 0) ? curr + totalRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—', _revSubLabel, totalRevenue, _t.revenue, true, 'kpi-total-revenue-val')}
             ${kpi('c-gold solid', '📈', 'ROAS', (totalRevenue || msgRevenue) ? sfmt(roas, v => fmt(v,'',2) + 'x') : sfmt(null, v=>v), sfmtSub('Total Revenue ÷ ' + _spendBasisLabel), roas, _t.roas, true, 'kpi-roas-val')}
+            ${kpi('c-green solid', '💰', 'Profit',
+                profit != null
+                  ? `<span style="color:${profit >= 0 ? '#34D399' : '#F87171'}">${fmt(profit, curr)}</span>`
+                      + (_profitMargin != null ? `<span style="font-size:12px;opacity:.75"> · ${_profitMargin.toFixed(1)}%</span>` : '')
+                  : '—',
+                _profitSub, profit, null, true, 'kpi-profit-val')}
             ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${kpi('c-teal solid', '🧾', 'Average Order Value',
                   (totalRevenue && totalOrders) ? fmt(totalRevenue / totalOrders, curr) : '—',
