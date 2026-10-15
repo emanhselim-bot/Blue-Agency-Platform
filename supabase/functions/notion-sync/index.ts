@@ -106,7 +106,12 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   msg_count:  ["totalnomsgs", "totalmsgs", "totalnomsg", "nomsgs", "noofmsgs", "totalnoofmsgs",
                "messages", "totalmessages", "nomsg", "nomessages", "noofmessages",
                "totalnomessages"],
-  revenue:    ["revenue", "totalrevenue", "sales"],
+  // A donations client calls its revenue a donation. Same money, same column:
+  // mapping it here means ROAS, AOV and the revenue cards work untouched
+  // rather than needing a parallel set of rules for one template.
+  revenue:    ["revenue", "totalrevenue", "sales",
+               "donation", "donations", "donationamount", "donationsamount",
+               "totaldonation", "totaldonations", "donationvalue", "amountdonated"],
   // The branding card means engagement, follows and awareness — campaigns that
   // buy no orders. Sheets call that spend several things.
   // Whatever a sheet calls the spend on campaigns that buy no orders --
@@ -165,6 +170,16 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   follow_spend: ["spendingfollowfb", "spendingfollowig", "followspending", "followspend",
                  "followersspending", "followersspend", "spendingfollow"],
   profile_visit_spend: ["profilevisitspending", "profilevisitsspending", "profilevisitspend"],
+
+  // -- Donations accounts ----------------------------------------------
+  // Clicks and donors instead of orders and pieces. The spellings are mapped
+  // ahead of the columns being filled, so nothing needs deploying again when
+  // the team starts recording them; anything still unmatched shows in that
+  // account's unrecognised-columns note.
+  clicks:         ["clicks", "click", "linkclicks", "noofclicks", "totalclicks"],
+  donation_users: ["donationusers", "donationuser", "donationsusers", "donors",
+                   "donor", "noofdonations", "nodonations", "donationscount",
+                   "totaldonationusers"],
 
   // -- Education accounts ----------------------------------------------
   // The academies split their work into Tahfez and everything they call
@@ -410,6 +425,7 @@ type DaySums = {
   tahfez_spend: number | null;
   revenue_courses: number | null;
   revenue_tahfez: number | null;
+  clicks: number | null;\n  donation_users: number | null;
 };
 
 type MonthSums = {
@@ -440,6 +456,7 @@ type MonthSums = {
   tahfez_spend: number | null;
   revenue_courses: number | null;
   revenue_tahfez: number | null;
+  clicks: number | null;\n  donation_users: number | null;
   days: number;
 };
 
@@ -469,6 +486,7 @@ const blank = (): MonthSums => ({
   tahfez_spend: null,
   revenue_courses: null,
   revenue_tahfez: null,
+  clicks: null,\n  donation_users: null,
   days: 0,
 });
 
@@ -531,6 +549,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           tahfez_spend: null,
           revenue_courses: null,
           revenue_tahfez: null,
+          clicks: null,\n          donation_users: null,
         });
 
         let msgOrdersTotal: number | null = null;
@@ -612,6 +631,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
               m.revenue_courses = add(m.revenue_courses, v); d.revenue_courses = add(d.revenue_courses, v); break;
             case "revenue_tahfez":
               m.revenue_tahfez = add(m.revenue_tahfez, v); d.revenue_tahfez = add(d.revenue_tahfez, v); break;
+            case "clicks":\n              m.clicks = add(m.clicks, v); d.clicks = add(d.clicks, v); break;\n            case "donation_users":\n              m.donation_users = add(m.donation_users, v); d.donation_users = add(d.donation_users, v); break;
             case "total_spend_total":   totalSpendExplicit = add(totalSpendExplicit, v); break;
             case "total_spend_generic": totalSpendGeneric  = add(totalSpendGeneric, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
@@ -768,6 +788,7 @@ async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
     tahfez_spend: d.tahfez_spend,
     revenue_courses: d.revenue_courses,
     revenue_tahfez: d.revenue_tahfez,
+    clicks: d.clicks,\n    donation_users: d.donation_users,
     synced_at: new Date().toISOString(),
   }));
 

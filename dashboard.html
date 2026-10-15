@@ -3613,6 +3613,10 @@
           <span class="tmpl-option-icon">🤝</span>
           <div class="tmpl-option-body"><div class="tmpl-option-title">Messages · Service</div><div class="tmpl-option-desc">Messages, leads, deals + cost per each</div></div>
         </div>
+        <div class="tmpl-option" data-tmpl="donations" onclick="_setTemplate('donations')">
+          <span class="tmpl-option-icon">🤲</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Donations</div><div class="tmpl-option-desc">Messages, clicks, donors, donations</div></div>
+        </div>
         <div class="tmpl-option" data-tmpl="education" onclick="_setTemplate('education')">
           <span class="tmpl-option-icon">🎓</span>
           <div class="tmpl-option-body"><div class="tmpl-option-title">Education</div><div class="tmpl-option-desc">Messages, Tahfez, courses, reservations</div></div>
@@ -5201,7 +5205,7 @@
       loadData();
     }
     function _updateTemplateBtnLabel(t) {
-      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', education:'🎓 Education', 'google-ads':'🔍 Google Ads' };
+      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', education:'🎓 Education', donations:'🤲 Donations', 'google-ads':'🔍 Google Ads' };
       const btn = document.getElementById('template-btn');
       // Keep the 📋 prefix always. Showing only the active template's name made
       // the button unrecognisable as the template control once one was picked.
@@ -7402,7 +7406,7 @@
               + 'web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, '
               // The service figures: leads, reservations and the engagement,
               // follow and profile-visit blocks the service template shows.
-              + 'engagement, engagement_spend, follows_fb, follows_ig, follow_spend, profile_visits, profile_visit_spend, leads_total, leads_qualified, deals_fb, deals_ig, deals_whatsapp, deals_unknown, deals_total, total_spend, total_tahfez, courses_spend, tahfez_spend, revenue_courses, revenue_tahfez')
+              + 'engagement, engagement_spend, follows_fb, follows_ig, follow_spend, profile_visits, profile_visit_spend, leads_total, leads_qualified, deals_fb, deals_ig, deals_whatsapp, deals_unknown, deals_total, total_spend, total_tahfez, courses_spend, tahfez_spend, revenue_courses, revenue_tahfez, clicks, donation_users')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey)
         .gte('day', range.from).lte('day', range.to);
@@ -7415,7 +7419,7 @@
       ['msg_count','msg_orders','msg_pieces','msg_revenue','web_orders','web_pieces',
        'web_revenue','web_spend','msg_spend','branding_spend','total_revenue',
        'web_orders_confirmed','web_pieces_confirmed','web_revenue_confirmed',
-       'engagement','engagement_spend','follows_fb','follows_ig','follow_spend','profile_visits','profile_visit_spend','leads_total','leads_qualified','deals_fb','deals_ig','deals_whatsapp','deals_unknown','deals_total','total_spend','total_tahfez','courses_spend','tahfez_spend','revenue_courses','revenue_tahfez'].forEach(f => {
+       'engagement','engagement_spend','follows_fb','follows_ig','follow_spend','profile_visits','profile_visit_spend','leads_total','leads_qualified','deals_fb','deals_ig','deals_whatsapp','deals_unknown','deals_total','total_spend','total_tahfez','courses_spend','tahfez_spend','revenue_courses','revenue_tahfez','clicks','donation_users'].forEach(f => {
         let t = null;
         data.forEach(r => { if (r[f] != null) t = (t ?? 0) + Number(r[f]); });
         sum[f] = t;
@@ -7453,6 +7457,7 @@
       'total_revenue', 'branding_spend',
       'engagement', 'engagement_spend', 'follows_fb', 'follows_ig', 'follow_spend', 'profile_visits', 'profile_visit_spend', 'leads_total', 'leads_qualified', 'deals_fb', 'deals_ig', 'deals_whatsapp', 'deals_unknown', 'deals_total', 'total_spend',
       'total_tahfez', 'courses_spend', 'tahfez_spend', 'revenue_courses', 'revenue_tahfez',
+      'clicks', 'donation_users',
     ];
     const ND_WHOLE_FIELDS = new Set([
       'msg_count', 'msg_orders', 'msg_pieces',
@@ -7460,7 +7465,7 @@
       'engagement', 'follows_fb', 'follows_ig', 'profile_visits',
       'leads_total', 'leads_qualified',
       'deals_fb', 'deals_ig', 'deals_whatsapp', 'deals_unknown', 'deals_total',
-      'total_tahfez',
+      'total_tahfez', 'clicks', 'donation_users',
     ]);
 
     async function ndSumForAccounts(accountKeys, period) {
@@ -11809,6 +11814,53 @@
           </div>
         </div>`;
 
+      // -- Donations --------------------------------------------------------
+      // A charity counts donors and the amount given, not orders and pieces.
+      // The amount is this client's revenue under another name, so it rides on
+      // total_revenue rather than a parallel column -- which is why the Revenue
+      // card and ROAS need no special case here.
+      //
+      // CPR and ROAS are both charged on total spending, as the team works them
+      // out. Clicks come from the sheet rather than Meta: the team's own count
+      // is what they report against.
+      const _donClicks   = _svcNd('clicks');
+      const _donUsers    = _svcNd('donation_users');
+      const _donAmount   = _svcRevenue;
+      const _donMsgSpend = _svcMsgSpend;
+      const _donWebSpend = _svcNd('web_spend');
+      const _donTotal    = _svcNd('total_spend')
+        ?? ((((_donMsgSpend ?? 0) + (_donWebSpend ?? 0)) || null));
+
+      const _donationsSection = `
+        <div class="kpi-section" data-section-id="donations">
+          <div class="section-label">Donations <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          <div class="kpi-grid" data-grid-id="donations">
+            ${_svcCard('c-orange', '💬', 'No of Messages', _svcInt(_svcMsgs),
+                _srcSub(null, _ndRow?.msg_count, 'From Notion'), 'don-messages')}
+            ${_svcCard('c-coral solid', '💸', 'CPMsg', _svcMoney(_svcDiv(_donMsgSpend, _svcMsgs)),
+                'Messages spending ÷ Messages', 'don-cpmsg')}
+            ${_svcCard('c-sky', '🖱️', 'Clicks', _svcInt(_donClicks),
+                _srcSub(null, _ndRow?.clicks, 'From Notion'), 'don-clicks')}
+
+            ${_svcCard('c-blue', '💰', 'Messages Spending', _svcMoney(_donMsgSpend),
+                _srcSub(null, _ndRow?.msg_spend, 'From Notion'), 'don-messages-spending')}
+            ${_svcCard('c-teal', '💰', 'Website Spending', _svcMoney(_donWebSpend),
+                _srcSub(null, _ndRow?.web_spend, 'From Notion'), 'don-website-spending')}
+            ${_svcCard('c-blue solid', '💰', 'Total Spending', _svcMoney(_donTotal),
+                _svcNd('total_spend') != null ? 'From Notion' : 'Messages + website', 'don-total-spending')}
+
+            ${_svcCard('c-green solid', '🤲', 'Donation Users', _svcInt(_donUsers),
+                _srcSub(null, _ndRow?.donation_users, 'From Notion'), 'don-users')}
+            ${_svcCard('c-navy solid', '💵', 'Donations Amount', _svcMoney(_donAmount),
+                _srcSub(null, _ndRow?.total_revenue, 'From Notion'), 'don-amount')}
+            ${_svcCard('c-purple solid', '🎯', 'CPR', _svcMoney(_svcDiv(_donTotal, _donUsers)),
+                'Total spending ÷ Donation Users', 'don-cpr')}
+            ${_svcCard('c-gold solid', '📈', 'ROAS',
+                (() => { const r = _svcDiv(_donAmount, _donTotal); return r == null ? '—' : r.toFixed(2) + 'x'; })(),
+                'Donations Amount ÷ Total spending', 'don-roas')}
+          </div>
+        </div>`;
+
       const _messagesServiceSection = `
         <div class="kpi-section" data-section-id="messages-service">
           <div class="section-label">Messages Analysis · Service <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
@@ -11895,6 +11947,10 @@
               ${_aw('c-sky solid',    '💸', 'Cost per Video View', _fc(parseNum(d['cost_per_action_type:video_view'])), '—', '—', 'Spend ÷ Video Views')}
             </div>
           </div>
+
+        ` : _curTmpl === 'donations' ? `
+          ${_spendingSection(false)}
+          ${_donationsSection}
 
         ` : _curTmpl === 'education' ? `
           ${_spendingSection(false)}
@@ -12080,7 +12136,8 @@
       // The funnel is a website journey — view content, add to cart, checkout.
       // On the messages templates there is no such journey, so the section was
       // showing empty or misleading stages.
-      if (_curTmpl !== 'messages' && _curTmpl !== 'messages-service' && _curTmpl !== 'education') {
+      if (_curTmpl !== 'messages' && _curTmpl !== 'messages-service'
+          && _curTmpl !== 'education' && _curTmpl !== 'donations') {
       document.getElementById('content').innerHTML += `
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
         ${(()=>{
