@@ -190,17 +190,6 @@ async function send(token: string, chatId: string, text: string) {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
-  if (!token || !chatId) {
-    return json({
-      error: "NO_TELEGRAM_CONFIG",
-      hint: "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as Supabase secrets. " +
-            "Create the bot with @BotFather, add it to the group, and read the chat id from " +
-            "https://api.telegram.org/bot<token>/getUpdates after posting once in that group.",
-    }, 422);
-  }
-
   let body: { cron_secret?: string; dry_run?: boolean; day?: string; force?: boolean };
   try { body = await req.json(); } catch { body = {}; }
 
@@ -209,6 +198,22 @@ Deno.serve(async (req: Request) => {
     .from("app_secrets").select("value").eq("key", "notion_cron").maybeSingle();
   if (!secret?.value || secret.value !== body.cron_secret) {
     return json({ error: "Unauthorized" }, 401);
+  }
+
+  // Read after the body, not before it: these checks consult body.dry_run, and
+  // a let declared further down is in its temporal dead zone until then, so
+  // touching it first throws on every single call.
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
+  // A dry run is still useful without the bot configured: it is how the report
+  // can be read before anyone creates it.
+  if ((!token || !chatId) && !body.dry_run) {
+    return json({
+      error: "NO_TELEGRAM_CONFIG",
+      hint: "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as Supabase secrets. " +
+            "Create the bot with @BotFather, add it to the group, and read the chat id from " +
+            "https://api.telegram.org/bot<token>/getUpdates after posting once in that group.",
+    }, 422);
   }
 
   // The cron fires at both hours that could be noon in Cairo across the year;
@@ -242,15 +247,41 @@ Deno.serve(async (req: Request) => {
 
   const withData: string[] = [];
   const noData: string[] = [];
+  const currencyOf: Record<string, string> = {};
 
   for (const a of (accounts ?? []) as Row[]) {
     const id = String(a.id);
     const name = String(a.account_name ?? "Account");
     const cur = a.currency ? String(a.currency) + " " : "";
+    currencyOf[id] = cur;
     const tmpl = String(a.dashboard_template ?? "full");
     const r = byAccount[id];
     if (!r) { noData.push(name); continue; }
     withData.push(lineFor(tmpl, name, cur, r));
+  }
+
+  // A client running two ad accounts against one sheet appears as both of them
+  // above, showing the same figures because the sheet is written to each. The
+  // combined line is that client as the sheet actually describes it, which is
+  // what a group row in notion_daily holds -- so both views are available and
+  // neither has to be inferred from the other.
+  const { data: groups } = await admin
+    .from("account_groups")
+    .select("id, name, account_ids, dashboard_template")
+    .not("notion_url", "is", null)
+    .order("name");
+
+  const combined: string[] = [];
+  for (const g of (groups ?? []) as Row[]) {
+    const key = "__group__" + String(g.id);
+    const r = byAccount[key];
+    const name = String(g.name ?? "Combined");
+    if (!r) { noData.push(name + " (combined)"); continue; }
+    // Groups carry no currency of their own, so the first member's is used:
+    // the accounts under one client are not billed in different ones.
+    const members = Array.isArray(g.account_ids) ? g.account_ids as string[] : [];
+    const cur = members.map(m => currencyOf[String(m)]).find(Boolean) ?? "";
+    combined.push(lineFor(String(g.dashboard_template ?? "full"), name, cur, r));
   }
 
   const human = new Date(day + "T12:00:00Z")
@@ -258,10 +289,12 @@ Deno.serve(async (req: Request) => {
 
   let text = `📊 <b>Blue Ad — ${esc(human)}</b>\n\n`;
   text += withData.length ? withData.join("\n\n") : "No account has figures for this day yet.";
+  if (combined.length) {
+    text += `\n\n\u{1F517} <b>Combined clients</b>\n\n` + combined.join("\n\n");
+  }
   if (noData.length) {
-    text += `\n\n<i>Not filled in Notion yet (${noData.length}):</i>\n` +
-            esc(noData.slice(0, 25).join(", ")) +
-            (noData.length > 25 ? ` and ${noData.length - 25} more` : "");
+    text += `\n\n<i>Sheet not filled for this day (${noData.length}):</i>\n` +
+            esc(noData.join(", "));
   }
 
   // Telegram refuses a message over 4096 characters, and silently losing the
@@ -271,11 +304,12 @@ Deno.serve(async (req: Request) => {
 
   if (body.dry_run) {
     return json({ ok: true, dry_run: true, day, accounts_with_data: withData.length,
-                  accounts_without: noData.length, chunks: chunks.length, preview: text.slice(0, 2500) });
+                  combined: combined.length, accounts_without: noData.length,
+                  chunks: chunks.length, configured: !!(token && chatId), preview: text });
   }
 
   const sent = [];
-  for (const c of chunks) sent.push(await send(token, chatId, c));
+  for (const c of chunks) sent.push(await send(token!, chatId!, c));
   return json({ ok: true, day, accounts_with_data: withData.length,
                 accounts_without: noData.length, messages: sent.length });
 });
