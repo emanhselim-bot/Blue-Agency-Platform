@@ -214,7 +214,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   let body: { cron_secret?: string; dry_run?: boolean; day?: string; force?: boolean;
-              check?: boolean };
+              check?: boolean; discover?: boolean };
   try { body = await req.json(); } catch { body = {}; }
 
   // The cron presents the same shared secret the Notion sync uses.
@@ -238,6 +238,51 @@ Deno.serve(async (req: Request) => {
             "Create the bot with @BotFather, add it to the group, and read the chat id from " +
             "https://api.telegram.org/bot<token>/getUpdates after posting once in that group.",
     }, 422);
+  }
+
+  // Find the chat id without anyone having to build a getUpdates URL by hand.
+  //
+  // The documented way to get a chat id is to open
+  // api.telegram.org/bot<TOKEN>/getUpdates in a browser, and that goes wrong
+  // easily: the angle brackets get left in, the token gets pasted into the
+  // wrong part of the URL, and the token ends up in a browser history and a
+  // screenshot. The function already holds the token, so it can just ask.
+  //
+  // A chat id is not a credential -- it is useless without the bot token --
+  // so returning it here is safe, and it is the one value that has to be
+  // copied into the secret.
+  if (body.discover) {
+    const res = await fetch(
+      `https://api.telegram.org/bot${token}/getUpdates?limit=100&allowed_updates=${encodeURIComponent(JSON.stringify(["message","channel_post","my_chat_member"]))}`,
+    );
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) {
+      return json({ error: "TELEGRAM_GETUPDATES_FAILED",
+                    detail: (payload as { description?: string })?.description ?? res.status }, 502);
+    }
+    // deno-lint-ignore no-explicit-any
+    const updates = ((payload as any)?.result ?? []) as any[];
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const u of updates) {
+      const c = u?.message?.chat ?? u?.channel_post?.chat ?? u?.my_chat_member?.chat;
+      if (!c?.id) continue;
+      seen.set(String(c.id), {
+        chat_id: String(c.id),
+        type: c.type ?? null,
+        title: c.title ?? ([c.first_name, c.last_name].filter(Boolean).join(" ") || null),
+        use_this_for_the_group: String(c.id).startsWith("-"),
+      });
+    }
+    return json({
+      ok: true, discover: true,
+      bot: "@Blueaddashboard_bot",
+      chats_found: [...seen.values()],
+      note: seen.size
+        ? "Copy chat_id of the group you want into TELEGRAM_CHAT_ID."
+        : "Telegram has no recent updates for this bot. Add it to the group and post a " +
+          "message there (or press Start in a private chat), then run this again. " +
+          "Telegram only keeps updates for about 24 hours.",
+    });
   }
 
   // Ask Telegram what it thinks of the bot and the chat, without sending
