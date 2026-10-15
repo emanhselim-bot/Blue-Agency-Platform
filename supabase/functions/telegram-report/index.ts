@@ -213,7 +213,8 @@ async function send(token: string, chatId: string, text: string) {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  let body: { cron_secret?: string; dry_run?: boolean; day?: string; force?: boolean };
+  let body: { cron_secret?: string; dry_run?: boolean; day?: string; force?: boolean;
+              check?: boolean };
   try { body = await req.json(); } catch { body = {}; }
 
   // The cron presents the same shared secret the Notion sync uses.
@@ -237,6 +238,40 @@ Deno.serve(async (req: Request) => {
             "Create the bot with @BotFather, add it to the group, and read the chat id from " +
             "https://api.telegram.org/bot<token>/getUpdates after posting once in that group.",
     }, 422);
+  }
+
+  // Ask Telegram what it thinks of the bot and the chat, without sending
+  // anything. Returns the bot's username and the chat's type and title -- not
+  // the chat id, which is a secret value and does not need echoing back to
+  // establish whether it points at the right group.
+  if (body.check) {
+    const call = async (method: string, qs = "") => {
+      const res = await fetch(`https://api.telegram.org/bot${token}/${method}${qs}`);
+      return { status: res.status, body: await res.json().catch(() => null) };
+    };
+    const me = await call("getMe");
+    const chat = await call("getChat", `?chat_id=${encodeURIComponent(chatId!)}`);
+    // deno-lint-ignore no-explicit-any
+    const c = (chat.body as any)?.result;
+    return json({
+      ok: true,
+      check: true,
+      // deno-lint-ignore no-explicit-any
+      bot: (me.body as any)?.result?.username ?? null,
+      bot_error: me.status === 200 ? null : (me.body as { description?: string })?.description ?? me.status,
+      chat_reachable: chat.status === 200,
+      chat_type: c?.type ?? null,
+      chat_title: c?.title ?? null,
+      chat_error: chat.status === 200 ? null
+        : (chat.body as { description?: string })?.description ?? chat.status,
+      chat_id_shape: chatId
+        ? (/^-100\d+$/.test(chatId) ? "supergroup/channel id (-100…)"
+          : /^-\d+$/.test(chatId) ? "basic group id (negative)"
+          : /^\d+$/.test(chatId) ? "positive id — this is a private user, not a group"
+          : chatId.startsWith("@") ? "public @username"
+          : "not an id or @username")
+        : null,
+    });
   }
 
   // The cron fires at both hours that could be noon in Cairo across the year;
@@ -355,8 +390,23 @@ Deno.serve(async (req: Request) => {
                   preview: text });
   }
 
+  // A throw here used to escape the handler, so a rejected message came back
+  // as a bare "Internal Server Error" with Telegram's actual reason only in
+  // the logs. The reason is almost always fixable in a minute -- the chat id
+  // or the bot not being in the group -- so it belongs in the response.
   const sent = [];
-  for (const c of chunks) sent.push(await send(token!, chatId!, c));
+  try {
+    for (const c of chunks) sent.push(await send(token!, chatId!, c));
+  } catch (e) {
+    return json({
+      error: "TELEGRAM_SEND_FAILED",
+      detail: (e as Error).message,
+      sent_before_failure: sent.length,
+      hint: "\"chat not found\" means TELEGRAM_CHAT_ID does not name a chat this bot " +
+            "can post to: either the bot was never added to the group, or the id is " +
+            "wrong. Call this function with {\"check\":true} to ask Telegram directly.",
+    }, 502);
+  }
   return json({ ok: true, day, accounts_with_data: withData.length,
                 accounts_without: noData.length, messages: sent.length });
 });
