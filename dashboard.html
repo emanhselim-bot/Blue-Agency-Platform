@@ -7389,7 +7389,10 @@
               // Notion holds came back undefined and the cards fell through to
               // Shopify or showed nothing. They are the team's own count, which is
               // the whole reason Notion is consulted for them.
-              + 'web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed')
+              + 'web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, '
+              // The service figures: leads, reservations and the engagement,
+              // follow and profile-visit blocks the service template shows.
+              + 'engagement, engagement_spend, follows_fb, follows_ig, follow_spend, profile_visits, profile_visit_spend, leads_total, leads_qualified, deals_fb, deals_ig, deals_whatsapp, deals_unknown, deals_total, total_spend')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey)
         .gte('day', range.from).lte('day', range.to);
@@ -7401,7 +7404,8 @@
       const sum = {};
       ['msg_count','msg_orders','msg_pieces','msg_revenue','web_orders','web_pieces',
        'web_revenue','web_spend','msg_spend','branding_spend','total_revenue',
-       'web_orders_confirmed','web_pieces_confirmed','web_revenue_confirmed'].forEach(f => {
+       'web_orders_confirmed','web_pieces_confirmed','web_revenue_confirmed',
+       'engagement','engagement_spend','follows_fb','follows_ig','follow_spend','profile_visits','profile_visit_spend','leads_total','leads_qualified','deals_fb','deals_ig','deals_whatsapp','deals_unknown','deals_total','total_spend'].forEach(f => {
         let t = null;
         data.forEach(r => { if (r[f] != null) t = (t ?? 0) + Number(r[f]); });
         sum[f] = t;
@@ -7437,10 +7441,14 @@
       'web_orders', 'web_pieces', 'web_revenue', 'web_spend', 'msg_spend',
       'web_orders_confirmed', 'web_pieces_confirmed', 'web_revenue_confirmed',
       'total_revenue', 'branding_spend',
+      'engagement', 'engagement_spend', 'follows_fb', 'follows_ig', 'follow_spend', 'profile_visits', 'profile_visit_spend', 'leads_total', 'leads_qualified', 'deals_fb', 'deals_ig', 'deals_whatsapp', 'deals_unknown', 'deals_total', 'total_spend',
     ];
     const ND_WHOLE_FIELDS = new Set([
       'msg_count', 'msg_orders', 'msg_pieces',
       'web_orders', 'web_pieces', 'web_orders_confirmed', 'web_pieces_confirmed',
+      'engagement', 'follows_fb', 'follows_ig', 'profile_visits',
+      'leads_total', 'leads_qualified',
+      'deals_fb', 'deals_ig', 'deals_whatsapp', 'deals_unknown', 'deals_total',
     ]);
 
     async function ndSumForAccounts(accountKeys, period) {
@@ -11625,55 +11633,122 @@
         </div>`;
 
       // ── Messages Analysis · SERVICE (messages → leads → deals) ──
-      const _msgInput = (id, val, ph = '0', step = '') => `<input id="${id}" type="number" min="0" ${step ? `step="${step}"` : ''} value="${val || ''}" placeholder="${ph}"
-        style="font-size:22px;font-weight:700;color:var(--text-main);border:none;border-bottom:2px dashed rgba(0,0,0,0.18);background:transparent;outline:none;width:100%;padding:0 0 2px;line-height:1.1;letter-spacing:-0.5px;font-family:inherit">`;
+
+      // ── Messages · Service ──────────────────────────────────────────────
+      // A lead-and-booking business, not a shop: messages become leads, leads
+      // become reservations. Everything here comes from the sheet, and each
+      // block is drawn only where that account records it — an academy with no
+      // follow campaigns should not be shown an empty Follows row, and a blank
+      // card reads as a broken one.
+      //
+      // The rates are all derived rather than read. Every sheet stores its own
+      // CPE, CPF, CPV and CPR, and they disagree with each other about which
+      // spend they divided by.
+      const _svcN   = (v) => (v == null || isNaN(Number(v))) ? null : Number(v);
+      const _svcNd  = (f) => _svcN(_ndRow?.[f]);
+
+      const _svcMsgs      = _storedNumMsg !== null ? parseInt(_storedNumMsg) : (_svcNd('msg_count') ?? (numMessages != null ? Math.round(numMessages) : null));
+      const _svcMsgSpend  = _svcNd('msg_spend');
+      const _svcEng       = _svcNd('engagement');
+      const _svcEngSpend  = _svcNd('engagement_spend');
+      const _svcFolFb     = _svcNd('follows_fb');
+      const _svcFolIg     = _svcNd('follows_ig');
+      const _svcFolSpend  = _svcNd('follow_spend');
+      const _svcVisits    = _svcNd('profile_visits');
+      const _svcVisSpend  = _svcNd('profile_visit_spend');
+      const _svcLeads     = _svcNd('leads_total')     ?? (msgLeads || null);
+      const _svcQualified = _svcNd('leads_qualified');
+      const _svcInterest  = _svcNd('deals_unknown');
+      const _svcDealsFb   = _svcNd('deals_fb');
+      const _svcDealsIg   = _svcNd('deals_ig');
+      const _svcDealsWa   = _svcNd('deals_whatsapp');
+      // The team's own total wins over the breakdown, which does not always add
+      // up to it — the same rule the message orders already follow.
+      const _svcDealsTot  = _svcNd('deals_total') ?? (msgDeals || null);
+      const _svcRevenue   = totalRevenue || null;
+
+      // Total spending: the sheet's own figure where it has one, otherwise
+      // what the parts come to, and Meta's as the last resort.
+      const _svcTotalSpend = _svcNd('total_spend')
+        ?? (((_svcMsgSpend ?? 0) + (_svcEngSpend ?? 0) + (_svcFolSpend ?? 0) + (_svcVisSpend ?? 0)) || null)
+        ?? (spend || null);
+
+      // Cost per lead is charged on the spending that chases leads: engagement,
+      // follows and profile visits buy awareness, not enquiries, so they come
+      // out of the denominator. ROAS here divides by message spend alone.
+      const _svcLeadSpend = Math.max(0, (_svcTotalSpend ?? 0)
+        - (_svcEngSpend ?? 0) - (_svcFolSpend ?? 0) - (_svcVisSpend ?? 0)) || null;
+
+      const _svcDiv = (a, b) => (a != null && b) ? a / b : null;
+      const _svcMoney = (v) => v == null ? '—' : fmt(v, curr);
+      const _svcInt   = (v) => v == null ? '—' : Math.round(v).toLocaleString('en');
+
+      const _svcCard = (cls, icon, label, value, sub, id) => `
+            <div class="kpi-card ${cls}" data-card-id="svc-${id}">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon"><span class="kpi-marks"></span>${icon}</div>
+              <div class="kpi-label">${label}</div>
+              <div class="kpi-value">${value}</div>
+              <div class="kpi-sub">${sub}</div>
+            </div>`;
+
+      // A block appears when the sheet carries either its count or its spend.
+      const _svcBlock = (has, cards) => has ? cards : '';
 
       const _messagesServiceSection = `
         <div class="kpi-section" data-section-id="messages-service">
           <div class="section-label">Messages Analysis · Service <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
           <div class="kpi-grid" data-grid-id="messages-service">
-            <div class="kpi-card c-orange" data-card-id="svc-number-of-messages">
-              <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon"><span class="kpi-marks"></span>💬</div>
-              <div class="kpi-label">Number of Messages</div>
-              ${_msgInput('kpi-svc-messages-input', _storedNumMsg !== null ? _storedNumMsg : (numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : ''), numMessages != null && !isNaN(numMessages) ? Math.round(numMessages) : '0')}
-              <div class="kpi-sub">Manual entry</div>
-            </div>
-            <div class="kpi-card c-coral" data-card-id="svc-cost-per-message">
-              <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon"><span class="kpi-marks"></span>💸</div>
-              <div class="kpi-label">Cost per Message</div>
-              <div class="kpi-value" id="kpi-svc-cpm-val">—</div>
-              <div class="kpi-sub">Spend ÷ Messages</div>
-            </div>
-            <div class="kpi-card c-teal" data-card-id="svc-number-of-leads">
-              <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon"><span class="kpi-marks"></span>📋</div>
-              <div class="kpi-label">Number of Leads</div>
-              ${_msgInput('kpi-svc-leads-input', msgLeads)}
-              <div class="kpi-sub">Manual entry</div>
-            </div>
-            <div class="kpi-card c-purple solid" data-card-id="svc-cost-per-lead">
-              <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon"><span class="kpi-marks"></span>🎯</div>
-              <div class="kpi-label">Cost per Lead</div>
-              <div class="kpi-value" id="kpi-svc-cpl-val">—</div>
-              <div class="kpi-sub">Spend ÷ Leads</div>
-            </div>
-            <div class="kpi-card c-green" data-card-id="svc-deals">
-              <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon"><span class="kpi-marks"></span>🤝</div>
-              <div class="kpi-label">Deals</div>
-              ${_msgInput('kpi-svc-deals-input', msgDeals)}
-              <div class="kpi-sub">Manual entry</div>
-            </div>
-            <div class="kpi-card c-navy solid" data-card-id="svc-cost-per-deal">
-              <span class="drag-handle" title="Drag to reorder">⠿</span>
-              <div class="kpi-icon"><span class="kpi-marks"></span>💰</div>
-              <div class="kpi-label">Cost per Deal</div>
-              <div class="kpi-value" id="kpi-svc-cpd-val">—</div>
-              <div class="kpi-sub">Spend ÷ Deals</div>
-            </div>
+            ${_svcCard('c-orange', '💬', 'Number of Messages', _svcInt(_svcMsgs),
+                _srcSub(_storedNumMsg, _ndRow?.msg_count, 'Manual entry'), 'messages')}
+            ${_svcCard('c-coral solid', '💸', 'Cost per Message', _svcMoney(_svcDiv(_svcMsgSpend, _svcMsgs)),
+                'Messages spending ÷ Messages', 'cost-per-message')}
+            ${_svcCard('c-blue', '💰', 'Messages Spending', _svcMoney(_svcMsgSpend),
+                _srcSub(null, _ndRow?.msg_spend, 'Meta Ads'), 'messages-spending')}
+
+            ${_svcBlock(_svcEng != null || _svcEngSpend != null, `
+            ${_svcCard('c-purple', '👍', 'Engagement', _svcInt(_svcEng), 'From Notion', 'engagement')}
+            ${_svcCard('c-purple solid', '💸', 'CPE', _svcMoney(_svcDiv(_svcEngSpend, _svcEng)),
+                'Engagement spending ÷ Engagement', 'cpe')}
+            ${_svcCard('c-purple', '💰', 'Engagement Spending', _svcMoney(_svcEngSpend), 'From Notion', 'engagement-spending')}`)}
+
+            ${_svcBlock(_svcFolFb != null || _svcFolIg != null || _svcFolSpend != null, `
+            ${_svcCard('c-sky', '📘', 'Follows', _svcInt((_svcFolFb ?? 0) + (_svcFolIg ?? 0) || null),
+                [_svcFolFb != null ? 'FB ' + _svcInt(_svcFolFb) : '', _svcFolIg != null ? 'IG ' + _svcInt(_svcFolIg) : ''].filter(Boolean).join(' · ') || 'From Notion', 'follows')}
+            ${_svcCard('c-sky solid', '💸', 'CPF', _svcMoney(_svcDiv(_svcFolSpend, (_svcFolFb ?? 0) + (_svcFolIg ?? 0))),
+                'Follow spending ÷ Follows', 'cpf')}
+            ${_svcCard('c-sky', '💰', 'Follow Spending', _svcMoney(_svcFolSpend), 'From Notion', 'follow-spending')}`)}
+
+            ${_svcBlock(_svcVisits != null || _svcVisSpend != null, `
+            ${_svcCard('c-teal', '👤', 'Profile Visits', _svcInt(_svcVisits), 'Instagram · from Notion', 'profile-visits')}
+            ${_svcCard('c-teal solid', '💸', 'CPPV', _svcMoney(_svcDiv(_svcVisSpend, _svcVisits)),
+                'Profile visit spending ÷ Visits', 'cppv')}
+            ${_svcCard('c-teal', '💰', 'Profile Visit Spending', _svcMoney(_svcVisSpend), 'From Notion', 'profile-visit-spending')}`)}
+
+            ${_svcCard('c-gold', '📋', 'Total Leads', _svcInt(_svcLeads),
+                _ndRow?.leads_total != null ? _srcSub(null, _ndRow?.leads_total, 'Manual entry') : 'Manual entry', 'total-leads')}
+            ${_svcCard('c-gold', '✅', 'Qualified Leads', _svcInt(_svcQualified),
+                _svcQualified != null && _svcLeads ? ((_svcQualified / _svcLeads) * 100).toFixed(1) + '% of leads' : 'From Notion', 'qualified-leads')}
+            ${_svcCard('c-gold', '🤔', 'Interested Deals', _svcInt(_svcInterest), 'Source not identified', 'interested-deals')}
+            ${_svcCard('c-purple solid', '🎯', 'CPL', _svcMoney(_svcDiv(_svcLeadSpend, _svcLeads)),
+                'Spending ÷ Leads · engagement and follows excluded', 'cpl')}
+
+            ${_svcCard('c-blue solid', '💰', 'Total Spending', _svcMoney(_svcTotalSpend),
+                _svcNd('total_spend') != null ? 'From Notion' : 'Messages + engagement + follows + visits', 'total-spending')}
+
+            ${_svcCard('c-green', '📘', 'FB Deals', _svcInt(_svcDealsFb), 'From Notion', 'fb-deals')}
+            ${_svcCard('c-green', '📷', 'IG Deals', _svcInt(_svcDealsIg), 'From Notion', 'ig-deals')}
+            ${_svcCard('c-green', '🟢', 'WhatsApp Deals', _svcInt(_svcDealsWa), 'From Notion', 'whatsapp-deals')}
+            ${_svcCard('c-green solid', '🤝', 'Total Deals', _svcInt(_svcDealsTot),
+                _svcDealsTot != null && (_svcDealsFb != null || _svcDealsIg != null || _svcDealsWa != null)
+                  ? 'The sheet&rsquo;s own total' : 'From Notion', 'total-deals')}
+            ${_svcCard('c-navy solid', '💰', 'Cost per Deal', _svcMoney(_svcDiv(_svcTotalSpend, _svcDealsTot)),
+                'Total Spending ÷ Total Deals', 'cost-per-deal')}
+
+            ${_svcCard('c-navy solid', '💵', 'Revenue', _svcMoney(_svcRevenue), _revSubLabel, 'revenue')}
+            ${_svcCard('c-gold solid', '📈', 'ROAS',
+                (() => { const r = _svcDiv(_svcRevenue, _svcMsgSpend); return r == null ? '—' : r.toFixed(2) + 'x'; })(),
+                'Revenue ÷ Messages spending', 'roas')}
           </div>
         </div>`;
 
@@ -12012,39 +12087,6 @@
         let _curMsgRevenue = msgRevenue;
         let _curMsgPieces  = msgPieces;
 
-        // ── Messages · Service template: live equations ──
-        (() => {
-          const msgIn   = document.getElementById('kpi-svc-messages-input');
-          const leadsIn = document.getElementById('kpi-svc-leads-input');
-          const dealsIn = document.getElementById('kpi-svc-deals-input');
-          if (!msgIn && !leadsIn && !dealsIn) return;   // not on this template
-
-          const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-          const recalcSvc = () => {
-            const m = parseInt(msgIn?.value) || 0;
-            const l = parseInt(leadsIn?.value) || 0;
-            const d = parseInt(dealsIn?.value) || 0;
-            setVal('kpi-svc-cpm-val', m > 0 && spend > 0 ? fmt(spend / m, curr) : '—');
-            setVal('kpi-svc-cpl-val', l > 0 && spend > 0 ? fmt(spend / l, curr) : '—');
-            setVal('kpi-svc-cpd-val', d > 0 && spend > 0 ? fmt(spend / d, curr) : '—');
-            try { applyFlexTargets(); } catch(_) {}
-          };
-
-          msgIn?.addEventListener('input', () => {
-            _mkSet(_numMsgKey, msgIn.value.trim() === '' ? '' : String(parseInt(msgIn.value) || 0));
-            recalcSvc();
-          });
-          leadsIn?.addEventListener('input', () => {
-            _mkSet(_leadsKey, String(parseInt(leadsIn.value) || 0));
-            recalcSvc();
-          });
-          dealsIn?.addEventListener('input', () => {
-            _mkSet(_dealsKey, String(parseInt(dealsIn.value) || 0));
-            recalcSvc();
-          });
-          recalcSvc();   // initial values on load
-        })();
-
         // ── Confirmed website orders and revenue (manual, per period) ──
         // Saving reloads so every derived figure — totals, ROAS, cost per
         // order — is recomputed from the confirmed number rather than only the
@@ -12237,7 +12279,7 @@
 
       // ── Viewer role: lock all manual KPI inputs (read-only) ──
       if (currentRole === 'viewer') {
-        ['kpi-num-messages-input','kpi-cost-per-message-input','kpi-msg-orders-input','kpi-msg-pieces-input','kpi-msg-revenue-input','kpi-conv-rate-input','kpi-svc-messages-input','kpi-svc-leads-input','kpi-svc-deals-input'].forEach(id => {
+        ['kpi-num-messages-input','kpi-cost-per-message-input','kpi-msg-orders-input','kpi-msg-pieces-input','kpi-msg-revenue-input','kpi-conv-rate-input'].forEach(id => {
           const el = document.getElementById(id);
           if (el) {
             el.readOnly = true;

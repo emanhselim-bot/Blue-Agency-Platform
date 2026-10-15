@@ -134,6 +134,38 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
                          "piecesconfirmed"],
   web_revenue_confirmed: ["confirmedrevenue", "confirmedrevenuefcs", "revenueconfirmed",
                           "confirmedsales"],
+  // ── Service accounts ──────────────────────────────────────────────────
+  // Lead-and-booking businesses rather than shops: an academy or a clinic
+  // counts messages, then leads, then reservations. The spellings below are the
+  // ones actually in use, read off the sheets rather than guessed -- VANGUARD
+  // writes "Qualifed" and "Whats Res", the academies write "Total Reservations".
+  //
+  // The three *_spend meanings here are components of branding, not
+  // alternatives to it: meaningOf still reports them as branding as well, so
+  // branding_spend keeps its total and conversion spend is unchanged.
+  // "eng" on its own is deliberately absent: Maree's sheet has both Eng and
+  // Engagement, and matching both would add one figure to the other.
+  engagement:   ["engagement", "engagment", "engresults", "engagementresults"],
+  follows_fb:   ["followfb", "followersfb", "nofollowerfb", "followerfb"],
+  follows_ig:   ["followig", "followersig", "nofollowerig", "followerig"],
+  profile_visits: ["profilevisitig", "profilevisits", "profilevisit", "profilevisitsig"],
+  leads_total:  ["totalleads", "leads", "noleads", "nooflead", "noofleads"],
+  leads_qualified: ["qualifed", "qualified", "qualifiedleads", "qualifedleads"],
+  deals_fb:     ["fbres", "fbreservations", "fbdeals", "fbdeal"],
+  deals_ig:     ["igres", "igreservations", "igdeals", "igdeal"],
+  deals_whatsapp: ["whatsres", "whatsappres", "whatsreservations", "whatsappdeals", "whatsdeals"],
+  deals_unknown:  ["unknownres", "unknownreservations", "callcenter"],
+  deals_total:  ["totalres", "totalreservations", "reservations", "deals", "totaldeals"],
+  // The sheet's own total, which includes branding. Kept for the service cards;
+  // conversion spend is still web_spend + msg_spend, never this.
+  total_spend_total:   ["totalspending", "totalspend"],
+  total_spend_generic: ["spending"],
+  engagement_spend: ["engagementspending", "engagementspend", "engspending", "engspend",
+                     "engagmentspending", "engagmentspend", "engagementbudget"],
+  follow_spend: ["spendingfollowfb", "spendingfollowig", "followspending", "followspend",
+                 "followersspending", "followersspend", "spendingfollow"],
+  profile_visit_spend: ["profilevisitspending", "profilevisitsspending", "profilevisitspend"],
+
   msg_orders_total: ["nopurchase", "nopurchases", "purchases", "noofpurchase"],
   msg_orders_parts: ["fborder", "fborders", "igorder", "igorders", "whatsorder", "whatsorders",
                      "whatsapporder", "whatsapporders"],
@@ -346,6 +378,21 @@ type DaySums = {
   web_orders_confirmed: number | null;
   web_pieces_confirmed: number | null;
   web_revenue_confirmed: number | null;
+  engagement: number | null;
+  engagement_spend: number | null;
+  follows_fb: number | null;
+  follows_ig: number | null;
+  follow_spend: number | null;
+  profile_visits: number | null;
+  profile_visit_spend: number | null;
+  leads_total: number | null;
+  leads_qualified: number | null;
+  deals_fb: number | null;
+  deals_ig: number | null;
+  deals_whatsapp: number | null;
+  deals_unknown: number | null;
+  deals_total: number | null;
+  total_spend: number | null;
 };
 
 type MonthSums = {
@@ -356,6 +403,21 @@ type MonthSums = {
   msg_count: number | null;  total_revenue: number | null;
   branding_spend: number | null; web_orders_confirmed: number | null;
   web_pieces_confirmed: number | null; web_revenue_confirmed: number | null;
+  engagement: number | null;
+  engagement_spend: number | null;
+  follows_fb: number | null;
+  follows_ig: number | null;
+  follow_spend: number | null;
+  profile_visits: number | null;
+  profile_visit_spend: number | null;
+  leads_total: number | null;
+  leads_qualified: number | null;
+  deals_fb: number | null;
+  deals_ig: number | null;
+  deals_whatsapp: number | null;
+  deals_unknown: number | null;
+  deals_total: number | null;
+  total_spend: number | null;
   days: number;
 };
 
@@ -364,7 +426,23 @@ const blank = (): MonthSums => ({
   web_spend: null, msg_spend: null,
   msg_orders: null, msg_pieces: null, msg_count: null, total_revenue: null,
   branding_spend: null, web_orders_confirmed: null,
-  web_pieces_confirmed: null, web_revenue_confirmed: null, days: 0,
+  web_pieces_confirmed: null, web_revenue_confirmed: null,
+  engagement: null,
+  engagement_spend: null,
+  follows_fb: null,
+  follows_ig: null,
+  follow_spend: null,
+  profile_visits: null,
+  profile_visit_spend: null,
+  leads_total: null,
+  leads_qualified: null,
+  deals_fb: null,
+  deals_ig: null,
+  deals_whatsapp: null,
+  deals_unknown: null,
+  deals_total: null,
+  total_spend: null,
+  days: 0,
 });
 
 // null + value = value, so a month keeps null for a column the sheet never had
@@ -406,10 +484,29 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           web_spend: null, msg_spend: null,
           branding_spend: null, total_revenue: null, web_orders_confirmed: null,
           web_pieces_confirmed: null, web_revenue_confirmed: null,
+          engagement: null,
+          engagement_spend: null,
+          follows_fb: null,
+          follows_ig: null,
+          follow_spend: null,
+          profile_visits: null,
+          profile_visit_spend: null,
+          leads_total: null,
+          leads_qualified: null,
+          deals_fb: null,
+          deals_ig: null,
+          deals_whatsapp: null,
+          deals_unknown: null,
+          deals_total: null,
+          total_spend: null,
         });
 
         let msgOrdersTotal: number | null = null;
         let msgOrdersParts: number | null = null;
+        // A sheet carrying both "Total Spending" and a bare "Spending" would
+        // otherwise add one to the other and double the account's spend.
+        let totalSpendExplicit: number | null = null;
+        let totalSpendGeneric: number | null = null;
 
         for (const [name, prop] of Object.entries(props)) {
           const meaning = meaningOf(name);
@@ -442,6 +539,39 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
             case "web_revenue_confirmed":
               m.web_revenue_confirmed = add(m.web_revenue_confirmed, v);
               d.web_revenue_confirmed = add(d.web_revenue_confirmed, v); break;
+            case "engagement":
+              m.engagement = add(m.engagement, v); d.engagement = add(d.engagement, v); break;
+            case "engagement_spend":
+              m.engagement_spend = add(m.engagement_spend, v); d.engagement_spend = add(d.engagement_spend, v);
+              m.branding_spend = add(m.branding_spend, v); d.branding_spend = add(d.branding_spend, v); break;
+            case "follows_fb":
+              m.follows_fb = add(m.follows_fb, v); d.follows_fb = add(d.follows_fb, v); break;
+            case "follows_ig":
+              m.follows_ig = add(m.follows_ig, v); d.follows_ig = add(d.follows_ig, v); break;
+            case "follow_spend":
+              m.follow_spend = add(m.follow_spend, v); d.follow_spend = add(d.follow_spend, v);
+              m.branding_spend = add(m.branding_spend, v); d.branding_spend = add(d.branding_spend, v); break;
+            case "profile_visits":
+              m.profile_visits = add(m.profile_visits, v); d.profile_visits = add(d.profile_visits, v); break;
+            case "profile_visit_spend":
+              m.profile_visit_spend = add(m.profile_visit_spend, v); d.profile_visit_spend = add(d.profile_visit_spend, v);
+              m.branding_spend = add(m.branding_spend, v); d.branding_spend = add(d.branding_spend, v); break;
+            case "leads_total":
+              m.leads_total = add(m.leads_total, v); d.leads_total = add(d.leads_total, v); break;
+            case "leads_qualified":
+              m.leads_qualified = add(m.leads_qualified, v); d.leads_qualified = add(d.leads_qualified, v); break;
+            case "deals_fb":
+              m.deals_fb = add(m.deals_fb, v); d.deals_fb = add(d.deals_fb, v); break;
+            case "deals_ig":
+              m.deals_ig = add(m.deals_ig, v); d.deals_ig = add(d.deals_ig, v); break;
+            case "deals_whatsapp":
+              m.deals_whatsapp = add(m.deals_whatsapp, v); d.deals_whatsapp = add(d.deals_whatsapp, v); break;
+            case "deals_unknown":
+              m.deals_unknown = add(m.deals_unknown, v); d.deals_unknown = add(d.deals_unknown, v); break;
+            case "deals_total":
+              m.deals_total = add(m.deals_total, v); d.deals_total = add(d.deals_total, v); break;
+            case "total_spend_total":   totalSpendExplicit = add(totalSpendExplicit, v); break;
+            case "total_spend_generic": totalSpendGeneric  = add(totalSpendGeneric, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
             case "msg_orders_parts": msgOrdersParts = add(msgOrdersParts, v); break;
             case "msg_pieces_parts":
@@ -450,6 +580,12 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
         }
 
         // Per row, not per month: the total wins where the team recorded one.
+        const totalSpend = totalSpendExplicit ?? totalSpendGeneric;
+        if (totalSpend != null) {
+          m.total_spend = add(m.total_spend, totalSpend);
+          d.total_spend = add(d.total_spend, totalSpend);
+        }
+
         const msgOrders = msgOrdersTotal ?? msgOrdersParts;
         if (msgOrders != null) {
           m.msg_orders = add(m.msg_orders, msgOrders);
@@ -570,6 +706,21 @@ async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
     web_orders_confirmed: d.web_orders_confirmed,
     web_pieces_confirmed: d.web_pieces_confirmed,
     web_revenue_confirmed: d.web_revenue_confirmed,
+    engagement: d.engagement,
+    engagement_spend: d.engagement_spend,
+    follows_fb: d.follows_fb,
+    follows_ig: d.follows_ig,
+    follow_spend: d.follow_spend,
+    profile_visits: d.profile_visits,
+    profile_visit_spend: d.profile_visit_spend,
+    leads_total: d.leads_total,
+    leads_qualified: d.leads_qualified,
+    deals_fb: d.deals_fb,
+    deals_ig: d.deals_ig,
+    deals_whatsapp: d.deals_whatsapp,
+    deals_unknown: d.deals_unknown,
+    deals_total: d.deals_total,
+    total_spend: d.total_spend,
     synced_at: new Date().toISOString(),
   }));
 
