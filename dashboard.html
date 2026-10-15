@@ -5195,14 +5195,49 @@
     }
 
     // ── Workspace Template System ──
-    function _tmplKey()      { return `ws-tmpl-${currentOrgId||'x'}-${currentAgencyId||'x'}`; }
-    function _getTemplate()  { return localStorage.getItem(_tmplKey()) || 'full'; }
-    function _setTemplate(t) {
+    //
+    // The template belongs to the account, and is kept on the server.
+    //
+    // It used to be one localStorage entry keyed on the org and the agency,
+    // with no account in it at all -- so picking Education for Hedaya silently
+    // switched VANGUARD, Ibriz and every other Blue Ad account to Education
+    // too, and the choice stayed in whichever browser made it. Nothing
+    // server-side could read it either, which the daily report needs.
+    //
+    // The old key is still read as a fallback, so nobody opens the dashboard
+    // to find their template reset; the first time an account's template is
+    // set it is written against that account and stops following the others.
+    function _tmplLegacyKey() { return `ws-tmpl-${currentOrgId||'x'}-${currentAgencyId||'x'}`; }
+    function _tmplKey()       { return `ws-tmpl-${currentOrgId||'x'}-${currentAgencyId||'x'}-${sel?.value||'x'}`; }
+
+    // Server values for the accounts loaded so far, so the picker and the
+    // render do not each need a round trip.
+    let _tmplByAccount = {};
+
+    function _getTemplate() {
+      const k = sel?.value || '';
+      if (k && _tmplByAccount[k]) return _tmplByAccount[k];
+      return localStorage.getItem(_tmplKey())
+          || localStorage.getItem(_tmplLegacyKey())
+          || 'full';
+    }
+
+    async function _setTemplate(t) {
+      const k = sel?.value || '';
+      if (k) _tmplByAccount[k] = t;
       localStorage.setItem(_tmplKey(), t);
       const p = document.getElementById('template-picker');
       if (p) p.style.display = 'none';
       _updateTemplateBtnLabel(t);
       loadData();
+      // Saved after the redraw: the dashboard should switch the moment it is
+      // clicked, and a slow write must not hold that up.
+      if (k && k !== '__all__') {
+        const tbl = String(k).startsWith('__group__') ? 'account_groups' : 'meta_ad_accounts';
+        const id  = String(k).replace('__group__', '');
+        try { await sb.from(tbl).update({ dashboard_template: t }).eq('id', id); }
+        catch (e) { console.warn('[template] not saved to the server', e); }
+      }
     }
     function _updateTemplateBtnLabel(t) {
       const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', education:'🎓 Education', donations:'🤲 Donations', 'google-ads':'🔍 Google Ads' };
@@ -8495,6 +8530,10 @@
       const { data } = await sb.from('account_groups')
         .select('*').eq('organization_id', currentOrgId).order('name');
       _acctGroups = data || [];
+      // Groups keep a template of their own, same as accounts.
+      (_acctGroups || []).forEach(g => {
+        if (g.dashboard_template) _tmplByAccount['__group__' + g.id] = g.dashboard_template;
+      });
     }
 
     async function saveAccountGroup() {
@@ -8874,6 +8913,9 @@
         || '';
 
       accountMap = {};
+      // Templates are per account and live on the server, so they follow the
+      // account rather than the browser that last picked one.
+      _tmplByAccount = {};
 
       // Auto-discover newly granted Meta / Google ad accounts (once per session).
       // Runs in the background; if new accounts were found, reload the list.
@@ -8910,14 +8952,17 @@
         .from('meta_ad_accounts_safe')  // safe view, no tokens
         // notion_url is here because branding spend on a shared sheet has to be
         // split between the accounts that share it — see _brandShare.
-        .select('id, meta_account_id, account_name, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id, campaigns_last_synced_at, agency_id, notion_url')
+        .select('id, meta_account_id, account_name, currency, shopify_store_id, clarity_project_id, site_tracker_id, ga4_property_id, campaigns_last_synced_at, agency_id, notion_url, dashboard_template')
         .eq('organization_id', currentOrgId)
         .eq('is_active', true)
         .order('account_name');
 
       // Populate accountMap — apply per-user access restrictions for non-owners
       const filteredAccounts = applyAccountAccessRestrictions(accounts || []);
-      filteredAccounts.forEach(acc => { accountMap[acc.id] = acc; });
+      filteredAccounts.forEach(acc => {
+        accountMap[acc.id] = acc;
+        if (acc.dashboard_template) _tmplByAccount[acc.id] = acc.dashboard_template;
+      });
 
       // Also load Google Ads and TikTok Ads accounts into the map
       if (currentOrgId) {
