@@ -343,7 +343,16 @@ Deno.serve(async (req: Request) => {
   if (body.dry_run) {
     return json({ ok: true, dry_run: true, day, accounts_with_data: withData.length,
                   combined: combined.length, accounts_without: noData.length,
-                  chunks: chunks.length, configured: !!(token && chatId), preview: text });
+                  chunks: chunks.length, configured: !!(token && chatId),
+                  // Which half is missing, and the NAMES of any Telegram
+                  // variables that are set -- never their values. "configured:
+                  // false" on its own cannot tell a typo in a secret's name
+                  // apart from a secret that was never added, and those need
+                  // different fixes.
+                  has_token: !!token, has_chat_id: !!chatId,
+                  telegram_env_names: Object.keys(Deno.env.toObject())
+                    .filter(k => /telegram/i.test(k)).sort(),
+                  preview: text });
   }
 
   const sent = [];
