@@ -181,6 +181,32 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
                    "donor", "noofdonations", "nodonations", "donationscount",
                    "totaldonationusers"],
 
+  // -- Awareness delivery the team records itself ----------------------
+  // Cytarose's sheet carries Reach and Impressions and the sync was throwing
+  // both away: they were in columns_ignored on every run. These are the
+  // figures the client is actually reported on, so they are kept alongside
+  // Meta's own, not instead of them. CPE and CPM stay unmapped on purpose --
+  // both are divisions of columns already here, and "CPM" means cost per
+  // mille on some sheets and cost per message on others.
+  reach:       ["reach", "totalreach", "reachtotal", "noofreach"],
+  impressions: ["impressions", "impression", "totalimpressions",
+                "noofimpressions", "impressionstotal"],
+
+  // -- TikTok delivery -------------------------------------------------
+  // TikTok is not connected as an ad platform, so the sheet is the only place
+  // these exist. Kept separate from the Meta columns above: adding TikTok
+  // impressions to Meta's would make a single "Impressions" figure that no
+  // platform could be held to.
+  tiktok_impressions: ["tiktokimpressions", "tiktokimpression", "ttimpressions",
+                       "impressionstiktok", "tiktokimpressionstotal"],
+  // A bare "TikTok Views" is a video view, not an impression -- counting it as
+  // reach-side delivery would inflate impressions by the play count.
+  tiktok_video_views: ["tiktokvideoviews", "tiktokvideoview", "ttvideoviews",
+                       "videoviewstiktok", "tiktokvideoplays", "tiktokplays",
+                       "tiktokviews", "tiktokview"],
+  tiktok_spend:       ["tiktokspending", "tiktokspend", "ttspending", "ttspend",
+                       "spendingtiktok"],
+
   // -- Education accounts ----------------------------------------------
   // The academies split their work into Tahfez and everything they call
   // courses. Total Reservations covers both, so the course count is worked out
@@ -222,7 +248,7 @@ for (const [meaning, names] of Object.entries(FIELD_SYNONYMS)) {
 // as branding would take real conversion spend out of ROAS.
 const BRANDING_SUBJECT = /follow|reach|profilevisit|profilevisits|engagement|engagment|awareness|pagelike|likes|brand/;
 const BRANDING_SPENDISH = /spend|spenping|budget/;
-const NOT_BRANDING = /^(sm|web|website|total|courses|dailyspendingweb|dailyspendingsm)spend/;
+const NOT_BRANDING = /^(sm|web|website|total|courses|tiktok|tt|dailyspendingweb|dailyspendingsm)spend/;
 
 function meaningOf(rawName: string): string | undefined {
   const n = norm(rawName);
@@ -425,7 +451,13 @@ type DaySums = {
   tahfez_spend: number | null;
   revenue_courses: number | null;
   revenue_tahfez: number | null;
-  clicks: number | null;\n  donation_users: number | null;
+  clicks: number | null;
+  donation_users: number | null;
+  tiktok_impressions: number | null;
+  tiktok_video_views: number | null;
+  tiktok_spend: number | null;
+  reach: number | null;
+  impressions: number | null;
 };
 
 type MonthSums = {
@@ -456,7 +488,13 @@ type MonthSums = {
   tahfez_spend: number | null;
   revenue_courses: number | null;
   revenue_tahfez: number | null;
-  clicks: number | null;\n  donation_users: number | null;
+  clicks: number | null;
+  donation_users: number | null;
+  tiktok_impressions: number | null;
+  tiktok_video_views: number | null;
+  tiktok_spend: number | null;
+  reach: number | null;
+  impressions: number | null;
   days: number;
 };
 
@@ -486,7 +524,13 @@ const blank = (): MonthSums => ({
   tahfez_spend: null,
   revenue_courses: null,
   revenue_tahfez: null,
-  clicks: null,\n  donation_users: null,
+  clicks: null,
+  donation_users: null,
+  tiktok_impressions: null,
+  tiktok_video_views: null,
+  tiktok_spend: null,
+  reach: null,
+  impressions: null,
   days: 0,
 });
 
@@ -549,7 +593,13 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           tahfez_spend: null,
           revenue_courses: null,
           revenue_tahfez: null,
-          clicks: null,\n          donation_users: null,
+          clicks: null,
+          donation_users: null,
+          tiktok_impressions: null,
+          tiktok_video_views: null,
+          tiktok_spend: null,
+          reach: null,
+          impressions: null,
         });
 
         let msgOrdersTotal: number | null = null;
@@ -631,7 +681,20 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
               m.revenue_courses = add(m.revenue_courses, v); d.revenue_courses = add(d.revenue_courses, v); break;
             case "revenue_tahfez":
               m.revenue_tahfez = add(m.revenue_tahfez, v); d.revenue_tahfez = add(d.revenue_tahfez, v); break;
-            case "clicks":\n              m.clicks = add(m.clicks, v); d.clicks = add(d.clicks, v); break;\n            case "donation_users":\n              m.donation_users = add(m.donation_users, v); d.donation_users = add(d.donation_users, v); break;
+            case "clicks":
+              m.clicks = add(m.clicks, v); d.clicks = add(d.clicks, v); break;
+            case "donation_users":
+              m.donation_users = add(m.donation_users, v); d.donation_users = add(d.donation_users, v); break;
+            case "tiktok_impressions":
+              m.tiktok_impressions = add(m.tiktok_impressions, v); d.tiktok_impressions = add(d.tiktok_impressions, v); break;
+            case "tiktok_video_views":
+              m.tiktok_video_views = add(m.tiktok_video_views, v); d.tiktok_video_views = add(d.tiktok_video_views, v); break;
+            case "tiktok_spend":
+              m.tiktok_spend = add(m.tiktok_spend, v); d.tiktok_spend = add(d.tiktok_spend, v); break;
+            case "reach":
+              m.reach = add(m.reach, v); d.reach = add(d.reach, v); break;
+            case "impressions":
+              m.impressions = add(m.impressions, v); d.impressions = add(d.impressions, v); break;
             case "total_spend_total":   totalSpendExplicit = add(totalSpendExplicit, v); break;
             case "total_spend_generic": totalSpendGeneric  = add(totalSpendGeneric, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
@@ -788,7 +851,13 @@ async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
     tahfez_spend: d.tahfez_spend,
     revenue_courses: d.revenue_courses,
     revenue_tahfez: d.revenue_tahfez,
-    clicks: d.clicks,\n    donation_users: d.donation_users,
+    clicks: d.clicks,
+    donation_users: d.donation_users,
+    tiktok_impressions: d.tiktok_impressions,
+    tiktok_video_views: d.tiktok_video_views,
+    tiktok_spend: d.tiktok_spend,
+    reach: d.reach,
+    impressions: d.impressions,
     synced_at: new Date().toISOString(),
   }));
 

@@ -7441,7 +7441,11 @@
               + 'web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, '
               // The service figures: leads, reservations and the engagement,
               // follow and profile-visit blocks the service template shows.
-              + 'engagement, engagement_spend, follows_fb, follows_ig, follow_spend, profile_visits, profile_visit_spend, leads_total, leads_qualified, deals_fb, deals_ig, deals_whatsapp, deals_unknown, deals_total, total_spend, total_tahfez, courses_spend, tahfez_spend, revenue_courses, revenue_tahfez, clicks, donation_users')
+              + 'engagement, engagement_spend, follows_fb, follows_ig, follow_spend, profile_visits, profile_visit_spend, leads_total, leads_qualified, deals_fb, deals_ig, deals_whatsapp, deals_unknown, deals_total, total_spend, total_tahfez, courses_spend, tahfez_spend, revenue_courses, revenue_tahfez, clicks, donation_users, '
+              // TikTok delivery, which only the sheet has — TikTok is not a
+              // connected ad platform. A name here that is not a real column
+              // makes PostgREST reject the whole request, not just that column.
+              + 'tiktok_impressions, tiktok_video_views, tiktok_spend, reach, impressions')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey)
         .gte('day', range.from).lte('day', range.to);
@@ -7454,7 +7458,8 @@
       ['msg_count','msg_orders','msg_pieces','msg_revenue','web_orders','web_pieces',
        'web_revenue','web_spend','msg_spend','branding_spend','total_revenue',
        'web_orders_confirmed','web_pieces_confirmed','web_revenue_confirmed',
-       'engagement','engagement_spend','follows_fb','follows_ig','follow_spend','profile_visits','profile_visit_spend','leads_total','leads_qualified','deals_fb','deals_ig','deals_whatsapp','deals_unknown','deals_total','total_spend','total_tahfez','courses_spend','tahfez_spend','revenue_courses','revenue_tahfez','clicks','donation_users'].forEach(f => {
+       'engagement','engagement_spend','follows_fb','follows_ig','follow_spend','profile_visits','profile_visit_spend','leads_total','leads_qualified','deals_fb','deals_ig','deals_whatsapp','deals_unknown','deals_total','total_spend','total_tahfez','courses_spend','tahfez_spend','revenue_courses','revenue_tahfez','clicks','donation_users',
+       'tiktok_impressions','tiktok_video_views','tiktok_spend','reach','impressions'].forEach(f => {
         let t = null;
         data.forEach(r => { if (r[f] != null) t = (t ?? 0) + Number(r[f]); });
         sum[f] = t;
@@ -10932,8 +10937,12 @@
         custom_to:   customTo   || undefined,
       };
 
+      // The per-placement awareness figures cost an extra Meta call, and only
+      // the awareness template shows them, so they are only asked for there.
+      const _wantPlacement = _getTemplate() === 'awareness';
+
       // 10 parallel calls: Meta (4) + Shopify + Clarity + Google Ads + TikTok Ads + platform + region + ad
-      const [metaRes, campaignRes, dailyRes, shopifyAllRes, clarityRes, platformRes, regionRes, adRes] =
+      const [metaRes, campaignRes, dailyRes, shopifyAllRes, clarityRes, platformRes, regionRes, adRes, placementRes] =
         await Promise.allSettled([
           callEdgeFunction('meta-data', baseMeta),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'campaign' }),
@@ -10945,6 +10954,7 @@
           callEdgeFunction('meta-data', { ...baseMeta, level: 'platform' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'region' }),
           callEdgeFunction('meta-data', { ...baseMeta, level: 'ad' }),
+          _wantPlacement ? callEdgeFunction('meta-platform', baseMeta) : Promise.resolve(null),
         ]);
 
       // ── Parse Meta account-level ──
@@ -11100,6 +11110,10 @@
 
       // ── Parse Analysis breakdowns ──
       const platforms    = (platformRes?.status === 'fulfilled' && !platformRes.value?.error) ? (platformRes.value?.platforms || []) : [];
+      // meta-platform carries the same placements with the awareness metrics
+      // attached. Asked for only on the awareness template, so an empty array
+      // here means "not requested", not "Meta reported nothing".
+      const placements   = (placementRes?.status === 'fulfilled' && !placementRes.value?.error) ? (placementRes.value?.platforms || []) : [];
       const regions      = (regionRes?.status   === 'fulfilled' && !regionRes.value?.error)   ? (regionRes.value?.regions   || []) : [];
       const ads          = (adRes?.status        === 'fulfilled' && !adRes.value?.error)        ? (adRes.value?.ads           || []) : [];
       const topProductRows = getShopifyRows('products') ?? [];
@@ -11587,8 +11601,18 @@
       _updateTemplateBtnLabel(_curTmpl);
 
       // ── Per-platform awareness data ──
-      const _fbPlat = platforms.find(p => p.publisher_platform === 'facebook')  || {};
-      const _igPlat = platforms.find(p => p.publisher_platform === 'instagram') || {};
+      // meta-data returns the placement as `platform`; this read `publisher_platform`,
+      // which that response never carried, so _fbPlat and _igPlat were always {}
+      // and every Facebook and Instagram column on the awareness cards showed
+      // "—" regardless of what Meta reported. Both names are accepted now.
+      // meta-platform first where it was asked for, because it carries the
+      // awareness metrics; meta-data's own breakdown otherwise, for spend and
+      // impressions on every other template.
+      const _platOf = want => placements.find(p => p.platform === want)
+        || platforms.find(p => (p.platform ?? p.publisher_platform) === want)
+        || {};
+      const _fbPlat = _platOf('facebook');
+      const _igPlat = _platOf('instagram');
       const _fv = v => (v !== null && v !== undefined && !isNaN(v) && v > 0) ? v : null;
       const _fbSpend = _fv(parseNum(_fbPlat.spend));
       const _igSpend = _fv(parseNum(_igPlat.spend));
@@ -11596,6 +11620,16 @@
       const _igImpr  = _fv(parseNum(_igPlat.impressions));
       const _fbCpm   = (_fbSpend && _fbImpr) ? _fbSpend / _fbImpr * 1000 : null;
       const _igCpm   = (_igSpend && _igImpr) ? _igSpend / _igImpr * 1000 : null;
+      // Instagram on its own. A goal set for Instagram cannot be measured
+      // against the account total: Facebook delivery would count towards it.
+      const _igReach  = _fv(parseNum(_igPlat.reach));
+      const _igEngage = _fv(parseNum(_igPlat.engagement));
+      const _igVideo  = _fv(parseNum(_igPlat.video_views));
+      const _igFollow = _fv(parseNum(_igPlat.follows));
+      const _fbReach  = _fv(parseNum(_fbPlat.reach));
+      const _fbEngage = _fv(parseNum(_fbPlat.engagement));
+      const _fbVideo  = _fv(parseNum(_fbPlat.video_views));
+      const _fbFollow = _fv(parseNum(_fbPlat.follows));
       const _fn  = v => _fv(v) !== null ? _fv(v).toLocaleString('en', {maximumFractionDigits:0}) : '—';
       const _fc  = v => _fv(v) !== null ? fmt(_fv(v), curr) : '—';
       const _ff  = v => _fv(v) !== null ? fmt(_fv(v), '', 2) : '—';
@@ -11876,6 +11910,100 @@
       const _donTotal    = _svcNd('total_spend')
         ?? ((((_donMsgSpend ?? 0) + (_donWebSpend ?? 0)) || null));
 
+      // ── Instagram on its own ────────────────────────────────────────────
+      // Separate cards rather than the Instagram tab on the cards above,
+      // because a target binds to a card id and reads whatever that card is
+      // showing. On a tabbed card the same id means the account total, Facebook
+      // or Instagram depending on which tab someone last clicked — so an
+      // Instagram goal could be reported as met on Facebook's delivery. These
+      // ids only ever hold Instagram.
+      const _igCard = (cls, icon, label, value, sub, id) => `
+            <div class="kpi-card ${cls}" data-card-id="ig-${id}">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon"><span class="kpi-marks"></span>${icon}</div>
+              <div class="kpi-label">${label}</div>
+              <div class="kpi-value">${value}</div>
+              <div class="kpi-sub">${sub}</div>
+            </div>`;
+      const _igAnything = [_igReach, _igImpr, _igEngage, _igVideo, _igFollow, _igSpend]
+        .some(v => v != null);
+      const _igAwarenessSection = `
+        <div class="kpi-section" data-section-id="ig-awareness">
+          <div class="section-label">Instagram only <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          ${_igAnything ? '' : `
+            <div class="tgt-note" style="padding:10px 0">
+              Meta reported no Instagram delivery for this period. If Instagram is
+              running, the placement breakdown may be unavailable for this account.
+            </div>`}
+          <div class="kpi-grid" data-grid-id="ig-awareness">
+            ${_igCard('c-sky', '👥', 'Reach', _fn(_igReach),
+                'Meta Ads · Instagram placements', 'reach')}
+            ${_igCard('c-blue solid', '👁️', 'Impressions', _fn(_igImpr),
+                'Meta Ads · Instagram placements', 'impressions')}
+            ${_igCard('c-purple solid', '❤️', 'Engagement', _fn(_igEngage),
+                'Meta Ads · Instagram placements', 'engagement')}
+            ${_igCard('c-orange', '🎥', 'Video Plays', _fn(_igVideo),
+                'Meta Ads · 3-second plays', 'video-plays')}
+            ${_igCard('c-green solid', '👍', 'Follows', _fn(_igFollow),
+                'Meta Ads · Instagram placements', 'follows')}
+            ${_igCard('c-gold solid', '💰', 'Spend', _fc(_igSpend),
+                'Meta Ads · Instagram placements', 'spend')}
+          </div>
+        </div>`;
+
+      // ── TikTok ──────────────────────────────────────────────────────────
+      // TikTok is not a connected ad platform here, so these come from the
+      // client's Notion sheet. The section says where each figure came from so
+      // a blank card is read as "nobody has filled it" rather than as a zero.
+      const _ttImpr  = _svcNd('tiktok_impressions');
+      const _ttViews = _svcNd('tiktok_video_views');
+      const _ttSpend = _svcNd('tiktok_spend');
+      const _ttCard = (cls, icon, label, value, sub, id) => `
+            <div class="kpi-card ${cls}" data-card-id="tt-${id}">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              <div class="kpi-icon"><span class="kpi-marks"></span>${icon}</div>
+              <div class="kpi-label">${label}</div>
+              <div class="kpi-value">${value}</div>
+              <div class="kpi-sub">${sub}</div>
+            </div>`;
+      // ── What the sheet itself records ───────────────────────────────────
+      // Cytarose's sheet carries its own Reach and Impressions, and those are
+      // the figures the client is reported on. Shown next to Meta's rather
+      // than replacing them, because the two will not agree: Meta counts the
+      // ad account, the sheet counts whatever the team decided to report.
+      const _ndReach = _svcNd('reach');
+      const _ndImpr  = _svcNd('impressions');
+      const _sheetAwarenessSection = (_ndReach == null && _ndImpr == null) ? '' : `
+        <div class="kpi-section" data-section-id="sheet-awareness">
+          <div class="section-label">Recorded in the sheet <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          <div class="kpi-grid" data-grid-id="sheet-awareness">
+            ${_svcCard('c-sky', '👥', 'Reach', _svcInt(_ndReach),
+                _srcSub(null, _ndRow?.reach, 'From Notion'), 'sheet-reach')}
+            ${_svcCard('c-blue solid', '👁️', 'Impressions', _svcInt(_ndImpr),
+                _srcSub(null, _ndRow?.impressions, 'From Notion'), 'sheet-impressions')}
+          </div>
+        </div>`;
+
+      const _tiktokAwarenessSection = `
+        <div class="kpi-section" data-section-id="tt-awareness">
+          <div class="section-label">TikTok <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          ${(_ttImpr != null || _ttViews != null || _ttSpend != null) ? '' : `
+            <div class="tgt-note" style="padding:10px 0">
+              Nothing filled yet. TikTok is not connected as an ad platform, so these
+              read from the client's Notion sheet — add <strong>TikTok Impressions</strong>,
+              <strong>TikTok Video Views</strong> and <strong>TikTok Spending</strong> columns
+              and the sync will pick them up.
+            </div>`}
+          <div class="kpi-grid" data-grid-id="tt-awareness">
+            ${_ttCard('c-blue solid', '👁️', 'Impressions', _svcInt(_ttImpr),
+                _srcSub(null, _ndRow?.tiktok_impressions, 'From Notion'), 'impressions')}
+            ${_ttCard('c-orange', '🎥', 'Video Views', _svcInt(_ttViews),
+                _srcSub(null, _ndRow?.tiktok_video_views, 'From Notion'), 'video-views')}
+            ${_ttCard('c-gold solid', '💰', 'Spend', _svcMoney(_ttSpend),
+                _srcSub(null, _ndRow?.tiktok_spend, 'From Notion'), 'spend')}
+          </div>
+        </div>`;
+
       const _donationsSection = `
         <div class="kpi-section" data-section-id="donations">
           <div class="section-label">Donations <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
@@ -11980,18 +12108,22 @@
               <button class="platform-tab" id="ptab-i" onclick="switchAwarenessPlatform('i')">Instagram</button>
             </div>
             <div class="kpi-grid" data-grid-id="awareness-kpis">
-              ${_aw('c-sky',          '👥', 'Reach',               _fn(reach),           '—', '—',        'Meta Ads · Unique accounts')}
+              ${_aw('c-sky',          '👥', 'Reach',               _fn(reach),           _fn(_fbReach), _fn(_igReach), 'Meta Ads · Unique accounts')}
               ${_aw('c-blue solid',   '👁️', 'Impressions',         _fn(impressions),     _fn(_fbImpr), _fn(_igImpr), 'Meta Ads · Total views')}
               ${_aw('c-gold solid',   '💰', 'CPM',                 _fc(cpm),             _fc(_fbCpm),  _fc(_igCpm),  'Cost per 1,000 impressions')}
               ${_aw('c-teal',         '🔁', 'Frequency',           _ff(frequency),       '—', '—',        'Avg times shown per person')}
-              ${_aw('c-purple solid', '❤️', 'Engagements',         _fn(numEngagements),  '—', '—',        'Total post engagements')}
+              ${_aw('c-purple solid', '❤️', 'Engagements',         _fn(numEngagements),  _fn(_fbEngage), _fn(_igEngage), 'Total post engagements')}
               ${_aw('c-coral solid',  '💸', 'Cost per Engagement', _fc(costPerEngage),   '—', '—',        'Spend ÷ Engagements')}
-              ${_aw('c-green solid',  '👍', 'Follows',             _fn(numLikes),        '—', '—',        'Page likes / follows')}
+              ${_aw('c-green solid',  '👍', 'Follows',             _fn(numLikes),        _fn(_fbFollow), _fn(_igFollow), 'Page likes / follows')}
               ${_aw('c-navy solid',   '💸', 'Cost per Follow',     _fc(costPerFollow),   '—', '—',        'Spend ÷ Follows')}
-              ${_aw('c-orange',       '🎥', 'Video Views',         _fn(parseNum(d['actions:video_view'])), '—', '—', 'Total video views')}
+              ${_aw('c-orange',       '🎥', 'Video Views',         _fn(parseNum(d['actions:video_view'])), _fn(_fbVideo), _fn(_igVideo), 'Total video views')}
               ${_aw('c-sky solid',    '💸', 'Cost per Video View', _fc(parseNum(d['cost_per_action_type:video_view'])), '—', '—', 'Spend ÷ Video Views')}
             </div>
           </div>
+
+          ${_sheetAwarenessSection}
+          ${_igAwarenessSection}
+          ${_tiktokAwarenessSection}
 
         ` : _curTmpl === 'donations' ? `
           ${_spendingSection(false)}
@@ -12181,8 +12313,11 @@
       // The funnel is a website journey — view content, add to cart, checkout.
       // On the messages templates there is no such journey, so the section was
       // showing empty or misleading stages.
+      // An awareness account buys reach, not orders, so the same applies: the
+      // funnel's stages would all read zero and look like a collapse.
       if (_curTmpl !== 'messages' && _curTmpl !== 'messages-service'
-          && _curTmpl !== 'education' && _curTmpl !== 'donations') {
+          && _curTmpl !== 'education' && _curTmpl !== 'donations'
+          && _curTmpl !== 'awareness') {
       document.getElementById('content').innerHTML += `
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
         ${(()=>{
