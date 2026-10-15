@@ -5217,7 +5217,7 @@
       const open = p.style.display !== 'none';
       // Clear any nudge from last time before measuring, or the correction
       // compounds each time it is opened.
-      p.style.marginLeft = '';
+      p.style.transform = '';
       p.style.display = open ? 'none' : 'block';
       if (!open) {
         const cur = _getTemplate();
@@ -5228,25 +5228,31 @@
 
     // Keep the menu on screen.
     //
-    // It hangs off the button with right:0, so it opens leftwards. On a narrow
-    // window the Template button sits near the left edge and 230px of menu went
-    // straight off it -- the options were drawn, just past the edge of the
-    // screen where they could not be read or tapped. Anchoring is left to CSS;
-    // this only nudges it back by however much it overhangs, so the common case
-    // is untouched.
+    // It hangs off the button with right:0, so it opens leftwards. The Template
+    // button sits at the left end of its toolbar, so 230px of menu went
+    // straight off the edge -- the options were drawn, just past where they
+    // could be read or tapped.
+    //
+    // The nudge is a transform, not a margin. An absolutely positioned box with
+    // right:0 and left:auto is laid out from its right edge, so margin-left
+    // changes the computed left and the browser takes the width back off the
+    // other side: the box does not move at all. Measured in the page rather
+    // than reasoned about -- margin-left left it at -108, transform put it at
+    // 8. The first version of this shipped with margin-left and did nothing,
+    // because the check I ran tested my arithmetic instead of the CSS.
     function _tmplFit(p) {
       const pad = 8;
       p.style.maxWidth = Math.max(180, document.documentElement.clientWidth - pad * 2) + 'px';
       const r = p.getBoundingClientRect();
       const vw = document.documentElement.clientWidth;
       let shift = 0;
-      if (r.left < pad) shift = pad - r.left;                  // off the left
-      else if (r.right > vw - pad) shift = (vw - pad) - r.right;  // off the right
-      if (shift) p.style.marginLeft = shift + 'px';
+      if (r.left < pad) shift = pad - r.left;                     // off the left
+      else if (r.right > vw - pad) shift = (vw - pad) - r.right;   // off the right
+      if (shift) p.style.transform = 'translateX(' + Math.round(shift) + 'px)';
     }
     window.addEventListener('resize', () => {
       const p = document.getElementById('template-picker');
-      if (p && p.style.display !== 'none') { p.style.marginLeft = ''; _tmplFit(p); }
+      if (p && p.style.display !== 'none') { p.style.transform = ''; _tmplFit(p); }
     });
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.tmpl-picker-wrap')) {
