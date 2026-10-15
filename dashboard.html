@@ -3613,6 +3613,10 @@
           <span class="tmpl-option-icon">🤝</span>
           <div class="tmpl-option-body"><div class="tmpl-option-title">Messages · Service</div><div class="tmpl-option-desc">Messages, leads, deals + cost per each</div></div>
         </div>
+        <div class="tmpl-option" data-tmpl="education" onclick="_setTemplate('education')">
+          <span class="tmpl-option-icon">🎓</span>
+          <div class="tmpl-option-body"><div class="tmpl-option-title">Education</div><div class="tmpl-option-desc">Messages, Tahfez, courses, reservations</div></div>
+        </div>
         <div class="tmpl-option" data-tmpl="google-ads" onclick="_setTemplate('google-ads')">
           <span class="tmpl-option-icon">🔍</span>
           <div class="tmpl-option-body"><div class="tmpl-option-title">Google Ads</div><div class="tmpl-option-desc">Spend, Clicks, Conversions, Keywords</div></div>
@@ -5197,7 +5201,7 @@
       loadData();
     }
     function _updateTemplateBtnLabel(t) {
-      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', 'google-ads':'🔍 Google Ads' };
+      const M = { full:'🏪 Full', awareness:'👁️ Awareness', messages:'📦 Msg · Product', 'messages-service':'🤝 Msg · Service', education:'🎓 Education', 'google-ads':'🔍 Google Ads' };
       const btn = document.getElementById('template-btn');
       // Keep the 📋 prefix always. Showing only the active template's name made
       // the button unrecognisable as the template control once one was picked.
@@ -7392,7 +7396,7 @@
               + 'web_orders_confirmed, web_pieces_confirmed, web_revenue_confirmed, '
               // The service figures: leads, reservations and the engagement,
               // follow and profile-visit blocks the service template shows.
-              + 'engagement, engagement_spend, follows_fb, follows_ig, follow_spend, profile_visits, profile_visit_spend, leads_total, leads_qualified, deals_fb, deals_ig, deals_whatsapp, deals_unknown, deals_total, total_spend')
+              + 'engagement, engagement_spend, follows_fb, follows_ig, follow_spend, profile_visits, profile_visit_spend, leads_total, leads_qualified, deals_fb, deals_ig, deals_whatsapp, deals_unknown, deals_total, total_spend, total_tahfez, courses_spend, tahfez_spend, revenue_courses, revenue_tahfez')
         .eq('organization_id', currentOrgId)
         .eq('account_key', accountKey)
         .gte('day', range.from).lte('day', range.to);
@@ -7405,7 +7409,7 @@
       ['msg_count','msg_orders','msg_pieces','msg_revenue','web_orders','web_pieces',
        'web_revenue','web_spend','msg_spend','branding_spend','total_revenue',
        'web_orders_confirmed','web_pieces_confirmed','web_revenue_confirmed',
-       'engagement','engagement_spend','follows_fb','follows_ig','follow_spend','profile_visits','profile_visit_spend','leads_total','leads_qualified','deals_fb','deals_ig','deals_whatsapp','deals_unknown','deals_total','total_spend'].forEach(f => {
+       'engagement','engagement_spend','follows_fb','follows_ig','follow_spend','profile_visits','profile_visit_spend','leads_total','leads_qualified','deals_fb','deals_ig','deals_whatsapp','deals_unknown','deals_total','total_spend','total_tahfez','courses_spend','tahfez_spend','revenue_courses','revenue_tahfez'].forEach(f => {
         let t = null;
         data.forEach(r => { if (r[f] != null) t = (t ?? 0) + Number(r[f]); });
         sum[f] = t;
@@ -7442,6 +7446,7 @@
       'web_orders_confirmed', 'web_pieces_confirmed', 'web_revenue_confirmed',
       'total_revenue', 'branding_spend',
       'engagement', 'engagement_spend', 'follows_fb', 'follows_ig', 'follow_spend', 'profile_visits', 'profile_visit_spend', 'leads_total', 'leads_qualified', 'deals_fb', 'deals_ig', 'deals_whatsapp', 'deals_unknown', 'deals_total', 'total_spend',
+      'total_tahfez', 'courses_spend', 'tahfez_spend', 'revenue_courses', 'revenue_tahfez',
     ];
     const ND_WHOLE_FIELDS = new Set([
       'msg_count', 'msg_orders', 'msg_pieces',
@@ -7449,6 +7454,7 @@
       'engagement', 'follows_fb', 'follows_ig', 'profile_visits',
       'leads_total', 'leads_qualified',
       'deals_fb', 'deals_ig', 'deals_whatsapp', 'deals_unknown', 'deals_total',
+      'total_tahfez',
     ]);
 
     async function ndSumForAccounts(accountKeys, period) {
@@ -11311,8 +11317,33 @@
       // account whose sheet does not record spend, which is most of them.
       const _ndWebSpend = _mhNum(_ndRow?.web_spend) ?? _mhNum(_mhRow?.web_spend);
       const _ndMsgSpendC = _mhNum(_ndRow?.msg_spend) ?? _mhNum(_mhRow?.msg_spend);
-      const _ndConvSpend = (_ndWebSpend == null && _ndMsgSpendC == null)
-        ? null : (_ndWebSpend ?? 0) + (_ndMsgSpendC ?? 0);
+      // The academies spend on courses and Tahfez rather than on a website, and
+      // those are selling campaigns. Until they were matched, Nour and Retaj had
+      // no conversion spend at all and their ROAS fell back to Meta's figure.
+      const _ndCourseSpend = _mhNum(_ndRow?.courses_spend);
+      const _ndTahfezSpend = _mhNum(_ndRow?.tahfez_spend);
+      const _ndSpendParts = (_ndWebSpend == null && _ndMsgSpendC == null
+                             && _ndCourseSpend == null && _ndTahfezSpend == null)
+        ? null : (_ndWebSpend ?? 0) + (_ndMsgSpendC ?? 0)
+               + (_ndCourseSpend ?? 0) + (_ndTahfezSpend ?? 0);
+
+      // The named parts can only ever understate the selling spend, because a
+      // sheet is free to call a campaign whatever it likes: Retaj records their
+      // course spend as "Muslima Spending", after the course, so the parts came
+      // to 6,112 of a real 12,182 and would have reported ROAS 2.77 instead of
+      // 1.39. Where the sheet keeps its own total, everything that is not
+      // branding is selling spend, so the larger of the two is the honest
+      // figure. Checked across every account with September data: it agrees to
+      // the pound wherever the parts are complete -- Nour, Hayah, TR and
+      // VANGUARD -- and never fires at all for a sheet with no total, which is
+      // every product account including Ibriz and Nuya.
+      const _ndTotalSpendRaw = _mhNum(_ndRow?.total_spend);
+      const _ndBrandRawForConv = _mhNum(_ndRow?.branding_spend);
+      const _ndSpendLessBrand = _ndTotalSpendRaw == null
+        ? null : Math.max(0, _ndTotalSpendRaw - (_ndBrandRawForConv ?? 0));
+      const _ndConvSpend = (_ndSpendParts == null && _ndSpendLessBrand == null)
+        ? null
+        : Math.max(_ndSpendParts ?? 0, _ndSpendLessBrand ?? 0);
 
       const _spendBasisIsNotion = _ndConvSpend != null && _ndConvSpend > 0;
       const conversionSpend = _spendBasisIsNotion
@@ -11322,7 +11353,9 @@
       // Named once so every card that shows a ratio can say which spend it
       // used, rather than leaving people to reconcile it by hand.
       const _spendBasisLabel = _spendBasisIsNotion
-        ? 'Notion conversion spend (website + messages)'
+        ? ((_ndCourseSpend != null || _ndTahfezSpend != null)
+            ? 'Notion conversion spend (courses + tahfez + messages)'
+            : 'Notion conversion spend (website + messages)')
         : (brandingSpend > 0 ? 'Meta conversion spend' : 'Meta spend');
 
       // What a card should say under its number. A figure someone typed still
@@ -11695,6 +11728,70 @@
       // A block appears when the sheet carries either its count or its spend.
       const _svcBlock = (has, cards) => has ? cards : '';
 
+      // ── Education ───────────────────────────────────────────────────────
+      // An academy sells places on courses and on Tahfez. Total Reservations
+      // covers both, so the course count is the remainder -- no sheet carries a
+      // Total Courses column, and deriving it keeps the three cards reconciling
+      // with each other however the team splits the work.
+      //
+      // CPR and ROAS are charged on total spending, and CR% is reservations
+      // over messages, as the team works them out. Their sheets do store CPR,
+      // CR%, AOV and ROAS, but those are left unmatched on purpose: the stored
+      // versions disagree between sheets about which spend they divided by.
+      const _eduMsgs      = _svcMsgs;
+      const _eduMsgSpend  = _svcMsgSpend;
+      const _eduTahfez    = _svcNd('total_tahfez');
+      const _eduReserved  = _svcNd('deals_total');
+      // Only a remainder when both halves are known, and never negative: a
+      // sheet where Tahfez exceeds the total is a mistake to show, not to hide.
+      const _eduCourses   = (_eduReserved != null && _eduTahfez != null)
+        ? Math.max(0, _eduReserved - _eduTahfez) : null;
+      const _eduCourseSpend = _svcNd('courses_spend');
+      const _eduTahfezSpend = _svcNd('tahfez_spend');
+      const _eduTotalSpend = _svcNd('total_spend')
+        ?? ((((_eduMsgSpend ?? 0) + (_eduCourseSpend ?? 0) + (_eduTahfezSpend ?? 0)) || null))
+        ?? (spend || null);
+      const _eduRevenue   = totalRevenue || null;
+      const _eduPct = (v) => v == null ? '—' : v.toFixed(2) + '%';
+
+      const _educationSection = `
+        <div class="kpi-section" data-section-id="education">
+          <div class="section-label">Education <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
+          <div class="kpi-grid" data-grid-id="education">
+            ${_svcCard('c-orange', '💬', 'No of Messages', _svcInt(_eduMsgs),
+                _srcSub(_storedNumMsg, _ndRow?.msg_count, 'Manual entry'), 'edu-messages')}
+            ${_svcCard('c-coral solid', '💸', 'CPMsg',
+                _svcMoney(_svcDiv(_eduMsgSpend ?? _eduTotalSpend, _eduMsgs)),
+                _eduMsgSpend != null ? 'Messages spending ÷ Messages' : 'Total spending ÷ Messages · no messages spending in the sheet',
+                'edu-cpmsg')}
+            ${_svcCard('c-blue', '💰', 'Messages Spending', _svcMoney(_eduMsgSpend),
+                _srcSub(null, _ndRow?.msg_spend, 'Meta Ads'), 'edu-messages-spending')}
+            ${_svcCard('c-blue solid', '💰', 'Total Spending', _svcMoney(_eduTotalSpend),
+                _svcNd('total_spend') != null ? 'From Notion' : 'Messages + courses + tahfez', 'edu-total-spending')}
+
+            ${_svcCard('c-purple', '📖', 'Total Tahfez', _svcInt(_eduTahfez),
+                _eduTahfezSpend != null ? 'Spending ' + _svcMoney(_eduTahfezSpend) : 'From Notion', 'edu-tahfez')}
+            ${_svcCard('c-teal', '📚', 'Total Courses', _svcInt(_eduCourses),
+                _eduCourses != null ? 'Reservations − Tahfez'
+                  + (_eduCourseSpend != null ? ' · spending ' + _svcMoney(_eduCourseSpend) : '')
+                  : 'Needs reservations and Tahfez', 'edu-courses')}
+            ${_svcCard('c-green solid', '🎓', 'Total Reservations', _svcInt(_eduReserved),
+                'From Notion', 'edu-reservations')}
+
+            ${_svcCard('c-navy solid', '💰', 'CPR', _svcMoney(_svcDiv(_eduTotalSpend, _eduReserved)),
+                'Total spending ÷ Reservations', 'edu-cpr')}
+            ${_svcCard('c-purple solid', '🎯', 'CR%',
+                _eduPct(_svcDiv(_eduReserved, _eduMsgs) != null ? _svcDiv(_eduReserved, _eduMsgs) * 100 : null),
+                'Reservations ÷ Messages', 'edu-cr')}
+            ${_svcCard('c-teal solid', '🧾', 'AOV', _svcMoney(_svcDiv(_eduRevenue, _eduReserved)),
+                'Revenue ÷ Reservations', 'edu-aov')}
+            ${_svcCard('c-navy solid', '💵', 'Revenue', _svcMoney(_eduRevenue), _revSubLabel, 'edu-revenue')}
+            ${_svcCard('c-gold solid', '📈', 'ROAS',
+                (() => { const r = _svcDiv(_eduRevenue, _eduTotalSpend); return r == null ? '—' : r.toFixed(2) + 'x'; })(),
+                'Revenue ÷ Total spending', 'edu-roas')}
+          </div>
+        </div>`;
+
       const _messagesServiceSection = `
         <div class="kpi-section" data-section-id="messages-service">
           <div class="section-label">Messages Analysis · Service <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
@@ -11778,6 +11875,10 @@
               ${_aw('c-sky solid',    '💸', 'Cost per Video View', _fc(parseNum(d['cost_per_action_type:video_view'])), '—', '—', 'Spend ÷ Video Views')}
             </div>
           </div>
+
+        ` : _curTmpl === 'education' ? `
+          ${_spendingSection(false)}
+          ${_educationSection}
 
         ` : _curTmpl === 'messages-service' ? `
           ${_spendingSection(false)}
@@ -11959,7 +12060,7 @@
       // The funnel is a website journey — view content, add to cart, checkout.
       // On the messages templates there is no such journey, so the section was
       // showing empty or misleading stages.
-      if (_curTmpl !== 'messages' && _curTmpl !== 'messages-service') {
+      if (_curTmpl !== 'messages' && _curTmpl !== 'messages-service' && _curTmpl !== 'education') {
       document.getElementById('content').innerHTML += `
         <div class="section-label">Funnel <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● ${periodLabel}</span></div>
         ${(()=>{
@@ -12617,7 +12718,15 @@
       // revenue by a Meta spend.
       const _aggNdConv = (() => {
         const w = _num(_aggNd?.web_spend), m = _num(_aggNd?.msg_spend);
-        return (w == null && m == null) ? null : (w ?? 0) + (m ?? 0);
+        const c = _num(_aggNd?.courses_spend), t = _num(_aggNd?.tahfez_spend);
+        const parts = (w == null && m == null && c == null && t == null)
+          ? null : (w ?? 0) + (m ?? 0) + (c ?? 0) + (t ?? 0);
+        // Same reasoning as the single account: a sheet's own total, less
+        // branding, catches selling spend recorded under a course's name.
+        const tot = _num(_aggNd?.total_spend);
+        const lessBrand = tot == null ? null : Math.max(0, tot - (_num(_aggNd?.branding_spend) ?? 0));
+        return (parts == null && lessBrand == null)
+          ? null : Math.max(parts ?? 0, lessBrand ?? 0);
       })();
       const _aggBasisIsNotion = _aggNdConv != null && _aggNdConv > 0;
       const aggConvSpend  = _aggBasisIsNotion

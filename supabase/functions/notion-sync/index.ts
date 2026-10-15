@@ -166,6 +166,18 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
                  "followersspending", "followersspend", "spendingfollow"],
   profile_visit_spend: ["profilevisitspending", "profilevisitsspending", "profilevisitspend"],
 
+  // -- Education accounts ----------------------------------------------
+  // The academies split their work into Tahfez and everything they call
+  // courses. Total Reservations covers both, so the course count is worked out
+  // as the remainder rather than read -- no sheet carries a Total Courses
+  // column. Courses Spending and Tahfez Spending are selling campaigns and
+  // count as conversion spend, which NOT_BRANDING already keeps them out of.
+  total_tahfez:    ["totaltahfez", "totaltahfiz", "tahfeztotal"],
+  courses_spend:   ["coursesspending", "coursespending", "coursesspend", "coursespend"],
+  tahfez_spend:    ["tahfezspending", "tahfezspend", "tahfizspending"],
+  revenue_courses: ["revenuecourse", "revenuecourses", "coursesrevenue", "courserevenue"],
+  revenue_tahfez:  ["revenuetahfez", "tahfezrevenue", "revenuetahfiz"],
+
   msg_orders_total: ["nopurchase", "nopurchases", "purchases", "noofpurchase"],
   msg_orders_parts: ["fborder", "fborders", "igorder", "igorders", "whatsorder", "whatsorders",
                      "whatsapporder", "whatsapporders"],
@@ -393,6 +405,11 @@ type DaySums = {
   deals_unknown: number | null;
   deals_total: number | null;
   total_spend: number | null;
+  total_tahfez: number | null;
+  courses_spend: number | null;
+  tahfez_spend: number | null;
+  revenue_courses: number | null;
+  revenue_tahfez: number | null;
 };
 
 type MonthSums = {
@@ -418,6 +435,11 @@ type MonthSums = {
   deals_unknown: number | null;
   deals_total: number | null;
   total_spend: number | null;
+  total_tahfez: number | null;
+  courses_spend: number | null;
+  tahfez_spend: number | null;
+  revenue_courses: number | null;
+  revenue_tahfez: number | null;
   days: number;
 };
 
@@ -442,6 +464,11 @@ const blank = (): MonthSums => ({
   deals_unknown: null,
   deals_total: null,
   total_spend: null,
+  total_tahfez: null,
+  courses_spend: null,
+  tahfez_spend: null,
+  revenue_courses: null,
+  revenue_tahfez: null,
   days: 0,
 });
 
@@ -499,6 +526,11 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           deals_unknown: null,
           deals_total: null,
           total_spend: null,
+          total_tahfez: null,
+          courses_spend: null,
+          tahfez_spend: null,
+          revenue_courses: null,
+          revenue_tahfez: null,
         });
 
         let msgOrdersTotal: number | null = null;
@@ -570,6 +602,16 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
               m.deals_unknown = add(m.deals_unknown, v); d.deals_unknown = add(d.deals_unknown, v); break;
             case "deals_total":
               m.deals_total = add(m.deals_total, v); d.deals_total = add(d.deals_total, v); break;
+            case "total_tahfez":
+              m.total_tahfez = add(m.total_tahfez, v); d.total_tahfez = add(d.total_tahfez, v); break;
+            case "courses_spend":
+              m.courses_spend = add(m.courses_spend, v); d.courses_spend = add(d.courses_spend, v); break;
+            case "tahfez_spend":
+              m.tahfez_spend = add(m.tahfez_spend, v); d.tahfez_spend = add(d.tahfez_spend, v); break;
+            case "revenue_courses":
+              m.revenue_courses = add(m.revenue_courses, v); d.revenue_courses = add(d.revenue_courses, v); break;
+            case "revenue_tahfez":
+              m.revenue_tahfez = add(m.revenue_tahfez, v); d.revenue_tahfez = add(d.revenue_tahfez, v); break;
             case "total_spend_total":   totalSpendExplicit = add(totalSpendExplicit, v); break;
             case "total_spend_generic": totalSpendGeneric  = add(totalSpendGeneric, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
@@ -721,6 +763,11 @@ async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
     deals_unknown: d.deals_unknown,
     deals_total: d.deals_total,
     total_spend: d.total_spend,
+    total_tahfez: d.total_tahfez,
+    courses_spend: d.courses_spend,
+    tahfez_spend: d.tahfez_spend,
+    revenue_courses: d.revenue_courses,
+    revenue_tahfez: d.revenue_tahfez,
     synced_at: new Date().toISOString(),
   }));
 
