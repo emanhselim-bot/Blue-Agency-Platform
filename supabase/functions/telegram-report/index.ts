@@ -144,9 +144,32 @@ function lineFor(template: string, name: string, cur: string, r: Row): string {
       break;
     }
     case "awareness": {
-      bits.push(`👁 ${int(n(r.engagement))} engagement`);
-      bits.push(`👥 ${int((n(r.follows_fb) ?? 0) + (n(r.follows_ig) ?? 0) || null)} follows`);
+      // Only what the sheet actually carries. The first version pushed every
+      // figure whether or not it existed, so Fastum -- whose sheet holds spend
+      // and nothing else -- reported "— engagement · — follows", which reads
+      // like a collapse rather than a sheet with two columns in it.
+      const impr = n(r.impressions);
+      const rch  = n(r.reach);
+      const eng  = n(r.engagement);
+      const fol  = (n(r.follows_fb) ?? 0) + (n(r.follows_ig) ?? 0) || null;
+      if (rch  != null) bits.push(`👥 ${int(rch)} reach`);
+      if (impr != null) bits.push(`👁 ${int(impr)} impressions`);
+      if (eng  != null) bits.push(`❤️ ${int(eng)} engagement`);
+      if (fol  != null) bits.push(`👍 ${int(fol)} follows`);
       bits.push(`💰 ${money(tot, cur)}`);
+      if (impr) bits.push(`CPM ${money(ratio(tot, impr / 1000), cur)}`);
+      if (eng)  bits.push(`CPE ${money(ratio(tot, eng), cur)}`);
+      // TikTok is labelled rather than added in: it is not a connected
+      // platform and its spend is not in the Meta total above, so folding the
+      // two together would make a cost per result that means nothing.
+      const tImpr = n(r.tiktok_impressions);
+      const tView = n(r.tiktok_video_views);
+      if (tImpr != null || tView != null) {
+        const tt: string[] = [];
+        if (tImpr != null) tt.push(`${int(tImpr)} impressions`);
+        if (tView != null) tt.push(`${int(tView)} views`);
+        bits.push(`🎵 TikTok ${tt.join(" · ")}`);
+      }
       break;
     }
     case "messages": {
@@ -299,8 +322,23 @@ Deno.serve(async (req: Request) => {
 
   // Telegram refuses a message over 4096 characters, and silently losing the
   // tail would be worse than sending two.
+  //
+  // Splitting on a fixed offset was wrong: at 3800 characters the cut lands
+  // wherever it lands, including the middle of a <b> tag, and Telegram rejects
+  // the whole message when the HTML does not parse. It has not happened yet
+  // only because the report still fits in one. The split is between accounts
+  // now, which is both safe and where a reader would expect it.
   const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += 3800) chunks.push(text.slice(i, i + 3800));
+  {
+    const LIMIT = 3500;
+    let cur = "";
+    for (const block of text.split("\n\n")) {
+      const joined = cur ? cur + "\n\n" + block : block;
+      if (joined.length > LIMIT && cur) { chunks.push(cur); cur = block; }
+      else cur = joined;
+    }
+    if (cur) chunks.push(cur);
+  }
 
   if (body.dry_run) {
     return json({ ok: true, dry_run: true, day, accounts_with_data: withData.length,

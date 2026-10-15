@@ -31,8 +31,16 @@ ALL="notion-sync notion-discover telegram-report meta-data meta-platform"
 
 TARGETS="${*:-$ALL}"
 
-if ! command -v supabase >/dev/null 2>&1; then
-  echo "The supabase CLI is not installed. Install it, run 'supabase login', then try again." >&2
+# A global install is nicer, but npx works too, so not having run the install
+# is not a reason to stop.
+if command -v supabase >/dev/null 2>&1; then
+  SUPABASE=(supabase)
+elif command -v npx >/dev/null 2>&1; then
+  echo "(supabase CLI not installed globally — using npx)"
+  SUPABASE=(npx --yes supabase@latest)
+else
+  echo "Neither the supabase CLI nor npx is available." >&2
+  echo "Install one (npm i -g supabase), run 'supabase login', then try again." >&2
   exit 1
 fi
 
@@ -42,13 +50,30 @@ for fn in $TARGETS; do
     continue
   fi
 
-  # A literal backslash-n in the source is the fingerprint of a bad edit: it
-  # does not compile, and it is what was committed once already. Refuse rather
-  # than deploy something broken.
-  if grep -q '\\n' "supabase/functions/$fn/index.ts"; then
-    echo "!! supabase/functions/$fn/index.ts contains a literal \\n escape outside a string." >&2
-    echo "   That file will not compile. Fix it before deploying." >&2
-    exit 1
+  # Parse the file before uploading it. notion-sync was once committed with a
+  # literal backslash-n where a newline belonged -- a syntax error that nothing
+  # caught, because the deployed copy had been pasted in separately and was
+  # fine. A grep for that escape is not the check to make: "\n" inside a string
+  # is perfectly ordinary, and telegram-report has several. Parsing is.
+  if command -v deno >/dev/null 2>&1; then
+    if ! deno check --no-lock "supabase/functions/$fn/index.ts"; then
+      echo "!! $fn does not type-check. Not deploying it." >&2
+      exit 1
+    fi
+  elif command -v npx >/dev/null 2>&1; then
+    # No Deno available, so check syntax only: tsc cannot resolve the https
+    # imports or the Deno global, and those errors are expected here.
+    errs=$(npx --yes tsc --noEmit --target es2022 --module esnext \
+             --moduleResolution bundler --skipLibCheck --noResolve \
+             "supabase/functions/$fn/index.ts" 2>&1 \
+           | grep -v "Cannot find module" | grep -v "Cannot find name 'Deno'" || true)
+    if [ -n "$errs" ]; then
+      echo "!! $fn does not parse:" >&2
+      echo "$errs" >&2
+      exit 1
+    fi
+  else
+    echo "   (no deno or npx found — skipping the parse check)"
   fi
 
   args=(functions deploy "$fn" --project-ref "$PROJECT_REF")
@@ -56,8 +81,8 @@ for fn in $TARGETS; do
     *" $fn "*) args+=(--no-verify-jwt) ;;
   esac
 
-  echo "→ deploying $fn ${args[*]: -1}"
-  supabase "${args[@]}"
+  echo "→ deploying $fn"
+  "${SUPABASE[@]}" "${args[@]}"
 done
 
 echo
