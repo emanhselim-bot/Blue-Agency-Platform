@@ -335,7 +335,7 @@ Deno.serve(async (req: Request) => {
   // that genuinely are behind.
   const { data: accounts } = await admin
     .from("meta_ad_accounts")
-    .select("id, account_name, currency, dashboard_template")
+    .select("id, account_name, currency, dashboard_template, notion_url")
     .eq("is_active", true)
     .not("notion_url", "is", null)
     .order("account_name");
@@ -348,53 +348,82 @@ Deno.serve(async (req: Request) => {
   const byAccount: Record<string, Row> = {};
   for (const r of rows ?? []) byAccount[String((r as Row).account_key)] = r as Row;
 
-  const withData: string[] = [];
-  const noData: string[] = [];
-  const currencyOf: Record<string, string> = {};
-
-  for (const a of (accounts ?? []) as Row[]) {
-    const id = String(a.id);
-    const name = String(a.account_name ?? "Account");
-    const cur = a.currency ? String(a.currency) + " " : "";
-    currencyOf[id] = cur;
-    const tmpl = String(a.dashboard_template ?? "full");
-    const r = byAccount[id];
-    if (!r) { noData.push(name); continue; }
-    withData.push(lineFor(tmpl, name, cur, r));
-  }
-
-  // A client running two ad accounts against one sheet appears as both of them
-  // above, showing the same figures because the sheet is written to each. The
-  // combined line is that client as the sheet actually describes it, which is
-  // what a group row in notion_daily holds -- so both views are available and
-  // neither has to be inferred from the other.
   const { data: groups } = await admin
     .from("account_groups")
-    .select("id, name, account_ids, dashboard_template")
+    .select("id, name, account_ids, dashboard_template, notion_url")
     .not("notion_url", "is", null)
     .order("name");
 
-  const combined: string[] = [];
-  for (const g of (groups ?? []) as Row[]) {
-    const key = "__group__" + String(g.id);
-    const r = byAccount[key];
-    const name = String(g.name ?? "Combined");
-    if (!r) { noData.push(name + " (combined)"); continue; }
-    // Groups carry no currency of their own, so the first member's is used:
-    // the accounts under one client are not billed in different ones.
-    const members = Array.isArray(g.account_ids) ? g.account_ids as string[] : [];
-    const cur = members.map(m => currencyOf[String(m)]).find(Boolean) ?? "";
-    combined.push(lineFor(String(g.dashboard_template ?? "full"), name, cur, r));
+  // One line per client, not per ad account.
+  //
+  // Ibriz runs two ad accounts against a single Notion sheet, and so do Nuya
+  // and Retaj. That sheet has one row per day for the whole client, with
+  // nothing saying which account an order came from -- so the figures are the
+  // client's. Reporting them per account printed the same 17 orders under
+  // BlueAd1, again under BlueAd2, and a third time under Combined, which reads
+  // as 51 orders to anyone totalling the column.
+  //
+  // Accounts are therefore grouped by the sheet they share. Where a client has
+  // one account this changes nothing at all.
+  const byUrl = new Map<string, Row[]>();
+  for (const a of (accounts ?? []) as Row[]) {
+    const url = String(a.notion_url ?? "").trim();
+    if (!byUrl.has(url)) byUrl.set(url, []);
+    byUrl.get(url)!.push(a);
   }
+  const groupByUrl = new Map<string, Row>();
+  for (const g of (groups ?? []) as Row[]) {
+    groupByUrl.set(String(g.notion_url ?? "").trim(), g);
+  }
+
+  const withData: { name: string; line: string }[] = [];
+  const noData: string[] = [];
+
+  for (const [url, accts] of byUrl) {
+    const g = groupByUrl.get(url);
+    // The sheet's own figures live on the group row where a group exists, and
+    // on the account row otherwise. They are the same numbers either way --
+    // the group row is preferred because it is the one keyed to the client.
+    const groupKey = g ? "__group__" + String(g.id) : null;
+    const r = (groupKey ? byAccount[groupKey] : undefined) ?? byAccount[String(accts[0].id)];
+
+    // The client's name: the group's where there is one, otherwise the
+    // shortest account name, which is reliably the name without the "2" or
+    // the agency suffix ("Retaj" out of Retaj and Retaj 2).
+    const name = g
+      ? String(g.name ?? "Client")
+      : accts.map(a => String(a.account_name ?? "").trim())
+             .filter(Boolean)
+             .sort((x, y) => x.length - y.length)[0] ?? "Account";
+
+    const label = accts.length > 1 ? `${name} · ${accts.length} ad accounts` : name;
+    const cur = accts.map(a => a.currency ? String(a.currency) + " " : "").find(Boolean) ?? "";
+    const tmpl = String(g?.dashboard_template ?? accts[0].dashboard_template ?? "full");
+
+    if (!r) { noData.push(label); continue; }
+    withData.push({ name, line: lineFor(tmpl, label, cur, r) });
+  }
+
+  // A group whose sheet no account carries -- nothing should fall through
+  // silently just because the link lives only on the group.
+  for (const [url, g] of groupByUrl) {
+    if (byUrl.has(url)) continue;
+    const r = byAccount["__group__" + String(g.id)];
+    const name = String(g.name ?? "Client");
+    if (!r) { noData.push(name); continue; }
+    withData.push({ name, line: lineFor(String(g.dashboard_template ?? "full"), name, "", r) });
+  }
+
+  withData.sort((a, b) => a.name.localeCompare(b.name));
+  noData.sort((a, b) => a.localeCompare(b));
 
   const human = new Date(day + "T12:00:00Z")
     .toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 
   let text = `📊 <b>Blue Ad — ${esc(human)}</b>\n\n`;
-  text += withData.length ? withData.join("\n\n") : "No account has figures for this day yet.";
-  if (combined.length) {
-    text += `\n\n\u{1F517} <b>Combined clients</b>\n\n` + combined.join("\n\n");
-  }
+  text += withData.length
+    ? withData.map(w => w.line).join("\n\n")
+    : "No client has figures for this day yet.";
   if (noData.length) {
     text += `\n\n<i>Sheet not filled for this day (${noData.length}):</i>\n` +
             esc(noData.join(", "));
@@ -421,8 +450,8 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.dry_run) {
-    return json({ ok: true, dry_run: true, day, accounts_with_data: withData.length,
-                  combined: combined.length, accounts_without: noData.length,
+    return json({ ok: true, dry_run: true, day, clients_with_data: withData.length,
+                  clients_without: noData.length,
                   chunks: chunks.length, configured: !!(token && chatId),
                   // Which half is missing, and the NAMES of any Telegram
                   // variables that are set -- never their values. "configured:
@@ -452,6 +481,6 @@ Deno.serve(async (req: Request) => {
             "wrong. Call this function with {\"check\":true} to ask Telegram directly.",
     }, 502);
   }
-  return json({ ok: true, day, accounts_with_data: withData.length,
-                accounts_without: noData.length, messages: sent.length });
+  return json({ ok: true, day, clients_with_data: withData.length,
+                clients_without: noData.length, messages: sent.length });
 });
