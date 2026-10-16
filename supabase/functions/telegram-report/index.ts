@@ -357,6 +357,29 @@ function bodyFor(template: string, t: Tally, cur: string, monthly: boolean): str
  * than fixed here: a client starting in November should not be measured from
  * 13 September.
  */
+/**
+ * The same KPIs, as Meta reports them.
+ *
+ * Fastum's sheet carries spend and nothing else, so its 450K reach would read
+ * "nothing recorded yet" forever while Meta has had the figure all along.
+ * Where the sheet has no column, Meta answers instead.
+ *
+ * Reach especially: adding up a month of daily reach counts the same person
+ * once per day they saw an ad, so the sheet's own column overstates it. Meta
+ * asked for the whole window returns deduplicated people, which is what a
+ * brief means by reach. TikTok has no entry here -- it is not a connected
+ * platform and the sheet is its only source.
+ */
+const KPI_META: Record<string, { field: string; placement: "all" | "instagram" }> = {
+  "aw-reach":       { field: "reach",       placement: "all" },
+  "aw-impressions": { field: "impressions", placement: "all" },
+  "aw-engagements": { field: "engagement",  placement: "all" },
+  "ig-reach":       { field: "reach",       placement: "instagram" },
+  "ig-impressions": { field: "impressions", placement: "instagram" },
+  "ig-engagement":  { field: "engagement",  placement: "instagram" },
+  "ig-video-plays": { field: "video_views", placement: "instagram" },
+};
+
 const KPI_COLUMN: Record<string, { col: string; group: string; label: string }> = {
   // The awareness template's own cards, which are account totals rather than
   // one platform. Fastum is sold on a total reach, so filing it under
@@ -387,6 +410,7 @@ const niceDay = (ymd: string) =>
 
 function kpiLinesFor(
   keys: string[], targets: Row[], rows: Row[], day: string,
+  meta: Record<string, number | null> = {},
 ): string[] {
   const mine = targets.filter(t => keys.includes(String(t.account_key)) && n(t.value) != null);
   if (!mine.length) return [];
@@ -412,8 +436,8 @@ function kpiLinesFor(
     const rank = (c: string) => Object.keys(KPI_COLUMN).indexOf(c);
     return rank(String(a.card_id)) - rank(String(b.card_id));
   })) {
-    const meta = KPI_COLUMN[String(t.card_id)];
-    if (!meta) continue;
+    const col = KPI_COLUMN[String(t.card_id)];
+    if (!col) continue;
     const start = String(t.starts_on ?? from);
     const end = String(t.ends_on ?? day);
     // Only days inside this target's own window, and never past the day being
@@ -424,13 +448,100 @@ function kpiLinesFor(
       if (!keys.includes(String(r.account_key))) continue;
       const d = String(r.day).slice(0, 10);
       if (d < start || d > end || d > day) continue;
-      actual = add(actual, n(r[meta.col]));
+      actual = add(actual, n(r[col.col]));
     }
+
+    // Meta first, the sheet second -- the opposite of everywhere else in this
+    // report, and for one reason: a KPI is measured across a whole campaign
+    // window, and the sheet only covers the days somebody filled in.
+    //
+    // Cytarose proved it. Its window is 30 days and its sheet has 4 of them,
+    // so the sheet put impressions at 32.7K against a 1.05M target -- 3%,
+    // when Meta has the other 26 days. A progress figure that silently means
+    // "progress on the days we remembered to type" is worse than no figure.
+    //
+    // Reach compounds it: summing daily reach counts a person once per day
+    // they saw an ad, while Meta over the window counts people.
+    //
+    // The sheet still answers where Meta cannot -- TikTok has no Meta figure
+    // at all -- and the line names its source either way, so two different
+    // numbers for the same KPI can never be mistaken for each other.
+    let source = "";
+    const fromMeta = meta[String(t.card_id)];
+    if (fromMeta != null) {
+      actual = fromMeta;
+      source = " \u00b7 Meta";
+    } else if (actual != null) {
+      source = " \u00b7 sheet";
+    }
+
     const target = n(t.value)!;
-    if (meta.group !== group) { out.push(`<b>${meta.group}</b>`); group = meta.group; }
+    if (col.group !== group) { out.push(`<b>${col.group}</b>`); group = col.group; }
     const share = actual == null ? null : Math.round(actual / target * 100);
-    out.push(`${meta.label} = ${compact(actual)} / ${compact(target)}` +
-             (share == null ? " \u2014 nothing recorded yet" : ` \u00b7 ${share}%`));
+    out.push(`${col.label} = ${compact(actual)} / ${compact(target)}` +
+             (share == null ? " \u2014 nothing recorded yet" : ` \u00b7 ${share}%${source}`));
+  }
+  return out;
+}
+
+
+/**
+ * Meta's own figures for one client over its KPI window.
+ *
+ * One call per client that has targets, not per target, and only for clients
+ * that have them -- two of nineteen today. Asked over the whole window rather
+ * than day by day, because that is what makes reach a count of people instead
+ * of a count of daily impressions-on-people.
+ *
+ * A failure here is not a failure of the report: the KPI line falls back to
+ * "nothing recorded yet" and every other figure is untouched.
+ */
+async function metaKpis(
+  accountIds: string[], targets: Row[], secret: string, day: string,
+): Promise<Record<string, number | null>> {
+  const wanted = targets.filter(t => KPI_META[String(t.card_id)]);
+  if (!wanted.length || !accountIds.length) return {};
+
+  const since = wanted.map(t => String(t.starts_on ?? "")).filter(Boolean).sort()[0];
+  if (!since) return {};
+
+  // Both placements summed, and Instagram on its own, across every ad account
+  // the client runs.
+  const all: Record<string, number | null> = {};
+  const ig: Record<string, number | null> = {};
+
+  for (const id of accountIds) {
+    let payload: { platforms?: Record<string, unknown>[] } | null = null;
+    try {
+      const res = await fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-platform`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_db_id: id, cron_secret: secret, since, until: day }),
+        },
+      );
+      if (!res.ok) continue;
+      payload = await res.json();
+    } catch { continue; }
+
+    for (const p of payload?.platforms ?? []) {
+      const take = (bucket: Record<string, number | null>) => {
+        for (const f of ["reach", "impressions", "engagement", "video_views"]) {
+          const v = n((p as Record<string, unknown>)[f]);
+          if (v != null) bucket[f] = (bucket[f] ?? 0) + v;
+        }
+      };
+      take(all);
+      if (String((p as Record<string, unknown>).platform) === "instagram") take(ig);
+    }
+  }
+
+  const out: Record<string, number | null> = {};
+  for (const t of wanted) {
+    const spec = KPI_META[String(t.card_id)];
+    const bucket = spec.placement === "instagram" ? ig : all;
+    out[String(t.card_id)] = bucket[spec.field] ?? null;
   }
   return out;
 }
@@ -726,7 +837,11 @@ Deno.serve(async (req: Request) => {
     // Targets may be stored against the group or against any of its accounts,
     // so every key this client answers to is offered.
     const kpiKeys = [groupKey, ...accts.map(a => String(a.id))].filter(Boolean) as string[];
-    const kpis = kpiLinesFor(kpiKeys, targets, kpiRows, day);
+    const mine = targets.filter(t => kpiKeys.includes(String(t.account_key)));
+    const metaFigures = mine.length
+      ? await metaKpis(accts.map(a => String(a.id)), mine, String(secret.value), day)
+      : {};
+    const kpis = kpiLinesFor(kpiKeys, targets, kpiRows, day, metaFigures);
 
     // A client running against campaign KPIs keeps its block even on a day
     // the sheet has not reached. The campaign is still running and its

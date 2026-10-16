@@ -68,22 +68,38 @@ const META_DATE_PRESETS: Record<string, string> = {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  const auth = req.headers.get("Authorization");
-  if (!auth) return json({ error: "Unauthorized" }, 401);
-  const { data: { user }, error: authErr } =
-    await admin.auth.getUser(auth.replace("Bearer ", ""));
-  if (authErr || !user) return json({ error: "Unauthorized" }, 401);
-
   let body: {
     account_db_id?: string;
     period?: string;
     custom_from?: string;
     custom_to?: string;
+    since?: string;
+    until?: string;
+    cron_secret?: string;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
 
   const { account_db_id, period = "today", custom_from, custom_to } = body;
   if (!account_db_id) return json({ error: "account_db_id is required" }, 400);
+
+  // Two callers, the same two the Notion sync accepts: a signed-in member of
+  // the organization, or the daily report presenting the shared secret. The
+  // report runs at noon with nobody logged in, and it needs these figures for
+  // the campaign KPIs.
+  let isCron = false;
+  let user: { id: string } | null = null;
+  if (body.cron_secret) {
+    const { data: secret } = await admin
+      .from("app_secrets").select("value").eq("key", "notion_cron").maybeSingle();
+    isCron = !!secret?.value && secret.value === body.cron_secret;
+    if (!isCron) return json({ error: "Unauthorized" }, 401);
+  } else {
+    const auth = req.headers.get("Authorization");
+    if (!auth) return json({ error: "Unauthorized" }, 401);
+    const { data, error: authErr } = await admin.auth.getUser(auth.replace("Bearer ", ""));
+    if (authErr || !data.user) return json({ error: "Unauthorized" }, 401);
+    user = data.user;
+  }
 
   const { data: account, error: accErr } = await admin
     .from("meta_ad_accounts")
@@ -105,19 +121,31 @@ Deno.serve(async (req: Request) => {
   if (!accessToken) return json({ error: "No access token found for this account" }, 422);
 
   // Membership of the account's organization, the same gate meta-data applies.
-  // Holding a valid login is not by itself permission to read a client.
-  const { data: member } = await admin
-    .from("organization_members")
-    .select("id")
-    .eq("organization_id", account.organization_id)
-    .eq("user_id", user.id)
-    .not("accepted_at", "is", null)
-    .maybeSingle();
-  if (!member) return json({ error: "Forbidden" }, 403);
+  // Holding a valid login is not by itself permission to read a client. The
+  // cron is not a person and is trusted by its secret instead.
+  if (!isCron) {
+    const { data: member } = await admin
+      .from("organization_members")
+      .select("id")
+      .eq("organization_id", account.organization_id)
+      .eq("user_id", user!.id)
+      .not("accepted_at", "is", null)
+      .maybeSingle();
+    if (!member) return json({ error: "Forbidden" }, 403);
+  }
 
+  // A campaign KPI is measured over its own window, so an explicit range wins
+  // over any preset.
+  //
+  // This matters most for reach. Adding up a month of daily reach counts the
+  // same person once per day they saw an ad; asking Meta for the whole window
+  // returns the deduplicated number of people, which is what "500K reach" in
+  // a brief means.
+  const since = body.since ?? (period === "custom" ? custom_from : undefined);
+  const until = body.until ?? (period === "custom" ? custom_to : undefined);
   const dateParams: Record<string, string> =
-    period === "custom" && custom_from && custom_to
-      ? { time_range: JSON.stringify({ since: custom_from, until: custom_to }) }
+    (since && until)
+      ? { time_range: JSON.stringify({ since, until }) }
       : { date_preset: META_DATE_PRESETS[period] ?? "today" };
 
   const params = new URLSearchParams({
