@@ -98,7 +98,8 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   // sales.
   web_revenue: ["revwebsite", "revenuewebsite", "websiterevenue", "webrevenue"],
   msg_revenue: ["revmessage", "revmessages", "revenuemessage", "messagerevenue",
-                "msgrevenue", "revenuefrommessages"],
+                "msgrevenue", "revenuefrommessages", "revenuemsgs", "revmsgs",
+                "revmsg", "revenuemsg"],
   // The same mistake twice, so both spellings are here now: "No of msgs"
   // normalises to noofmsgs, which the first list missed and lost Nour Academy's
   // whole message count; "No.Messages" normalises to nomessages, which the
@@ -224,6 +225,17 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   revenue_courses: ["revenuecourse", "revenuecourses", "coursesrevenue", "courserevenue"],
   revenue_tahfez:  ["revenuetahfez", "tahfezrevenue", "revenuetahfiz"],
 
+  // Message orders named outright. TR writes "Msgs orders", Lumi writes
+  // "Message orders", and both were being thrown away while the sync read the
+  // purchase column instead -- which on those sheets is something else.
+  msg_orders_explicit: ["msgsorders", "msgorders", "messageorders", "messagesorders",
+                        "msgsorder", "messageorder", "ordersfrommessages",
+                        "orderfrommessages"],
+  msg_pieces_explicit: ["msgspieces", "msgpieces", "messagepieces", "messagespieces"],
+  // The sheet's own purchase column. Deliberately NOT called the message
+  // total: on dafapad and Maree it is website plus messages, on Basma it is
+  // messages alone. Which it means is decided per row below, from what else
+  // the sheet carries, rather than assumed here.
   msg_orders_total: ["nopurchase", "nopurchases", "purchases", "noofpurchase"],
   msg_orders_parts: ["fborder", "fborders", "igorder", "igorders", "whatsorder", "whatsorders",
                      "whatsapporder", "whatsapporders"],
@@ -613,6 +625,14 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
 
         let msgOrdersTotal: number | null = null;
         let msgOrdersParts: number | null = null;
+        let msgOrdersExplicit: number | null = null;
+        let msgPiecesParts: number | null = null;
+        let msgPiecesExplicit: number | null = null;
+        // Whether this sheet tracks website orders at all. It is what decides
+        // whether a bare purchase column means messages or means everything:
+        // a sheet that counts website orders separately and then gives one
+        // "Purchases" figure is giving the total.
+        let hasWebOrdersCol = false;
         // A sheet carrying both "Total Spending" and a bare "Spending" would
         // otherwise add one to the other and double the account's spend.
         let totalSpendExplicit: number | null = null;
@@ -620,6 +640,9 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
 
         for (const [name, prop] of Object.entries(props)) {
           const meaning = meaningOf(name);
+          if (meaning === "web_orders" || meaning === "web_orders_confirmed") {
+            hasWebOrdersCol = true;
+          }
           if (!meaning) {
             // Only worth reporting if it actually held a number.
             if (numberOf(prop) != null) columnsIgnored.add(name.trim());
@@ -710,8 +733,9 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
             case "total_spend_generic": totalSpendGeneric  = add(totalSpendGeneric, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
             case "msg_orders_parts": msgOrdersParts = add(msgOrdersParts, v); break;
-            case "msg_pieces_parts":
-              m.msg_pieces = add(m.msg_pieces, v); d.msg_pieces = add(d.msg_pieces, v); break;
+            case "msg_orders_explicit": msgOrdersExplicit = add(msgOrdersExplicit, v); break;
+            case "msg_pieces_explicit": msgPiecesExplicit = add(msgPiecesExplicit, v); break;
+            case "msg_pieces_parts": msgPiecesParts = add(msgPiecesParts, v); break;
           }
         }
 
@@ -722,10 +746,30 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           d.total_spend = add(d.total_spend, totalSpend);
         }
 
-        const msgOrders = msgOrdersTotal ?? msgOrdersParts;
+        // What came through messages, in order of how much the sheet actually
+        // says.
+        //
+        // 1. A column that names message orders outright is the answer.
+        // 2. Otherwise FB + IG + WhatsApp, which are unambiguously message
+        //    channels.
+        // 3. Otherwise the bare purchase column -- but only on a sheet that
+        //    does not track website orders. Where it does, that column is the
+        //    whole business: dafapad's "Purchases" on 13 October was 10,
+        //    which is its 6 website orders plus 4 through messages, and
+        //    reading it as messages reported 10 and counted the website
+        //    orders twice in Total Sales. Maree's "No,Purchase" is the same,
+        //    and Maree sells through the website only, so its messages are
+        //    correctly nothing at all.
+        const msgOrders = msgOrdersExplicit ?? msgOrdersParts
+          ?? (hasWebOrdersCol ? null : msgOrdersTotal);
         if (msgOrders != null) {
           m.msg_orders = add(m.msg_orders, msgOrders);
           d.msg_orders = add(d.msg_orders, msgOrders);
+        }
+        const msgPieces = msgPiecesExplicit ?? msgPiecesParts;
+        if (msgPieces != null) {
+          m.msg_pieces = add(m.msg_pieces, msgPieces);
+          d.msg_pieces = add(d.msg_pieces, msgPieces);
         }
       }
 
