@@ -79,8 +79,13 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 // Normalised Notion column name -> what it means. Several spellings per meaning
 // because each media buyer built their own sheet.
 const FIELD_SYNONYMS: Record<string, string[]> = {
+  // "Website Purchase" is IBRA's count of what was sold, and it was being
+  // discarded: its sheet carries Revenue, Spending, Total No.Msgs and that
+  // column, nothing else. Revenue divided by its 2,000 price gives 3, 3, 2, 1
+  // then 1 on the 13th -- ten over 1 to 13 October, which is what Selim counted.
   web_orders: ["weborders", "weborder", "websiteorders", "websiteorder",
-               "websiteordersfrommeta", "weborderfrommeta"],
+               "websiteordersfrommeta", "weborderfrommeta",
+               "websitepurchase", "websitepurchases", "webpurchase", "webpurchases"],
   web_pieces: ["webpieces", "webpiece", "websitepieces"],
   web_spend:  ["websitespending", "spendingweb", "webspending", "spendweb", "websitespend",
                "dailyspendingweb"],

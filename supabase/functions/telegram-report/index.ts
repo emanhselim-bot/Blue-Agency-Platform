@@ -277,11 +277,24 @@ function bodyFor(template: string, t: Tally, cur: string, monthly: boolean): str
   // worth having, so it is labelled "No of Messages" and sits first, as the
   // volume the rest of the block comes out of.
   switch (template) {
-    case "education":
+    case "education": {
+      // Reservations split the way the academies work: Tahfez and everything
+      // else, which each sheet names for itself -- Retaj calls its half
+      // "Muslima". No sheet carries a courses count, so it is the remainder,
+      // the same derivation the dashboard uses.
+      //
+      // Showing only the tahfez half read as though the rest were missing:
+      // Retaj's 13 October said "4 reservations (2 tahfez)" and the other two
+      // simply vanished.
+      const courses = (t.deals == null || t.tahfez == null)
+        ? null : Math.max(0, t.deals - t.tahfez);
+      const split = t.tahfez == null ? ""
+        : ` (${int(t.tahfez)} tahfez` +
+          (courses == null ? "" : ` + ${int(courses)} courses`) + ")";
       out.push(`No of Messages = ${int(t.msgs)}`);
-      out.push(`Messages = ${int(t.deals)} reservations` +
-        (t.tahfez == null ? "" : ` (${int(t.tahfez)} tahfez)`));
+      out.push(`Messages = ${int(t.deals)} reservations${split}`);
       break;
+    }
     case "messages-service":
       out.push(`No of Messages = ${int(t.msgs)}`);
       if (t.leads != null) out.push(`Leads = ${int(t.leads)}`);
