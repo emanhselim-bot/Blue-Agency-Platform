@@ -189,6 +189,11 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   // both are divisions of columns already here, and "CPM" means cost per
   // mille on some sheets and cost per message on others.
   reach:       ["reach", "totalreach", "reachtotal", "noofreach"],
+  // Instagram video plays. Deliberately not merged with TikTok's video views:
+  // the two are reported against separate KPI targets, and a single combined
+  // figure could not be checked against either.
+  video_plays: ["videoplays", "videoplay", "igvideoplays", "instagramvideoplays",
+                "plays", "videoviewsig", "igvideoviews"],
   impressions: ["impressions", "impression", "totalimpressions",
                 "noofimpressions", "impressionstotal"],
 
@@ -458,6 +463,7 @@ type DaySums = {
   tiktok_spend: number | null;
   reach: number | null;
   impressions: number | null;
+  video_plays: number | null;
 };
 
 type MonthSums = {
@@ -495,6 +501,7 @@ type MonthSums = {
   tiktok_spend: number | null;
   reach: number | null;
   impressions: number | null;
+  video_plays: number | null;
   days: number;
 };
 
@@ -531,6 +538,7 @@ const blank = (): MonthSums => ({
   tiktok_spend: null,
   reach: null,
   impressions: null,
+  video_plays: null,
   days: 0,
 });
 
@@ -600,6 +608,7 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
           tiktok_spend: null,
           reach: null,
           impressions: null,
+          video_plays: null,
         });
 
         let msgOrdersTotal: number | null = null;
@@ -695,6 +704,8 @@ async function sumDatabases(token: string, dbs: { id: string; title: string }[],
               m.reach = add(m.reach, v); d.reach = add(d.reach, v); break;
             case "impressions":
               m.impressions = add(m.impressions, v); d.impressions = add(d.impressions, v); break;
+            case "video_plays":
+              m.video_plays = add(m.video_plays, v); d.video_plays = add(d.video_plays, v); break;
             case "total_spend_total":   totalSpendExplicit = add(totalSpendExplicit, v); break;
             case "total_spend_generic": totalSpendGeneric  = add(totalSpendGeneric, v); break;
             case "msg_orders_total": msgOrdersTotal = add(msgOrdersTotal, v); break;
@@ -858,6 +869,7 @@ async function writeDays(orgId: string, accountKey: string, days: DaySums[]) {
     tiktok_spend: d.tiktok_spend,
     reach: d.reach,
     impressions: d.impressions,
+    video_plays: d.video_plays,
     synced_at: new Date().toISOString(),
   }));
 

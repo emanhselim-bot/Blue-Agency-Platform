@@ -113,6 +113,7 @@ type Tally = {
   msgs: number | null;      deals: number | null;   tahfez: number | null;
   leads: number | null;     donors: number | null;  clicks: number | null;
   engagement: number | null; reach: number | null;  impressions: number | null;
+  tiktokImpr: number | null; tiktokViews: number | null;
   days: number;
 };
 
@@ -130,7 +131,8 @@ function tally(rows: Row[]): Tally {
     webOrders: null, webPieces: null, msgOrders: null, msgPieces: null,
     orders: null, pieces: null, revenue: null, spend: null, totalSpend: null,
     msgs: null, deals: null, tahfez: null, leads: null, donors: null,
-    clicks: null, engagement: null, reach: null, impressions: null, days: 0,
+    clicks: null, engagement: null, reach: null, impressions: null,
+    tiktokImpr: null, tiktokViews: null, days: 0,
   };
   for (const r of rows) {
     t.days++;
@@ -156,6 +158,8 @@ function tally(rows: Row[]): Tally {
     t.engagement = add(t.engagement, n(r.engagement));
     t.reach      = add(t.reach, n(r.reach));
     t.impressions = add(t.impressions, n(r.impressions));
+    t.tiktokImpr  = add(t.tiktokImpr, n(r.tiktok_impressions));
+    t.tiktokViews = add(t.tiktokViews, n(r.tiktok_video_views));
   }
   return t;
 }
@@ -326,20 +330,107 @@ function bodyFor(template: string, t: Tally, cur: string, monthly: boolean): str
   return out;
 }
 
+/**
+ * Progress against the campaign KPIs, for clients that have them.
+ *
+ * Kepler's awareness clients are sold on a three-month number -- 500K reach,
+ * 1.05M impressions -- so the useful figure is not yesterday but how far
+ * through the target the campaign has got. "Reach = 120K / 500K" answers that
+ * in one line; "Reach = 4,000" does not.
+ *
+ * Targets come from kpi_targets, the same rows the dashboard's Targets panel
+ * writes, so the two can never disagree. Actuals are summed from the sheet
+ * over the target's own window, which is why the window is per target rather
+ * than fixed here: a client starting in November should not be measured from
+ * 13 September.
+ */
+const KPI_COLUMN: Record<string, { col: string; group: string; label: string }> = {
+  "ig-impressions": { col: "impressions",        group: "Instagram", label: "Impressions" },
+  "ig-engagement":  { col: "engagement",         group: "Instagram", label: "Engagement" },
+  "ig-video-plays": { col: "video_plays",        group: "Instagram", label: "Video Plays" },
+  "ig-reach":       { col: "reach",              group: "Instagram", label: "Reach" },
+  "tt-impressions": { col: "tiktok_impressions", group: "TikTok",    label: "Impressions" },
+  "tt-video-views": { col: "tiktok_video_views", group: "TikTok",    label: "Video Views" },
+};
+
+// 500000 reads as 500K; 2431 stays 2,431. A target is a round number and
+// shortens well, an actual usually is not.
+const compact = (v: number | null) => {
+  if (v == null) return "\u2014";
+  if (Math.abs(v) >= 1_000_000) return (v / 1_000_000).toFixed(2).replace(/\.?0+$/, "") + "M";
+  if (Math.abs(v) >= 10_000)    return (v / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  return Math.round(v).toLocaleString("en");
+};
+
+const niceDay = (ymd: string) =>
+  new Date(ymd + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+function kpiLinesFor(
+  keys: string[], targets: Row[], rows: Row[], day: string,
+): string[] {
+  const mine = targets.filter(t => keys.includes(String(t.account_key)) && n(t.value) != null);
+  if (!mine.length) return [];
+
+  const out: string[] = [];
+  const from = mine.map(t => String(t.starts_on ?? "")).filter(Boolean).sort()[0] ?? "";
+  const to   = mine.map(t => String(t.ends_on ?? "")).filter(Boolean).sort().slice(-1)[0] ?? "";
+  if (from && to) {
+    const total = Math.max(1, Math.round(
+      (Date.parse(to + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 86_400_000));
+    const gone = Math.max(0, Math.round(
+      (Date.parse(day + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 86_400_000));
+    out.push(`<i>KPIs \u00b7 ${niceDay(from)} \u2192 ${niceDay(to)} (day ${gone} of ${total})</i>`);
+  } else {
+    out.push("<i>KPIs</i>");
+  }
+
+  let group = "";
+  for (const t of mine.sort((a, b) => {
+    const ka = KPI_COLUMN[String(a.card_id)], kb = KPI_COLUMN[String(b.card_id)];
+    // Instagram before TikTok, and within each the order Selim writes them:
+    // impressions, engagement, video plays, reach.
+    const rank = (c: string) => Object.keys(KPI_COLUMN).indexOf(c);
+    return rank(String(a.card_id)) - rank(String(b.card_id));
+  })) {
+    const meta = KPI_COLUMN[String(t.card_id)];
+    if (!meta) continue;
+    const start = String(t.starts_on ?? from);
+    const end = String(t.ends_on ?? day);
+    // Only days inside this target's own window, and never past the day being
+    // reported -- a target running to December must not count a future day
+    // even if the sheet somehow has one.
+    let actual: number | null = null;
+    for (const r of rows) {
+      if (!keys.includes(String(r.account_key))) continue;
+      const d = String(r.day).slice(0, 10);
+      if (d < start || d > end || d > day) continue;
+      actual = add(actual, n(r[meta.col]));
+    }
+    const target = n(t.value)!;
+    if (meta.group !== group) { out.push(`<b>${meta.group}</b>`); group = meta.group; }
+    const share = actual == null ? null : Math.round(actual / target * 100);
+    out.push(`${meta.label} = ${compact(actual)} / ${compact(target)}` +
+             (share == null ? " \u2014 nothing recorded yet" : ` \u00b7 ${share}%`));
+  }
+  return out;
+}
+
 /** One client's whole block: the day, the month to date, and the read on it. */
 function blockFor(
   template: string, name: string, cur: string,
   dayT: Tally, mtd: Tally, prev: Tally,
   dayOfMonth: number, daysInMonth: number,
+  kpis: string[] = [], dayMissing = false,
 ): string {
   return [
     `<b>Brand: ${esc(name)}</b>`,
     "",
     "<i>This day</i>",
-    ...bodyFor(template, dayT, cur, false),
+    ...(dayMissing ? ["Sheet not filled for this day."] : bodyFor(template, dayT, cur, false)),
     "",
     "<i>This month</i>",
     ...bodyFor(template, mtd, cur, true),
+    ...(kpis.length ? ["", ...kpis] : []),
     "",
     `\u{1F4AC} ${esc(comment(template, dayT, mtd, prev, dayOfMonth, daysInMonth, cur))}`,
   ].join("\n");
@@ -541,6 +632,27 @@ Deno.serve(async (req: Request) => {
     .not("notion_url", "is", null)
     .order("name");
 
+  // Campaign KPIs and the days they are measured over. Only targets that
+  // cover the day being reported: a finished campaign should drop off the
+  // report rather than sit at 100% forever.
+  const { data: targetRows } = await admin
+    .from("kpi_targets")
+    .select("account_key, card_id, label, value, starts_on, ends_on")
+    .not("value", "is", null)
+    .lte("starts_on", day)
+    .gte("ends_on", day);
+  const targets = (targetRows ?? []) as Row[];
+
+  // One query for every day any live target covers, rather than one per
+  // client. The earliest start is as far back as it needs to go.
+  let kpiRows: Row[] = [];
+  if (targets.length) {
+    const earliest = targets.map(t => String(t.starts_on ?? day)).sort()[0];
+    const { data } = await admin.from("notion_daily").select("*")
+      .gte("day", earliest).lte("day", day);
+    kpiRows = (data ?? []) as Row[];
+  }
+
   // One block per client, not per ad account.
   //
   // Ibriz runs two ad accounts against a single Notion sheet, and so do Nuya
@@ -591,11 +703,21 @@ Deno.serve(async (req: Request) => {
     const cur = accts.map(a => a.currency ? String(a.currency) + " " : "").find(Boolean) ?? "";
     const tmpl = String(g?.dashboard_template ?? accts[0].dashboard_template ?? "full");
 
-    if (!r) { noData.push(label); continue; }
+    // Targets may be stored against the group or against any of its accounts,
+    // so every key this client answers to is offered.
+    const kpiKeys = [groupKey, ...accts.map(a => String(a.id))].filter(Boolean) as string[];
+    const kpis = kpiLinesFor(kpiKeys, targets, kpiRows, day);
+
+    // A client running against campaign KPIs keeps its block even on a day
+    // the sheet has not reached. The campaign is still running and its
+    // progress is the figure that matters; dropping the whole client to a
+    // name in the not-filled list hides it. Everyone else is just listed.
+    if (!r && !kpis.length) { noData.push(label); continue; }
+
     withData.push({ name, line: blockFor(
       tmpl, label, cur,
-      tally([r]), tally(mtdBy[mtdKey] ?? []), tally(prevBy[mtdKey] ?? []),
-      dayOfMonth, daysInMonth) });
+      tally(r ? [r] : []), tally(mtdBy[mtdKey] ?? []), tally(prevBy[mtdKey] ?? []),
+      dayOfMonth, daysInMonth, kpis, !r) });
   }
 
   // A group whose sheet no account carries -- nothing should fall through
@@ -609,7 +731,8 @@ Deno.serve(async (req: Request) => {
     withData.push({ name, line: blockFor(
       String(g.dashboard_template ?? "full"), name, "",
       tally([r]), tally(mtdBy[gk] ?? []), tally(prevBy[gk] ?? []),
-      dayOfMonth, daysInMonth) });
+      dayOfMonth, daysInMonth,
+      kpiLinesFor([gk], targets, kpiRows, day)) });
   }
 
   // The order Selim reads them in, not alphabetical.
