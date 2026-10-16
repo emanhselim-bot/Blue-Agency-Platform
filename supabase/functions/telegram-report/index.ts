@@ -348,11 +348,10 @@ function blockFor(
 /**
  * Send one message, waiting out a rate limit rather than losing it.
  *
- * One message per client means about twenty in a row, and Telegram allows
- * roughly twenty a minute to one chat before answering 429 with a
- * retry_after. Dropping a client's figures because the one before it was sent
- * too quickly would be the worst kind of failure here -- quiet, and different
- * every day -- so a 429 is waited out and retried.
+ * Telegram answers 429 with a retry_after when a chat is sent to too quickly.
+ * Losing part of the report because the message before it went too fast would
+ * be the worst kind of failure here -- quiet, and a different part each day --
+ * so a 429 is waited out and retried rather than thrown.
  */
 async function send(token: string, chatId: string, text: string) {
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -658,25 +657,23 @@ Deno.serve(async (req: Request) => {
   }
   const text = blocks.join("\n\n");
 
-  // One message per client, so each can be replied to, forwarded or searched
-  // on its own. The date banner and the not-filled list are messages in their
-  // own right for the same reason.
+  // Everything in as few messages as possible -- the whole report read in one
+  // scroll rather than twenty notifications.
   //
-  // Telegram refuses anything over 4096 characters. A client's block is a few
-  // hundred, so the guard below is only for a pathological case -- and it cuts
-  // between lines rather than at a fixed offset, because a cut inside a <b>
-  // tag makes Telegram reject the whole message instead of splitting it.
+  // Telegram refuses anything over 4096 characters, so nineteen clients still
+  // take three messages. The split falls between clients, never inside one:
+  // cutting at a fixed offset can land in the middle of a <b> tag, and
+  // Telegram rejects a message whose HTML does not parse instead of splitting
+  // it, so the report would fail outright rather than arrive in pieces.
+  const LIMIT = 3500;
   const chunks: string[] = [];
+  let cur = "";
   for (const block of blocks) {
-    if (block.length <= 3900) { chunks.push(block); continue; }
-    let cur = "";
-    for (const line of block.split("\n")) {
-      const joined = cur ? cur + "\n" + line : line;
-      if (joined.length > 3900 && cur) { chunks.push(cur); cur = line; }
-      else cur = joined;
-    }
-    if (cur) chunks.push(cur);
+    const joined = cur ? cur + "\n\n" + block : block;
+    if (joined.length > LIMIT && cur) { chunks.push(cur); cur = block; }
+    else cur = joined;
   }
+  if (cur) chunks.push(cur);
 
   if (body.dry_run) {
     return json({ ok: true, dry_run: true, day, clients_with_data: withData.length,
@@ -700,11 +697,9 @@ Deno.serve(async (req: Request) => {
   const sent = [];
   try {
     for (const [i, c] of chunks.entries()) {
-      // Paced deliberately. Telegram's limit for one chat is about twenty
-      // messages a minute, and twenty clients sent back to back walks into it;
-      // send() still waits out a 429, but not provoking one keeps the report
-      // arriving in order and in a few seconds rather than a few minutes.
-      if (i > 0) await new Promise(r => setTimeout(r, 1200));
+      // A short gap between the few messages this now takes. send() waits out
+      // a 429 regardless, but not provoking one keeps them arriving in order.
+      if (i > 0) await new Promise(r => setTimeout(r, 400));
       sent.push(await send(token!, chatId!, c));
     }
   } catch (e) {
