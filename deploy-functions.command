@@ -25,9 +25,13 @@ PROJECT_REF="thtteysputwjiddqchcp"
 # notion-sync and telegram-report are called by cron with a shared secret
 # rather than a user's login, so they must be deployed with JWT checking off.
 # Deploying them without this flag would make the cron start failing with 401.
-NO_JWT="notion-sync notion-discover telegram-report"
+# tiktok-oauth is a browser redirect target: TikTok sends the user back to it
+# with no Authorization header, so JWT checking would reject the callback. It
+# does its own auth instead -- every route verifies org membership before it
+# touches anything.
+NO_JWT="notion-sync notion-discover telegram-report tiktok-oauth"
 
-ALL="notion-sync notion-discover telegram-report meta-data meta-platform"
+ALL="notion-sync notion-discover telegram-report meta-data meta-platform tiktok-ads-data tiktok-oauth"
 
 TARGETS="${*:-$ALL}"
 
