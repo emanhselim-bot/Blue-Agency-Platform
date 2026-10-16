@@ -1,18 +1,19 @@
 /**
  * Daily report to Telegram
  *
- * One message at noon Cairo covering yesterday, a line or two per account.
- * The team fills the previous day in Notion during the morning, so noon is
- * late enough for the figures to be there and early enough to act on them.
+ * One message at noon Cairo covering yesterday, a block per client: the day,
+ * the month to date, and a read on how the day compares. The team fills the
+ * previous day in Notion during the morning, so noon is late enough for the
+ * figures to be there and early enough to act on them.
  *
- * Each line is written for the account's own template: a shop reports orders,
- * revenue and ROAS; an academy reports reservations and cost per reservation;
- * the donations account reports donors. A single fixed row would be meaningless
- * for most of them.
+ * Each block is written for the client's own template: a shop reports orders,
+ * pieces, revenue and ROAS; an academy reports reservations; the donations
+ * account reports donors; an awareness client reports delivery. A single fixed
+ * shape would be meaningless for most of them.
  *
- * Where a sheet has not reached yesterday the line says so rather than showing
- * zeros. That is not a failure mode to hide -- it is also the fastest way to
- * see who has not filled their sheet in.
+ * Where a sheet has not reached yesterday the client is listed as not filled
+ * rather than shown as zeros. That is not a failure mode to hide -- it is also
+ * the fastest way to see who is behind.
  *
  * The bot token is read from the environment and never appears here or in the
  * database. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as Supabase secrets.
@@ -100,98 +101,239 @@ function revenueOf(r: Row): number | null {
   return n(r.web_revenue_confirmed) ?? n(r.total_revenue) ?? n(r.web_revenue);
 }
 
-/** One account's line, written for its own template. */
-function lineFor(template: string, name: string, cur: string, r: Row): string {
-  const bits: string[] = [];
-  const rev = revenueOf(r);
-  const conv = convSpend(r);
-  const tot = totalSpend(r);
-  const msgs = n(r.msg_count);
+// null + value = value, so a column no day carried stays null rather than
+// becoming a confident zero.
+const add = (a: number | null, b: number | null) => b == null ? a : (a ?? 0) + b;
 
-  const roas = (d: number | null) => {
-    const v = ratio(rev, d);
-    return v == null ? "—" : v.toFixed(2) + "x";
+type Tally = {
+  webOrders: number | null; webPieces: number | null;
+  msgOrders: number | null; msgPieces: number | null;
+  orders: number | null;    pieces: number | null;
+  revenue: number | null;   spend: number | null;   totalSpend: number | null;
+  msgs: number | null;      deals: number | null;   tahfez: number | null;
+  leads: number | null;     donors: number | null;  clicks: number | null;
+  engagement: number | null; reach: number | null;  impressions: number | null;
+  days: number;
+};
+
+/**
+ * Add up a set of days.
+ *
+ * Each day is reduced first and the results summed, rather than summing the
+ * raw columns and reducing once. It matters: revenue falls back from confirmed
+ * to total to website per day, and spend takes the larger of its two readings
+ * per day. Doing that once over a month's totals would mix a confirmed figure
+ * from one day with an unconfirmed one from another.
+ */
+function tally(rows: Row[]): Tally {
+  const t: Tally = {
+    webOrders: null, webPieces: null, msgOrders: null, msgPieces: null,
+    orders: null, pieces: null, revenue: null, spend: null, totalSpend: null,
+    msgs: null, deals: null, tahfez: null, leads: null, donors: null,
+    clicks: null, engagement: null, reach: null, impressions: null, days: 0,
   };
+  for (const r of rows) {
+    t.days++;
+    const wo = n(r.web_orders_confirmed) ?? n(r.web_orders);
+    const wp = n(r.web_pieces_confirmed) ?? n(r.web_pieces);
+    const mo = n(r.msg_orders);
+    const mp = n(r.msg_pieces);
+    t.webOrders = add(t.webOrders, wo);
+    t.webPieces = add(t.webPieces, wp);
+    t.msgOrders = add(t.msgOrders, mo);
+    t.msgPieces = add(t.msgPieces, mp);
+    t.orders    = add(t.orders, wo == null && mo == null ? null : (wo ?? 0) + (mo ?? 0));
+    t.pieces    = add(t.pieces, wp == null && mp == null ? null : (wp ?? 0) + (mp ?? 0));
+    t.revenue    = add(t.revenue, revenueOf(r));
+    t.spend      = add(t.spend, convSpend(r));
+    t.totalSpend = add(t.totalSpend, totalSpend(r));
+    t.msgs       = add(t.msgs, n(r.msg_count));
+    t.deals      = add(t.deals, n(r.deals_total));
+    t.tahfez     = add(t.tahfez, n(r.total_tahfez));
+    t.leads      = add(t.leads, n(r.leads_total));
+    t.donors     = add(t.donors, n(r.donation_users));
+    t.clicks     = add(t.clicks, n(r.clicks));
+    t.engagement = add(t.engagement, n(r.engagement));
+    t.reach      = add(t.reach, n(r.reach));
+    t.impressions = add(t.impressions, n(r.impressions));
+  }
+  return t;
+}
+
+const pct = (a: number, b: number) => (a - b) / b * 100;
+const signed = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v)}%`;
+
+/**
+ * The read on the day, in one or two sentences.
+ *
+ * Every clause is arithmetic on the client's own figures -- this day against
+ * the average of the month's earlier days, and the month's pace against last
+ * month's finished total. Nothing here is a guess: where there is no basis for
+ * a comparison (a first day, a client with no revenue column) the comparison is
+ * left out rather than filled in with something agreeable.
+ */
+function comment(
+  template: string, dayT: Tally, mtd: Tally, prev: Tally,
+  dayOfMonth: number, daysInMonth: number, cur: string,
+): string {
+  const parts: string[] = [];
+  const spend = dayT.totalSpend ?? dayT.spend;
+  const rev = dayT.revenue;
+
+  // An awareness client has no revenue to be judged on, so the day is read
+  // on delivery and cost instead.
+  const revenueLed = template !== "awareness";
+
+  if ((spend == null || spend === 0) && (rev == null || rev === 0)) {
+    return "Nothing spent and nothing recorded this day.";
+  }
+  if (revenueLed && spend && (rev == null || rev === 0)) {
+    parts.push(`⚠️ ${money(spend, cur)} spent with no revenue recorded.`);
+  }
+
+  // This day against the month's earlier days.
+  const earlierDays = mtd.days - dayT.days;
+  if (revenueLed && rev != null && mtd.revenue != null && earlierDays > 0) {
+    const avg = (mtd.revenue - rev) / earlierDays;
+    if (avg > 0) {
+      const d = pct(rev, avg);
+      parts.push(
+        Math.abs(d) < 15
+          ? `Revenue in line with the month's daily average (${money(avg, cur)}).`
+          : `Revenue ${signed(d)} against the month's daily average of ${money(avg, cur)}.`,
+      );
+    }
+  }
+
+  // ROAS, where both sides exist.
+  const dayRoas = ratio(rev, dayT.spend);
+  const mtdRoas = ratio(mtd.revenue, mtd.spend);
+  if (revenueLed && dayRoas != null) {
+    if (dayRoas < 1) parts.push(`⚠️ ROAS ${dayRoas.toFixed(2)}x — the day returned less than it cost.`);
+    else if (mtdRoas != null && Math.abs(dayRoas - mtdRoas) >= 0.3) {
+      parts.push(`ROAS ${dayRoas.toFixed(2)}x against ${mtdRoas.toFixed(2)}x for the month so far.`);
+    }
+  }
+
+  // Where the month lands if the rest of it looks like the part already run.
+  // Three days is the floor: projecting a whole month from one filled day
+  // produces a confident number with nothing behind it.
+  if (revenueLed && mtd.revenue != null && dayOfMonth > 0 && mtd.days >= 3) {
+    const projected = mtd.revenue / dayOfMonth * daysInMonth;
+    if (prev.revenue != null && prev.revenue > 0) {
+      const d = pct(projected, prev.revenue);
+      const verdict = d >= 10 ? "ahead of" : d <= -10 ? "behind" : "level with";
+      parts.push(
+        `At this pace the month ends near ${money(projected, cur)}, ${verdict} last month's ${money(prev.revenue, cur)} (${signed(d)}).`,
+      );
+    } else {
+      parts.push(`At this pace the month ends near ${money(projected, cur)}.`);
+    }
+  }
+
+  if (!revenueLed) {
+    const eng = dayT.engagement;
+    const earlier = mtd.days - dayT.days;
+    if (eng != null && mtd.engagement != null && earlier > 0) {
+      const avg = (mtd.engagement - eng) / earlier;
+      if (avg > 0) parts.push(`Engagement ${signed(pct(eng, avg))} against the month's daily average.`);
+    }
+    if (spend != null) parts.push(`${money(mtd.totalSpend ?? mtd.spend, cur)} spent this month so far.`);
+  }
+
+  return parts.length ? parts.join(" ") : "Recorded, with nothing to compare it against yet.";
+}
+
+/** "12 orders (18 pieces)", with the bracket dropped when the sheet has no pieces column. */
+const op = (orders: number | null, pieces: number | null) =>
+  `${int(orders)} orders` + (pieces == null ? "" : ` (${int(pieces)} pieces)`);
+
+const roasOf = (rev: number | null, spend: number | null) => {
+  const v = ratio(rev, spend);
+  return v == null ? "\u2014" : v.toFixed(2) + "x";
+};
+
+/**
+ * The body lines for one period, written for the client's own template.
+ *
+ * A shop is judged on orders and pieces, an academy on reservations, the
+ * donations client on donors, an awareness client on delivery. The shape is
+ * the same for all of them -- this day, this month, a comment -- and only
+ * these middle lines differ.
+ */
+function bodyFor(template: string, t: Tally, cur: string, monthly: boolean): string[] {
+  const out: string[] = [];
+  const spend = t.totalSpend ?? t.spend;
 
   switch (template) {
-    case "donations": {
-      const donors = n(r.donation_users);
-      bits.push(`💬 ${int(msgs)}`);
-      bits.push(`🤲 ${int(donors)} donors`);
-      bits.push(`💰 ${money(tot, cur)}`);
-      bits.push(`CPR ${money(ratio(tot, donors), cur)}`);
-      bits.push(`ROAS ${roas(tot)}`);
+    case "education":
+      out.push(`Messages = ${int(t.msgs)}`);
+      out.push(`Reservations = ${int(t.deals)}` +
+        (t.tahfez == null ? "" : ` (${int(t.tahfez)} tahfez)`));
       break;
-    }
-    case "education": {
-      const reservations = n(r.deals_total);
-      const tahfez = n(r.total_tahfez);
-      bits.push(`💬 ${int(msgs)}`);
-      bits.push(`🎓 ${int(reservations)} res` + (tahfez != null ? ` (${int(tahfez)} tahfez)` : ""));
-      bits.push(`💰 ${money(tot, cur)}`);
-      bits.push(`CPR ${money(ratio(tot, reservations), cur)}`);
-      bits.push(`ROAS ${roas(tot)}`);
+    case "messages-service":
+      out.push(`Messages = ${int(t.msgs)}`);
+      if (t.leads != null) out.push(`Leads = ${int(t.leads)}`);
+      out.push(`Deals = ${int(t.deals)}`);
       break;
-    }
-    case "messages-service": {
-      const leads = n(r.leads_total);
-      const deals = n(r.deals_total);
-      bits.push(`💬 ${int(msgs)}`);
-      if (leads != null) bits.push(`📋 ${int(leads)} leads`);
-      bits.push(`🤝 ${int(deals)} deals`);
-      bits.push(`💰 ${money(tot, cur)}`);
-      bits.push(`ROAS ${roas(n(r.msg_spend))}`);
+    case "donations":
+      out.push(`Messages = ${int(t.msgs)}`);
+      if (t.clicks != null) out.push(`Clicks = ${int(t.clicks)}`);
+      out.push(`Donors = ${int(t.donors)}`);
       break;
-    }
-    case "awareness": {
-      // Only what the sheet actually carries. The first version pushed every
-      // figure whether or not it existed, so Fastum -- whose sheet holds spend
-      // and nothing else -- reported "— engagement · — follows", which reads
-      // like a collapse rather than a sheet with two columns in it.
-      const impr = n(r.impressions);
-      const rch  = n(r.reach);
-      const eng  = n(r.engagement);
-      const fol  = (n(r.follows_fb) ?? 0) + (n(r.follows_ig) ?? 0) || null;
-      if (rch  != null) bits.push(`👥 ${int(rch)} reach`);
-      if (impr != null) bits.push(`👁 ${int(impr)} impressions`);
-      if (eng  != null) bits.push(`❤️ ${int(eng)} engagement`);
-      if (fol  != null) bits.push(`👍 ${int(fol)} follows`);
-      bits.push(`💰 ${money(tot, cur)}`);
-      if (impr) bits.push(`CPM ${money(ratio(tot, impr / 1000), cur)}`);
-      if (eng)  bits.push(`CPE ${money(ratio(tot, eng), cur)}`);
-      // TikTok is labelled rather than added in: it is not a connected
-      // platform and its spend is not in the Meta total above, so folding the
-      // two together would make a cost per result that means nothing.
-      const tImpr = n(r.tiktok_impressions);
-      const tView = n(r.tiktok_video_views);
-      if (tImpr != null || tView != null) {
-        const tt: string[] = [];
-        if (tImpr != null) tt.push(`${int(tImpr)} impressions`);
-        if (tView != null) tt.push(`${int(tView)} views`);
-        bits.push(`🎵 TikTok ${tt.join(" · ")}`);
+    case "awareness":
+      if (t.reach != null)       out.push(`Reach = ${int(t.reach)}`);
+      if (t.impressions != null) out.push(`Impressions = ${int(t.impressions)}`);
+      if (t.engagement != null)  out.push(`Engagement = ${int(t.engagement)}`);
+      break;
+    case "messages":
+      out.push(`Messages = ${op(t.msgOrders, t.msgPieces)}`);
+      break;
+    default: {
+      // full, google-ads and anything unset: the shape Selim wrote out.
+      //
+      // A channel the sheet has no column for is left off rather than printed
+      // as "— orders". Ibriz sells through the website only, and a Messages
+      // line with a dash in it reads as a broken figure rather than as a
+      // channel the client does not use.
+      const hasWeb = t.webOrders != null || t.webPieces != null;
+      const hasMsg = t.msgOrders != null || t.msgPieces != null;
+      if (hasWeb) out.push(`Website = ${op(t.webOrders, t.webPieces)}`);
+      if (hasMsg) out.push(`Messages = ${op(t.msgOrders, t.msgPieces)}`);
+      if (hasWeb && hasMsg) {
+        out.push(`${monthly ? "Total" : "Total Sales"} = ${op(t.orders, t.pieces)}`);
+      } else if (!hasWeb && !hasMsg) {
+        out.push(`${monthly ? "Total" : "Total Sales"} = ${op(null, null)}`);
       }
       break;
     }
-    case "messages": {
-      const orders = n(r.msg_orders);
-      bits.push(`💬 ${int(msgs)}`);
-      bits.push(`📦 ${int(orders)} orders`);
-      bits.push(`💰 ${money(conv, cur)}`);
-      bits.push(`CPO ${money(ratio(conv, orders), cur)}`);
-      bits.push(`ROAS ${roas(conv)}`);
-      break;
-    }
-    default: {
-      // full, google-ads and anything unset
-      const orders = (n(r.web_orders_confirmed) ?? n(r.web_orders) ?? 0) + (n(r.msg_orders) ?? 0) || null;
-      bits.push(`📦 ${int(orders)} orders`);
-      bits.push(`💵 ${money(rev, cur)}`);
-      bits.push(`💰 ${money(conv, cur)}`);
-      bits.push(`ROAS ${roas(conv)}`);
-      break;
-    }
   }
-  return `<b>${esc(name)}</b>\n  ${bits.join(" · ")}`;
+
+  out.push(`${monthly ? "Total Spending" : "Spending"} = ${money(spend, cur)}`);
+  if (template !== "awareness") {
+    out.push(`${monthly ? "Total Revenue" : "Revenue"} = ${money(t.revenue, cur)}`);
+    out.push(`ROAS = ${roasOf(t.revenue, t.spend)}`);
+  }
+  return out;
+}
+
+/** One client's whole block: the day, the month to date, and the read on it. */
+function blockFor(
+  template: string, name: string, cur: string,
+  dayT: Tally, mtd: Tally, prev: Tally,
+  dayOfMonth: number, daysInMonth: number,
+): string {
+  return [
+    `<b>Brand: ${esc(name)}</b>`,
+    "",
+    "<i>This day</i>",
+    ...bodyFor(template, dayT, cur, false),
+    "",
+    "<i>This month</i>",
+    ...bodyFor(template, mtd, cur, true),
+    "",
+    `\u{1F4AC} ${esc(comment(template, dayT, mtd, prev, dayOfMonth, daysInMonth, cur))}`,
+  ].join("\n");
 }
 
 async function send(token: string, chatId: string, text: string) {
@@ -340,13 +482,32 @@ Deno.serve(async (req: Request) => {
     .not("notion_url", "is", null)
     .order("account_name");
 
-  const { data: rows } = await admin
-    .from("notion_daily")
-    .select("*")
-    .eq("day", day);
+  // The day itself, the month up to and including it, and last month whole.
+  // The month figures are what make the day mean anything: 17 orders is only
+  // good or bad against what the other days came to.
+  const monthStart = day.slice(0, 8) + "01";
+  const prevMonthEnd = shiftDate(monthStart, -1);
+  const prevMonthStart = prevMonthEnd.slice(0, 8) + "01";
+  const dayOfMonth = Number(day.slice(8, 10));
+  const daysInMonth = new Date(Date.UTC(
+    Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate();
+
+  const [{ data: mtdRows }, { data: prevRows }] = await Promise.all([
+    admin.from("notion_daily").select("*").gte("day", monthStart).lte("day", day),
+    admin.from("notion_daily").select("*").gte("day", prevMonthStart).lte("day", prevMonthEnd),
+  ]);
 
   const byAccount: Record<string, Row> = {};
-  for (const r of rows ?? []) byAccount[String((r as Row).account_key)] = r as Row;
+  const mtdBy: Record<string, Row[]> = {};
+  const prevBy: Record<string, Row[]> = {};
+  for (const r of mtdRows ?? []) {
+    const k = String((r as Row).account_key);
+    (mtdBy[k] ||= []).push(r as Row);
+    if (String((r as Row).day).slice(0, 10) === day) byAccount[k] = r as Row;
+  }
+  for (const r of prevRows ?? []) {
+    (prevBy[String((r as Row).account_key)] ||= []).push(r as Row);
+  }
 
   const { data: groups } = await admin
     .from("account_groups")
@@ -354,7 +515,7 @@ Deno.serve(async (req: Request) => {
     .not("notion_url", "is", null)
     .order("name");
 
-  // One line per client, not per ad account.
+  // One block per client, not per ad account.
   //
   // Ibriz runs two ad accounts against a single Notion sheet, and so do Nuya
   // and Retaj. That sheet has one row per day for the whole client, with
@@ -385,7 +546,11 @@ Deno.serve(async (req: Request) => {
     // on the account row otherwise. They are the same numbers either way --
     // the group row is preferred because it is the one keyed to the client.
     const groupKey = g ? "__group__" + String(g.id) : null;
-    const r = (groupKey ? byAccount[groupKey] : undefined) ?? byAccount[String(accts[0].id)];
+    const key = (groupKey && byAccount[groupKey]) ? groupKey : String(accts[0].id);
+    const r = byAccount[key];
+    // The month and last month are read from whichever key the day came from,
+    // so a client never has its day measured against another key's month.
+    const mtdKey = (groupKey && mtdBy[groupKey]?.length) ? groupKey : String(accts[0].id);
 
     // The client's name: the group's where there is one, otherwise the
     // shortest account name, which is reliably the name without the "2" or
@@ -401,47 +566,57 @@ Deno.serve(async (req: Request) => {
     const tmpl = String(g?.dashboard_template ?? accts[0].dashboard_template ?? "full");
 
     if (!r) { noData.push(label); continue; }
-    withData.push({ name, line: lineFor(tmpl, label, cur, r) });
+    withData.push({ name, line: blockFor(
+      tmpl, label, cur,
+      tally([r]), tally(mtdBy[mtdKey] ?? []), tally(prevBy[mtdKey] ?? []),
+      dayOfMonth, daysInMonth) });
   }
 
   // A group whose sheet no account carries -- nothing should fall through
   // silently just because the link lives only on the group.
   for (const [url, g] of groupByUrl) {
     if (byUrl.has(url)) continue;
-    const r = byAccount["__group__" + String(g.id)];
+    const gk = "__group__" + String(g.id);
+    const r = byAccount[gk];
     const name = String(g.name ?? "Client");
     if (!r) { noData.push(name); continue; }
-    withData.push({ name, line: lineFor(String(g.dashboard_template ?? "full"), name, "", r) });
+    withData.push({ name, line: blockFor(
+      String(g.dashboard_template ?? "full"), name, "",
+      tally([r]), tally(mtdBy[gk] ?? []), tally(prevBy[gk] ?? []),
+      dayOfMonth, daysInMonth) });
   }
 
   withData.sort((a, b) => a.name.localeCompare(b.name));
   noData.sort((a, b) => a.localeCompare(b));
 
   const human = new Date(day + "T12:00:00Z")
-    .toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    .toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
-  let text = `📊 <b>Blue Ad — ${esc(human)}</b>\n\n`;
-  text += withData.length
-    ? withData.map(w => w.line).join("\n\n")
-    : "No client has figures for this day yet.";
+  // The blocks, kept as a list rather than one string, because the splitter
+  // below has to break between clients and a client's own block now contains
+  // blank lines. Splitting the finished text on "\n\n" would cut a client in
+  // half, between "This day" and "This month".
+  const blocks: string[] = [`📊 <b>Blue Ad — ${esc(human)}</b>`];
+  if (withData.length) blocks.push(...withData.map(w => w.line));
+  else blocks.push("No client has figures for this day yet.");
   if (noData.length) {
-    text += `\n\n<i>Sheet not filled for this day (${noData.length}):</i>\n` +
-            esc(noData.join(", "));
+    blocks.push(`<i>Sheet not filled for this day (${noData.length}):</i>\n` +
+                esc(noData.join(", ")));
   }
+  const text = blocks.join("\n\n");
 
   // Telegram refuses a message over 4096 characters, and silently losing the
-  // tail would be worse than sending two.
+  // tail would be worse than sending several.
   //
-  // Splitting on a fixed offset was wrong: at 3800 characters the cut lands
-  // wherever it lands, including the middle of a <b> tag, and Telegram rejects
-  // the whole message when the HTML does not parse. It has not happened yet
-  // only because the report still fits in one. The split is between accounts
-  // now, which is both safe and where a reader would expect it.
+  // The first version cut every 3800 characters wherever that landed, which
+  // can fall inside a <b> tag -- and Telegram rejects a message whose HTML
+  // does not parse, so the report would have failed outright rather than
+  // arriving split. Whole blocks only now.
   const chunks: string[] = [];
   {
     const LIMIT = 3500;
     let cur = "";
-    for (const block of text.split("\n\n")) {
+    for (const block of blocks) {
       const joined = cur ? cur + "\n\n" + block : block;
       if (joined.length > LIMIT && cur) { chunks.push(cur); cur = block; }
       else cur = joined;
