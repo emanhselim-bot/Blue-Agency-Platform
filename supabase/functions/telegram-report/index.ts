@@ -606,8 +606,34 @@ Deno.serve(async (req: Request) => {
       dayOfMonth, daysInMonth) });
   }
 
-  withData.sort((a, b) => a.name.localeCompare(b.name));
-  noData.sort((a, b) => a.localeCompare(b));
+  // The order Selim reads them in, not alphabetical.
+  //
+  // Matched on a prefix of the client's name with punctuation and case
+  // stripped, because the names here are not the names in the database:
+  // "dafa" is dafapad, "Joud / Hayah tyba" is Hayah Tayeba Academy, and
+  // Cytarose is spelt Cytrose about half the time. A prefix is enough to be
+  // unambiguous across these nineteen and short enough to survive the account
+  // being renamed.
+  //
+  // "ibra" and "ibriz" are deliberately both here and do not collide: IBRA Org
+  // normalises to ibraorg, Ibriz Abaya to ibrizabaya, and neither is a prefix
+  // of the other.
+  //
+  // A client matching nothing sorts to the end rather than disappearing -- a
+  // new account should look out of place, not vanish.
+  const ORDER = [
+    "ibriz", "nuya", "dafa", "maree", "tr", "lumi", "basma", "skills", "ibra",
+    "fastum", "cyta",
+    "vanguard", "spende", "glossy", "boudy",
+    "retaj", "nour", "hedaya", "hayah",
+  ];
+  const orderKey = (name: string) => {
+    const k = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const i = ORDER.findIndex(p => k.startsWith(p));
+    return i === -1 ? ORDER.length : i;
+  };
+  withData.sort((a, b) => orderKey(a.name) - orderKey(b.name) || a.name.localeCompare(b.name));
+  noData.sort((a, b) => orderKey(a) - orderKey(b) || a.localeCompare(b));
 
   const human = new Date(day + "T12:00:00Z")
     .toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
