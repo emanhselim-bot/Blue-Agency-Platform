@@ -345,6 +345,13 @@ function bodyFor(template: string, t: Tally, cur: string, monthly: boolean): str
  * 13 September.
  */
 const KPI_COLUMN: Record<string, { col: string; group: string; label: string }> = {
+  // The awareness template's own cards, which are account totals rather than
+  // one platform. Fastum is sold on a total reach, so filing it under
+  // "Instagram" would claim a split the brief never made. Listed first so a
+  // client measured on totals reads them before any platform breakdown.
+  "aw-reach":       { col: "reach",              group: "Total",     label: "Reach" },
+  "aw-impressions": { col: "impressions",        group: "Total",     label: "Impressions" },
+  "aw-engagements": { col: "engagement",         group: "Total",     label: "Engagement" },
   "ig-impressions": { col: "impressions",        group: "Instagram", label: "Impressions" },
   "ig-engagement":  { col: "engagement",         group: "Instagram", label: "Engagement" },
   "ig-video-plays": { col: "video_plays",        group: "Instagram", label: "Video Plays" },
