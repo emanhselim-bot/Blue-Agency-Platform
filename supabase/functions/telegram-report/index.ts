@@ -415,31 +415,45 @@ function kpiLinesFor(
   const mine = targets.filter(t => keys.includes(String(t.account_key)) && n(t.value) != null);
   if (!mine.length) return [];
 
-  const out: string[] = [];
-  const from = mine.map(t => String(t.starts_on ?? "")).filter(Boolean).sort()[0] ?? "";
-  const to   = mine.map(t => String(t.ends_on ?? "")).filter(Boolean).sort().slice(-1)[0] ?? "";
-  if (from && to) {
+  const out: string[] = ["<i>KPIs</i>"];
+
+  // The window belongs to the group, not to the block.
+  //
+  // One header saying "13 Sept -> 13 Dec" was right until Cytarose's TikTok
+  // turned out to have started on 16 October. Each target was still measured
+  // over its own dates, but the heading described only the earliest of them,
+  // so TikTok looked like it had been running for a month and delivering
+  // almost nothing. Instagram and TikTok now each carry their own dates.
+  const span = (from: string, to: string) => {
+    if (!from || !to) return "";
     const total = Math.max(1, Math.round(
       (Date.parse(to + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 86_400_000));
     const gone = Math.max(0, Math.round(
       (Date.parse(day + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 86_400_000));
-    out.push(`<i>KPIs \u00b7 ${niceDay(from)} \u2192 ${niceDay(to)} (day ${gone} of ${total})</i>`);
-  } else {
-    out.push("<i>KPIs</i>");
-  }
+    return ` \u00b7 ${niceDay(from)} \u2192 ${niceDay(to)} (day ${gone} of ${total})`;
+  };
+
+  const rank = (c: string) => Object.keys(KPI_COLUMN).indexOf(c);
+  const sorted = [...mine].sort((a, b) => rank(String(a.card_id)) - rank(String(b.card_id)));
 
   let group = "";
-  for (const t of mine.sort((a, b) => {
-    const ka = KPI_COLUMN[String(a.card_id)], kb = KPI_COLUMN[String(b.card_id)];
-    // Instagram before TikTok, and within each the order Selim writes them:
-    // impressions, engagement, video plays, reach.
-    const rank = (c: string) => Object.keys(KPI_COLUMN).indexOf(c);
-    return rank(String(a.card_id)) - rank(String(b.card_id));
-  })) {
+  for (const t of sorted) {
     const col = KPI_COLUMN[String(t.card_id)];
     if (!col) continue;
-    const start = String(t.starts_on ?? from);
+    const start = String(t.starts_on ?? "");
     const end = String(t.ends_on ?? day);
+
+    if (col.group !== group) {
+      // Every target in this group, so the heading can carry the window they
+      // share -- and say so only when they genuinely share one.
+      const sameGroup = sorted.filter(x => KPI_COLUMN[String(x.card_id)]?.group === col.group);
+      const froms = [...new Set(sameGroup.map(x => String(x.starts_on ?? "")))];
+      const tos   = [...new Set(sameGroup.map(x => String(x.ends_on ?? "")))];
+      out.push(`<b>${col.group}</b>` +
+               (froms.length === 1 && tos.length === 1 ? `<i>${span(froms[0], tos[0])}</i>` : ""));
+      group = col.group;
+    }
+
     // Only days inside this target's own window, and never past the day being
     // reported -- a target running to December must not count a future day
     // even if the sheet somehow has one.
@@ -455,17 +469,16 @@ function kpiLinesFor(
     // report, and for one reason: a KPI is measured across a whole campaign
     // window, and the sheet only covers the days somebody filled in.
     //
-    // Cytarose proved it. Its window is 30 days and its sheet has 4 of them,
+    // Cytarose proved it. Its window had 30 days and its sheet had 4 of them,
     // so the sheet put impressions at 32.7K against a 1.05M target -- 3%,
-    // when Meta has the other 26 days. A progress figure that silently means
+    // when Meta had the other 26 days. A progress figure that silently means
     // "progress on the days we remembered to type" is worse than no figure.
     //
     // Reach compounds it: summing daily reach counts a person once per day
     // they saw an ad, while Meta over the window counts people.
     //
     // The sheet still answers where Meta cannot -- TikTok has no Meta figure
-    // at all -- and the line names its source either way, so two different
-    // numbers for the same KPI can never be mistaken for each other.
+    // at all -- and the line names its source either way.
     let source = "";
     const fromMeta = meta[String(t.card_id)];
     if (fromMeta != null) {
@@ -476,14 +489,12 @@ function kpiLinesFor(
     }
 
     const target = n(t.value)!;
-    if (col.group !== group) { out.push(`<b>${col.group}</b>`); group = col.group; }
     const share = actual == null ? null : Math.round(actual / target * 100);
     out.push(`${col.label} = ${compact(actual)} / ${compact(target)}` +
              (share == null ? " \u2014 nothing recorded yet" : ` \u00b7 ${share}%${source}`));
   }
   return out;
 }
-
 
 /**
  * Meta's own figures for one client over its KPI window.
