@@ -338,20 +338,38 @@ function blockFor(
   ].join("\n");
 }
 
+/**
+ * Send one message, waiting out a rate limit rather than losing it.
+ *
+ * One message per client means about twenty in a row, and Telegram allows
+ * roughly twenty a minute to one chat before answering 429 with a
+ * retry_after. Dropping a client's figures because the one before it was sent
+ * too quickly would be the worst kind of failure here -- quiet, and different
+ * every day -- so a 429 is waited out and retried.
+ */
 async function send(token: string, chatId: string, text: string) {
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
-    }),
-  });
-  if (!res.ok) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+      }),
+    });
+    if (res.ok) return await res.json();
+
+    const raw = (await res.text()).slice(0, 400);
+    if (res.status === 429) {
+      let wait = 3;
+      try { wait = JSON.parse(raw)?.parameters?.retry_after ?? 3; } catch { /* keep 3 */ }
+      await new Promise(r => setTimeout(r, Math.min(wait, 30) * 1000));
+      continue;
+    }
     // Telegram puts the reason in the body, and it is almost always the chat id
     // or the bot not being in the group. Worth surfacing rather than a bare 400.
-    throw new Error(`Telegram ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new Error(`Telegram ${res.status}: ${raw}`);
   }
-  return await res.json();
+  throw new Error("Telegram kept rate-limiting the report");
 }
 
 Deno.serve(async (req: Request) => {
@@ -607,20 +625,21 @@ Deno.serve(async (req: Request) => {
   }
   const text = blocks.join("\n\n");
 
-  // Telegram refuses a message over 4096 characters, and silently losing the
-  // tail would be worse than sending several.
+  // One message per client, so each can be replied to, forwarded or searched
+  // on its own. The date banner and the not-filled list are messages in their
+  // own right for the same reason.
   //
-  // The first version cut every 3800 characters wherever that landed, which
-  // can fall inside a <b> tag -- and Telegram rejects a message whose HTML
-  // does not parse, so the report would have failed outright rather than
-  // arriving split. Whole blocks only now.
+  // Telegram refuses anything over 4096 characters. A client's block is a few
+  // hundred, so the guard below is only for a pathological case -- and it cuts
+  // between lines rather than at a fixed offset, because a cut inside a <b>
+  // tag makes Telegram reject the whole message instead of splitting it.
   const chunks: string[] = [];
-  {
-    const LIMIT = 3500;
+  for (const block of blocks) {
+    if (block.length <= 3900) { chunks.push(block); continue; }
     let cur = "";
-    for (const block of blocks) {
-      const joined = cur ? cur + "\n\n" + block : block;
-      if (joined.length > LIMIT && cur) { chunks.push(cur); cur = block; }
+    for (const line of block.split("\n")) {
+      const joined = cur ? cur + "\n" + line : line;
+      if (joined.length > 3900 && cur) { chunks.push(cur); cur = line; }
       else cur = joined;
     }
     if (cur) chunks.push(cur);
@@ -647,7 +666,14 @@ Deno.serve(async (req: Request) => {
   // or the bot not being in the group -- so it belongs in the response.
   const sent = [];
   try {
-    for (const c of chunks) sent.push(await send(token!, chatId!, c));
+    for (const [i, c] of chunks.entries()) {
+      // Paced deliberately. Telegram's limit for one chat is about twenty
+      // messages a minute, and twenty clients sent back to back walks into it;
+      // send() still waits out a 429, but not provoking one keeps the report
+      // arriving in order and in a few seconds rather than a few minutes.
+      if (i > 0) await new Promise(r => setTimeout(r, 1200));
+      sent.push(await send(token!, chatId!, c));
+    }
   } catch (e) {
     return json({
       error: "TELEGRAM_SEND_FAILED",
