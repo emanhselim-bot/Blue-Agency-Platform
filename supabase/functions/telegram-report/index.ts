@@ -296,15 +296,17 @@ function bodyFor(template: string, t: Tally, cur: string, monthly: boolean): str
       // as "— orders". Ibriz sells through the website only, and a Messages
       // line with a dash in it reads as a broken figure rather than as a
       // channel the client does not use.
+      //
+      // Total Sales is always shown, even for a one-channel client where it
+      // repeats the line above it. It is the figure Selim reads first, and a
+      // report where it appears for some clients and not others is one you
+      // have to check rather than scan. Messages orders are themselves
+      // FB + IG + WhatsApp, so this is the whole of what the client sold.
       const hasWeb = t.webOrders != null || t.webPieces != null;
       const hasMsg = t.msgOrders != null || t.msgPieces != null;
       if (hasWeb) out.push(`Website = ${op(t.webOrders, t.webPieces)}`);
       if (hasMsg) out.push(`Messages = ${op(t.msgOrders, t.msgPieces)}`);
-      if (hasWeb && hasMsg) {
-        out.push(`${monthly ? "Total" : "Total Sales"} = ${op(t.orders, t.pieces)}`);
-      } else if (!hasWeb && !hasMsg) {
-        out.push(`${monthly ? "Total" : "Total Sales"} = ${op(null, null)}`);
-      }
+      out.push(`${monthly ? "Total" : "Total Sales"} = ${op(t.orders, t.pieces)}`);
       break;
     }
   }
