@@ -265,21 +265,28 @@ function bodyFor(template: string, t: Tally, cur: string, monthly: boolean): str
   const out: string[] = [];
   const spend = t.totalSpend ?? t.spend;
 
+  // "Messages" means what came through messages -- purchases for a shop,
+  // reservations for an academy -- never the number of conversations. Those
+  // two were both printed as "Messages" and an academy's block read
+  // "Messages = 109, Reservations = 3", where 109 was conversations and
+  // looked like a third figure of sales. The conversation count is still
+  // worth having, so it is labelled "No of Messages" and sits first, as the
+  // volume the rest of the block comes out of.
   switch (template) {
     case "education":
-      out.push(`Messages = ${int(t.msgs)}`);
-      out.push(`Reservations = ${int(t.deals)}` +
+      out.push(`No of Messages = ${int(t.msgs)}`);
+      out.push(`Messages = ${int(t.deals)} reservations` +
         (t.tahfez == null ? "" : ` (${int(t.tahfez)} tahfez)`));
       break;
     case "messages-service":
-      out.push(`Messages = ${int(t.msgs)}`);
+      out.push(`No of Messages = ${int(t.msgs)}`);
       if (t.leads != null) out.push(`Leads = ${int(t.leads)}`);
-      out.push(`Deals = ${int(t.deals)}`);
+      out.push(`Messages = ${int(t.deals)} deals`);
       break;
     case "donations":
-      out.push(`Messages = ${int(t.msgs)}`);
+      out.push(`No of Messages = ${int(t.msgs)}`);
       if (t.clicks != null) out.push(`Clicks = ${int(t.clicks)}`);
-      out.push(`Donors = ${int(t.donors)}`);
+      out.push(`Messages = ${int(t.donors)} donors`);
       break;
     case "awareness":
       if (t.reach != null)       out.push(`Reach = ${int(t.reach)}`);
