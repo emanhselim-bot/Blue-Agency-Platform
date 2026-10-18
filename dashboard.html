@@ -21646,40 +21646,59 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       batFillSelectors(); batRender();
     }
 
+    // A task can name several people in one field — Notion's Person property
+    // arrives as "Eman Selim, Hager Hamdy". Treated whole, that becomes a
+    // thirteenth "person" in the filter who matches exactly the tasks both of
+    // them share, and neither of their own.
+    const batNamePieces = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    // The same person is written at different lengths depending on where the
+    // name came from: the Notion roster knows them by the title of their task
+    // database ("📋 Yara Tasks" → "Yara"), while a task's Person property
+    // carries "Yara Ammar". One is the other's first name, so they are matched
+    // on that rather than on an exact string — otherwise picking "Yara" in the
+    // filter returns nothing at all, which is how this looked before.
+    const batSamePerson = (a, b) => {
+      const x = String(a || '').trim().toLowerCase(), y = String(b || '').trim().toLowerCase();
+      if (!x || !y) return false;
+      return x === y || x.startsWith(y + ' ') || y.startsWith(x + ' ');
+    };
+
     function batBuildAssignees() {
-      const knownNames = new Set();
       const assignees = [];
-      _batMembers.forEach(m => {
-        const person = { ...m, taskPersonKey: `member:${m.id}` };
-        assignees.push(person);
-        [m.full_name, m.email].filter(Boolean).forEach(value => knownNames.add(value.trim().toLowerCase()));
-      });
-      // When Notion has supplied its team directory, keep the member selector
-      // to real team members only. Task titles and imported pages are not people.
-      if (!_batNotionRoster.length) _batTasks.forEach(t => {
-        const name = String(t.assignee_name || '').trim();
-        const key = name.toLowerCase();
-        const email = String(t.assignee_email || '').trim().toLowerCase();
-        if (!name || knownNames.has(key) || email && knownNames.has(email)) return;
-        knownNames.add(key);
-        if (email) knownNames.add(email);
-        assignees.push({ id: null, full_name: name, email: t.assignee_email || null, taskPersonKey: `notion:${key}` });
-      });
-      _batNotionRoster.forEach(m => {
-        const name = String(m.full_name || '').trim();
-        const key = name.toLowerCase();
-        if (!name) return;
-        const email = String(m.email || '').trim().toLowerCase();
-        const existing = assignees.find(person => [person.full_name, person.email]
-          .filter(Boolean).some(value => [key, email].includes(value.trim().toLowerCase())));
-        knownNames.add(key);
-        if (email) knownNames.add(email);
-        if (existing) existing.department = existing.department || m.department;
-        else {
-          assignees.push({ id: null, full_name: name, email: m.email || null, department: m.department,
-            taskPersonKey: `notion-directory:${m.id || key}` });
+      // Merge into whoever is already there, keeping the fullest spelling of
+      // the name as the label: "Yara Ammar" reads better than "Yara", and is
+      // what the task rows say.
+      const absorb = (name, extra = {}) => {
+        const clean = String(name || '').trim();
+        if (!clean) return null;
+        const existing = assignees.find(p =>
+          batSamePerson(p.full_name, clean) ||
+          (extra.email && p.email && p.email.toLowerCase() === extra.email.toLowerCase()));
+        if (existing) {
+          if (clean.length > String(existing.full_name || '').length) existing.full_name = clean;
+          existing.email = existing.email || extra.email || null;
+          existing.department = existing.department || extra.department || '';
+          existing.id = existing.id || extra.id || null;
+          return existing;
         }
-      });
+        const person = { id: extra.id || null, full_name: clean, email: extra.email || null,
+          department: extra.department || '', taskPersonKey: extra.taskPersonKey || `person:${clean.toLowerCase()}` };
+        assignees.push(person);
+        return person;
+      };
+
+      _batMembers.forEach(m => absorb(m.full_name || m.email,
+        { id: m.id, email: m.email, taskPersonKey: `member:${m.id}` }));
+      _batNotionRoster.forEach(m => absorb(m.full_name,
+        { email: m.email, department: m.department, taskPersonKey: `notion-directory:${m.id || m.full_name}` }));
+      // Finally the names the tasks themselves carry. These are the fullest
+      // and the only ones guaranteed to match a row, so they fill in anyone
+      // the roster missed and lengthen the names of everyone it found.
+      _batTasks.forEach(t => batNamePieces(t.assignee_name).forEach(name =>
+        absorb(name, { email: batNamePieces(t.assignee_name).length === 1 ? t.assignee_email : null })));
+
+      assignees.sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
       _batAssignees = assignees;
     }
 
@@ -21717,9 +21736,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (clientId) rows = rows.filter(t => t.client_id === clientId);
       if (personId) rows = rows.filter(t => {
         const person = _batAssignees.find(m => m.taskPersonKey === personId);
-        return person && (person.id && t.assignee_member_id === person.id ||
-          String(t.assignee_name || '').trim().toLowerCase() === String(person.full_name || '').toLowerCase() ||
-          Boolean(person.email && String(t.assignee_email || '').trim().toLowerCase() === person.email.toLowerCase()));
+        if (!person) return false;
+        // Any one of the people named on the task, not the whole field: a task
+        // assigned to "Eman Selim, Hager Hamdy" belongs in both their filters.
+        return (person.id && t.assignee_member_id === person.id) ||
+          batNamePieces(t.assignee_name).some(nm => batSamePerson(nm, person.full_name)) ||
+          Boolean(person.email && String(t.assignee_email || '').trim().toLowerCase() === person.email.toLowerCase());
       });
       if (query) rows = rows.filter(t => [t.title, t.description, t.client_name, t.assignee_name, t.category].some(v => String(v || '').toLowerCase().includes(query)));
       if (dueFilter === 'today') rows = rows.filter(t => t.due_date === today);

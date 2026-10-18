@@ -57,21 +57,59 @@ function blockText(block: any): string {
   return plain(richText);
 }
 
-function personFromText(value: string): { name: string; email: string | null } | null {
-  let text = value.replace(/^\s*[-*•\d.)]+\s*/, "").replace(/^📋\s*/, "").trim();
-  text = text.replace(/\s+tasks?\s*$/i, "").trim();
-  if (!text || /^(name|member|team member|role|email|department|media buying team|social media team)$/i.test(text)) return null;
-  const email = text.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || null;
-  if (email) text = text.replace(email, "").replace(/[()<>]/g, "").trim();
-  text = text.replace(/\s*\([^)]*\)\s*$/, "").replace(/\s*(?:—|–|\||•|\s-\s|:)\s*.*$/, "").trim();
-  text = text.replace(/^(?:name|member|team member)\s*:\s*/i, "").trim();
-  if (!text && email) text = email;
-  if (!text || text.length > 100 || /^(media buying|social media|team|members?)$/i.test(text)) return null;
-  if (text.split(/\s+/).length > 6 || /[.!?]/.test(text)) return null;
-  return { name: text, email };
+/**
+ * A team member's name out of their task database's title.
+ *
+ * In Notion the team is not a list of people anywhere -- it is one task
+ * database per person per month, named "📋 Eman Tasks", "📋 Hager Tasks".
+ * That title is the only place a member's name is actually written down, and
+ * it is already fetched, so it is what the roster is built from.
+ *
+ * This replaces a walk that treated any page under the team whose title ended
+ * in "task" as a person. It did not find the databases at all -- those are
+ * child_database blocks, not child_page -- and swept up everything else it
+ * passed instead: month pages, priority options, section headings, client
+ * names and plain task titles. The member filter ended up listing 134
+ * "people", among them "Sep", "🔴 High", "Optimize basma" and "قواعد
+ * التاسكات".
+ *
+ * A title is accepted only when something stands in front of the word Tasks:
+ * bare "Tasks" and "Tasks Database" are a shared or unnamed board, not a
+ * person, and are left out rather than guessed at.
+ */
+function memberNameFromDatabaseTitle(title: string): string | null {
+  const text = String(title || "")
+    .replace(/[\p{Extended_Pictographic}️‍]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const match = text.match(/^(.*\S)\s+tasks?$/i);
+  if (!match) return null;
+
+  const name = match[1].trim();
+  if (!name) return null;
+  // Words that describe the board rather than name its owner.
+  if (/^(the|my|our|all|team|teams|shared|general|daily|weekly|monthly|notion|new|old|archive[d]?|database)$/i.test(name)) {
+    return null;
+  }
+  // A person's name is short. Anything longer is a task that happens to end
+  // in the word "tasks" -- "Remaining Reports Tasks" is not somebody.
+  if (name.length > 40 || name.split(" ").length > 3) return null;
+  return name;
 }
 
-async function notionTeamRoster(notionRequest: (path: string, init?: RequestInit) => Promise<any>, rootPageId: string) {
+/**
+ * Which team each task database belongs to.
+ *
+ * Only to label a member Media Buying or Social Media; the names themselves
+ * come from the database titles. Walking the two team pages for their
+ * child_database blocks is a handful of requests, and a team page that cannot
+ * be read costs its members their label, not their place in the list.
+ */
+async function notionTeamRoster(
+  notionRequest: (path: string, init?: RequestInit) => Promise<any>,
+  rootPageId: string,
+) {
   const blockChildren = async (id: string) => {
     const rows: any[] = [];
     let cursor: string | undefined;
@@ -85,7 +123,7 @@ async function notionTeamRoster(notionRequest: (path: string, init?: RequestInit
     return rows;
   };
 
-  const pages: { id: string; name: string; department: string }[] = [];
+  const teams: { id: string; name: string; department: string }[] = [];
   const queue = [{ id: rootPageId, depth: 0 }];
   const visited = new Set<string>();
   while (queue.length && visited.size < 100) {
@@ -97,46 +135,67 @@ async function notionTeamRoster(notionRequest: (path: string, init?: RequestInit
       const title = String(block.child_page?.title || "").trim();
       const department = /media\s*buying/i.test(title) ? "Media Buying" :
         /social\s*media/i.test(title) ? "Social Media" : "";
-      if (department && /team/i.test(title)) pages.push({ id: block.id, name: title, department });
+      if (department && /team/i.test(title)) teams.push({ id: block.id, name: title, department });
       else if (current.depth < 4) queue.push({ id: block.id, depth: current.depth + 1 });
     }
   }
 
-  const roster: any[] = [];
+  // database id -> { team page, department }
+  const byDatabase = new Map<string, { teamPageId: string; department: string }>();
   const inaccessibleTeams: string[] = [];
-  for (const team of pages) {
+  for (const team of teams) {
     try {
-    const blocks = [{ id: team.id, depth: 0 }];
+      const blocks = [{ id: team.id, depth: 0 }];
       const seen = new Set<string>();
-      const teamPeople = new Map<string, { name: string; email: string | null }>();
-    while (blocks.length && seen.size < 200) {
-      const current = blocks.shift()!;
-      if (seen.has(current.id) || current.depth > 4) continue;
-      seen.add(current.id);
-      for (const block of await blockChildren(current.id)) {
-        const isMemberTaskPage = block.type === "child_page" && /\btasks?\s*$/i.test(String(block.child_page?.title || ""));
-        if (isMemberTaskPage) {
-          const person = personFromText(String(block.child_page.title));
-          if (person) teamPeople.set(person.name.toLowerCase(), person);
-          continue;
-        }
-        if (block.has_children && current.depth < 4 && !isMemberTaskPage) {
-          blocks.push({ id: block.id, depth: current.depth + 1 });
+      while (blocks.length && seen.size < 200) {
+        const current = blocks.shift()!;
+        if (seen.has(current.id) || current.depth > 4) continue;
+        seen.add(current.id);
+        for (const block of await blockChildren(current.id)) {
+          if (block.type === "child_database") {
+            byDatabase.set(block.id, { teamPageId: team.id, department: team.department });
+          } else if (block.type === "child_page" && current.depth < 4) {
+            blocks.push({ id: block.id, depth: current.depth + 1 });
+          }
         }
       }
-    }
-    for (const person of teamPeople.values()) {
-      roster.push({
-        notion_page_id: team.id,
-        notion_person_key: `${team.id}:${(person.email || person.name).toLowerCase()}`,
-        full_name: person.name, email: person.email, department: team.department,
-      });
-    }
     } catch {
       inaccessibleTeams.push(team.name);
     }
   }
-  return { roster, inaccessibleTeams, foundTeams: pages.length };
+  return { byDatabase, inaccessibleTeams, foundTeams: teams.length };
+}
+
+/**
+ * The roster itself: one row per person, from the task databases they own.
+ *
+ * A person owns a database per month, so the same name arrives several times
+ * and is folded into one entry. The key is the name rather than the database,
+ * which is why re-importing a new month does not add a second "Eman".
+ */
+function rosterFromDatabases(
+  databases: any[],
+  byDatabase: Map<string, { teamPageId: string; department: string }>,
+  fallbackTeamPageId: string,
+) {
+  const people = new Map<string, any>();
+  for (const database of databases) {
+    const name = memberNameFromDatabaseTitle(plain(database.title));
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const team = byDatabase.get(database.id);
+    const existing = people.get(key);
+    // First sighting wins, except that a labelled team beats an unlabelled one.
+    if (existing && (existing.department || !team?.department)) continue;
+    people.set(key, {
+      notion_page_id: team?.teamPageId || fallbackTeamPageId,
+      notion_person_key: `roster:${key}`,
+      full_name: name,
+      email: null,
+      department: team?.department || "",
+    });
+  }
+  return [...people.values()];
 }
 
 Deno.serve(async (req) => {
@@ -295,13 +354,12 @@ Deno.serve(async (req) => {
     let teamRosterWarning: string | null = null;
     if (teamRootPageId) {
       const teamRoster = await notionTeamRoster(notionRequest, teamRootPageId);
-      teamMembers = teamRoster.roster;
+      teamMembers = rosterFromDatabases(databases, teamRoster.byDatabase, teamRootPageId);
       if (teamRoster.inaccessibleTeams.length) {
         teamRosterWarning = `Share these Notion pages with the Blue Ad integration, then import again: ${teamRoster.inaccessibleTeams.join(", ")}.`;
-      } else if (!teamRoster.foundTeams) {
-        teamRosterWarning = "No Social Media Team or Media Buying Team page was found under Blue Ad HQ.";
       } else if (!teamMembers.length) {
-        teamRosterWarning = "The team pages were found, but no member task pages such as “Eman Tasks” could be read.";
+        teamRosterWarning = "No task database named after a person (such as “📋 Eman Tasks”) was found, " +
+          "so the member list could not be built.";
       }
       if (teamMembers.length) {
         const { error: clearRosterError } = await admin.from("blue_ad_task_assignees").delete()
