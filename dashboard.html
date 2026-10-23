@@ -3989,6 +3989,17 @@
             <div class="hub-card-desc">Plan today’s work, assign tasks to your team, and track every deadline in one place.</div>
             <div class="hub-card-badge" style="background:#EAF2FE;color:#0573F5">NEW</div>
           </div>
+          <!-- Proposal lives inside the media dashboard as a tab. This opens
+               that tab directly, so it does not have to be found two clicks
+               in. data-mod is what applyModuleAccess() hides cards by, and
+               canOpenModule('proposal') checks both gates: the media module
+               and the proposal tab itself. -->
+          <div class="hub-card" id="hub-card-proposal" data-mod="proposal" onclick="hubOpen('proposal')" style="display:none">
+            <div class="hub-card-icon">📝</div>
+            <div class="hub-card-title">Proposals</div>
+            <div class="hub-card-desc">Price a new client from what comparable accounts actually delivered, and save the estimate.</div>
+            <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
+          </div>
           <div class="hub-card" id="hub-card-access" data-mod="access" onclick="hubOpen('access')" style="display:none">
             <div class="hub-card-icon">🔐</div>
             <div class="hub-card-title">Access</div>
@@ -23992,6 +24003,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function canOpenModule(m) {
       // Owner-only modules are never part of a member's module list.
       if (m === 'activity' || m === 'access') return currentRole === 'owner';
+      // Proposal is a tab inside the media dashboard rather than a module of
+      // its own, so its card answers to both gates: the media module, and the
+      // tab permission an owner may have narrowed. Putting a shortcut on the
+      // home screen must not widen who can reach it.
+      if (m === 'proposal') return canOpenModule('media') && canSeeMediaTab('proposal');
       // Tasks are a team workspace. Anyone who has at least one dashboard
       // module may open it; task editing follows the member's existing role.
       if (m === 'tasks') return !!(_cpModules && _cpModules.length);
@@ -24046,8 +24062,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function hubOpen(section) {
       const permissionSection = section === 'tasks' ? 'pipeline' : section;
       if (!canOpenModule(permissionSection)) { alert('You do not have access to this section.'); return; }
-      if (section === 'media') {
+      if (section === 'media' || section === 'proposal') {
         document.getElementById('home-hub').classList.add('hidden');
+        // The media dashboard is the page underneath the hub, so opening it is
+        // just getting out of the way. Proposal then switches to its tab —
+        // openProposalTab re-checks the permission itself, so a stale card or
+        // a console call cannot reach it.
+        if (section === 'proposal') openProposalTab();
         return;
       }
       hubShowView(section);
