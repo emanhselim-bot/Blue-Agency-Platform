@@ -4075,23 +4075,6 @@
         <button class="hub-signout" onclick="document.getElementById('signout-btn').click()">Sign out</button>
       </div>
 
-      <!-- Ask Claude. Fixed to the viewport so it is reachable from the hub,
-           the media dashboard and every other view without each of them
-           having to make room for it. -->
-      <button class="ac-fab" id="ac-fab" onclick="acToggle()" title="Ask Claude about your accounts" style="display:none">✨</button>
-      <div class="ac-panel" id="ac-panel" role="dialog" aria-label="Ask Claude">
-        <div class="ac-head">
-          <b>Ask Claude</b><span class="ac-scope" id="ac-scope"></span>
-          <button class="ac-x" onclick="acToggle(false)" title="Close">✕</button>
-        </div>
-        <div class="ac-log" id="ac-log"></div>
-        <div class="ac-foot">
-          <textarea class="ac-in" id="ac-in" rows="1" placeholder="Ask about any client…"
-                    onkeydown="acKey(event)" oninput="acGrow(this)"></textarea>
-          <button class="ac-send" id="ac-send" onclick="acSend()">Ask</button>
-        </div>
-      </div>
-
       <!-- Team activity module (owner only) -->
       <div id="hub-activity-view" style="display:none">
         <div class="hub-mod-head">
@@ -24716,5 +24699,25 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
   })();
   </script>
+
+  <!-- Ask Claude.
+       At the top level of the document on purpose. It was first written
+       inside #home-hub, which gets .hidden the moment you open any
+       dashboard — so the button vanished in exactly the places you would
+       want to ask about an account. position:fixed does not save you from
+       a hidden ancestor. -->
+  <button class="ac-fab" id="ac-fab" onclick="acToggle()" title="Ask Claude about your accounts" style="display:none">✨</button>
+  <div class="ac-panel" id="ac-panel" role="dialog" aria-label="Ask Claude">
+    <div class="ac-head">
+      <b>Ask Claude</b><span class="ac-scope" id="ac-scope"></span>
+      <button class="ac-x" onclick="acToggle(false)" title="Close">✕</button>
+    </div>
+    <div class="ac-log" id="ac-log"></div>
+    <div class="ac-foot">
+      <textarea class="ac-in" id="ac-in" rows="1" placeholder="Ask about any client…"
+                onkeydown="acKey(event)" oninput="acGrow(this)"></textarea>
+      <button class="ac-send" id="ac-send" onclick="acSend()">Ask</button>
+    </div>
+  </div>
 </body>
 </html>
