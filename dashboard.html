@@ -1919,6 +1919,11 @@
     .dc-donut-key span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dc-donut-key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
     .dc-donut-key b { color: var(--text-main); }
+    .dc-ring-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+      color: var(--text-muted); margin: 2px 0 6px;
+    }
+    .dc-ring-sep { border-top: 1px solid var(--border); margin: 14px 0 0; }
     /* ── Customization edit buttons ── */
     .section-rename-btn, .section-del-btn { display: inline-block; margin-left: 3px; padding: 1px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; line-height: 1.6; vertical-align: middle; opacity: 0.55; transition: opacity 0.15s, background 0.15s; }
     .section-rename-btn:hover { opacity: 1; background: #6366f1; color: #fff; border-color: #6366f1; }
@@ -10996,6 +11001,13 @@
     const _dcTotalSpend = r => _dcNum(r.total_spend) ?? _dcConvSpend(r);
     const _dcRevenue = r => _dcNum(r.web_revenue_confirmed) ?? _dcNum(r.total_revenue) ?? _dcNum(r.web_revenue);
 
+    // Orders by channel, confirmed where the sheet distinguishes them — the
+    // same precedence the cards and the Telegram report use, so the ring adds
+    // up to Total Orders rather than to a slightly different number.
+    const _dcWebOrders = r => _dcNum(r.web_orders_confirmed) ?? _dcNum(r.web_orders) ?? 0;
+    const _dcMsgOrders = r => _dcNum(r.msg_orders) ?? 0;
+    const _dcOrders = r => _dcWebOrders(r) + _dcMsgOrders(r);
+
     /**
      * Which notion_daily keys the current selection covers, one entry per
      * client.
@@ -11158,10 +11170,17 @@
       <div class="dc-legend"><span class="dc-be-key"><i></i>break-even (1.00x)</span></div>`;
     }
 
-    /** Share of spend, biggest first, with the tail folded into "Other". */
-    function _dcDonut(slices, currency) {
+    /**
+     * Share of a total, biggest first, with the tail folded into "Other".
+     *
+     * `opts.prefix` is for money and `opts.suffix` for counted things, so the
+     * same ring can read "EGP 238K · 79%" or "301 orders · 78%".
+     */
+    function _dcDonut(slices, opts = {}) {
+      const { prefix = '', suffix = '', empty = 'Nothing recorded in this period.' } =
+        typeof opts === 'string' ? { prefix: opts } : opts;
       const total = slices.reduce((s, x) => s + x.value, 0);
-      if (!total) return _dcEmpty('Nothing spent in this period.');
+      if (!total) return _dcEmpty(empty);
       const palette = ['var(--blue-light)', '#16a34a', 'var(--gold)', 'var(--teal)', 'var(--coral)', 'var(--blue-navy)', 'var(--text-muted)'];
       const R = 62, r = 38, cx = 80, cy = 80;
       let angle = -Math.PI / 2;
@@ -11178,7 +11197,7 @@
           ? `M${cx - R},${cy} a${R},${R} 0 1,0 ${R * 2},0 a${R},${R} 0 1,0 ${-R * 2},0 M${cx - r},${cy} a${r},${r} 0 1,1 ${r * 2},0 a${r},${r} 0 1,1 ${-r * 2},0`
           : `M${x0.toFixed(1)},${y0.toFixed(1)} A${R},${R} 0 ${large},1 ${x1.toFixed(1)},${y1.toFixed(1)} L${x2.toFixed(1)},${y2.toFixed(1)} A${r},${r} 0 ${large},0 ${x3.toFixed(1)},${y3.toFixed(1)} Z`;
         return `<path d="${d}" fill="${palette[i % palette.length]}" fill-rule="evenodd">
-          <title>${_dcEsc(s.name)}: ${currency}${_dcShort(s.value)} · ${Math.round(s.value / total * 100)}%</title></path>`;
+          <title>${_dcEsc(s.name)}: ${prefix}${_dcShort(s.value)}${suffix} · ${Math.round(s.value / total * 100)}%</title></path>`;
       }).join('');
       return `<div class="dc-donut-wrap">
         <svg viewBox="0 0 160 160" class="dc-donut" role="img">${arcs}</svg>
@@ -11244,13 +11263,14 @@
       // ── ROAS per client over the window ──
       const perClient = clients.map(c => {
         const keys = new Set(c.key);
-        let s = 0, rev = 0;
+        let s = 0, rev = 0, ord = 0;
         for (const r of scoped) {
           if (!keys.has(String(r.account_key))) continue;
           s += _dcConvSpend(r) ?? 0;
           rev += _dcRevenue(r) ?? 0;
+          ord += _dcOrders(r);
         }
-        return { name: c.name, spend: s, revenue: rev, roas: s > 0 ? rev / s : null };
+        return { name: c.name, spend: s, revenue: rev, orders: ord, roas: s > 0 ? rev / s : null };
       });
 
       const single = clients.length === 1;
@@ -11287,6 +11307,27 @@
             return top;
           })();
 
+      // The same split for orders, under the spend ring.
+      //
+      // Branding has no slice here on purpose: it is a real share of spend and
+      // it produces no orders, so including it would draw a 0% wedge. The two
+      // rings therefore have different slice counts, which is the honest
+      // picture — the money goes three ways and the orders come back two.
+      const orderSlices = single
+        ? (() => {
+            let web = 0, msg = 0;
+            for (const r of scoped) { web += _dcWebOrders(r); msg += _dcMsgOrders(r); }
+            return [{ name: 'Website', value: web }, { name: 'Messages', value: msg }]
+              .filter(s => s.value > 0);
+          })()
+        : (() => {
+            const sorted = perClient.filter(c => c.orders > 0).sort((a, b) => b.orders - a.orders);
+            const top = sorted.slice(0, 6).map(c => ({ name: c.name, value: c.orders }));
+            const rest = sorted.slice(6).reduce((s, c) => s + c.orders, 0);
+            if (rest > 0) top.push({ name: `Other (${sorted.length - 6})`, value: rest });
+            return top;
+          })();
+
       // The label is the period that was chosen, so it reads the same as the
       // header above it. Where the sheets have not reached the end of that
       // period the label says so rather than quietly shortening the range —
@@ -11307,7 +11348,12 @@
               (() => { const cs = days.reduce((s, d) => s + byDay[d].convSpend, 0);
                        return cs > 0 ? revenue.reduce((s, v) => s + v, 0) / cs : null; })()))}
           ${_dcCard(single ? 'ROAS by day' : 'ROAS by client', single ? 'last 10 recorded days' : 'window total', roasPanel)}
-          ${_dcCard(single ? 'Where spend went' : 'Spend by client', window, _dcDonut(spendSlices, cur))}
+          ${_dcCard(single ? 'Where spend went' : 'Spend by client', window,
+              `<div class="dc-ring-label">Spend</div>
+               ${_dcDonut(spendSlices, { prefix: cur, empty: 'Nothing spent in this period.' })}
+               <div class="dc-ring-sep"></div>
+               <div class="dc-ring-label">Orders</div>
+               ${_dcDonut(orderSlices, { suffix: ' orders', empty: 'No orders recorded in this period.' })}`)}
         </div>`;
 
       const existing = document.getElementById('dash-charts');
