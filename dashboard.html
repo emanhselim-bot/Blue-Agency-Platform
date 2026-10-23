@@ -795,6 +795,11 @@
     body.cp-shared .header, body.cp-shared #content, body.cp-shared .hub-mod-head,
     body.cp-shared #hub-cards-view, body.cp-shared #hub-pipeline-view, body.cp-shared #hub-finance-view,
     body.cp-shared #hub-activity-view,
+    /* A share link is a client looking at their own timeline. The assistant
+       reads across the whole organisation, so it has no business on that
+       page — the function refuses an unauthenticated caller anyway, but the
+       button should not be there to press. */
+    body.cp-shared #ac-fab, body.cp-shared #ac-panel,
     body.cp-shared #auth-overlay, body.cp-shared .cp-owner-only { display: none !important; }
     body.cp-shared .hub-inner { max-width: 1200px; }
     body.cp-readonly .cp-node-date { pointer-events: none; }
@@ -1938,6 +1943,65 @@
     }
     .dc-ring-sep { border-top: 1px solid var(--border); margin: 14px 0 0; }
     .dc-ring-src { font-weight: 600; text-transform: none; letter-spacing: 0; opacity: .8; cursor: help; }
+
+    /* ── Ask Claude: floating panel ───────────────────────────────── */
+    .ac-fab {
+      position: fixed; right: 22px; bottom: 22px; z-index: 900;
+      width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+      background: var(--blue-light); color: #fff; font-size: 22px; line-height: 1;
+      box-shadow: 0 8px 24px rgba(0,0,0,.3); transition: transform .15s, box-shadow .15s;
+    }
+    .ac-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,.38); }
+    @media print { .ac-fab, .ac-panel { display: none !important; } }
+
+    .ac-panel {
+      position: fixed; right: 22px; bottom: 86px; z-index: 901;
+      width: 400px; max-width: calc(100vw - 32px);
+      height: 540px; max-height: calc(100vh - 130px);
+      display: none; flex-direction: column;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.4); overflow: hidden;
+    }
+    .ac-panel.open { display: flex; }
+    .ac-head {
+      display: flex; align-items: center; gap: 8px; padding: 11px 14px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .ac-head b { font-size: 13px; color: var(--text-main); }
+    .ac-scope { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+    .ac-x { margin-left: auto; background: none; border: none; color: var(--text-muted);
+      font-size: 17px; cursor: pointer; line-height: 1; padding: 2px 4px; }
+    .ac-log { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+    .ac-msg { font-size: 13px; line-height: 1.55; max-width: 92%; }
+    .ac-msg.me {
+      align-self: flex-end; background: var(--blue-light); color: #fff;
+      padding: 8px 12px; border-radius: 12px 12px 3px 12px; white-space: pre-wrap;
+    }
+    .ac-msg.ai { align-self: flex-start; color: var(--text-main); white-space: pre-wrap; }
+    .ac-msg.err { align-self: flex-start; color: var(--coral); }
+    .ac-tools { font-size: 10px; color: var(--text-muted); margin-top: 5px; opacity: .8; }
+    .ac-hint { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    .ac-eg {
+      display: block; width: 100%; text-align: left; margin-top: 6px;
+      background: var(--well); border: 1px solid var(--border); border-radius: 9px;
+      padding: 7px 10px; font-size: 12px; color: var(--text-main); cursor: pointer;
+    }
+    .ac-eg:hover { border-color: var(--blue-light); }
+    .ac-foot { border-top: 1px solid var(--border); padding: 9px 10px; display: flex; gap: 7px; flex-shrink: 0; }
+    .ac-in {
+      flex: 1; resize: none; border: 1px solid var(--border); border-radius: 9px;
+      padding: 8px 10px; font-size: 13px; font-family: inherit; line-height: 1.45;
+      background: var(--bg); color: var(--text-main); max-height: 110px;
+    }
+    .ac-send {
+      border: none; border-radius: 9px; padding: 0 14px; cursor: pointer;
+      background: var(--blue-light); color: #fff; font-size: 13px; font-weight: 600;
+    }
+    .ac-send:disabled { opacity: .5; cursor: default; }
+    @media (max-width: 760px) {
+      .ac-panel { right: 10px; left: 10px; width: auto; bottom: 78px; height: calc(100vh - 150px); }
+      .ac-fab { right: 14px; bottom: 14px; }
+    }
     /* ── Customization edit buttons ── */
     .section-rename-btn, .section-del-btn { display: inline-block; margin-left: 3px; padding: 1px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; line-height: 1.6; vertical-align: middle; opacity: 0.55; transition: opacity 0.15s, background 0.15s; }
     .section-rename-btn:hover { opacity: 1; background: #6366f1; color: #fff; border-color: #6366f1; }
@@ -4009,6 +4073,23 @@
         </div>
 
         <button class="hub-signout" onclick="document.getElementById('signout-btn').click()">Sign out</button>
+      </div>
+
+      <!-- Ask Claude. Fixed to the viewport so it is reachable from the hub,
+           the media dashboard and every other view without each of them
+           having to make room for it. -->
+      <button class="ac-fab" id="ac-fab" onclick="acToggle()" title="Ask Claude about your accounts" style="display:none">✨</button>
+      <div class="ac-panel" id="ac-panel" role="dialog" aria-label="Ask Claude">
+        <div class="ac-head">
+          <b>Ask Claude</b><span class="ac-scope" id="ac-scope"></span>
+          <button class="ac-x" onclick="acToggle(false)" title="Close">✕</button>
+        </div>
+        <div class="ac-log" id="ac-log"></div>
+        <div class="ac-foot">
+          <textarea class="ac-in" id="ac-in" rows="1" placeholder="Ask about any client…"
+                    onkeydown="acKey(event)" oninput="acGrow(this)"></textarea>
+          <button class="ac-send" id="ac-send" onclick="acSend()">Ask</button>
+        </div>
       </div>
 
       <!-- Team activity module (owner only) -->
@@ -24032,6 +24113,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         c.style.display = ok ? '' : 'none';
         if (ok) visible++;
       });
+      // The assistant appears once permissions are known and the person has
+      // at least one module. Before that the answer is "not known yet", and a
+      // button that is there and then is not is worse than one that arrives.
+      acVisible(!!(_cpModules && _cpModules.length) && !document.body.classList.contains('cp-shared'));
       // Somebody with no modules would otherwise stare at an empty page and
       // assume the dashboard is broken.
       let note = document.getElementById('hub-no-access');
@@ -24067,6 +24152,131 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // for a moment and then took them away again.
       loadMyModules().then(applyModuleAccess);
     }
+    // ══════════════════════════════════════════════════════════════
+    // ASK CLAUDE
+    //
+    // A thin client. It holds the conversation and sends the account
+    // currently on screen as a hint, and that is all — which account the
+    // assistant may actually read is decided server-side from the signed-in
+    // user, never from anything sent here. Passing an account id from the
+    // browser would be a way to read a client you cannot open.
+    // ══════════════════════════════════════════════════════════════
+    let _acHistory = [], _acBusy = false;
+
+    const AC_EXAMPLES = [
+      'Which client lost money this month?',
+      'Why did ROAS drop for this account last week?',
+      'Compare this month to last month for this client',
+      'Which client improved the most in the last 30 days?',
+    ];
+
+    function acVisible(on) {
+      const fab = document.getElementById('ac-fab');
+      if (fab) fab.style.display = on ? '' : 'none';
+      if (!on) acToggle(false);
+    }
+
+    function acToggle(force) {
+      const p = document.getElementById('ac-panel');
+      if (!p) return;
+      const open = force === undefined ? !p.classList.contains('open') : !!force;
+      p.classList.toggle('open', open);
+      if (!open) return;
+      const scope = document.getElementById('ac-scope');
+      if (scope) scope.textContent = _acAccountHint() ? '· ' + _acAccountHint() : '· all clients';
+      if (!_acHistory.length) acGreet();
+      setTimeout(() => document.getElementById('ac-in')?.focus(), 30);
+    }
+
+    /** Whatever the user is looking at, so "this client" means something. */
+    function _acAccountHint() {
+      const v = sel?.value;
+      if (!v) return '';
+      if (v === '__all__') return '';
+      if (String(v).startsWith('__group__')) {
+        const g = (_acctGroups || []).find(x => '__group__' + x.id === v);
+        return g?.name || '';
+      }
+      return accountMap[v]?.account_name || '';
+    }
+
+    function acGreet() {
+      const log = document.getElementById('ac-log');
+      if (!log) return;
+      log.innerHTML = `<div class="ac-hint">I can look up your clients' figures and answer questions about them.
+        ${AC_EXAMPLES.map(q => `<button class="ac-eg" onclick="acAsk(this.textContent.trim())">${escHtml(q)}</button>`).join('')}</div>`;
+    }
+
+    function acGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(110, el.scrollHeight) + 'px'; }
+    function acKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); acSend(); } }
+    function acAsk(q) { const i = document.getElementById('ac-in'); if (i) { i.value = q; acSend(); } }
+
+    function _acAdd(cls, text, tools) {
+      const log = document.getElementById('ac-log');
+      if (!log) return null;
+      const d = document.createElement('div');
+      d.className = 'ac-msg ' + cls;
+      d.textContent = text;
+      if (tools?.length) {
+        const t = document.createElement('div');
+        t.className = 'ac-tools';
+        // Saying what it looked at is the difference between a figure you can
+        // check and one you have to take on faith.
+        t.textContent = 'looked at: ' + [...new Set(tools)].join(', ').replace(/_/g, ' ');
+        d.appendChild(t);
+      }
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+      return d;
+    }
+
+    async function acSend() {
+      const input = document.getElementById('ac-in');
+      const btn = document.getElementById('ac-send');
+      const q = (input?.value || '').trim();
+      if (!q || _acBusy) return;
+      if (!currentOrgId) { _acAdd('err', 'No organisation loaded yet — try again in a moment.'); return; }
+
+      // The greeting is scaffolding, not conversation.
+      if (!_acHistory.length) { const l = document.getElementById('ac-log'); if (l) l.innerHTML = ''; }
+
+      _acBusy = true; btn.disabled = true;
+      input.value = ''; acGrow(input);
+      _acAdd('me', q);
+      const thinking = _acAdd('ai', 'Looking…');
+
+      try {
+        const r = await callEdgeFunction('ai-chat', {
+          organization_id: currentOrgId,
+          message: q,
+          account_hint: _acAccountHint() || undefined,
+          history: _acHistory.slice(-12),
+        }, 90000);   // tool rounds take longer than a plain completion
+        if (r?.error) {
+          thinking.className = 'ac-msg err';
+          thinking.textContent = r.error;
+        } else {
+          thinking.className = 'ac-msg ai';
+          thinking.textContent = r.reply || 'No answer came back.';
+          if (r.used?.length) {
+            const t = document.createElement('div');
+            t.className = 'ac-tools';
+            t.textContent = 'looked at: ' + [...new Set(r.used)].join(', ').replace(/_/g, ' ');
+            thinking.appendChild(t);
+          }
+          _acHistory.push({ role: 'user', content: q }, { role: 'assistant', content: r.reply || '' });
+        }
+      } catch (e) {
+        thinking.className = 'ac-msg err';
+        thinking.textContent = e.message || String(e);
+      } finally {
+        _acBusy = false; btn.disabled = false;
+        const log = document.getElementById('ac-log');
+        if (log) log.scrollTop = log.scrollHeight;
+        input.focus();
+      }
+    }
+
     function hubOpen(section) {
       const permissionSection = section === 'tasks' ? 'pipeline' : section;
       if (!canOpenModule(permissionSection)) { alert('You do not have access to this section.'); return; }

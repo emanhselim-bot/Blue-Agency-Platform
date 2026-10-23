@@ -31,7 +31,7 @@ PROJECT_REF="thtteysputwjiddqchcp"
 # touches anything.
 NO_JWT="notion-sync notion-discover telegram-report tiktok-oauth notion-tasks-sync"
 
-ALL="notion-sync notion-discover telegram-report meta-data meta-platform tiktok-ads-data tiktok-oauth notion-tasks-sync"
+ALL="notion-sync notion-discover telegram-report meta-data meta-platform tiktok-ads-data tiktok-oauth notion-tasks-sync ai-chat"
 
 TARGETS="${*:-$ALL}"
 
