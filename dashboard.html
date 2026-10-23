@@ -11276,7 +11276,10 @@
       // the ten doing well — and the ones cut off the bottom were Glossy, Boudy
       // and Spende, sitting at 0.00x. The under-performers are the whole reason
       // to look at this chart, so the list is not truncated.
-      const rows = items.slice(0, 20);
+      //
+      // 20 was also quietly truncating the by-day view, where a month is 22
+      // rows: the caller has already decided how many to show.
+      const rows = items;
       const max = Math.max(2, ...rows.map(r => r.roas));
       const colour = v => v < 1 ? 'var(--coral)' : v < 2 ? 'var(--gold)' : '#16a34a';
       return `<div class="dc-bars">
@@ -11399,13 +11402,26 @@
 
       // Chart 2: across clients, who is returning. On one client, how the
       // days themselves went — the same question at the only scale left.
+      //
+      // Every day in the chosen period, not a fixed ten. Ten was arbitrary and
+      // it quietly contradicted the period buttons: This Month starting on the
+      // 1st drew its first bar on the 13th, with nothing on the card saying
+      // why. The cap only exists so This Year does not draw three hundred
+      // rows, and when it bites the subtitle says so.
+      const DC_MAX_DAY_ROWS = 45;
+      const roasDays = days.map(d => ({
+        name: _dcDay(d),
+        roas: byDay[d].convSpend > 0 ? byDay[d].revenue / byDay[d].convSpend : null,
+      })).filter(x => x.roas != null);
+      const roasShown = roasDays.slice(-DC_MAX_DAY_ROWS);
       const roasPanel = single
-        ? _dcRoasBars(days.map((d, i) => ({
-            name: _dcDay(d),
-            roas: byDay[d].convSpend > 0 ? byDay[d].revenue / byDay[d].convSpend : null,
-          })).filter(x => x.roas != null).slice(-10))
+        ? _dcRoasBars(roasShown)
         : _dcRoasBars(perClient.filter(c => c.roas != null)
-            .sort((a, b) => b.roas - a.roas));
+            .sort((a, b) => b.roas - a.roas).slice(0, DC_MAX_DAY_ROWS));
+      const roasSub = !single ? 'window total'
+        : roasShown.length < roasDays.length
+          ? `last ${roasShown.length} of ${roasDays.length} recorded days`
+          : `${roasShown.length} recorded day${roasShown.length === 1 ? '' : 's'}`;
 
       // Chart 3: where the money went.
       const spendSlices = single
@@ -11512,7 +11528,7 @@
           ${_dcCard('Spend vs Revenue', window, _dcArea(days, spend, revenue, 'Spend', 'Revenue',
               (() => { const cs = days.reduce((s, d) => s + byDay[d].convSpend, 0);
                        return cs > 0 ? revenue.reduce((s, v) => s + v, 0) / cs : null; })()))}
-          ${_dcCard(single ? 'ROAS by day' : 'ROAS by client', single ? 'last 10 recorded days' : 'window total', roasPanel)}
+          ${_dcCard(single ? 'ROAS by day' : 'ROAS by client', roasSub, roasPanel)}
           ${_dcCard(single ? 'Where spend went' : 'Spend by client', window,
               `<div class="dc-ring-label">Spend</div>
                ${_dcDonut(spendSlices, { prefix: cur, empty: 'Nothing spent in this period.' })}
