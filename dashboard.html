@@ -10980,7 +10980,6 @@
     // it would be worse than no chart, so the arithmetic is shared, not
     // reimplemented.
     // ══════════════════════════════════════════════════════════════
-    const DC_DAYS = 30;
     const _dcNum = v => (v == null || isNaN(Number(v))) ? null : Number(v);
 
     // Selling spend. The named parts can only understate — a sheet may call a
@@ -11201,15 +11200,20 @@
       const host = document.getElementById('content');
       if (!host || !currentOrgId || !sel?.value) return;
 
-      const until = new Date();
-      const since = new Date(); since.setDate(since.getDate() - (DC_DAYS - 1));
-      const iso = d => d.toISOString().slice(0, 10);
+      // The period buttons decide the window, not a fixed thirty days.
+      //
+      // They did not at first: the charts always drew the last 30 days while
+      // the header said "This Month · 2026-10-01 – 2026-10-24", so the page
+      // showed two different date ranges at once and the charts were the ones
+      // lying. Same helpers the website figures use, so there is one answer to
+      // "what does this period mean" rather than two.
+      const since = _webRangeStart(), until = _webRangeEnd();
 
       let rows = [];
       try {
         const { data, error } = await sb.from('notion_daily').select('*')
           .eq('organization_id', currentOrgId)
-          .gte('day', iso(since)).lte('day', iso(until));
+          .gte('day', since).lte('day', until);
         if (error) throw error;
         rows = data || [];
       } catch (e) {
@@ -11283,8 +11287,14 @@
             return top;
           })();
 
-      const from = days[0], to = days[days.length - 1];
-      const window = from ? `${_dcDay(from)} → ${_dcDay(to)}` : '';
+      // The label is the period that was chosen, so it reads the same as the
+      // header above it. Where the sheets have not reached the end of that
+      // period the label says so rather than quietly shortening the range —
+      // "filled to 22 Oct" on a window ending the 24th is itself worth
+      // knowing, and is the difference between a quiet two days and a drop.
+      const lastFilled = days[days.length - 1];
+      const window = `${_dcDay(since)} → ${_dcDay(until)}`
+        + (lastFilled && lastFilled < until ? ` · filled to ${_dcDay(lastFilled)}` : '');
       const cur = currency || '';
 
       const section = document.createElement('div');
@@ -11333,8 +11343,19 @@
     // zero means "never able to look" rather than "nothing sold".
     let _webMeasuresOrders = true;
 
+    // Local calendar date, never via toISOString().
+    //
+    // toISOString converts to UTC first, and `new Date(y, m, 1)` is local
+    // midnight. In Cairo — UTC+2, +3 in summer — the first of October is
+    // 30 September 21:00 UTC, so this helper answered "2026-09-30" for
+    // This Month and "2026-08-31" for Last Month. Every month, quarter and
+    // year boundary was a day early, which quietly pulled one extra day of
+    // the previous period into the website figures.
+    const _localDay = x =>
+      `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+
     function _webRangeStart() {
-      const d = new Date(), f = x => x.toISOString().slice(0, 10);
+      const d = new Date(), f = _localDay;
       const back = n => { const y = new Date(); y.setDate(y.getDate() - n); return f(y); };
       switch (currentPeriod) {
         case 'today':        return f(d);
@@ -11344,15 +11365,22 @@
         case 'this_month':   return f(new Date(d.getFullYear(), d.getMonth(), 1));
         case 'last_month':   return f(new Date(d.getFullYear(), d.getMonth() - 1, 1));
         case 'this_quarter': return f(new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1));
+        // Last Quarter is one of the eight buttons and was missing here, so it
+        // fell through to "today" — the website figures for that button were
+        // one day's, labelled as a quarter's.
+        case 'last_quarter': return f(new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 - 3, 1));
         case 'this_year':    return `${d.getFullYear()}-01-01`;
+        case 'last_year':    return `${d.getFullYear() - 1}-01-01`;
         case 'custom':       return customFrom || f(d);
         default:             return f(d);
       }
     }
     function _webRangeEnd() {
-      const d = new Date(), f = x => x.toISOString().slice(0, 10);
+      const d = new Date(), f = _localDay;
       if (currentPeriod === 'yesterday') { const y = new Date(); y.setDate(y.getDate() - 1); return f(y); }
       if (currentPeriod === 'last_month') return f(new Date(d.getFullYear(), d.getMonth(), 0));
+      if (currentPeriod === 'last_quarter') return f(new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 0));
+      if (currentPeriod === 'last_year') return `${d.getFullYear() - 1}-12-31`;
       if (currentPeriod === 'custom') return customTo || f(d);
       return f(d);
     }
