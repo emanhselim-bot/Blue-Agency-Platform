@@ -11049,28 +11049,65 @@
      */
     async function _dcMetaPlatformSplit(accountIds, since, until) {
       if (!accountIds.length) return null;
-      const web = {}, msg = {};
-      let any = false;
-      const results = await Promise.allSettled(accountIds.map(id =>
+
+      // Every platform's full action map first, merged across the client's ad
+      // accounts. The metric is chosen afterwards, once, for all of them.
+      const acts = {};
+      let reached = false;
+      const results = await Promise.all(accountIds.map(id =>
         callEdgeFunction('meta-platform', { account_db_id: id, since, until })));
       for (const r of results) {
-        const platforms = r.status === 'fulfilled' ? (r.value?.platforms || []) : [];
-        for (const p of platforms) {
+        // callEdgeFunction never throws — it returns { error }. Without this
+        // the ring would fall back to Website / Messages in silence, which is
+        // indistinguishable from "Meta had nothing to say".
+        if (r?.error) { console.warn('[charts] meta-platform:', r.error); continue; }
+        for (const p of r?.platforms || []) {
           const name = String(p.platform || '').toLowerCase();
-          const acts = p.actions_all || {};
-          const pick = keys => {
-            for (const k of keys) {
-              const v = parseFloat(acts[k]);
-              if (isFinite(v) && v > 0) return v;
-            }
-            return 0;
-          };
-          const w = pick(DC_WEB_PURCHASE), m = pick(DC_MSG_CONVERSION);
-          if (w) { web[name] = (web[name] || 0) + w; any = true; }
-          if (m) { msg[name] = (msg[name] || 0) + m; any = true; }
+          if (!name || name === 'unknown') continue;
+          reached = true;
+          const bucket = (acts[name] ||= {});
+          for (const [k, v] of Object.entries(p.actions_all || {})) {
+            const n = parseFloat(v);
+            if (isFinite(n)) bucket[k] = (bucket[k] || 0) + n;
+          }
         }
       }
-      return any ? { web, msg } : null;
+      if (!reached) return null;
+
+      /**
+       * One action type across every platform, never one each.
+       *
+       * Picking per platform mixed units and produced nonsense: Ibriz's
+       * Facebook and Instagram both report onsite_conversion.purchase (20 and
+       * 1), WhatsApp reports none, so WhatsApp fell through to the
+       * conversation count — 68 — and was compared against 20 and 1 as though
+       * they measured the same thing. WhatsApp would have taken three
+       * quarters of the message orders on the strength of a different metric.
+       *
+       * The key with the widest coverage wins, ties broken by the preference
+       * order, so every platform is measured the same way or not at all.
+       */
+      const chooseBasis = candidates => {
+        let best = null;
+        for (const k of candidates) {
+          const covered = Object.values(acts).filter(a => (a[k] || 0) > 0).length;
+          if (covered > (best?.covered ?? 0)) best = { key: k, covered };
+        }
+        if (!best) return null;
+        const shares = {};
+        for (const [name, a] of Object.entries(acts)) {
+          if ((a[best.key] || 0) > 0) shares[name] = a[best.key];
+        }
+        return { key: best.key, shares };
+      };
+
+      const web = chooseBasis(DC_WEB_PURCHASE);
+      const msg = chooseBasis(DC_MSG_CONVERSION);
+      if (!web && !msg) return null;
+      return {
+        web: web?.shares || null, msg: msg?.shares || null,
+        webBasis: web?.key || null, msgBasis: msg?.key || null,
+      };
     }
 
     /**
@@ -11424,7 +11461,7 @@
 
             // Website: the sheet has no platform column anywhere, so this is
             // Meta's share or nothing.
-            if (web > 0 && split?.web && Object.keys(split.web).length) {
+            if (web > 0 && split?.web && Object.keys(split.web).length > 1) {
               slices.push(..._dcApportion(web, split.web, k => `${label(k)} · website`));
             } else if (web > 0) {
               slices.push({ name: 'Website', value: web });
@@ -11435,7 +11472,7 @@
             const hasSheetMsg = fb + ig + wa > 0;
             if (msg > 0 && hasSheetMsg) {
               slices.push(..._dcApportion(msg, sheetMsg, k => `${label(k)} · messages`));
-            } else if (msg > 0 && split?.msg && Object.keys(split.msg).length) {
+            } else if (msg > 0 && split?.msg && Object.keys(split.msg).length > 1) {
               slices.push(..._dcApportion(msg, split.msg, k => `${label(k)} · messages`));
             } else if (msg > 0) {
               slices.push({ name: 'Messages', value: msg });
