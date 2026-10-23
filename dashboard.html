@@ -1924,6 +1924,7 @@
       color: var(--text-muted); margin: 2px 0 6px;
     }
     .dc-ring-sep { border-top: 1px solid var(--border); margin: 14px 0 0; }
+    .dc-ring-src { font-weight: 600; text-transform: none; letter-spacing: 0; opacity: .8; cursor: help; }
     /* ── Customization edit buttons ── */
     .section-rename-btn, .section-del-btn { display: inline-block; margin-left: 3px; padding: 1px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; line-height: 1.6; vertical-align: middle; opacity: 0.55; transition: opacity 0.15s, background 0.15s; }
     .section-rename-btn:hover { opacity: 1; background: #6366f1; color: #fff; border-color: #6366f1; }
@@ -11008,6 +11009,90 @@
     const _dcMsgOrders = r => _dcNum(r.msg_orders) ?? 0;
     const _dcOrders = r => _dcWebOrders(r) + _dcMsgOrders(r);
 
+    // ── Orders by platform ───────────────────────────────────────
+    //
+    // Notion first, Meta only for the split.
+    //
+    // No sheet records which platform a website order came from, and only
+    // VANGUARD's records it for messages (deals_fb / deals_ig /
+    // deals_whatsapp); every shop keeps a single msg_orders total. So the
+    // breakdown has to come from Meta — but Meta's own conversion counts are
+    // what it attributed, not what the team confirmed, and Ibriz's 292 would
+    // become some other number sitting under a card that says 292.
+    //
+    // Meta therefore supplies proportions and nothing else: the sheet's total
+    // is divided by Meta's platform shares. The ring still adds to Total
+    // Orders, and the split is from the only source that knows it.
+    const DC_WEB_PURCHASE = [
+      'offsite_conversion.fb_pixel_purchase', 'purchase', 'omni_purchase', 'web_in_store_purchase',
+    ];
+    // A purchase made through a conversation where Meta saw it; otherwise the
+    // conversation count, which is a proxy for distribution only. That is safe
+    // here precisely because these numbers are never shown — only their ratio
+    // is — but it is why the card names Meta as the source of the split.
+    const DC_MSG_CONVERSION = [
+      'onsite_conversion.purchase', 'onsite_conversion.messaging_conversation_started_7d',
+      'onsite_conversion.total_messaging_connection', 'onsite_conversion.messaging_first_reply',
+    ];
+
+    const DC_PLATFORM_LABEL = {
+      instagram: 'Instagram', facebook: 'Facebook',
+      whatsapp: 'WhatsApp', messenger: 'Messenger', audience_network: 'Audience Network',
+    };
+
+    /**
+     * Per-platform conversion counts from Meta, for the accounts in scope.
+     *
+     * One call per ad account, so this runs only on a single client. Failure
+     * is not an error: the ring falls back to Website / Messages, which is
+     * what it showed before and still agrees with the cards.
+     */
+    async function _dcMetaPlatformSplit(accountIds, since, until) {
+      if (!accountIds.length) return null;
+      const web = {}, msg = {};
+      let any = false;
+      const results = await Promise.allSettled(accountIds.map(id =>
+        callEdgeFunction('meta-platform', { account_db_id: id, since, until })));
+      for (const r of results) {
+        const platforms = r.status === 'fulfilled' ? (r.value?.platforms || []) : [];
+        for (const p of platforms) {
+          const name = String(p.platform || '').toLowerCase();
+          const acts = p.actions_all || {};
+          const pick = keys => {
+            for (const k of keys) {
+              const v = parseFloat(acts[k]);
+              if (isFinite(v) && v > 0) return v;
+            }
+            return 0;
+          };
+          const w = pick(DC_WEB_PURCHASE), m = pick(DC_MSG_CONVERSION);
+          if (w) { web[name] = (web[name] || 0) + w; any = true; }
+          if (m) { msg[name] = (msg[name] || 0) + m; any = true; }
+        }
+      }
+      return any ? { web, msg } : null;
+    }
+
+    /**
+     * Divide a total by a set of shares, as whole orders that still add up.
+     *
+     * Rounding each share separately loses or gains an order, so the largest
+     * slice absorbs the remainder. A ring that reads 291 under a card reading
+     * 292 is exactly the kind of small disagreement nobody can explain later.
+     */
+    function _dcApportion(total, shares, labelFor) {
+      const sum = Object.values(shares).reduce((s, v) => s + v, 0);
+      if (!total || !sum) return [];
+      const out = Object.entries(shares)
+        .map(([k, v]) => ({ name: labelFor(k), raw: total * v / sum }))
+        .filter(x => x.raw > 0)
+        .sort((a, b) => b.raw - a.raw)
+        .map(x => ({ name: x.name, value: Math.round(x.raw) }));
+      const drift = Math.round(total) - out.reduce((s, x) => s + x.value, 0);
+      if (out.length && drift) out[0].value += drift;
+      return out.filter(x => x.value > 0);
+    }
+
     /**
      * Which notion_daily keys the current selection covers, one entry per
      * client.
@@ -11313,12 +11398,55 @@
       // it produces no orders, so including it would draw a 0% wedge. The two
       // rings therefore have different slice counts, which is the honest
       // picture — the money goes three ways and the orders come back two.
+      let orderSource = '';
       const orderSlices = single
-        ? (() => {
-            let web = 0, msg = 0;
-            for (const r of scoped) { web += _dcWebOrders(r); msg += _dcMsgOrders(r); }
-            return [{ name: 'Website', value: web }, { name: 'Messages', value: msg }]
+        ? await (async () => {
+            let web = 0, msg = 0, fb = 0, ig = 0, wa = 0;
+            for (const r of scoped) {
+              web += _dcWebOrders(r);
+              msg += _dcMsgOrders(r);
+              fb  += _dcNum(r.deals_fb) ?? 0;
+              ig  += _dcNum(r.deals_ig) ?? 0;
+              wa  += _dcNum(r.deals_whatsapp) ?? 0;
+            }
+            const plain = [{ name: 'Website', value: web }, { name: 'Messages', value: msg }]
               .filter(s => s.value > 0);
+
+            // Only the real Meta ad accounts: a Google or TikTok account in the
+            // selection has no publisher_platform to ask about.
+            const metaIds = _scopeAccounts(sel.value).filter(a => !a.type).map(a => String(a.id));
+            let split = null;
+            try { split = await _dcMetaPlatformSplit(metaIds, since, until); }
+            catch (e) { console.warn('[charts] platform split', e); }
+
+            const label = k => DC_PLATFORM_LABEL[k] || (k ? k[0].toUpperCase() + k.slice(1) : 'Other');
+            const slices = [];
+
+            // Website: the sheet has no platform column anywhere, so this is
+            // Meta's share or nothing.
+            if (web > 0 && split?.web && Object.keys(split.web).length) {
+              slices.push(..._dcApportion(web, split.web, k => `${label(k)} · website`));
+            } else if (web > 0) {
+              slices.push({ name: 'Website', value: web });
+            }
+
+            // Messages: the sheet's own split wins where the team records it.
+            const sheetMsg = { facebook: fb, instagram: ig, whatsapp: wa };
+            const hasSheetMsg = fb + ig + wa > 0;
+            if (msg > 0 && hasSheetMsg) {
+              slices.push(..._dcApportion(msg, sheetMsg, k => `${label(k)} · messages`));
+            } else if (msg > 0 && split?.msg && Object.keys(split.msg).length) {
+              slices.push(..._dcApportion(msg, split.msg, k => `${label(k)} · messages`));
+            } else if (msg > 0) {
+              slices.push({ name: 'Messages', value: msg });
+            }
+
+            const splitUsed = slices.some(s => s.name.includes('·'));
+            orderSource = !splitUsed ? ''
+              : hasSheetMsg && !split ? 'split from the sheet'
+              : hasSheetMsg ? 'split: sheet + Meta'
+              : 'split by Meta';
+            return slices.length ? slices : plain;
           })()
         : (() => {
             const sorted = perClient.filter(c => c.orders > 0).sort((a, b) => b.orders - a.orders);
@@ -11352,7 +11480,7 @@
               `<div class="dc-ring-label">Spend</div>
                ${_dcDonut(spendSlices, { prefix: cur, empty: 'Nothing spent in this period.' })}
                <div class="dc-ring-sep"></div>
-               <div class="dc-ring-label">Orders</div>
+               <div class="dc-ring-label">Orders${orderSource ? ` <span class="dc-ring-src" title="Totals are the sheet's confirmed orders. Only the split between platforms comes from Meta, so this ring still adds up to Total Orders.">· ${_dcEsc(orderSource)}</span>` : ''}</div>
                ${_dcDonut(orderSlices, { suffix: ' orders', empty: 'No orders recorded in this period.' })}`)}
         </div>`;
 
