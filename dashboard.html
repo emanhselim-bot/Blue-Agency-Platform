@@ -1902,6 +1902,19 @@
     .dc-be-key i { width: 2px; height: 10px; border-radius: 0; background: var(--text-muted); }
     .dc-empty { font-size: 12px; color: var(--text-muted); padding: 28px 4px; text-align: center; }
 
+    /* Modelled on .camp-wrap, which is the file's existing resizable scroller.
+       Default is about twelve rows — enough to read a fortnight without the
+       card towering over the two next to it. */
+    .dc-scroll {
+      overflow: auto; resize: vertical; height: 268px; min-height: 110px; max-height: 80vh;
+      border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px;
+      background: var(--well);
+    }
+    /* Touch devices have no resize grip and a short page, so it simply fits. */
+    @media (max-width: 760px) { .dc-scroll { resize: none; height: auto; max-height: 52vh; } }
+    .dc-drag-hint { margin-left: auto; opacity: .55; font-size: 10px; }
+    @media (max-width: 760px) { .dc-drag-hint { display: none; } }
+
     .dc-bars { display: flex; flex-direction: column; gap: 7px; }
     .dc-bar-row { display: grid; grid-template-columns: 112px 1fr 46px; align-items: center; gap: 8px; }
     .dc-bar-name {
@@ -11270,7 +11283,7 @@
      * ROAS is read against 1x — below it the day or the client lost money —
      * so the line is drawn rather than left for the reader to estimate.
      */
-    function _dcRoasBars(items) {
+    function _dcRoasBars(items, wrapKey) {
       if (!items.length) return _dcEmpty('No client has both spend and revenue recorded yet.');
       // Every client, not the top ten. Sorted best first, the ten that fit were
       // the ten doing well — and the ones cut off the bottom were Glossy, Boudy
@@ -11282,7 +11295,18 @@
       const rows = items;
       const max = Math.max(2, ...rows.map(r => r.roas));
       const colour = v => v < 1 ? 'var(--coral)' : v < 2 ? 'var(--gold)' : '#16a34a';
-      return `<div class="dc-bars">
+      // Scrolls, and can be dragged taller.
+      //
+      // A month is 22 rows and This Year is 45, which made the card several
+      // times the height of the two beside it and pushed the KPI cards off
+      // the screen. Same component the campaign tables use, so the height is
+      // dragged the same way and remembered the same way — data-camp-wrap is
+      // what restoreCampHeights() looks for.
+      //
+      // The break-even key sits outside the scroller so it stays readable
+      // while the bars move under it.
+      return `<div class="dc-scroll" data-camp-wrap="${_dcEsc(wrapKey || 'roas')}">
+        <div class="dc-bars">
         ${rows.map(r => `<div class="dc-bar-row" title="${_dcEsc(r.name)} · ${r.roas.toFixed(2)}x">
           <span class="dc-bar-name">${_dcEsc(r.name)}</span>
           <span class="dc-bar-track">
@@ -11291,8 +11315,9 @@
           </span>
           <span class="dc-bar-val" style="color:${colour(r.roas)}">${r.roas.toFixed(2)}x</span>
         </div>`).join('')}
+        </div>
       </div>
-      <div class="dc-legend"><span class="dc-be-key"><i></i>break-even (1.00x)</span></div>`;
+      <div class="dc-legend"><span class="dc-be-key"><i></i>break-even (1.00x)</span><span class="dc-drag-hint">drag the corner to resize</span></div>`;
     }
 
     /**
@@ -11414,10 +11439,12 @@
         roas: byDay[d].convSpend > 0 ? byDay[d].revenue / byDay[d].convSpend : null,
       })).filter(x => x.roas != null);
       const roasShown = roasDays.slice(-DC_MAX_DAY_ROWS);
+      // Separate saved heights: a month of days and a list of clients are
+      // different lengths, and a height chosen for one is wrong for the other.
       const roasPanel = single
-        ? _dcRoasBars(roasShown)
+        ? _dcRoasBars(roasShown, 'roas-day')
         : _dcRoasBars(perClient.filter(c => c.roas != null)
-            .sort((a, b) => b.roas - a.roas).slice(0, DC_MAX_DAY_ROWS));
+            .sort((a, b) => b.roas - a.roas).slice(0, DC_MAX_DAY_ROWS), 'roas-client');
       const roasSub = !single ? 'window total'
         : roasShown.length < roasDays.length
           ? `last ${roasShown.length} of ${roasDays.length} recorded days`
@@ -11539,6 +11566,9 @@
 
       const existing = document.getElementById('dash-charts');
       if (existing) existing.remove();
+      // Must run after the section is in the document: it reads the saved
+      // height off localStorage and binds the observer that records a drag.
+      setTimeout(() => { try { restoreCampHeights(); } catch (e) { console.warn('[charts]', e); } }, 0);
       // Inside the sortable container when there is one, so the charts sit
       // with the sections rather than above the whole page.
       const container = document.getElementById('kpi-sections-container') || host;
