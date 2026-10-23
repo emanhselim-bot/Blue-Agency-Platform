@@ -1950,7 +1950,12 @@
       width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
       background: var(--blue-light); color: #fff; font-size: 22px; line-height: 1;
       box-shadow: 0 8px 24px rgba(0,0,0,.3); transition: transform .15s, box-shadow .15s;
+      cursor: grab;
+      /* Dragging a button otherwise selects text and, on touch, scrolls the
+         page out from under the finger. */
+      touch-action: none; user-select: none; -webkit-user-select: none;
     }
+    .ac-fab:active { cursor: grabbing; }
     .ac-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,.38); }
     @media print { .ac-fab, .ac-panel { display: none !important; } }
 
@@ -24165,11 +24170,121 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const open = force === undefined ? !p.classList.contains('open') : !!force;
       p.classList.toggle('open', open);
       if (!open) return;
+      acPlacePanel();
       const scope = document.getElementById('ac-scope');
       if (scope) scope.textContent = _acAccountHint() ? '· ' + _acAccountHint() : '· all clients';
       if (!_acHistory.length) acGreet();
       setTimeout(() => document.getElementById('ac-in')?.focus(), 30);
     }
+
+    // ── Dragging the button ──────────────────────────────────────
+    //
+    // The corner it starts in is not the right corner for everyone: it sits
+    // over the campaign table's resize grip on a short window, and over the
+    // theme toggle. So it can be moved, and it remembers where.
+    //
+    // Stored as a fraction of the viewport rather than pixels, so a position
+    // chosen on a wide monitor is still on screen on a laptop.
+    const AC_POS_KEY = 'ac-fab-pos';
+
+    function acLoadPos() {
+      const fab = document.getElementById('ac-fab');
+      if (!fab) return;
+      let p = null;
+      try { p = JSON.parse(localStorage.getItem(AC_POS_KEY) || 'null'); } catch { /* ignore */ }
+      if (!p || typeof p.fx !== 'number' || typeof p.fy !== 'number') return;
+      acMoveTo(p.fx * innerWidth, p.fy * innerHeight);
+    }
+
+    /** Place the button by its top-left, kept wholly on screen. */
+    function acMoveTo(x, y) {
+      const fab = document.getElementById('ac-fab');
+      if (!fab) return;
+      const w = fab.offsetWidth || 52, h = fab.offsetHeight || 52, pad = 6;
+      const left = Math.max(pad, Math.min(innerWidth - w - pad, x));
+      const top = Math.max(pad, Math.min(innerHeight - h - pad, y));
+      fab.style.left = left + 'px';
+      fab.style.top = top + 'px';
+      fab.style.right = 'auto';
+      fab.style.bottom = 'auto';
+      acPlacePanel();
+    }
+
+    /**
+     * Keep the panel next to the button, and wholly on screen.
+     *
+     * Above the button when there is room, below when there is not — dragging
+     * it to the top of the screen should not push the conversation off it.
+     */
+    function acPlacePanel() {
+      const fab = document.getElementById('ac-fab');
+      const p = document.getElementById('ac-panel');
+      if (!fab || !p || !p.classList.contains('open')) return;
+      if (!fab.style.left) return;             // never dragged: CSS corner is fine
+      const f = fab.getBoundingClientRect();
+      const pw = p.offsetWidth || 400, ph = p.offsetHeight || 540, gap = 10, pad = 8;
+      const above = f.top - gap - ph >= pad;
+      p.style.top = (above ? f.top - gap - ph : Math.min(f.bottom + gap, innerHeight - ph - pad)) + 'px';
+      p.style.left = Math.max(pad, Math.min(innerWidth - pw - pad, f.left + f.width / 2 - pw / 2)) + 'px';
+      p.style.right = 'auto';
+      p.style.bottom = 'auto';
+    }
+
+    (function acEnableDrag() {
+      const start = (e) => {
+        const fab = document.getElementById('ac-fab');
+        if (!fab || e.button > 0) return;
+        const r = fab.getBoundingClientRect();
+        const dx = e.clientX - r.left, dy = e.clientY - r.top;
+        let moved = false;
+        fab.setPointerCapture?.(e.pointerId);
+
+        const move = (ev) => {
+          if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 4) return;
+          moved = true;
+          fab.style.cursor = 'grabbing';
+          acMoveTo(ev.clientX - dx, ev.clientY - dy);
+        };
+        const end = () => {
+          fab.removeEventListener('pointermove', move);
+          fab.removeEventListener('pointerup', end);
+          fab.removeEventListener('pointercancel', end);
+          fab.style.cursor = '';
+          // The button keeps its onclick, so a tap and the keyboard both still
+          // open the panel. Only a real drag has to be stopped from also
+          // counting as a click — otherwise letting go opens the panel every
+          // time you move the button.
+          if (!moved) return;
+          fab.addEventListener('click', ev => { ev.stopPropagation(); ev.preventDefault(); },
+                               { capture: true, once: true });
+          const r2 = fab.getBoundingClientRect();
+          try {
+            localStorage.setItem(AC_POS_KEY,
+              JSON.stringify({ fx: r2.left / innerWidth, fy: r2.top / innerHeight }));
+          } catch { /* private mode */ }
+        };
+        fab.addEventListener('pointermove', move);
+        fab.addEventListener('pointerup', end);
+        fab.addEventListener('pointercancel', end);
+      };
+      // The button's markup comes after this script, so binding waits for the
+      // parser. The readyState check is for the case where it does not have
+      // to wait — a script moved later, or re-run.
+      const bind = () => {
+        const fab = document.getElementById('ac-fab');
+        if (!fab || fab._acDrag) return;
+        fab._acDrag = true;
+        fab.addEventListener('pointerdown', start);
+        acLoadPos();
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+      else bind();
+      // A window that shrinks must not strand the button off-screen.
+      addEventListener('resize', () => {
+        const fab = document.getElementById('ac-fab');
+        if (fab?.style.left) acMoveTo(parseFloat(fab.style.left), parseFloat(fab.style.top));
+      });
+    })();
 
     /** Whatever the user is looking at, so "this client" means something. */
     function _acAccountHint() {
