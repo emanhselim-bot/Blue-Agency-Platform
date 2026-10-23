@@ -8486,9 +8486,17 @@
                         title="${connected ? '' : def.label + ' — not connected yet'}">${def.icon} ${def.label}</button>`;
       }).join('');
 
+      // Proposal is reached from the home screen now, not from here. It was
+      // never a platform or an account view — it prices a client who does not
+      // exist yet — so it sat in this bar only because the bar was the only
+      // place to put it.
+      //
+      // Leaving it is still possible from inside: setPlatformTab clears
+      // _ppMode, so any platform tab here comes back out of the proposal view.
+      // While it is open no tab is highlighted, which is honest — none of them
+      // is what is on screen.
       const toolBtns = [
         canSeeMediaTab('ads_library')   ? `<button class="platform-tab${_alMode ? ' active' : ''}" onclick="openAdsLibraryTab()" title="Competitor ads from Meta's Ad Library">🔎 Ads Library</button>` : '',
-        canSeeMediaTab('proposal')      ? `<button class="platform-tab${_ppMode ? ' active' : ''}" onclick="openProposalTab()" title="Estimate results for a new client from what similar accounts actually did">📝 Proposal</button>` : '',
       ].filter(Boolean).join('');
 
       bar.innerHTML = platformBtns + (toolBtns ? '<span class="platform-sep"></span>' + toolBtns : '');
