@@ -47,13 +47,27 @@ async function verifyState(state: string): Promise<Record<string, unknown> | nul
   return payload;
 }
 
-// Closes the OAuth popup and signals the dashboard opener via postMessage
+// Closes the OAuth popup and signals the dashboard opener via postMessage.
+//
+// Supabase now serves this response as text/plain with a sandbox CSP, so the
+// script does not run: the window shows the markup as text instead of closing.
+// The connection itself still completes, because all the work is done before
+// this is returned. The page therefore also says in plain words what happened,
+// so the text that does get shown is at least readable.
+//
+// The charset is correct and so is the content type — the override happens
+// above this function. Do not "fix" it by changing the header; the fix, if one
+// is wanted, is to redirect the browser to the dashboard with the result in
+// the query string rather than returning a page at all.
 function popupCloser(event: string, data: Record<string, unknown> = {}): Response {
-  const html = `<!DOCTYPE html><html><body><script>
+  const note = event === "meta_oauth_complete"
+    ? `Connected ${data.accounts_connected} ad account(s). You can close this window and refresh the dashboard.`
+    : `Could not connect: ${data.message ?? "unknown error"}`;
+  const html = `<!DOCTYPE html><html><body><p>${note}</p><script>
     try { window.opener.postMessage(${JSON.stringify({ event, ...data })}, '*'); } catch(e){}
     window.close();
-  <\/script><p>Closing…</p></body></html>`;
-  return new Response(html, { headers: { "Content-Type": "text/html" } });
+  <\/script></body></html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
 
 serve(async (req: Request) => {
