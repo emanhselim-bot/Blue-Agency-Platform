@@ -457,6 +457,22 @@
        Without a floor it gives all its width to the search box, which has a
        min-width and will not yield — on a 560px pane the client's name was
        squeezed down to the emoji. The title keeps a floor; the search shrinks. */
+    /* The picker was the only full-width area with no gutter, so its cards and
+       its breadcrumb sat flat against the window edge while every other part
+       of the dashboard kept 24px. max() with the safe-area inset so a notch or
+       a rounded corner in landscape cannot clip it either. */
+    #mb-picker {
+      padding: 18px max(24px, env(safe-area-inset-right)) 40px max(24px, env(safe-area-inset-left));
+    }
+    /* The rest of the dashboard already gutters at 24px; this only widens it
+       where the device actually reports an inset, so nothing moves on a Mac. */
+    .content, .controls-bar, .date-bar, #billing-section {
+      padding-left: max(24px, env(safe-area-inset-left));
+      padding-right: max(24px, env(safe-area-inset-right));
+    }
+    @media (max-width: 620px) {
+      #mb-picker { padding: 14px max(14px, env(safe-area-inset-right)) 32px max(14px, env(safe-area-inset-left)); }
+    }
     /* While the agency/account picker is up, the dashboard's own chrome is out
        of the way. !important because renderPlatformTabs() sets display:flex
        inline on the tab bar every time it runs. */
