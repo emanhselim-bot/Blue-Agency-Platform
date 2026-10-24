@@ -24356,14 +24356,25 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         applyModuleAccess();
 
         if (s.v === 'media') {
+          if (!canOpenModule('media')) return;
           // loadAccounts() has already put the account back in the picker and
-          // loaded it; this only gets the home screen out of the way.
-          if (canOpenModule('media')) document.getElementById('home-hub').classList.add('hidden');
+          // loaded it; this only gets the home screen out of the way. If it
+          // could not — the account was removed, or access to it was — the
+          // agency list is a better answer than an empty dashboard reading
+          // "select an account above".
+          if (sel && sel.value) {
+            document.getElementById('home-hub').classList.add('hidden');
+          } else {
+            await mbpOpen();
+          }
           return;
         }
         if (s.v === 'media-picker') {
           if (!canOpenModule('media')) return;
-          await mbpOpen();
+          // mbpOpen() clears the agency and folder and renders, which would
+          // record an empty picker over the one being restored.
+          _navBooting = true;
+          try { await mbpOpen(); } finally { _navBooting = false; }
           _mbpAgency = s.agency || null;
           _mbpFolder = s.folder || null;
           mbpRender();
@@ -25457,7 +25468,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           // somebody signing in. Leave the screen exactly as they left it.
           if (_authBootedFor === session.user.id) return;
           _authBootedFor = session.user.id;
+          // Boot shows the home screen while the org loads, and showHomeHub()
+          // records where you are — which here means writing 'home' over the
+          // view the restore is about to put back. Reading _navPending early
+          // saved this load; without this the entry is 'home' from now on, so
+          // the restore worked once and never again. Only the boot call is
+          // silenced: the Home button and mbpBack() still record home.
+          _navBooting = true;
           showHomeHub();
+          _navBooting = false;
           if (_orgsLoading) return;
           _orgsLoading = true;
           // Defer outside the Supabase navigator.locks session lock.
