@@ -457,7 +457,18 @@
        Without a floor it gives all its width to the search box, which has a
        min-width and will not yield — on a 560px pane the client's name was
        squeezed down to the emoji. The title keeps a floor; the search shrinks. */
-    #cln-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 150px; }
+    /* While the agency/account picker is up, the dashboard's own chrome is out
+       of the way. !important because renderPlatformTabs() sets display:flex
+       inline on the tab bar every time it runs. */
+    body.mb-picking #agency-nav,
+    body.mb-picking #platform-tabs-bar,
+    body.mb-picking .controls-bar,
+    body.mb-picking .date-bar,
+    body.mb-picking #billing-section,
+    body.mb-picking #targets-panel,
+    body.mb-picking #compare-panel,
+    body.mb-picking #content { display: none !important; }
+    #mbp-title, #cln-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 150px; }
     #cln-search { flex: 0 1 210px; min-width: 90px !important; }
     .cln-crumb { font-size: 12px; color: rgba(255,255,255,.65); margin: -10px 0 16px; }
     .cln-crumb b { color: #fff; font-weight: 700; }
@@ -3925,6 +3936,12 @@
       <h2 id="mbp-title">📊 Media Buying</h2>
       <input id="mbp-search" class="connect-input" placeholder="Search agency or account…"
              oninput="mbpRender()" style="min-width:210px;margin-left:auto">
+      <select id="mbp-period" class="connect-input" onchange="mbpReload()" style="min-width:150px">
+        <option value="last_7_days">Last 7 days</option>
+        <option value="last_30_days" selected>Last 30 days</option>
+        <option value="this_month">This month</option>
+        <option value="last_month">Last month</option>
+      </select>
     </div>
     <div id="mbp-crumb" class="cln-crumb"></div>
     <div id="mbp-body"><div class="cln-note">Loading…</div></div>
@@ -24885,19 +24902,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // Opening Media Buying used to drop you on whichever account was open
     // last, with a dropdown as the only way to move. The dropdown is still
     // there; this is the way in.
-    let _mbpAgency = null;
+    let _mbpAgency = null, _mbpFig = {};
 
     // The dashboard's own chrome is hidden while the picker is up, so the
-    // picker is the page rather than a panel sitting on top of a stale
-    // account's numbers.
+    // picker is the page rather than a panel sitting on top of the previous
+    // account's billing and numbers.
+    //
+    // A body class, not inline styles: renderPlatformTabs() hard-sets
+    // display:flex on the tab bar and runs after this (loadAccounts calls it),
+    // so an inline none was being undone and the tabs came back.
     function mbpChrome(show) {
-      ['agency-nav', 'platform-tabs-bar', 'content'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = show ? '' : 'none';
-      });
-      document.querySelectorAll('.controls-bar, .date-bar').forEach(el => {
-        el.style.display = show ? '' : 'none';
-      });
+      document.body.classList.toggle('mb-picking', !show);
     }
 
     function mbpClose() {
@@ -24931,11 +24946,78 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         if (!_acctGroups || !_acctGroups.length) await loadAccountGroups();
         if (!_agencies) await loadAgencies();
         await clnLoadRunning();
+        await mbpFill();
       } catch (e) {
         body.innerHTML = '<div class="cln-note">Could not load accounts: ' + escHtml(e.message || String(e)) + '</div>';
         return;
       }
       mbpRender();
+    }
+
+    // Spend, revenue and ROAS for everything on screen, the same figures and
+    // the same period control as the Clients page, so the two read alike.
+    // One query for every account rather than one per card.
+    const mbpPeriod = () => document.getElementById('mbp-period')?.value || 'last_30_days';
+
+    async function mbpFill() {
+      _mbpFig = {};
+      const keys = Object.values(accountMap || {}).filter(a => !a.type).map(a => a.id);
+      const range = _cmpRange({ key: mbpPeriod() });
+      if (!keys.length || !currentOrgId || !range) return;
+      const { data: rows, error } = await sb.from('notion_daily')
+        .select('account_key, total_spend, web_spend, msg_spend, branding_spend, total_revenue, web_revenue, web_revenue_confirmed, msg_revenue')
+        .eq('organization_id', currentOrgId)
+        .in('account_key', keys)
+        .gte('day', range.from).lte('day', range.to);
+      if (error) { console.warn('[picker] figures not loaded:', error.message); return; }
+      const per = {};
+      (rows || []).forEach(r => {
+        const p = (per[r.account_key] ||= { spend: 0, revenue: 0, days: 0 });
+        const s = r.total_spend != null ? Number(r.total_spend)
+          : Number(r.web_spend || 0) + Number(r.msg_spend || 0) + Number(r.branding_spend || 0);
+        const v = r.total_revenue != null ? Number(r.total_revenue)
+          : Number(r.web_revenue_confirmed ?? r.web_revenue ?? 0) + Number(r.msg_revenue || 0);
+        if (isFinite(s)) p.spend += s;
+        if (isFinite(v)) p.revenue += v;
+        p.days++;
+      });
+      // _brandShare splits a figure that two accounts on one Notion sheet both
+      // carry, so an agency total does not count it twice.
+      Object.keys(per).forEach(k => {
+        _mbpFig[k] = {
+          spend:   Number(_brandShare(k, per[k].spend))   || 0,
+          revenue: Number(_brandShare(k, per[k].revenue)) || 0,
+          days:    per[k].days,
+        };
+      });
+    }
+
+    async function mbpReload() {
+      const body = document.getElementById('mbp-body');
+      if (body) body.innerHTML = '<div class="cln-note">Loading…</div>';
+      await mbpFill();
+      mbpRender();
+    }
+
+    // Totals for a set of accounts, and the stat strip the cards share.
+    function mbpTotals(accounts) {
+      let spend = 0, revenue = 0, any = false;
+      accounts.forEach(a => {
+        const f = _mbpFig[a.id];
+        if (!f || !f.days) return;
+        spend += f.spend; revenue += f.revenue; any = true;
+      });
+      // Zero revenue across a whole period is an unfilled sheet, not a client
+      // who sold nothing, so ROAS stays blank rather than reading 0.00x.
+      return { spend, revenue, any, roas: (any && spend && revenue) ? revenue / spend : null };
+    }
+
+    function mbpStats(t) {
+      return `<div class="cln-stats">
+        <div><div class="cln-stat-k">Spend</div><div class="cln-stat-v">${t.any ? clnMoney(t.spend) : '—'}</div></div>
+        <div><div class="cln-stat-k">Revenue</div><div class="cln-stat-v">${t.any ? clnMoney(t.revenue) : '—'}</div></div>
+        <div><div class="cln-stat-k">ROAS</div><div class="cln-stat-v">${t.roas != null ? t.roas.toFixed(2) + 'x' : '—'}</div></div>
+      </div>`;
     }
 
     // Accounts of one agency. Unassigned accounts belong to no agency and are
@@ -24974,13 +25056,16 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           (g.account_ids || []).some(id => agency.accounts.some(a => a.id === id)));
         const accounts = agency.accounts.filter(a => !q || (a.account_name || '').toLowerCase().includes(q));
         const shownGroups = groups.filter(g => !q || (g.name || '').toLowerCase().includes(q));
-        crumb.innerHTML = `<b>${escHtml(agency.name)}</b> · ${agency.accounts.length} account${agency.accounts.length === 1 ? '' : 's'}`;
+        const p = document.getElementById('mbp-period');
+        crumb.innerHTML = `<b>${escHtml(agency.name)}</b> · ${agency.accounts.length} account${agency.accounts.length === 1 ? '' : 's'} · ${escHtml((p?.options[p.selectedIndex]?.textContent || '').toLowerCase())}`;
         if (!accounts.length && !shownGroups.length) {
           body.innerHTML = `<div class="cln-note">Nothing here matches “${escHtml(q)}”.</div>`;
           return;
         }
         body.innerHTML = `<div class="cln-grid">
-          ${shownGroups.map(g => `
+          ${shownGroups.map(g => {
+            const members = (g.account_ids || []).map(id => accountMap[id]).filter(Boolean);
+            return `
             <div class="cln-card" onclick="clnOpenGroupInDashboard('${escHtml(g.id)}')">
               <div class="cln-card-top">
                 <span class="cln-card-icon">⊕</span>
@@ -24988,9 +25073,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 <span class="cln-pill">COMBINED</span>
               </div>
               <div class="cln-card-sub">${(g.account_ids || []).length} accounts read as one</div>
-            </div>`).join('')}
+              ${mbpStats(mbpTotals(members))}
+            </div>`;
+          }).join('')}
           ${accounts.map(a => {
             const live = clnRunning(a);
+            // An account sharing a Notion sheet has no figure of its own —
+            // both accounts carry the client's whole total. The combined card
+            // above is where that number means something.
+            const shared = !a.type && _brandSharers(a.id) > 1;
             return `
             <div class="cln-card" onclick="clnOpenInDashboard('${escHtml(a.id)}')">
               <div class="cln-card-top">
@@ -24999,6 +25090,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
                 <span class="cln-pill">${a.type === 'google_ads' ? 'GOOGLE' : a.type === 'tiktok_ads' ? 'TIKTOK' : 'META'}</span>
               </div>
               <div class="cln-card-sub">${live === null ? 'Status not synced' : live ? 'Running' : 'Not running'}${a.currency ? ' · ' + escHtml(a.currency) : ''}</div>
+              ${shared
+                ? '<div class="cln-stats"><div><div class="cln-stat-k">Figures</div><div class="cln-stat-v" style="font-size:12px;font-weight:600">on the combined card</div></div></div>'
+                : mbpStats(mbpTotals([a]))}
             </div>`;
           }).join('')}
         </div>`;
@@ -25008,7 +25102,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // ── The agencies ──
       title.textContent = '📊 Media Buying';
       const total = agencies.reduce((n, a) => n + a.accounts.length, 0);
-      crumb.innerHTML = `${agencies.length} agencies · ${total} accounts`;
+      const period = document.getElementById('mbp-period');
+      const periodLabel = period?.options[period.selectedIndex]?.textContent || '';
+      crumb.innerHTML = `${agencies.length} agencies · ${total} accounts · ${escHtml(periodLabel.toLowerCase())}`;
       const shown = agencies.filter(a => !q
         || a.name.toLowerCase().includes(q)
         || a.accounts.some(x => (x.account_name || '').toLowerCase().includes(q)));
@@ -25022,6 +25118,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <span class="cln-card-name">${escHtml(a.name)}</span>
             </div>
             <div class="cln-card-sub">${a.accounts.length} account${a.accounts.length === 1 ? '' : 's'} · ${live} running</div>
+            ${mbpStats(mbpTotals(a.accounts))}
           </div>`;
         }).join('')}
       </div>` : `<div class="cln-note">Nothing matches “${escHtml(q)}”.</div>`;
