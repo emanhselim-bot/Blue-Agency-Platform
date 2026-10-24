@@ -3759,6 +3759,8 @@
 
   <!-- CONTROLS -->
   <div class="controls-bar">
+    <button class="header-btn" id="mbp-open-btn" onclick="mbpOpen()"
+            title="Back to the agency and account list">☰ Accounts</button>
     <label>Account</label>
     <select id="account-select"><option value="">— Select Account —</option></select>
     <div class="period-tabs" id="period-tabs">
@@ -3911,6 +3913,21 @@
   <div class="date-bar">
     <span class="date-dot"></span>
     <span id="date-label">Select an account to start</span>
+  </div>
+
+  <!-- ACCOUNT PICKER — the way into the dashboard.
+       Opening Media Buying used to drop you on whichever account was open
+       last, with a dropdown as the only way to change it. This shows the
+       agencies first, then that agency's accounts, then the dashboard. -->
+  <div id="mb-picker" style="display:none">
+    <div class="hub-mod-head" style="margin-top:18px">
+      <button class="hub-mod-back" id="mbp-back" onclick="mbpBack()">← Home</button>
+      <h2 id="mbp-title">📊 Media Buying</h2>
+      <input id="mbp-search" class="connect-input" placeholder="Search agency or account…"
+             oninput="mbpRender()" style="min-width:210px;margin-left:auto">
+    </div>
+    <div id="mbp-crumb" class="cln-crumb"></div>
+    <div id="mbp-body"><div class="cln-note">Loading…</div></div>
   </div>
 
   <!-- MAIN CONTENT (unchanged) -->
@@ -24257,6 +24274,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     function showHomeHub() {
+      // Leaving the picker up would hide the dashboard's own chrome for the
+      // next person to come back to it.
+      mbpClose();
       hubShowView('cards');
       document.getElementById('home-hub').classList.remove('hidden');
       // Painting before the permissions load showed every module to everyone
@@ -24812,55 +24832,206 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // Hand an account to the media dashboard. The picker is filtered by the
     // active agency and platform tab, so both have to be put where the account
     // actually is or sel.value silently does nothing.
-    // The combined view the team already saved. It is an option in the same
-    // picker, valued __group__<id>, and it only appears there when one of the
-    // group's accounts survives the agency and platform filters — so those are
-    // widened first, exactly as for a single account.
-    function clnOpenGroupInDashboard(groupId) {
-      const g = (_acctGroups || []).find(x => x.id === groupId);
-      if (!g) { alert('That combination is no longer saved — reload the page.'); return; }
-      const first = (g.account_ids || []).map(id => accountMap[id]).find(Boolean);
-      currentAgencyId = (first && getAccountAgencyId(currentOrgId, first.id)) || 'all';
+    // ═══ Opening something in the media dashboard ════════════════════
+    //
+    // One path for every entry point — the Clients tab, the combined view and
+    // the account picker. The picker is filtered by the active agency and the
+    // active platform tab, so both have to be put where the selection actually
+    // lives or sel.value silently does nothing and the dashboard stays on
+    // whatever was open before.
+    function mdOpenSelection(value, agencyId, platform) {
+      currentAgencyId = agencyId || 'all';
       try { localStorage.setItem(`dash_agency_id_${currentOrgId}`, currentAgencyId); } catch {}
-      const pf = (first && first.type) || 'meta';
-      if (orgPlatforms.includes(pf)) currentPlatformTab = pf;
+      if (platform && orgPlatforms.includes(platform)) currentPlatformTab = platform;
       renderAgencyNav();
       renderPlatformTabs();
       filterAccountsByAgency();
-      const value = '__group__' + groupId;
-      if (!sel.querySelector(`option[value="${CSS.escape(value)}"]`)) {
+      const has = () => !!sel.querySelector(`option[value="${CSS.escape(value)}"]`);
+      if (!has()) {
+        // The agency filter hid it. Fall back to every agency.
         currentAgencyId = 'all';
         renderAgencyNav(); filterAccountsByAgency();
       }
-      if (!sel.querySelector(`option[value="${CSS.escape(value)}"]`)) {
-        alert('The combined view is not available on this platform tab.');
-        return;
+      if (!has()) {
+        alert('That selection is not available on this platform tab.');
+        return false;
       }
       sel.value = value;
       sel.dispatchEvent(new Event('change'));
       document.getElementById('home-hub').classList.add('hidden');
+      mbpClose();
       loadDataWithRefresh();
+      return true;
+    }
+
+    // The combined view the team already saved, valued __group__<id>.
+    function clnOpenGroupInDashboard(groupId) {
+      const g = (_acctGroups || []).find(x => x.id === groupId);
+      if (!g) { alert('That combination is no longer saved — reload the page.'); return; }
+      const first = (g.account_ids || []).map(id => accountMap[id]).find(Boolean);
+      mdOpenSelection('__group__' + groupId,
+        first && getAccountAgencyId(currentOrgId, first.id),
+        (first && first.type) || 'meta');
     }
 
     function clnOpenInDashboard(accountId) {
       const acc = accountMap[accountId];
       if (!acc) { alert('That account is no longer loaded — reload the page.'); return; }
-      currentAgencyId = getAccountAgencyId(currentOrgId, accountId) || 'all';
-      try { localStorage.setItem(`dash_agency_id_${currentOrgId}`, currentAgencyId); } catch {}
-      const pf = acc.type || 'meta';
-      if (orgPlatforms.includes(pf)) currentPlatformTab = pf;
-      renderAgencyNav();
-      renderPlatformTabs();
-      filterAccountsByAgency();
-      if (!sel.querySelector(`option[value="${CSS.escape(accountId)}"]`)) {
-        // Still not there: the agency filter hid it. Fall back to every agency.
-        currentAgencyId = 'all';
-        renderAgencyNav(); filterAccountsByAgency();
-      }
-      sel.value = accountId;
-      sel.dispatchEvent(new Event('change'));
+      mdOpenSelection(accountId, getAccountAgencyId(currentOrgId, accountId), acc.type || 'meta');
+    }
+
+    // ═══ MEDIA BUYING — agencies, then accounts, then the dashboard ═══
+    //
+    // Opening Media Buying used to drop you on whichever account was open
+    // last, with a dropdown as the only way to move. The dropdown is still
+    // there; this is the way in.
+    let _mbpAgency = null;
+
+    // The dashboard's own chrome is hidden while the picker is up, so the
+    // picker is the page rather than a panel sitting on top of a stale
+    // account's numbers.
+    function mbpChrome(show) {
+      ['agency-nav', 'platform-tabs-bar', 'content'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = show ? '' : 'none';
+      });
+      document.querySelectorAll('.controls-bar, .date-bar').forEach(el => {
+        el.style.display = show ? '' : 'none';
+      });
+    }
+
+    function mbpClose() {
+      const p = document.getElementById('mb-picker');
+      if (p) p.style.display = 'none';
+      mbpChrome(true);
+    }
+
+    function mbpBack() {
+      if (_mbpAgency) { _mbpAgency = null; mbpRender(); return; }
+      mbpClose();
+      showHomeHub();
+    }
+
+    async function mbpOpen() {
+      // Not requireMediaTab(): that alerts, and someone whose only platform is
+      // Google Ads would be told off for opening their own dashboard.
+      if (!canOpenModule('media')) return;
+      _mbpAgency = null;
       document.getElementById('home-hub').classList.add('hidden');
-      loadDataWithRefresh();
+      document.getElementById('mb-picker').style.display = '';
+      mbpChrome(false);
+      const body = document.getElementById('mbp-body');
+      body.innerHTML = '<div class="cln-note">Loading…</div>';
+      if (!await _hubWaitOrg()) {
+        body.innerHTML = '<div class="cln-note">No organisation loaded yet — try again in a moment.</div>';
+        return;
+      }
+      try {
+        if (!Object.keys(accountMap || {}).length) await loadAccounts(false);
+        if (!_acctGroups || !_acctGroups.length) await loadAccountGroups();
+        if (!_agencies) await loadAgencies();
+        await clnLoadRunning();
+      } catch (e) {
+        body.innerHTML = '<div class="cln-note">Could not load accounts: ' + escHtml(e.message || String(e)) + '</div>';
+        return;
+      }
+      mbpRender();
+    }
+
+    // Accounts of one agency. Unassigned accounts belong to no agency and are
+    // shown in their own bucket rather than vanishing.
+    function mbpAccountsOf(agencyId) {
+      return Object.values(accountMap || {}).filter(a => {
+        const assigned = getAccountAgencyId(currentOrgId, a.id);
+        return agencyId === '__none__' ? !assigned : assigned === agencyId;
+      });
+    }
+
+    function mbpAgencyList() {
+      const list = applyAgencyAccessRestrictions(getAgencies(currentOrgId) || [])
+        .map(a => ({ ...a, accounts: mbpAccountsOf(a.id) }))
+        .filter(a => a.accounts.length);
+      const orphans = mbpAccountsOf('__none__');
+      if (orphans.length) list.push({ id: '__none__', name: 'Unassigned', icon: '📁', accounts: orphans });
+      return list;
+    }
+
+    function mbpRender() {
+      const body = document.getElementById('mbp-body');
+      if (!body) return;
+      const q = (document.getElementById('mbp-search')?.value || '').trim().toLowerCase();
+      const title = document.getElementById('mbp-title');
+      const crumb = document.getElementById('mbp-crumb');
+      const back = document.getElementById('mbp-back');
+      const agencies = mbpAgencyList();
+      const agency = _mbpAgency && agencies.find(a => a.id === _mbpAgency);
+      back.textContent = agency ? '← Agencies' : '← Home';
+
+      // ── The accounts of one agency ──
+      if (agency) {
+        title.textContent = (agency.icon || '🏢') + ' ' + agency.name;
+        const groups = (_acctGroups || []).filter(g =>
+          (g.account_ids || []).some(id => agency.accounts.some(a => a.id === id)));
+        const accounts = agency.accounts.filter(a => !q || (a.account_name || '').toLowerCase().includes(q));
+        const shownGroups = groups.filter(g => !q || (g.name || '').toLowerCase().includes(q));
+        crumb.innerHTML = `<b>${escHtml(agency.name)}</b> · ${agency.accounts.length} account${agency.accounts.length === 1 ? '' : 's'}`;
+        if (!accounts.length && !shownGroups.length) {
+          body.innerHTML = `<div class="cln-note">Nothing here matches “${escHtml(q)}”.</div>`;
+          return;
+        }
+        body.innerHTML = `<div class="cln-grid">
+          ${shownGroups.map(g => `
+            <div class="cln-card" onclick="clnOpenGroupInDashboard('${escHtml(g.id)}')">
+              <div class="cln-card-top">
+                <span class="cln-card-icon">⊕</span>
+                <span class="cln-card-name">${escHtml(g.name)}</span>
+                <span class="cln-pill">COMBINED</span>
+              </div>
+              <div class="cln-card-sub">${(g.account_ids || []).length} accounts read as one</div>
+            </div>`).join('')}
+          ${accounts.map(a => {
+            const live = clnRunning(a);
+            return `
+            <div class="cln-card" onclick="clnOpenInDashboard('${escHtml(a.id)}')">
+              <div class="cln-card-top">
+                <span class="cln-dot ${live === true ? 'on' : 'off'}"></span>
+                <span class="cln-card-name">${escHtml(a.account_name || a.meta_account_id || 'Untitled')}</span>
+                <span class="cln-pill">${a.type === 'google_ads' ? 'GOOGLE' : a.type === 'tiktok_ads' ? 'TIKTOK' : 'META'}</span>
+              </div>
+              <div class="cln-card-sub">${live === null ? 'Status not synced' : live ? 'Running' : 'Not running'}${a.currency ? ' · ' + escHtml(a.currency) : ''}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+        return;
+      }
+
+      // ── The agencies ──
+      title.textContent = '📊 Media Buying';
+      const total = agencies.reduce((n, a) => n + a.accounts.length, 0);
+      crumb.innerHTML = `${agencies.length} agencies · ${total} accounts`;
+      const shown = agencies.filter(a => !q
+        || a.name.toLowerCase().includes(q)
+        || a.accounts.some(x => (x.account_name || '').toLowerCase().includes(q)));
+      body.innerHTML = shown.length ? `<div class="cln-grid">
+        ${shown.map(a => {
+          const live = a.accounts.filter(x => clnRunning(x) === true).length;
+          return `
+          <div class="cln-card" onclick="mbpPick('${escHtml(a.id)}')">
+            <div class="cln-card-top">
+              <span class="cln-card-icon">${escHtml(a.icon || '🏢')}</span>
+              <span class="cln-card-name">${escHtml(a.name)}</span>
+            </div>
+            <div class="cln-card-sub">${a.accounts.length} account${a.accounts.length === 1 ? '' : 's'} · ${live} running</div>
+          </div>`;
+        }).join('')}
+      </div>` : `<div class="cln-note">Nothing matches “${escHtml(q)}”.</div>`;
+    }
+
+    function mbpPick(agencyId) {
+      _mbpAgency = agencyId;
+      const s = document.getElementById('mbp-search');
+      if (s) s.value = '';
+      mbpRender();
     }
 
     function hubOpen(section) {
@@ -24868,11 +25039,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!canOpenModule(permissionSection)) { alert('You do not have access to this section.'); return; }
       if (section === 'media' || section === 'proposal') {
         document.getElementById('home-hub').classList.add('hidden');
+        // Media Buying opens on the agency list rather than on whichever
+        // account happened to be open last. Proposal is a tab and goes
+        // straight there.
+        if (section === 'media') { mbpOpen(); return; }
         // The media dashboard is the page underneath the hub, so opening it is
         // just getting out of the way. Proposal then switches to its tab —
         // openProposalTab re-checks the permission itself, so a stale card or
         // a console call cannot reach it.
-        if (section === 'proposal') openProposalTab();
+        if (section === 'proposal') { mbpClose(); openProposalTab(); }
         return;
       }
       hubShowView(section);
