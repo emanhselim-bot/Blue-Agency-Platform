@@ -5665,7 +5665,7 @@
             const lsCust = localStorage.getItem(_clientCustKey());
             const { error } = await sb.from('client_view_layouts').upsert({
               organization_id: currentOrgId,
-              scope:           'default',
+              scope:           _clpScope(),
               customizations:  lsCust ? JSON.parse(lsCust) : {},
               updated_by:      currentUser.id,
               updated_at:      new Date().toISOString(),
@@ -5751,7 +5751,7 @@
         try { localStorage.removeItem(_clientCustKey()); } catch(_) {}
         if (currentOrgId) {
           const { error } = await sb.from('client_view_layouts').delete()
-            .eq('organization_id', currentOrgId).eq('scope', 'default');
+            .eq('organization_id', currentOrgId).eq('scope', _clpScope());
           if (error) { _clpToast('Not reset — only the account owner can change the client view.', true); return; }
         }
         applyCustomizations();
@@ -5862,6 +5862,21 @@
       return 'kpi-client-v1-' + (currentOrgId || 'x') + '-' + (currentAgencyId || 'x');
     }
 
+    // The local key carries the agency, because the dashboard's whole
+    // customisation layer is keyed that way. The server row has to match it or
+    // Blue Ad's client view and Kepler's would overwrite each other through
+    // one shared row — the path is agencies → accounts → dashboard, so the
+    // agency is always part of which dashboard you are shaping.
+    function _clpScope() { return currentAgencyId || 'default'; }
+
+    // Naming the agency matters: the same button on a different agency is
+    // editing a different client view, and nothing else on screen says so.
+    function _clpBarText() {
+      const a = (getAgencies(currentOrgId) || []).find(x => x.id === currentAgencyId);
+      const where = a ? `${a.name}'s clients` : (currentAgencyId === 'all' ? 'all agencies' : 'your clients');
+      return `Client view — the dashboard ${where} see. Hide a section or a card here and it disappears from their screen, not yours.`;
+    }
+
     function _clpToast(msg, bad) {
       let t = document.getElementById('clp-toast');
       if (!t) {
@@ -5888,7 +5903,7 @@
         const { data, error } = await sb.from('client_view_layouts')
           .select('customizations')
           .eq('organization_id', currentOrgId)
-          .eq('scope', 'default')
+          .eq('scope', _clpScope())
           .maybeSingle();
         if (error) { console.warn('[client view] not loaded:', error.message); return; }
         if (data && data.customizations) {
@@ -5914,10 +5929,10 @@
           bar.id = 'clp-bar';
           bar.style.cssText = 'position:sticky;top:0;z-index:60;background:var(--brand-gold,#E7B91C);color:#26210A;' +
             'padding:9px 16px;font-size:12.5px;font-weight:700;border-radius:9px;margin-bottom:12px;line-height:1.5';
-          bar.textContent = 'Client view — this is the dashboard your client sees. Hide a section or a card here and it disappears from their screen, not yours.';
           const host = document.getElementById('kpi-sections-container');
           if (host && host.parentNode) host.parentNode.insertBefore(bar, host);
         }
+        bar.textContent = _clpBarText();
         bar.style.display = '';
       } else if (bar) {
         bar.style.display = 'none';
@@ -8863,6 +8878,14 @@
       renderAgencyNav();
       renderPlatformTabs();
       filterAccountsByAgency();
+      // The client profile is per agency too, so switching agency has to fetch
+      // the one that belongs here. Without this you would be looking at the
+      // previous agency's hidden sections and editing them into this one.
+      if (_clientPreview) {
+        const bar = document.getElementById('clp-bar');
+        if (bar) bar.textContent = _clpBarText();
+        _clpLoadFromServer().then(() => applyCustomizations());
+      }
       if (sel.value) loadData();
     }
 
