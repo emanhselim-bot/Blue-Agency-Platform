@@ -24721,6 +24721,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               <div><div class="cln-stat-k">ROAS</div><div class="cln-stat-v">${croas != null ? croas.toFixed(2) + 'x' : '—'}</div></div>
             </div>
             ${shared ? '<div class="cln-card-sub" style="margin-top:11px">These accounts share one Notion sheet, so the figures above are the client’s total — they do not split per account.</div>' : ''}
+            ${client.groupId ? `<button class="cln-open" onclick="clnOpenGroupInDashboard('${escHtml(client.groupId)}')">Open all ${client.accounts.length} accounts combined →</button>` : ''}
           </div>
           <div class="cln-grid">
             ${client.accounts.map(acc => `
@@ -24811,6 +24812,36 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // Hand an account to the media dashboard. The picker is filtered by the
     // active agency and platform tab, so both have to be put where the account
     // actually is or sel.value silently does nothing.
+    // The combined view the team already saved. It is an option in the same
+    // picker, valued __group__<id>, and it only appears there when one of the
+    // group's accounts survives the agency and platform filters — so those are
+    // widened first, exactly as for a single account.
+    function clnOpenGroupInDashboard(groupId) {
+      const g = (_acctGroups || []).find(x => x.id === groupId);
+      if (!g) { alert('That combination is no longer saved — reload the page.'); return; }
+      const first = (g.account_ids || []).map(id => accountMap[id]).find(Boolean);
+      currentAgencyId = (first && getAccountAgencyId(currentOrgId, first.id)) || 'all';
+      try { localStorage.setItem(`dash_agency_id_${currentOrgId}`, currentAgencyId); } catch {}
+      const pf = (first && first.type) || 'meta';
+      if (orgPlatforms.includes(pf)) currentPlatformTab = pf;
+      renderAgencyNav();
+      renderPlatformTabs();
+      filterAccountsByAgency();
+      const value = '__group__' + groupId;
+      if (!sel.querySelector(`option[value="${CSS.escape(value)}"]`)) {
+        currentAgencyId = 'all';
+        renderAgencyNav(); filterAccountsByAgency();
+      }
+      if (!sel.querySelector(`option[value="${CSS.escape(value)}"]`)) {
+        alert('The combined view is not available on this platform tab.');
+        return;
+      }
+      sel.value = value;
+      sel.dispatchEvent(new Event('change'));
+      document.getElementById('home-hub').classList.add('hidden');
+      loadDataWithRefresh();
+    }
+
     function clnOpenInDashboard(accountId) {
       const acc = accountMap[accountId];
       if (!acc) { alert('That account is no longer loaded — reload the page.'); return; }
