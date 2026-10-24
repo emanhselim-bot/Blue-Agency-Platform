@@ -21942,6 +21942,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (v === 'meetings') mtInit();
       if (v === 'tasks') batLoad();
       if (v === 'clients') clnInit();
+      // Remembered so a refresh comes back here instead of the home screen.
+      _navSave({ v: v === 'cards' ? 'home' : v });
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -24321,6 +24323,61 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
     }
 
+    // ═══ Where you were ══════════════════════════════════════════════
+    //
+    // A refresh used to land on the home screen whatever you had open, so
+    // reloading to get fresh numbers for an account meant walking back in
+    // through the agency and the account every time. The current view is
+    // remembered and restored after the org and permissions have loaded —
+    // not before, or the restore would reopen a module the person is no
+    // longer allowed to see.
+    const NAV_KEY = 'dash_nav_v1';
+    let _navBooting = false;
+
+    // Read once, now, while the script is still loading. Boot calls
+    // showHomeHub() long before the restore runs, and that writes 'home' over
+    // the very entry the restore is about to read.
+    let _navPending = null;
+    try { _navPending = JSON.parse(localStorage.getItem(NAV_KEY) || 'null'); } catch (_) {}
+
+    function _navSave(state) {
+      if (_navBooting) return;
+      try { localStorage.setItem(NAV_KEY, JSON.stringify(state)); } catch (_) {}
+    }
+
+    async function _navRestore() {
+      const s = _navPending;
+      _navPending = null;
+      if (!s || !s.v || s.v === 'home') return;
+      _navBooting = true;
+      try {
+        // Permissions decide what may be reopened, so they have to be known.
+        await loadMyModules();
+        applyModuleAccess();
+
+        if (s.v === 'media') {
+          // loadAccounts() has already put the account back in the picker and
+          // loaded it; this only gets the home screen out of the way.
+          if (canOpenModule('media')) document.getElementById('home-hub').classList.add('hidden');
+          return;
+        }
+        if (s.v === 'media-picker') {
+          if (!canOpenModule('media')) return;
+          await mbpOpen();
+          _mbpAgency = s.agency || null;
+          _mbpFolder = s.folder || null;
+          mbpRender();
+          return;
+        }
+        // Tasks answers to the pipeline permission, same as hubOpen().
+        if (canOpenModule(s.v === 'tasks' ? 'pipeline' : s.v)) hubShowView(s.v);
+      } catch (e) {
+        console.warn('[nav] could not restore the last view', e);
+      } finally {
+        _navBooting = false;
+      }
+    }
+
     function showHomeHub() {
       // Leaving the picker up would hide the dashboard's own chrome for the
       // next person to come back to it.
@@ -24908,6 +24965,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       sel.dispatchEvent(new Event('change'));
       document.getElementById('home-hub').classList.add('hidden');
       mbpClose();
+      _navSave({ v: 'media' });
       loadDataWithRefresh();
       return true;
     }
@@ -25080,6 +25138,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function mbpRender() {
       const body = document.getElementById('mbp-body');
       if (!body) return;
+      // One place covers every move inside the picker: agency, folder, back.
+      _navSave({ v: 'media-picker', agency: _mbpAgency, folder: _mbpFolder });
       const q = (document.getElementById('mbp-search')?.value || '').trim().toLowerCase();
       const title = document.getElementById('mbp-title');
       const crumb = document.getElementById('mbp-crumb');
@@ -25407,6 +25467,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           setTimeout(async () => {
             try {
               await loadOrgs();
+              // Back to whatever was open before the refresh. After loadOrgs,
+              // because it needs the org, the accounts and the permissions;
+              // a real sign-in starts at home rather than wherever the last
+              // person on this browser happened to be.
+              if (event !== 'SIGNED_IN') _navRestore();
               // Record the sign-in once the org context exists. INITIAL_SESSION
               // fires on every page load from a stored session, so only a real
               // SIGNED_IN event counts as "signed in".
@@ -25434,6 +25499,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         _orgsLoading = false;
         // Signed out: the next session, whoever it belongs to, is a real one.
         _authBootedFor = null;
+        // And they must not be dropped into the last person's view.
+        try { localStorage.removeItem(NAV_KEY); } catch (_) {}
         if (timer) clearInterval(timer);
         overlay.classList.remove('hidden');
         document.getElementById('home-hub').classList.add('hidden');
