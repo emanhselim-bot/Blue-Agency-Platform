@@ -457,11 +457,6 @@
        Without a floor it gives all its width to the search box, which has a
        min-width and will not yield — on a 560px pane the client's name was
        squeezed down to the emoji. The title keeps a floor; the search shrinks. */
-    /* Client view: the page is the same, so it needs an unmissable frame —
-       otherwise you hide a section believing you are tidying your own screen
-       and have quietly taken it off the client's. */
-    body.client-preview #kpi-sections-container {
-      outline: 2px solid var(--brand-gold, #E7B91C); outline-offset: 10px; border-radius: 6px; }
     #cln-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 150px; }
     #cln-search { flex: 0 1 210px; min-width: 90px !important; }
     .cln-crumb { font-size: 12px; color: rgba(255,255,255,.65); margin: -10px 0 16px; }
@@ -3802,8 +3797,6 @@
     <button class="targets-btn" id="history-toggle-btn" onclick="mhOpen()" title="Enter past monthly orders, pieces and revenue">📅 Monthly history</button>
     <button class="layout-edit-btn" id="layout-undo-btn" onclick="undoLayout()" style="display:none" disabled title="Undo last layout change">↩ Undo</button>
     <button class="layout-edit-btn" id="layout-reset-btn" onclick="resetToDefaultLayout()" style="display:none" title="Reset all section/card arrangements to defaults">↺ Reset</button>
-    <button class="layout-edit-btn" id="client-view-btn" onclick="clpToggle()"
-            title="See the dashboard as your client sees it, and choose what they get">👁 Client view</button>
     <div class="tmpl-picker-wrap">
       <button class="layout-edit-btn" id="template-btn" onclick="toggleTemplatePicker(event)">📋 Template</button>
       <div class="tmpl-picker" id="template-picker" style="display:none">
@@ -5657,30 +5650,6 @@
       clearTimeout(_serverSaveTimer);
       _serverSaveTimer = setTimeout(async () => {
         if (!currentUser || !currentOrgId) return;
-        // What clients see belongs to the organisation, so it goes to its own
-        // table. Writing it into user_layouts would file it under whoever
-        // happened to be editing.
-        if (_clientPreview) {
-          try {
-            const lsCust = localStorage.getItem(_clientCustKey());
-            const { error } = await sb.from('client_view_layouts').upsert({
-              organization_id: currentOrgId,
-              scope:           _clpScope(),
-              customizations:  lsCust ? JSON.parse(lsCust) : {},
-              updated_by:      currentUser.id,
-              updated_at:      new Date().toISOString(),
-            }, { onConflict: 'organization_id,scope' });
-            // Only an owner may change it, and a silent refusal is how a
-            // change looks saved until the next reload throws it away.
-            if (error) {
-              console.warn('[client view] not saved:', error.message);
-              _clpToast('Not saved — only the account owner can change the client view.', true);
-            } else {
-              _clpToast('Client view saved');
-            }
-          } catch (e) { console.warn('[client view] not saved', e); }
-          return;
-        }
         try {
           const lsLayout = localStorage.getItem(_layoutKey());
           const lsCust   = localStorage.getItem(_custKey());
@@ -5726,12 +5695,8 @@
         if (serverIsNewer) {
           if (data.layout)
             try { localStorage.setItem(_layoutKey(), JSON.stringify(data.layout)); } catch(_) {}
-          // _ownerCustKey, not _custKey: this row is the user's own layout, and
-          // while the client preview is on _custKey() points at the client
-          // profile — which this would then overwrite with your own hidden
-          // sections, silently changing what every client sees.
           if (data.customizations && Object.keys(data.customizations).length)
-            try { localStorage.setItem(_ownerCustKey(), JSON.stringify(data.customizations)); } catch(_) {}
+            try { localStorage.setItem(_custKey(), JSON.stringify(data.customizations)); } catch(_) {}
           try { localStorage.setItem(_layoutKey() + '_server_ts', new Date(data.updated_at).getTime().toString()); } catch(_) {}
           console.log('[Layout] synced from server (server newer)');
         } else {
@@ -5743,21 +5708,6 @@
     }
 
     async function resetToDefaultLayout() {
-      // In client view, Reset means "show the client everything again". It must
-      // not touch your own layout, and it must not delete the user_layouts row
-      // the way the normal reset does.
-      if (_clientPreview) {
-        if (!confirm('Show clients every section again?\n\nEverything you hid from the client view will come back. Your own layout is not affected.')) return;
-        try { localStorage.removeItem(_clientCustKey()); } catch(_) {}
-        if (currentOrgId) {
-          const { error } = await sb.from('client_view_layouts').delete()
-            .eq('organization_id', currentOrgId).eq('scope', _clpScope());
-          if (error) { _clpToast('Not reset — only the account owner can change the client view.', true); return; }
-        }
-        applyCustomizations();
-        _clpToast('Client view reset — clients see every section');
-        return;
-      }
       if (!confirm('Reset to default layout?\n\nAll section/card arrangements and visibility customizations will be cleared.')) return;
       try { localStorage.removeItem(_layoutKey()); } catch(_) {}
       try { localStorage.removeItem(_custKey()); }  catch(_) {}
@@ -5846,108 +5796,9 @@
       if (newIds.length) saveLayout();   // remember the position from now on
     }
 
-    // ── Client view ──────────────────────────────────────────────────────────
-    //
-    // The client's dashboard is this dashboard. Rather than keeping a second
-    // page that drifts, the same render runs against a second customisation
-    // profile: hide a section while this is on and it goes from the client's
-    // screen, not yours.
-    //
-    // The profile is stored per organisation, not per user. user_layouts is
-    // keyed on the user, which would make what a client sees depend on which
-    // team member last opened the page.
-    let _clientPreview = false;
-
-    function _clientCustKey() {
-      return 'kpi-client-v1-' + (currentOrgId || 'x') + '-' + (currentAgencyId || 'x');
-    }
-
-    // The local key carries the agency, because the dashboard's whole
-    // customisation layer is keyed that way. The server row has to match it or
-    // Blue Ad's client view and Kepler's would overwrite each other through
-    // one shared row — the path is agencies → accounts → dashboard, so the
-    // agency is always part of which dashboard you are shaping.
-    function _clpScope() { return currentAgencyId || 'default'; }
-
-    // Naming the agency matters: the same button on a different agency is
-    // editing a different client view, and nothing else on screen says so.
-    function _clpBarText() {
-      const a = (getAgencies(currentOrgId) || []).find(x => x.id === currentAgencyId);
-      const where = a ? `${a.name}'s clients` : (currentAgencyId === 'all' ? 'all agencies' : 'your clients');
-      return `Client view — the dashboard ${where} see. Hide a section or a card here and it disappears from their screen, not yours.`;
-    }
-
-    function _clpToast(msg, bad) {
-      let t = document.getElementById('clp-toast');
-      if (!t) {
-        t = document.createElement('div');
-        t.id = 'clp-toast';
-        t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:26px;z-index:9999;' +
-          'padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;color:#fff;' +
-          'box-shadow:0 6px 24px rgba(0,0,0,.3);transition:opacity .25s';
-        document.body.appendChild(t);
-      }
-      t.style.background = bad ? '#B91C1C' : '#15803D';
-      t.textContent = msg;
-      t.style.opacity = '1';
-      clearTimeout(t._h);
-      t._h = setTimeout(() => { t.style.opacity = '0'; }, bad ? 5000 : 1800);
-    }
-
-    // Pulls the organisation's client profile into the local key the
-    // customisation layer reads, so turning the preview on shows what is
-    // actually saved rather than this browser's last guess at it.
-    async function _clpLoadFromServer() {
-      if (!currentOrgId) return;
-      try {
-        const { data, error } = await sb.from('client_view_layouts')
-          .select('customizations')
-          .eq('organization_id', currentOrgId)
-          .eq('scope', _clpScope())
-          .maybeSingle();
-        if (error) { console.warn('[client view] not loaded:', error.message); return; }
-        if (data && data.customizations) {
-          localStorage.setItem(_clientCustKey(), JSON.stringify(data.customizations));
-        }
-      } catch (e) { console.warn('[client view] not loaded', e); }
-    }
-
-    async function clpToggle() {
-      _clientPreview = !_clientPreview;
-      document.body.classList.toggle('client-preview', _clientPreview);
-      const btn = document.getElementById('client-view-btn');
-      if (btn) {
-        btn.textContent = _clientPreview ? '✕ Exit client view' : '👁 Client view';
-        btn.style.background = _clientPreview ? 'var(--brand-gold)' : '';
-        btn.style.color = _clientPreview ? '#26210A' : '';
-      }
-      let bar = document.getElementById('clp-bar');
-      if (_clientPreview) {
-        await _clpLoadFromServer();
-        if (!bar) {
-          bar = document.createElement('div');
-          bar.id = 'clp-bar';
-          bar.style.cssText = 'position:sticky;top:0;z-index:60;background:var(--brand-gold,#E7B91C);color:#26210A;' +
-            'padding:9px 16px;font-size:12.5px;font-weight:700;border-radius:9px;margin-bottom:12px;line-height:1.5';
-          const host = document.getElementById('kpi-sections-container');
-          if (host && host.parentNode) host.parentNode.insertBefore(bar, host);
-        }
-        bar.textContent = _clpBarText();
-        bar.style.display = '';
-      } else if (bar) {
-        bar.style.display = 'none';
-      }
-      // The hide rules, the custom sections and the renames all come from
-      // _loadCust(), which now answers from the other profile.
-      applyCustomizations();
-    }
-
     // ── Dashboard Customization: hide/rename cards & sections ────────────────
-    function _ownerCustKey() {
-      return 'kpi-custom-v1-' + (currentOrgId || 'x') + '-' + (currentAgencyId || 'x');
-    }
     function _custKey() {
-      return _clientPreview ? _clientCustKey() : _ownerCustKey();
+      return 'kpi-custom-v1-' + (currentOrgId || 'x') + '-' + (currentAgencyId || 'x');
     }
     function _loadCust() {
       try { return JSON.parse(localStorage.getItem(_custKey()) || '{}'); } catch(_) { return {}; }
@@ -6015,12 +5866,6 @@
       const container = document.getElementById('kpi-sections-container');
       if (!container) return;
 
-      // Drop custom sections belonging to the profile that is no longer active.
-      const keep = new Set((cust.customSections || []).map(s => s.id));
-      container.querySelectorAll('.kpi-section.custom-section').forEach(el => {
-        if (!keep.has(el.dataset.sectionId)) el.remove();
-      });
-
       // ── Render custom sections (re-inject after every data render) ────────────
       _renderCustomSections(cust, container);
 
@@ -6081,10 +5926,7 @@
         // Skip if already in DOM
         if (container.querySelector(`.kpi-section[data-section-id="${sec.id}"]`)) return;
         const secEl = document.createElement('div');
-        // Marked so switching between your profile and the client's can take
-        // the other profile's custom sections back out again — this used to
-        // only ever add, so they accumulated across a switch.
-        secEl.className = 'kpi-section custom-section';
+        secEl.className = 'kpi-section';
         secEl.dataset.sectionId = sec.id;
         secEl.innerHTML = `
           <div class="section-label">${sec.name} <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
@@ -6245,9 +6087,6 @@
     }
 
     function resetCustomizations() {
-      // In client view the profile lives on the server, so clearing the local
-      // copy alone would look like a reset and come back on the next toggle.
-      if (_clientPreview) return resetToDefaultLayout();
       if (!confirm('This will restore all hidden items, delete all custom sections, and reset all names. Continue?')) return;
       try {
         localStorage.removeItem(_custKey());
@@ -8878,14 +8717,6 @@
       renderAgencyNav();
       renderPlatformTabs();
       filterAccountsByAgency();
-      // The client profile is per agency too, so switching agency has to fetch
-      // the one that belongs here. Without this you would be looking at the
-      // previous agency's hidden sections and editing them into this one.
-      if (_clientPreview) {
-        const bar = document.getElementById('clp-bar');
-        if (bar) bar.textContent = _clpBarText();
-        _clpLoadFromServer().then(() => applyCustomizations());
-      }
       if (sel.value) loadData();
     }
 
@@ -24397,11 +24228,6 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // at least one module. Before that the answer is "not known yet", and a
       // button that is there and then is not is worse than one that arrives.
       acVisible(!!(_cpModules && _cpModules.length) && !document.body.classList.contains('cp-shared'));
-      // Only an owner may change what clients see, so only an owner is offered
-      // the switch. A member who got there anyway is stopped by the RLS policy
-      // and told so by the toast.
-      const cvb = document.getElementById('client-view-btn');
-      if (cvb) cvb.style.display = currentRole === 'owner' ? '' : 'none';
       // Somebody with no modules would otherwise stare at an empty page and
       // assume the dashboard is broken.
       let note = document.getElementById('hub-no-access');
