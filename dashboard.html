@@ -1911,14 +1911,25 @@
        Default is about twelve rows — enough to read a fortnight without the
        card towering over the two next to it. */
     .dc-scroll {
-      overflow: auto; resize: vertical; height: 268px; min-height: 110px; max-height: 80vh;
+      overflow: auto; resize: vertical; height: 208px; min-height: 96px; max-height: 80vh;
       border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px;
       background: var(--well);
     }
-    /* Touch devices have no resize grip and a short page, so it simply fits. */
-    @media (max-width: 760px) { .dc-scroll { resize: none; height: auto; max-height: 52vh; } }
+    /* Phones and tablets keep the grip.
+       They used to get resize:none and height:auto, which made the card grow
+       to fit every row — 22 for a month, 45 for a year — so on a phone the
+       ROAS card alone ran several screens and could not be shortened. It is
+       the one card whose length the reader should decide. */
+    @media (max-width: 760px) { .dc-scroll { height: 188px; max-height: 70vh; } }
     .dc-drag-hint { margin-left: auto; opacity: .55; font-size: 10px; }
-    @media (max-width: 760px) { .dc-drag-hint { display: none; } }
+    /* The native resize grip is about 16px and awkward to hit with a thumb,
+       so the same thing is also one tap. The grip stays for the mouse. */
+    .dc-expand {
+      margin-left: auto; background: none; border: 1px solid var(--border);
+      border-radius: 7px; padding: 3px 9px; font: inherit; font-size: 10px;
+      font-weight: 600; color: var(--text-muted); cursor: pointer;
+    }
+    .dc-expand:hover { border-color: var(--blue-light); color: var(--text-main); }
 
     /* A phone, not a narrow desktop window.
        At 375px the 112px name column leaves about 140px for the bar itself,
@@ -1931,7 +1942,7 @@
       .dc-sub { flex-basis: 100%; }
       .dc-bar-row { grid-template-columns: 74px 1fr 42px; gap: 6px; }
       .dc-bar-name, .dc-bar-val { font-size: 10px; }
-      .dc-scroll { padding: 8px; max-height: 60vh; }
+      .dc-scroll { padding: 8px; height: 168px; max-height: 60vh; }
       .dc-donut-wrap { gap: 10px; }
       .dc-donut { width: 104px; height: 104px; }
       .dc-donut-key { font-size: 10px; gap: 4px; }
@@ -11426,7 +11437,27 @@
         </div>`).join('')}
         </div>
       </div>
-      <div class="dc-legend"><span class="dc-be-key"><i></i>break-even (1.00x)</span><span class="dc-drag-hint">drag the corner to resize</span></div>`;
+      <div class="dc-legend"><span class="dc-be-key"><i></i>break-even (1.00x)</span>
+        <button class="dc-expand" onclick="dcToggleHeight(this)" title="Show every row, or go back to a short list">Expand</button>
+      </div>`;
+    }
+
+    /**
+     * Expand the list to every row, or back to the short default.
+     *
+     * Sets an inline height rather than toggling a class, so the drag grip,
+     * this button and restoreCampHeights all speak the same language — the
+     * ResizeObserver that records a drag picks this up too, which is what
+     * makes the choice survive a refresh and a period change.
+     */
+    function dcToggleHeight(btn) {
+      const box = btn.closest('.dc-card')?.querySelector('.dc-scroll');
+      if (!box) return;
+      const short = innerWidth <= 480 ? 168 : innerWidth <= 760 ? 188 : 208;
+      const cap = Math.round(innerHeight * 0.7);
+      const isShort = box.offsetHeight <= short + 24;
+      box.style.height = (isShort ? Math.min(box.scrollHeight + 6, cap) : short) + 'px';
+      btn.textContent = isShort ? 'Shorten' : 'Expand';
     }
 
     /**
