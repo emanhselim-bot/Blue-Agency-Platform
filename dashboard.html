@@ -1920,6 +1920,27 @@
     .dc-drag-hint { margin-left: auto; opacity: .55; font-size: 10px; }
     @media (max-width: 760px) { .dc-drag-hint { display: none; } }
 
+    /* A phone, not a narrow desktop window.
+       At 375px the 112px name column leaves about 140px for the bar itself,
+       which is too little to read a length against the break-even mark, and
+       the donut and its key stop fitting side by side. */
+    @media (max-width: 480px) {
+      .dc-card { padding: 12px 12px 8px; border-radius: 10px; }
+      .dc-grid { gap: 10px; }
+      .dc-head { flex-wrap: wrap; gap: 2px 8px; }
+      .dc-sub { flex-basis: 100%; }
+      .dc-bar-row { grid-template-columns: 74px 1fr 42px; gap: 6px; }
+      .dc-bar-name, .dc-bar-val { font-size: 10px; }
+      .dc-scroll { padding: 8px; max-height: 60vh; }
+      .dc-donut-wrap { gap: 10px; }
+      .dc-donut { width: 104px; height: 104px; }
+      .dc-donut-key { font-size: 10px; gap: 4px; }
+      .dc-legend { gap: 8px; font-size: 10px; }
+      /* The area chart is drawn on a 560x190 viewBox; on a narrow screen that
+         is a 70px-tall strip, too flat to read a trend off. */
+      .dc-svg { min-height: 150px; }
+    }
+
     .dc-bars { display: flex; flex-direction: column; gap: 7px; }
     .dc-bar-row { display: grid; grid-template-columns: 112px 1fr 46px; align-items: center; gap: 8px; }
     .dc-bar-name {
