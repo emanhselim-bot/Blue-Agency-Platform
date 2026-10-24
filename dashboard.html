@@ -24902,7 +24902,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     // Opening Media Buying used to drop you on whichever account was open
     // last, with a dropdown as the only way to move. The dropdown is still
     // there; this is the way in.
-    let _mbpAgency = null, _mbpFig = {};
+    let _mbpAgency = null, _mbpFolder = null, _mbpFig = {};
 
     // The dashboard's own chrome is hidden while the picker is up, so the
     // picker is the page rather than a panel sitting on top of the previous
@@ -24922,16 +24922,24 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     function mbpBack() {
+      if (_mbpFolder) { _mbpFolder = null; mbpRender(); return; }
       if (_mbpAgency) { _mbpAgency = null; mbpRender(); return; }
       mbpClose();
       showHomeHub();
+    }
+
+    function mbpOpenFolder(groupId) {
+      _mbpFolder = groupId;
+      const s = document.getElementById('mbp-search');
+      if (s) s.value = '';
+      mbpRender();
     }
 
     async function mbpOpen() {
       // Not requireMediaTab(): that alerts, and someone whose only platform is
       // Google Ads would be told off for opening their own dashboard.
       if (!canOpenModule('media')) return;
-      _mbpAgency = null;
+      _mbpAgency = null; _mbpFolder = null;
       document.getElementById('home-hub').classList.add('hidden');
       document.getElementById('mb-picker').style.display = '';
       mbpChrome(false);
@@ -25047,15 +25055,60 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const back = document.getElementById('mbp-back');
       const agencies = mbpAgencyList();
       const agency = _mbpAgency && agencies.find(a => a.id === _mbpAgency);
-      back.textContent = agency ? '← Agencies' : '← Home';
+      const folder = _mbpFolder && (_acctGroups || []).find(g => g.id === _mbpFolder);
+      back.textContent = folder ? '← Accounts' : agency ? '← Agencies' : '← Home';
+
+      // ── Inside a client folder: its accounts, and the combined view ──
+      if (agency && folder) {
+        const members = (folder.account_ids || []).map(id => accountMap[id]).filter(Boolean);
+        const p0 = document.getElementById('mbp-period');
+        title.textContent = '📁 ' + folder.name;
+        crumb.innerHTML = `<b>${escHtml(agency.name)}</b> › ${escHtml(folder.name)} · ${escHtml((p0?.options[p0.selectedIndex]?.textContent || '').toLowerCase())}`;
+        body.innerHTML = `<div class="cln-grid">
+          <div class="cln-card" onclick="clnOpenGroupInDashboard('${escHtml(folder.id)}')">
+            <div class="cln-card-top">
+              <span class="cln-card-icon">⊕</span>
+              <span class="cln-card-name">${escHtml(folder.name)} — combined</span>
+              <span class="cln-pill">COMBINED</span>
+            </div>
+            <div class="cln-card-sub">All ${members.length} accounts read as one</div>
+            ${mbpStats(mbpTotals(members))}
+          </div>
+          ${members.map(a => {
+            const live = clnRunning(a);
+            return `
+            <div class="cln-card" onclick="clnOpenInDashboard('${escHtml(a.id)}')">
+              <div class="cln-card-top">
+                <span class="cln-dot ${live === true ? 'on' : 'off'}"></span>
+                <span class="cln-card-name">${escHtml(a.account_name || a.meta_account_id || 'Untitled')}</span>
+                <span class="cln-pill">${a.type === 'google_ads' ? 'GOOGLE' : a.type === 'tiktok_ads' ? 'TIKTOK' : 'META'}</span>
+              </div>
+              <div class="cln-card-sub">${live === null ? 'Status not synced' : live ? 'Running' : 'Not running'}${a.currency ? ' · ' + escHtml(a.currency) : ''}</div>
+              <div class="cln-stats"><div><div class="cln-stat-k">Figures</div>
+                <div class="cln-stat-v" style="font-size:12px;font-weight:600">on the combined card</div></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="cln-note" style="padding-top:18px">
+          Both accounts are written to one Notion sheet, so each carries the client's whole total.
+          The combined card is the real figure; open an account on its own to read its campaigns and creatives.
+        </div>`;
+        return;
+      }
 
       // ── The accounts of one agency ──
       if (agency) {
         title.textContent = (agency.icon || '🏢') + ' ' + agency.name;
         const groups = (_acctGroups || []).filter(g =>
           (g.account_ids || []).some(id => agency.accounts.some(a => a.id === id)));
-        const accounts = agency.accounts.filter(a => !q || (a.account_name || '').toLowerCase().includes(q));
-        const shownGroups = groups.filter(g => !q || (g.name || '').toLowerCase().includes(q));
+        // An account that belongs to a folder is listed inside it, not beside
+        // it — otherwise Ibriz appears three times in one list.
+        const inFolder = new Set(groups.flatMap(g => g.account_ids || []));
+        const loose = agency.accounts.filter(a => !inFolder.has(a.id));
+        const accounts = loose.filter(a => !q || (a.account_name || '').toLowerCase().includes(q));
+        const shownGroups = groups.filter(g => !q
+          || (g.name || '').toLowerCase().includes(q)
+          || (g.account_ids || []).some(id => (accountMap[id]?.account_name || '').toLowerCase().includes(q)));
         const p = document.getElementById('mbp-period');
         crumb.innerHTML = `<b>${escHtml(agency.name)}</b> · ${agency.accounts.length} account${agency.accounts.length === 1 ? '' : 's'} · ${escHtml((p?.options[p.selectedIndex]?.textContent || '').toLowerCase())}`;
         if (!accounts.length && !shownGroups.length) {
@@ -25065,22 +25118,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         body.innerHTML = `<div class="cln-grid">
           ${shownGroups.map(g => {
             const members = (g.account_ids || []).map(id => accountMap[id]).filter(Boolean);
+            const live = members.filter(x => clnRunning(x) === true).length;
             return `
-            <div class="cln-card" onclick="clnOpenGroupInDashboard('${escHtml(g.id)}')">
+            <div class="cln-card" onclick="mbpOpenFolder('${escHtml(g.id)}')">
               <div class="cln-card-top">
-                <span class="cln-card-icon">⊕</span>
+                <span class="cln-card-icon">📁</span>
                 <span class="cln-card-name">${escHtml(g.name)}</span>
-                <span class="cln-pill">COMBINED</span>
+                <span class="cln-pill">${members.length} + COMBINED</span>
               </div>
-              <div class="cln-card-sub">${(g.account_ids || []).length} accounts read as one</div>
+              <div class="cln-card-sub">${live} of ${members.length} running · open for each account or all together</div>
               ${mbpStats(mbpTotals(members))}
             </div>`;
           }).join('')}
           ${accounts.map(a => {
             const live = clnRunning(a);
             // An account sharing a Notion sheet has no figure of its own —
-            // both accounts carry the client's whole total. The combined card
-            // above is where that number means something.
+            // both accounts carry the client's whole total.
             const shared = !a.type && _brandSharers(a.id) > 1;
             return `
             <div class="cln-card" onclick="clnOpenInDashboard('${escHtml(a.id)}')">
@@ -25091,7 +25144,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               </div>
               <div class="cln-card-sub">${live === null ? 'Status not synced' : live ? 'Running' : 'Not running'}${a.currency ? ' · ' + escHtml(a.currency) : ''}</div>
               ${shared
-                ? '<div class="cln-stats"><div><div class="cln-stat-k">Figures</div><div class="cln-stat-v" style="font-size:12px;font-weight:600">on the combined card</div></div></div>'
+                ? '<div class="cln-stats"><div><div class="cln-stat-k">Figures</div><div class="cln-stat-v" style="font-size:12px;font-weight:600">shared Notion sheet</div></div></div>'
                 : mbpStats(mbpTotals([a]))}
             </div>`;
           }).join('')}
@@ -25126,6 +25179,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     function mbpPick(agencyId) {
       _mbpAgency = agencyId;
+      _mbpFolder = null;
       const s = document.getElementById('mbp-search');
       if (s) s.value = '';
       mbpRender();
