@@ -24334,6 +24334,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     const NAV_KEY = 'dash_nav_v1';
     let _navBooting = false;
 
+    // Nothing may record a view until boot has finished.
+    //
+    // Guarding the one boot call that was known to clobber the entry was not
+    // enough: during start-up the dashboard renders the picker, restores the
+    // last account and settles the agency, and those paths run the same
+    // save that a click does. The entry was being rewritten with whatever
+    // start-up happened to touch last — once with a different agency, once
+    // with the account — so the next refresh landed somewhere else again.
+    //
+    // So saving is off until the restore has had its turn, and only a real
+    // navigation afterwards writes. The timeout is a backstop for the boots
+    // that never reach _navRestore (no session, an org that fails to load):
+    // without it a failure there would silently stop saving for the session.
+    let _navReady = false;
+    setTimeout(() => { _navReady = true; }, 8000);
+
     // Read once, now, while the script is still loading. Boot calls
     // showHomeHub() long before the restore runs, and that writes 'home' over
     // the very entry the restore is about to read.
@@ -24341,14 +24357,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     try { _navPending = JSON.parse(localStorage.getItem(NAV_KEY) || 'null'); } catch (_) {}
 
     function _navSave(state) {
-      if (_navBooting) return;
+      if (!_navReady || _navBooting) return;
       try { localStorage.setItem(NAV_KEY, JSON.stringify(state)); } catch (_) {}
     }
 
     async function _navRestore() {
       const s = _navPending;
       _navPending = null;
-      if (!s || !s.v || s.v === 'home') return;
+      // Nothing to put back, but boot is still over, so start recording.
+      if (!s || !s.v || s.v === 'home') { setTimeout(() => { _navReady = true; }, 1200); return; }
       _navBooting = true;
       try {
         // Permissions decide what may be reopened, so they have to be known.
@@ -24386,6 +24403,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         console.warn('[nav] could not restore the last view', e);
       } finally {
         _navBooting = false;
+        // Boot is done; from here a navigation is the person's own and is
+        // worth recording. Deferred one tick so anything the restore left
+        // in flight settles before it can write.
+        setTimeout(() => { _navReady = true; }, 1200);
       }
     }
 
