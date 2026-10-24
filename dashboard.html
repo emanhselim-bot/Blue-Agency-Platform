@@ -452,6 +452,40 @@
     .hub-mod-back { background: none; border: 1px solid rgba(255,255,255,.4); color: rgba(255,255,255,.9); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
     .hub-mod-back:hover { background: rgba(255,255,255,.1); }
     .hub-loading { color: rgba(255,255,255,.8); padding: 40px; text-align: center; font-size: 14px; grid-column: 1 / -1; }
+    /* Clients tab — agency → client → account */
+    /* The head is a flex row and the title carries flex:1 from .hub-mod-head.
+       Without a floor it gives all its width to the search box, which has a
+       min-width and will not yield — on a 560px pane the client's name was
+       squeezed down to the emoji. The title keeps a floor; the search shrinks. */
+    #cln-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 150px; }
+    #cln-search { flex: 0 1 210px; min-width: 90px !important; }
+    .cln-crumb { font-size: 12px; color: rgba(255,255,255,.65); margin: -10px 0 16px; }
+    .cln-crumb b { color: #fff; font-weight: 700; }
+    .cln-note { color: rgba(255,255,255,.75); font-size: 13px; padding: 26px 4px; }
+    .cln-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; align-items: start; }
+    .cln-card { background: var(--surface, rgba(255,255,255,.07)); border: 1px solid var(--border, rgba(255,255,255,.16));
+      border-radius: 14px; padding: 16px 18px; cursor: pointer; transition: border-color .12s, transform .12s; }
+    .cln-card:hover { border-color: rgba(255,255,255,.45); transform: translateY(-1px); }
+    .cln-card-top { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+    .cln-card-icon { font-size: 19px; line-height: 1; }
+    .cln-card-name { font-size: 15px; font-weight: 700; color: var(--text, #fff); flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cln-card-sub { font-size: 11.5px; color: var(--text-muted, rgba(255,255,255,.6)); }
+    .cln-stats { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+    .cln-stat-k { font-size: 9.5px; letter-spacing: .6px; text-transform: uppercase; color: var(--text-muted, rgba(255,255,255,.55)); }
+    .cln-stat-v { font-size: 14px; font-weight: 700; color: var(--text, #fff); margin-top: 1px; }
+    .cln-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: none; }
+    .cln-dot.on { background: #22C55E; } .cln-dot.off { background: rgba(255,255,255,.3); }
+    .cln-pill { font-size: 9.5px; font-weight: 700; letter-spacing: .4px; padding: 2px 7px; border-radius: 20px;
+      background: rgba(255,255,255,.12); color: var(--text-muted, rgba(255,255,255,.75)); }
+    .cln-open { margin-top: 13px; width: 100%; background: #fff; color: #0A1CA3; border: none; padding: 8px 0;
+      border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .cln-open:hover { background: #EAF2FE; }
+    @media (max-width: 620px) {
+      .cln-grid { grid-template-columns: 1fr; }
+      #hub-clients-view .hub-mod-head { flex-wrap: wrap; }
+      #cln-search, #cln-period { margin-left: 0; flex: 1 1 140px; min-width: 0; }
+    }
     /* pipeline kanban */
     .pipe-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: start; }
     @media (max-width: 1000px) { .pipe-board { grid-template-columns: repeat(2, 1fr); } }
@@ -4066,6 +4100,16 @@
             <div class="hub-card-desc">Live performance across Meta Ads, Google Ads and Shopify — all your client accounts in one place.</div>
             <div class="hub-card-badge" style="background:#DCFCE7;color:#16A34A">LIVE</div>
           </div>
+          <!-- Clients: the agency → client → account tree. data-mod is its own
+               key so an owner can take it away on its own, but canOpenModule
+               answers to the media module underneath, because this card shows
+               account names and spend. -->
+          <div class="hub-card" id="hub-card-clients" data-mod="clients" onclick="hubOpen('clients')">
+            <div class="hub-card-icon">👥</div>
+            <div class="hub-card-title">Clients</div>
+            <div class="hub-card-desc">Every agency and the clients inside it — open a client's accounts, or give the client their own view.</div>
+            <div class="hub-card-badge" style="background:#EAF2FE;color:#0573F5">NEW</div>
+          </div>
           <div class="hub-card" data-mod="finance" onclick="hubOpen('finance')">
             <div class="hub-card-icon">💰</div>
             <div class="hub-card-title">Finance</div>
@@ -4154,6 +4198,26 @@
         </div>
         <div class="mt-grid" id="mt-grid"></div>
         <div id="mt-day" style="margin-top:18px"></div>
+      </div>
+
+      <!-- Clients — agencies, the clients inside each, and their accounts.
+           Note the id: hub-client-view (singular) is the pipeline's client
+           detail panel and is a different thing entirely. -->
+      <div id="hub-clients-view" style="display:none">
+        <div class="hub-mod-head">
+          <button class="hub-mod-back" id="cln-back" onclick="clnBack()">← Home</button>
+          <h2 id="cln-title">👥 Clients</h2>
+          <input id="cln-search" class="connect-input" placeholder="Search client or account…"
+                 oninput="clnRender()" style="min-width:210px;margin-left:auto">
+          <select id="cln-period" class="connect-input" onchange="clnReload()" style="min-width:150px">
+            <option value="last_7_days">Last 7 days</option>
+            <option value="last_30_days" selected>Last 30 days</option>
+            <option value="this_month">This month</option>
+            <option value="last_month">Last month</option>
+          </select>
+        </div>
+        <div id="cln-crumb" class="cln-crumb"></div>
+        <div id="cln-body"><div class="cln-note">Loading…</div></div>
       </div>
 
       <!-- Blue Ad Tasks -->
@@ -21802,6 +21866,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (batImport) batImport.style.display = batCanEdit() ? '' : 'none';
       const cv = document.getElementById('hub-client-view');
       if (cv) cv.style.display = v === 'client' ? '' : 'none';
+      const clv = document.getElementById('hub-clients-view');
+      if (clv) clv.style.display = v === 'clients' ? '' : 'none';
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
       document.querySelector('#home-hub .hub-inner').classList.toggle('tasks-fullscreen', v === 'tasks');
       if (v === 'pipeline') cpmInit();
@@ -21810,6 +21876,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (v === 'access')   acxInit();
       if (v === 'meetings') mtInit();
       if (v === 'tasks') batLoad();
+      if (v === 'clients') clnInit();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -24137,6 +24204,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // tab permission an owner may have narrowed. Putting a shortcut on the
       // home screen must not widen who can reach it.
       if (m === 'proposal') return canOpenModule('media') && canSeeMediaTab('proposal');
+      // Clients lists account names and their spend, so it can never be wider
+      // than the media dashboard itself. An owner can still take it away on
+      // its own by dropping 'clients' from a member's module list.
+      if (m === 'clients') return canOpenModule('media') && (!_cpModules || _cpModules.includes('clients') || _cpModules.includes('media'));
       // Tasks are a team workspace. Anyone who has at least one dashboard
       // module may open it; task editing follows the member's existing role.
       if (m === 'tasks') return !!(_cpModules && _cpModules.length);
@@ -24425,6 +24496,340 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         if (log) log.scrollTop = log.scrollHeight;
         input.focus();
       }
+    }
+
+    // ═══ CLIENTS — agencies → clients → accounts ══════════════════════
+    //
+    // "Client" is not a table. It is whatever the team already said belongs
+    // together, read in this order:
+    //   1. an account_groups row — two ad accounts the team deliberately
+    //      combined (Ibriz Abaya, Nuya). That is an explicit answer.
+    //   2. a shared notion_url — Retaj and Retaj 2 carry one sheet and no
+    //      group, and they are still one client.
+    //   3. the account on its own.
+    // Guessing from account names was the other option and it is wrong the
+    // moment somebody renames an account.
+    let _clnAgency = null, _clnClient = null, _clnData = null;
+
+    const clnPeriod = () => document.getElementById('cln-period')?.value || 'last_30_days';
+
+    function clnMoney(n) {
+      if (n == null || !isFinite(n)) return '—';
+      const v = Math.round(Number(n));
+      if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(v % 1e6 ? 1 : 0) + 'M';
+      if (Math.abs(v) >= 1e4) return Math.round(v / 1e3) + 'K';
+      return v.toLocaleString();
+    }
+
+    // Strips the agency tag the team appends when one client runs two accounts
+    // ("Nuya - BlueAd", "Ibriz BlueAd1"), so the client reads as the client.
+    function clnCleanName(name) {
+      return String(name || '')
+        .replace(/[\s–—-]*\b(blue\s*ad|bluead|blue)\s*\d*\s*$/i, '')
+        .trim() || String(name || '').trim();
+    }
+
+    async function clnInit() {
+      _clnAgency = null; _clnClient = null;
+      await clnReload();
+    }
+
+    async function clnReload() {
+      const body = document.getElementById('cln-body');
+      if (!body) return;
+      body.innerHTML = '<div class="cln-note">Loading…</div>';
+      if (!await _hubWaitOrg()) {
+        body.innerHTML = '<div class="cln-note">No organisation loaded — open the Media Buying Dashboard once, then come back.</div>';
+        return;
+      }
+      try {
+        if (!Object.keys(accountMap || {}).length) await loadAccounts(false);
+        if (!_acctGroups || !_acctGroups.length) await loadAccountGroups();
+        if (!_agencies) await loadAgencies();
+        await clnLoadRunning();
+        _clnData = clnBuild();
+        await clnFill(_clnData);
+      } catch (e) {
+        body.innerHTML = '<div class="cln-note">Could not load clients: ' + escHtml(e.message || String(e)) + '</div>';
+        return;
+      }
+      clnRender();
+    }
+
+    function clnBuild() {
+      // accountMap has already been through applyAccountAccessRestrictions,
+      // so a member who only has one agency never sees the others here.
+      const accounts = Object.values(accountMap || {}).filter(Boolean);
+      const agencies = applyAgencyAccessRestrictions(getAgencies(currentOrgId) || []);
+      const byAgency = new Map(agencies.map(a => [a.id, { ...a, clients: [] }]));
+      byAgency.set('__none__', { id: '__none__', name: 'Unassigned', icon: '📁', clients: [] });
+
+      const clients = new Map();
+      accounts.forEach(acc => {
+        const g = (_acctGroups || []).find(x => (x.account_ids || []).includes(acc.id));
+        let key, name;
+        if (g) { key = 'g:' + g.id; name = g.name; }
+        else if (acc.notion_url) { key = 'n:' + acc.notion_url; name = clnCleanName(acc.account_name); }
+        else { key = 'a:' + acc.id; name = acc.account_name || acc.meta_account_id || 'Untitled'; }
+        let c = clients.get(key);
+        if (!c) {
+          c = { key, name, groupId: g ? g.id : null, accounts: [] };
+          clients.set(key, c);
+        }
+        // Two accounts on one sheet: the shorter cleaned name is the client.
+        if (!g) {
+          const cand = clnCleanName(acc.account_name);
+          if (cand && cand.length < c.name.length) c.name = cand;
+        }
+        c.accounts.push(acc);
+      });
+
+      clients.forEach(c => {
+        const agencyId = (c.groupId && (_acctGroups.find(x => x.id === c.groupId) || {}).agency_id)
+          || c.accounts.map(a => getAccountAgencyId(currentOrgId, a.id)).find(Boolean)
+          || '__none__';
+        const bucket = byAgency.get(agencyId) || byAgency.get('__none__');
+        bucket.clients.push(c);
+      });
+
+      const list = [...byAgency.values()]
+        .filter(a => a.clients.length)
+        .map(a => { a.clients.sort((x, y) => x.name.localeCompare(y.name)); return a; });
+      return { agencies: list };
+    }
+
+    // One query for every account on screen, then rolled up. Asking per client
+    // would be twenty round trips for a page that is mostly navigation.
+    async function clnFill(data) {
+      const keys = [];
+      data.agencies.forEach(a => a.clients.forEach(c => c.accounts.forEach(x => {
+        if (!x.type) keys.push(x.id);   // notion_daily is keyed by Meta account id
+      })));
+      data.range = _cmpRange({ key: clnPeriod() });
+      data.agencies.forEach(a => { a.spend = 0; a.revenue = 0; a.hasData = false; });
+      if (!keys.length || !currentOrgId || !data.range) return;
+
+      const { data: rows, error } = await sb.from('notion_daily')
+        .select('account_key, total_spend, web_spend, msg_spend, branding_spend, total_revenue, web_revenue, web_revenue_confirmed, msg_revenue')
+        .eq('organization_id', currentOrgId)
+        .in('account_key', [...new Set(keys)])
+        .gte('day', data.range.from).lte('day', data.range.to);
+      if (error) { console.warn('[clients] figures not loaded:', error.message); return; }
+
+      const per = {};
+      (rows || []).forEach(r => {
+        const p = (per[r.account_key] ||= { spend: 0, revenue: 0, days: 0 });
+        const spend = r.total_spend != null ? Number(r.total_spend)
+          : Number(r.web_spend || 0) + Number(r.msg_spend || 0) + Number(r.branding_spend || 0);
+        const rev = r.total_revenue != null ? Number(r.total_revenue)
+          : Number(r.web_revenue_confirmed ?? r.web_revenue ?? 0) + Number(r.msg_revenue || 0);
+        if (isFinite(spend)) p.spend += spend;
+        if (isFinite(rev)) p.revenue += rev;
+        p.days++;
+      });
+
+      data.agencies.forEach(a => {
+        a.clients.forEach(c => {
+          c.spend = 0; c.revenue = 0; c.hasData = false;
+          c.accounts.forEach(x => {
+            const p = per[x.id];
+            if (!p || !p.days) return;
+            // A sheet two accounts share reports one figure that both carry.
+            // _brandShare splits it so the client total is not doubled.
+            x.spend   = Number(_brandShare(x.id, p.spend))   || 0;
+            x.revenue = Number(_brandShare(x.id, p.revenue)) || 0;
+            x.hasData = true;
+            c.spend += x.spend; c.revenue += x.revenue; c.hasData = true;
+          });
+          a.spend += c.spend; a.revenue += c.revenue;
+          if (c.hasData) a.hasData = true;
+        });
+      });
+    }
+
+    // A whole period summing to exactly zero revenue is a sheet nobody fills
+    // in, not a client who sold nothing — Kepler spends and records no revenue
+    // at all. Printing 0.00x there reads as a disaster rather than a blank.
+    function clnRoas(c) {
+      if (!c.hasData || !c.spend || !c.revenue) return null;
+      return c.revenue / c.spend;
+    }
+
+    // loadAccounts() does not select has_active_campaigns, and widening that
+    // select is how the whole dashboard went blank once before. This asks for
+    // the flag on its own instead.
+    let _clnRunning = {};
+
+    async function clnLoadRunning() {
+      _clnRunning = {};
+      if (!currentOrgId) return;
+      const { data, error } = await sb.from('meta_ad_accounts_safe')
+        .select('id, has_active_campaigns')
+        .eq('organization_id', currentOrgId)
+        .eq('is_active', true);
+      if (error) { console.warn('[clients] running flags not loaded:', error.message); return; }
+      (data || []).forEach(r => { _clnRunning[r.id] = r.has_active_campaigns === true; });
+    }
+
+    // null for Google and TikTok accounts: the flag is a Meta sync, so saying
+    // "not running" there would be an invention.
+    function clnRunning(acc) {
+      if (acc.type) return null;
+      return _clnRunning[acc.id] === true;
+    }
+
+    function clnBack() {
+      if (_clnClient) { _clnClient = null; clnRender(); return; }
+      if (_clnAgency) { _clnAgency = null; clnRender(); return; }
+      hubShowView('cards');
+    }
+
+    function clnOpenAgency(id) { _clnAgency = id; _clnClient = null; clnRender(); }
+    function clnOpenClient(key) { _clnClient = key; clnRender(); }
+
+    function clnRender() {
+      const body = document.getElementById('cln-body');
+      if (!body || !_clnData) return;
+      const q = (document.getElementById('cln-search')?.value || '').trim().toLowerCase();
+      const title = document.getElementById('cln-title');
+      const crumb = document.getElementById('cln-crumb');
+      const back  = document.getElementById('cln-back');
+      const period = document.getElementById('cln-period');
+      const periodLabel = period?.options[period.selectedIndex]?.textContent || '';
+      const agency = _clnAgency && _clnData.agencies.find(a => a.id === _clnAgency);
+      const client = agency && _clnClient && agency.clients.find(c => c.key === _clnClient);
+
+      back.textContent = (agency || client) ? '← Back' : '← Home';
+
+      // ── Level 3: one client's accounts ──
+      if (client) {
+        title.textContent = '👥 ' + client.name;
+        crumb.innerHTML = `<b>${escHtml(agency.name)}</b> › ${escHtml(client.name)} · ${escHtml(periodLabel.toLowerCase())}`;
+        const croas = clnRoas(client);
+        // Ibriz's two accounts carry byte-identical daily rows, because the
+        // team keeps one Notion sheet for the client. Splitting that in half
+        // and printing it on each card would be a number nobody can act on,
+        // so the figures live on the client, and the cards say why.
+        const shared = client.accounts.filter(a => !a.type && _brandSharers(a.id) > 1).length > 1;
+        body.innerHTML = `
+          <div class="cln-card" style="cursor:default;margin-bottom:16px">
+            <div class="cln-card-top"><span class="cln-card-name">${escHtml(client.name)}</span>
+              <span class="cln-pill">${client.accounts.length} ACCOUNT${client.accounts.length === 1 ? '' : 'S'}</span></div>
+            <div class="cln-stats">
+              <div><div class="cln-stat-k">Spend</div><div class="cln-stat-v">${client.hasData ? clnMoney(client.spend) : '—'}</div></div>
+              <div><div class="cln-stat-k">Revenue</div><div class="cln-stat-v">${client.hasData ? clnMoney(client.revenue) : '—'}</div></div>
+              <div><div class="cln-stat-k">ROAS</div><div class="cln-stat-v">${croas != null ? croas.toFixed(2) + 'x' : '—'}</div></div>
+            </div>
+            ${shared ? '<div class="cln-card-sub" style="margin-top:11px">These accounts share one Notion sheet, so the figures above are the client’s total — they do not split per account.</div>' : ''}
+          </div>
+          <div class="cln-grid">
+            ${client.accounts.map(acc => `
+              <div class="cln-card" onclick="clnOpenInDashboard('${escHtml(acc.id)}')">
+                <div class="cln-card-top">
+                  <span class="cln-dot ${clnRunning(acc) === true ? 'on' : 'off'}"></span>
+                  <span class="cln-card-name">${escHtml(acc.account_name || acc.meta_account_id || 'Untitled')}</span>
+                  <span class="cln-pill">${acc.type === 'google_ads' ? 'GOOGLE' : acc.type === 'tiktok_ads' ? 'TIKTOK' : 'META'}</span>
+                </div>
+                <div class="cln-card-sub">${clnRunning(acc) === null ? 'Status not synced' : clnRunning(acc) ? 'Running' : 'Not running'}${acc.currency ? ' · ' + escHtml(acc.currency) : ''}</div>
+                ${(!acc.type && _brandSharers(acc.id) > 1)
+                  ? '<div class="cln-stats"><div><div class="cln-stat-k">Figures</div><div class="cln-stat-v" style="font-size:12px;font-weight:600">on the shared sheet above</div></div></div>'
+                  : acc.hasData ? `
+                <div class="cln-stats">
+                  <div><div class="cln-stat-k">Spend</div><div class="cln-stat-v">${clnMoney(acc.spend)}</div></div>
+                  <div><div class="cln-stat-k">Revenue</div><div class="cln-stat-v">${clnMoney(acc.revenue)}</div></div>
+                  <div><div class="cln-stat-k">ROAS</div><div class="cln-stat-v">${acc.spend && acc.revenue ? (acc.revenue / acc.spend).toFixed(2) + 'x' : '—'}</div></div>
+                </div>` : '<div class="cln-stats"><div><div class="cln-stat-k">Figures</div><div class="cln-stat-v" style="font-size:12px;font-weight:600">none for this period</div></div></div>'}
+                <button class="cln-open" onclick="event.stopPropagation();clnOpenInDashboard('${escHtml(acc.id)}')">Open in dashboard →</button>
+              </div>`).join('')}
+          </div>
+          <div class="cln-note" style="padding-top:22px">
+            Client access — a login of their own showing these numbers — is the next piece. Nothing here is visible to the client yet.
+          </div>`;
+        return;
+      }
+
+      // ── Level 2: the clients inside one agency ──
+      if (agency) {
+        title.textContent = (agency.icon || '👥') + ' ' + agency.name;
+        crumb.innerHTML = `<b>${escHtml(agency.name)}</b> · ${agency.clients.length} client${agency.clients.length === 1 ? '' : 's'} · ${escHtml(periodLabel.toLowerCase())}`;
+        const shown = agency.clients.filter(c => !q
+          || c.name.toLowerCase().includes(q)
+          || c.accounts.some(a => (a.account_name || '').toLowerCase().includes(q)));
+        body.innerHTML = shown.length ? `
+          <div class="cln-grid">
+            ${shown.map(c => {
+              const roas = clnRoas(c);
+              const live = c.accounts.filter(clnRunning).length;
+              return `
+              <div class="cln-card" onclick="clnOpenClient('${escHtml(c.key)}')">
+                <div class="cln-card-top">
+                  <span class="cln-dot ${live ? 'on' : 'off'}"></span>
+                  <span class="cln-card-name">${escHtml(c.name)}</span>
+                  ${c.accounts.length > 1 ? `<span class="cln-pill">${c.accounts.length} ACCTS</span>` : ''}
+                </div>
+                <div class="cln-card-sub">${live} of ${c.accounts.length} running</div>
+                <div class="cln-stats">
+                  <div><div class="cln-stat-k">Spend</div><div class="cln-stat-v">${c.hasData ? clnMoney(c.spend) : '—'}</div></div>
+                  <div><div class="cln-stat-k">Revenue</div><div class="cln-stat-v">${c.hasData ? clnMoney(c.revenue) : '—'}</div></div>
+                  <div><div class="cln-stat-k">ROAS</div><div class="cln-stat-v">${roas != null ? roas.toFixed(2) + 'x' : '—'}</div></div>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>` : `<div class="cln-note">No client here matches “${escHtml(q)}”.</div>`;
+        return;
+      }
+
+      // ── Level 1: the agencies ──
+      title.textContent = '👥 Clients';
+      const totalClients = _clnData.agencies.reduce((n, a) => n + a.clients.length, 0);
+      crumb.innerHTML = `${_clnData.agencies.length} agencies · ${totalClients} clients · ${escHtml(periodLabel.toLowerCase())}`;
+      const shownAg = _clnData.agencies.filter(a => !q
+        || a.name.toLowerCase().includes(q)
+        || a.clients.some(c => c.name.toLowerCase().includes(q)));
+      body.innerHTML = shownAg.length ? `
+        <div class="cln-grid">
+          ${shownAg.map(a => {
+            const live = a.clients.filter(c => c.accounts.some(clnRunning)).length;
+            const roas = clnRoas(a);
+            return `
+            <div class="cln-card" onclick="clnOpenAgency('${escHtml(a.id)}')">
+              <div class="cln-card-top">
+                <span class="cln-card-icon">${escHtml(a.icon || '🏢')}</span>
+                <span class="cln-card-name">${escHtml(a.name)}</span>
+              </div>
+              <div class="cln-card-sub">${a.clients.length} client${a.clients.length === 1 ? '' : 's'} · ${live} running</div>
+              <div class="cln-stats">
+                <div><div class="cln-stat-k">Spend</div><div class="cln-stat-v">${a.hasData ? clnMoney(a.spend) : '—'}</div></div>
+                <div><div class="cln-stat-k">Revenue</div><div class="cln-stat-v">${a.hasData ? clnMoney(a.revenue) : '—'}</div></div>
+                <div><div class="cln-stat-k">ROAS</div><div class="cln-stat-v">${roas != null ? roas.toFixed(2) + 'x' : '—'}</div></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>` : `<div class="cln-note">Nothing matches “${escHtml(q)}”.</div>`;
+    }
+
+    // Hand an account to the media dashboard. The picker is filtered by the
+    // active agency and platform tab, so both have to be put where the account
+    // actually is or sel.value silently does nothing.
+    function clnOpenInDashboard(accountId) {
+      const acc = accountMap[accountId];
+      if (!acc) { alert('That account is no longer loaded — reload the page.'); return; }
+      currentAgencyId = getAccountAgencyId(currentOrgId, accountId) || 'all';
+      try { localStorage.setItem(`dash_agency_id_${currentOrgId}`, currentAgencyId); } catch {}
+      const pf = acc.type || 'meta';
+      if (orgPlatforms.includes(pf)) currentPlatformTab = pf;
+      renderAgencyNav();
+      renderPlatformTabs();
+      filterAccountsByAgency();
+      if (!sel.querySelector(`option[value="${CSS.escape(accountId)}"]`)) {
+        // Still not there: the agency filter hid it. Fall back to every agency.
+        currentAgencyId = 'all';
+        renderAgencyNav(); filterAccountsByAgency();
+      }
+      sel.value = accountId;
+      sel.dispatchEvent(new Event('change'));
+      document.getElementById('home-hub').classList.add('hidden');
+      loadDataWithRefresh();
     }
 
     function hubOpen(section) {
