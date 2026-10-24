@@ -25487,10 +25487,16 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             try {
               await loadOrgs();
               // Back to whatever was open before the refresh. After loadOrgs,
-              // because it needs the org, the accounts and the permissions;
-              // a real sign-in starts at home rather than wherever the last
-              // person on this browser happened to be.
-              if (event !== 'SIGNED_IN') _navRestore();
+              // because it needs the org, the accounts and the permissions.
+              //
+              // Not conditional on the event. This used to skip SIGNED_IN, to
+              // keep a real sign-in from landing on the last person's screen —
+              // but Supabase re-emits SIGNED_IN for a revalidated stored
+              // session, which is exactly what an ordinary refresh is, so the
+              // restore was skipped on most refreshes. _authBootedFor above
+              // exists because of the same re-emit. Signing out clears the
+              // saved view, and that is the right guard for a shared browser.
+              _navRestore();
               // Record the sign-in once the org context exists. INITIAL_SESSION
               // fires on every page load from a stored session, so only a real
               // SIGNED_IN event counts as "signed in".
