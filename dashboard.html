@@ -457,21 +457,36 @@
        Without a floor it gives all its width to the search box, which has a
        min-width and will not yield — on a 560px pane the client's name was
        squeezed down to the emoji. The title keeps a floor; the search shrinks. */
-    /* The picker was the only full-width area with no gutter, so its cards and
-       its breadcrumb sat flat against the window edge while every other part
-       of the dashboard kept 24px. max() with the safe-area inset so a notch or
-       a rounded corner in landscape cannot clip it either. */
-    #mb-picker {
-      padding: 18px max(24px, env(safe-area-inset-right)) 40px max(24px, env(safe-area-inset-left));
+    /* ── Page margin ───────────────────────────────────────────────────
+       One number for the breathing space around every page of the
+       dashboard. 5cm is about 190px, which is the ask on a wide monitor
+       and impossible on a phone — a phone is only about 7cm across — so
+       the gutter steps down with the window instead of being one value.
+       Change these five numbers and the whole dashboard follows. */
+    :root { --safe-x: 56px; --safe-y: 26px; }
+    @media (min-width: 1600px) { :root { --safe-x: 190px; --safe-y: 34px; } }
+    @media (max-width: 1599px) and (min-width: 1200px) { :root { --safe-x: 96px; } }
+    @media (max-width: 899px)  { :root { --safe-x: 32px; --safe-y: 18px; } }
+    @media (max-width: 620px)  { :root { --safe-x: 14px; --safe-y: 12px; } }
+
+    /* max() with the safe-area inset so a notch or a rounded corner in
+       landscape cannot clip the page either.
+
+       The home screen is left out on purpose: .hub-inner is already a
+       centred 1040px column, so a 190px gutter would squeeze its cards
+       to 660px rather than give them room. */
+    .content, .controls-bar, .date-bar, #billing-section, #mb-picker,
+    .agency-nav, #platform-tabs-bar {
+      padding-left:  max(var(--safe-x), env(safe-area-inset-left))  !important;
+      padding-right: max(var(--safe-x), env(safe-area-inset-right)) !important;
     }
-    /* The rest of the dashboard already gutters at 24px; this only widens it
-       where the device actually reports an inset, so nothing moves on a Mac. */
-    .content, .controls-bar, .date-bar, #billing-section {
-      padding-left: max(24px, env(safe-area-inset-left));
-      padding-right: max(24px, env(safe-area-inset-right));
-    }
-    @media (max-width: 620px) {
-      #mb-picker { padding: 14px max(14px, env(safe-area-inset-right)) 32px max(14px, env(safe-area-inset-left)); }
+    /* !important on these too: the narrow-screen rules further down set
+       padding with the shorthand, which would otherwise reset them. */
+    .content, #mb-picker { padding-top: var(--safe-y) !important; }
+    /* Room under the last thing on the page, clearing the home indicator
+       on a phone as well. */
+    .content, #billing-section, #mb-picker {
+      padding-bottom: calc(var(--safe-y) * 2 + env(safe-area-inset-bottom)) !important;
     }
     /* While the agency/account picker is up, the dashboard's own chrome is out
        of the way. !important because renderPlatformTabs() sets display:flex
