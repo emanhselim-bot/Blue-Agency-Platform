@@ -11793,7 +11793,11 @@
             // card on the same screen — 2.66x against 2.68x for Basma.
             const m = await callEdgeFunction('meta-data', {
               account_db_id: id, period: 'custom', custom_from: day, custom_to: day });
-            const v = parseFloat(m?.ad_entity?.spend ?? m?.spend);
+            // amount_spent, not spend: meta-data returns the account-level
+            // figure under ad_entity.amount_spent, and reading the wrong
+            // field gave a silent 0 — the chart showed no spend beside a
+            // card reading EGP 1,756.
+            const v = parseFloat(m?.ad_entity?.amount_spent);
             if (isFinite(v)) spend = v;
           } catch (e) { console.warn('[charts] live spend', e); }
 
