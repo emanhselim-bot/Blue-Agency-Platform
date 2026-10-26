@@ -11781,25 +11781,34 @@
       const missing = _dcDaysBetween(since, until).filter(d => !haveDays.has(d));
       if (!missing.length || missing.length > DC_LIVE_MAX_DAYS) return [];
 
+      // Spend for every missing day in one call per account.
+      //
+      // It was one call per account per day. The page already asks meta-data
+      // for this account at load, and the extra calls were being throttled by
+      // Meta — site-data answered, meta-data did not, so the chart drew
+      // revenue with no spend beside it. level:'daily' returns the whole
+      // range broken down by day, so one call covers them all.
+      const spendByDay = {};
+      for (const id of ids) {
+        try {
+          const d = await callEdgeFunction('meta-data', {
+            account_db_id: id, level: 'daily',
+            period: 'custom', custom_from: since, custom_to: until });
+          if (d?.error) { console.warn('[charts] live spend:', d.error); continue; }
+          for (const row of d?.daily || []) {
+            const v = parseFloat(row.spend);
+            if (!isFinite(v)) continue;
+            const day = String(row.date).slice(0, 10);
+            (spendByDay[day] ||= {})[id] = v;
+          }
+        } catch (e) { console.warn('[charts] live spend', e); }
+      }
+
       const rows = [];
       for (const day of missing) {
         for (const id of ids) {
           const acc = accountMap[id];
-          let spend = null, revenue = null, orders = null;
-          try {
-            // The account-level figure, which is what the Total Spend card
-            // shows. Summing the platform rows misses spend Meta does not
-            // attribute to a platform, and the chart then disagreed with the
-            // card on the same screen — 2.66x against 2.68x for Basma.
-            const m = await callEdgeFunction('meta-data', {
-              account_db_id: id, period: 'custom', custom_from: day, custom_to: day });
-            // amount_spent, not spend: meta-data returns the account-level
-            // figure under ad_entity.amount_spent, and reading the wrong
-            // field gave a silent 0 — the chart showed no spend beside a
-            // card reading EGP 1,756.
-            const v = parseFloat(m?.ad_entity?.amount_spent);
-            if (isFinite(v)) spend = v;
-          } catch (e) { console.warn('[charts] live spend', e); }
+          let spend = spendByDay[day]?.[id] ?? null, revenue = null, orders = null;
 
           if (acc?.site_tracker_id) {
             try {
@@ -11816,7 +11825,7 @@
             // the rest of the dashboard groups a Cairo day.
             try {
               const { data } = await sb.from('shopify_orders')
-                .select('total_price, financial_status, cancelled_at, created_at')
+                .select('total_price, cancelled_at, created_at')
                 .eq('store_id', acc.shopify_store_id)
                 .gte('created_at', day + 'T00:00:00+02:00')
                 .lte('created_at', day + 'T23:59:59+02:00');
