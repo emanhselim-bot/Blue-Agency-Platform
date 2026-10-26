@@ -1958,6 +1958,13 @@
     .dc-row { margin-bottom: 22px; }
     .dc-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 14px; }
     @media (max-width: 1100px) { .dc-grid { grid-template-columns: 1fr; } }
+    .dc-single { padding: 26px 8px 10px; text-align: center; }
+    .dc-single-day { font-size: 11px; letter-spacing: .6px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 14px; }
+    .dc-single-row { display: flex; justify-content: center; gap: 34px; flex-wrap: wrap; }
+    .dc-single-k { font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: var(--text-muted); }
+    .dc-single-v { font-size: 23px; font-weight: 800; margin-top: 3px; }
+    .dc-single-note { margin-top: 18px; font-size: 11.5px; color: var(--text-muted); }
     .dc-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
       padding: 14px 16px 10px; min-width: 0;
@@ -11479,6 +11486,24 @@
      */
     function _dcArea(days, a, b, labelA, labelB, roasOverride) {
       if (!days.length) return _dcEmpty('No days recorded yet.');
+      // One day is not a trend. The area chart drew a single point with
+      // nothing to join it to, so the panel looked empty next to an axis
+      // reading 1.8K — the two figures said plainly are the honest picture.
+      if (days.length === 1) {
+        const roas = roasOverride != null ? roasOverride : (a[0] ? b[0] / a[0] : null);
+        return `<div class="dc-single">
+          <div class="dc-single-day">${_dcEsc(_dcDay(days[0]))}</div>
+          <div class="dc-single-row">
+            <div><div class="dc-single-k">${_dcEsc(labelA)}</div>
+                 <div class="dc-single-v">${_dcShort(a[0])}</div></div>
+            <div><div class="dc-single-k">${_dcEsc(labelB)}</div>
+                 <div class="dc-single-v">${_dcShort(b[0])}</div></div>
+            <div><div class="dc-single-k">ROAS</div>
+                 <div class="dc-single-v">${roas != null ? roas.toFixed(2) + 'x' : '—'}</div></div>
+          </div>
+          <div class="dc-single-note">Pick a longer period to see the trend.</div>
+        </div>`;
+      }
       const W = 560, H = 190, P = { t: 14, r: 46, b: 24, l: 46 };
       const maxA = Math.max(1, ...a), maxB = Math.max(1, ...b);
       const x = i => P.l + (days.length === 1 ? (W - P.l - P.r) / 2 : i * (W - P.l - P.r) / (days.length - 1));
@@ -11762,13 +11787,14 @@
           const acc = accountMap[id];
           let spend = null, revenue = null, orders = null;
           try {
-            const m = await callEdgeFunction('meta-platform', { account_db_id: id, since: day, until: day });
-            if (!m?.error) {
-              for (const p of m.platforms || []) {
-                const v = parseFloat(p.spend);
-                if (isFinite(v)) spend = (spend ?? 0) + v;
-              }
-            }
+            // The account-level figure, which is what the Total Spend card
+            // shows. Summing the platform rows misses spend Meta does not
+            // attribute to a platform, and the chart then disagreed with the
+            // card on the same screen — 2.66x against 2.68x for Basma.
+            const m = await callEdgeFunction('meta-data', {
+              account_db_id: id, period: 'custom', custom_from: day, custom_to: day });
+            const v = parseFloat(m?.ad_entity?.spend ?? m?.spend);
+            if (isFinite(v)) spend = v;
           } catch (e) { console.warn('[charts] live spend', e); }
 
           if (acc?.site_tracker_id) {
@@ -11956,8 +11982,15 @@
               t.Courses  += _dcNum(r.courses_spend) ?? 0;
               t.Tahfez   += _dcNum(r.tahfez_spend) ?? 0;
             }
-            return Object.entries(t).filter(([, v]) => v > 0)
+            const out = Object.entries(t).filter(([, v]) => v > 0)
               .sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+            // A live day has spend but none of the sheet's buckets, so the
+            // ring read "Nothing spent in this period" next to a chart
+            // showing 1.8K. It gets its own slice instead of vanishing.
+            const liveSpend = scoped.filter(r => r._live)
+              .reduce((t2, r) => t2 + (_dcNum(r.total_spend) ?? 0), 0);
+            if (liveSpend > 0) out.push({ name: 'Live · not split yet', value: liveSpend });
+            return out;
           })()
         : (() => {
             const sorted = perClient.filter(c => c.spend > 0).sort((a, b) => b.spend - a.spend);
