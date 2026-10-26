@@ -11695,6 +11695,50 @@
       }
     }
 
+
+    // Why there is nothing, told accurately.
+    //
+    // The first version of this note blamed a missing Notion sheet. That was
+    // wrong for the case that actually comes up: Nuya BlueAd2 has 180 days of
+    // figures and a sheet linked, but the newest is the 25th, so "Today" has
+    // none. "Link a sheet" sends you looking for a problem that is not there.
+    // The useful answer is the date the sheet stops at.
+    async function _dcExplainEmpty(label, since, until) {
+      const keys = _dcWantedKeys();
+      let newest = null, ever = 0;
+      try {
+        let q = sb.from('notion_daily')
+          .select('day')
+          .eq('organization_id', currentOrgId)
+          .order('day', { ascending: false })
+          .limit(1);
+        if (keys && keys.length) q = q.in('account_key', keys);
+        const { data } = await q;
+        newest = data?.[0]?.day || null;
+
+        let c = sb.from('notion_daily')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', currentOrgId);
+        if (keys && keys.length) c = c.in('account_key', keys);
+        ever = (await c).count || 0;
+      } catch (e) { console.warn('[charts]', e.message || e); }
+
+      if (!ever) {
+        _dcNote(`${label} has no daily figures at all, so there is nothing to chart. `
+          + `The charts read the Notion sheet — once one is linked to this account and filled in, they appear.`);
+        return;
+      }
+      if (newest && newest < since) {
+        _dcNote(`${label} has figures up to ${_dcDay(newest)}, which is before this period `
+          + `(${_dcDay(since)} – ${_dcDay(until)}). Pick a period that includes ${_dcDay(newest)}, `
+          + `or fill the sheet in for these days.`);
+        return;
+      }
+      _dcNote(`${label} has no figures for ${_dcDay(since)} – ${_dcDay(until)} yet`
+        + (newest ? `; the sheet is filled to ${_dcDay(newest)}.` : '.')
+        + ` The charts fill in as the sheet does.`);
+    }
+
     async function dashCharts(currency = '') {
       const host = document.getElementById('content');
       if (!host || !currentOrgId || !sel?.value) return;
@@ -11719,19 +11763,10 @@
 
       const label = accountMap[sel.value]?.account_name || 'This account';
       const clients = _dcScopeKeys(rows);
-      if (!clients.length) {
-        _dcNote(`No daily figures for ${label} in this period, so there is nothing to chart. `
-          + `The charts read the Notion sheet; link one to this account and they fill in.`);
-        return;
-      }
-
-      const mine = new Set(clients.flatMap(c => c.key));
-      const scoped = rows.filter(r => mine.has(String(r.account_key)));
-      if (!scoped.length) {
-        _dcNote(`No daily figures for ${label} in this period, so there is nothing to chart. `
-          + `Either the sheet has not been filled in for these days, or this account has no Notion sheet linked yet.`);
-        return;
-      }
+      const scoped = clients.length
+        ? rows.filter(r => new Set(clients.flatMap(c => c.key)).has(String(r.account_key)))
+        : [];
+      if (!scoped.length) { await _dcExplainEmpty(label, since, until); return; }
 
       // ── Series: one point per day across the whole selection ──
       const byDay = {};
