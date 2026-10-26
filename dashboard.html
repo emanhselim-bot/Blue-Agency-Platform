@@ -11639,7 +11639,7 @@
     // They used to just not appear, which reads as "the charts are broken"
     // rather than "this account has no figures" — and the difference matters,
     // because the second one is fixable by linking the account's Notion sheet.
-    function _dcNote(text) {
+    function _dcNote(text, jumpTo) {
       const existing = document.getElementById('dash-charts');
       if (existing) existing.remove();
       const host = document.getElementById('content');
@@ -11648,12 +11648,29 @@
       const section = document.createElement('div');
       section.className = 'dc-row';
       section.id = 'dash-charts';
+      // The sheets are filled by hand and usually run a day or two behind, so
+      // Today and Yesterday are empty most mornings. Saying so is only half an
+      // answer; this takes you to a period that has the figures.
+      const jump = jumpTo
+        ? `<button class="dc-expand" style="margin:12px auto 0;display:block"
+             onclick="dcJumpPeriod('${_dcEsc(jumpTo.period)}')">${_dcEsc(jumpTo.label)}</button>`
+        : '';
       section.innerHTML = `
         <div class="section-label">Overview</div>
         <div class="dc-card" style="cursor:default">
           <div class="dc-empty" style="padding:18px 4px;font-size:13px;line-height:1.6">${_dcEsc(text)}</div>
+          ${jump}
         </div>`;
       container.insertBefore(section, container.firstChild);
+    }
+
+    function dcJumpPeriod(period) {
+      const btn = document.querySelector(`.period-btn[data-period="${CSS.escape(period)}"]`);
+      if (!btn) return;
+      btn.click();
+      // The picker stages a change and waits for Apply; this is one deliberate
+      // click, so it applies itself rather than leaving an Apply button behind.
+      if (typeof applyViewChange === 'function') applyViewChange();
     }
 
     // Which account keys the charts actually need, worked out before the
@@ -11703,6 +11720,9 @@
     // figures and a sheet linked, but the newest is the 25th, so "Today" has
     // none. "Link a sheet" sends you looking for a problem that is not there.
     // The useful answer is the date the sheet stops at.
+    const _dcMonthStart = () => { const n = new Date();
+      return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01`; };
+
     async function _dcExplainEmpty(label, since, until) {
       const keys = _dcWantedKeys();
       let newest = null, ever = 0;
@@ -11728,15 +11748,21 @@
           + `The charts read the Notion sheet — once one is linked to this account and filled in, they appear.`);
         return;
       }
+      // Which period to offer: this month normally, last month when the
+      // sheet stops before this month began.
+      const jump = newest
+        ? (newest >= _dcMonthStart() ? { period: 'this_month', label: 'Show this month' }
+                                     : { period: 'last_month', label: 'Show last month' })
+        : null;
       if (newest && newest < since) {
         _dcNote(`${label} has figures up to ${_dcDay(newest)}, which is before this period `
-          + `(${_dcDay(since)} – ${_dcDay(until)}). Pick a period that includes ${_dcDay(newest)}, `
-          + `or fill the sheet in for these days.`);
+          + `(${_dcDay(since)} – ${_dcDay(until)}). The sheets are filled in by hand, so the `
+          + `last day or two is often still blank.`, jump);
         return;
       }
       _dcNote(`${label} has no figures for ${_dcDay(since)} – ${_dcDay(until)} yet`
         + (newest ? `; the sheet is filled to ${_dcDay(newest)}.` : '.')
-        + ` The charts fill in as the sheet does.`);
+        + ` The charts fill in as the sheet does.`, jump);
     }
 
     async function dashCharts(currency = '') {
