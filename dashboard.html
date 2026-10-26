@@ -11656,6 +11656,45 @@
       container.insertBefore(section, container.firstChild);
     }
 
+    // Which account keys the charts actually need, worked out before the
+    // query rather than after it. Charting one account used to mean fetching
+    // every account's rows and throwing almost all of them away.
+    function _dcWantedKeys() {
+      const key = sel?.value;
+      if (!key || key === '__all__') return null;          // null = everything
+      if (String(key).startsWith('__group__')) {
+        const g = (_acctGroups || []).find(x => '__group__' + x.id === key);
+        // The group can carry rows under its own key as well as its members'.
+        return [String(key), ...((g?.account_ids) || []).map(String)];
+      }
+      return [String(key)];
+    }
+
+    // PostgREST answers with at most 1000 rows and says nothing about it.
+    // Over 90 days this organisation has 1,869, so "This Quarter" and "This
+    // Year" were being charted from an arbitrary, unordered slice of the
+    // data — the charts were not slow so much as wrong. Pages until a short
+    // page comes back, and orders by day so the pages line up.
+    async function _dcFetchRows(since, until, keys) {
+      const PAGE = 1000;
+      const out = [];
+      for (let from = 0; ; from += PAGE) {
+        let q = sb.from('notion_daily').select('*')
+          .eq('organization_id', currentOrgId)
+          .gte('day', since).lte('day', until)
+          .order('day', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (keys && keys.length) q = q.in('account_key', keys);
+        const { data, error } = await q;
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < PAGE) return out;
+        // A selection this large is every account over a long period; stop
+        // before the browser is asked to hold an unreasonable amount.
+        if (out.length >= 20000) return out;
+      }
+    }
+
     async function dashCharts(currency = '') {
       const host = document.getElementById('content');
       if (!host || !currentOrgId || !sel?.value) return;
@@ -11671,11 +11710,7 @@
 
       let rows = [];
       try {
-        const { data, error } = await sb.from('notion_daily').select('*')
-          .eq('organization_id', currentOrgId)
-          .gte('day', since).lte('day', until);
-        if (error) throw error;
-        rows = data || [];
+        rows = await _dcFetchRows(since, until, _dcWantedKeys());
       } catch (e) {
         console.warn('[charts]', e.message || e);
         _dcNote('The charts could not be loaded just now. The figures below are unaffected.');
@@ -24787,6 +24822,26 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return { agencies: list };
     }
 
+
+    // Same 1000-row ceiling as the charts: these roll up every account at
+    // once, so they are the first to hit it as the agency grows. Paged, and
+    // ordered so the pages are stable.
+    async function _ndPagedSums(since, until, keys) {
+      const PAGE = 1000, out = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await sb.from('notion_daily')
+          .select('account_key, total_spend, web_spend, msg_spend, branding_spend, total_revenue, web_revenue, web_revenue_confirmed, msg_revenue')
+          .eq('organization_id', currentOrgId)
+          .in('account_key', keys)
+          .gte('day', since).lte('day', until)
+          .order('day', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < PAGE || out.length >= 20000) return out;
+      }
+    }
+
     // One query for every account on screen, then rolled up. Asking per client
     // would be twenty round trips for a page that is mostly navigation.
     async function clnFill(data) {
@@ -24798,12 +24853,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       data.agencies.forEach(a => { a.spend = 0; a.revenue = 0; a.hasData = false; });
       if (!keys.length || !currentOrgId || !data.range) return;
 
-      const { data: rows, error } = await sb.from('notion_daily')
-        .select('account_key, total_spend, web_spend, msg_spend, branding_spend, total_revenue, web_revenue, web_revenue_confirmed, msg_revenue')
-        .eq('organization_id', currentOrgId)
-        .in('account_key', [...new Set(keys)])
-        .gte('day', data.range.from).lte('day', data.range.to);
-      if (error) { console.warn('[clients] figures not loaded:', error.message); return; }
+      let rows;
+      try { rows = await _ndPagedSums(data.range.from, data.range.to, [...new Set(keys)]); }
+      catch (e) { console.warn('[clients] figures not loaded:', e.message || e); return; }
 
       const per = {};
       (rows || []).forEach(r => {
@@ -25125,12 +25177,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const keys = Object.values(accountMap || {}).filter(a => !a.type).map(a => a.id);
       const range = _cmpRange({ key: mbpPeriod() });
       if (!keys.length || !currentOrgId || !range) return;
-      const { data: rows, error } = await sb.from('notion_daily')
-        .select('account_key, total_spend, web_spend, msg_spend, branding_spend, total_revenue, web_revenue, web_revenue_confirmed, msg_revenue')
-        .eq('organization_id', currentOrgId)
-        .in('account_key', keys)
-        .gte('day', range.from).lte('day', range.to);
-      if (error) { console.warn('[picker] figures not loaded:', error.message); return; }
+      let rows;
+      try { rows = await _ndPagedSums(range.from, range.to, keys); }
+      catch (e) { console.warn('[picker] figures not loaded:', e.message || e); return; }
       const per = {};
       (rows || []).forEach(r => {
         const p = (per[r.account_key] ||= { spend: 0, revenue: 0, days: 0 });
