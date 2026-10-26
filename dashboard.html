@@ -11720,6 +11720,95 @@
     // figures and a sheet linked, but the newest is the 25th, so "Today" has
     // none. "Link a sheet" sends you looking for a problem that is not there.
     // The useful answer is the date the sheet stops at.
+
+    // ── Live fill for days the sheet has not reached ────────────────────
+    //
+    // The cards read Meta and Shopify live, the charts read the Notion sheet,
+    // and the sheet is filled in by hand a day or two behind. So the cards
+    // showed Today while the charts said there was nothing — same account,
+    // same screen, two different answers.
+    //
+    // Missing days are fetched from the same live sources the cards use and
+    // marked provisional: Meta spend is final, but revenue a tracker reports
+    // today is not what the team later confirms in the sheet. A sheet row
+    // always wins once it exists.
+    const DC_LIVE_MAX_DAYS = 7;      // a sheet further behind than this is a
+                                     // backlog to fix, not a gap to paper over
+    const DC_LIVE_MAX_ACCOUNTS = 4;  // one client, not the whole agency
+
+    function _dcDaysBetween(since, until) {
+      const out = [];
+      const d = new Date(since + 'T12:00:00');
+      const end = new Date(until + 'T12:00:00');
+      while (d <= end) {
+        out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+        d.setDate(d.getDate() + 1);
+      }
+      return out;
+    }
+
+    async function _dcLiveRows(since, until, haveDays) {
+      const keys = _dcWantedKeys();
+      if (!keys) return [];                               // All Accounts: too many calls
+      const ids = keys.filter(k => !String(k).startsWith('__group__') && accountMap[k] && !accountMap[k].type);
+      if (!ids.length || ids.length > DC_LIVE_MAX_ACCOUNTS) return [];
+
+      const missing = _dcDaysBetween(since, until).filter(d => !haveDays.has(d));
+      if (!missing.length || missing.length > DC_LIVE_MAX_DAYS) return [];
+
+      const rows = [];
+      for (const day of missing) {
+        for (const id of ids) {
+          const acc = accountMap[id];
+          let spend = null, revenue = null, orders = null;
+          try {
+            const m = await callEdgeFunction('meta-platform', { account_db_id: id, since: day, until: day });
+            if (!m?.error) {
+              for (const p of m.platforms || []) {
+                const v = parseFloat(p.spend);
+                if (isFinite(v)) spend = (spend ?? 0) + v;
+              }
+            }
+          } catch (e) { console.warn('[charts] live spend', e); }
+
+          if (acc?.site_tracker_id) {
+            try {
+              const w = await callEdgeFunction('site-data', {
+                tracker_id: acc.site_tracker_id, since: day, until: day,
+                report_currency: (acc.currency || '').trim() || undefined });
+              if (!w?.error) {
+                if (isFinite(parseFloat(w.revenue))) revenue = parseFloat(w.revenue);
+                if (isFinite(parseInt(w.orders)))    orders  = parseInt(w.orders);
+              }
+            } catch (e) { console.warn('[charts] live revenue', e); }
+          } else if (acc?.shopify_store_id) {
+            // Straight from the orders the webhook delivered, grouped the way
+            // the rest of the dashboard groups a Cairo day.
+            try {
+              const { data } = await sb.from('shopify_orders')
+                .select('total_price, financial_status, cancelled_at, created_at')
+                .eq('store_id', acc.shopify_store_id)
+                .gte('created_at', day + 'T00:00:00+02:00')
+                .lte('created_at', day + 'T23:59:59+02:00');
+              const live = (data || []).filter(o => !o.cancelled_at);
+              if (live.length) {
+                orders = live.length;
+                revenue = live.reduce((t, o) => t + (parseFloat(o.total_price) || 0), 0);
+              }
+            } catch (e) { console.warn('[charts] live orders', e); }
+          }
+
+          if (spend == null && revenue == null && orders == null) continue;
+          rows.push({
+            account_key: String(id), day,
+            total_spend: spend, total_revenue: revenue, web_orders: orders,
+            _live: true,
+          });
+        }
+      }
+      return rows;
+    }
+
     const _dcMonthStart = () => { const n = new Date();
       return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01`; };
 
@@ -11778,9 +11867,18 @@
       // "what does this period mean" rather than two.
       const since = _webRangeStart(), until = _webRangeEnd();
 
-      let rows = [];
+      let rows = [], liveDays = 0;
       try {
         rows = await _dcFetchRows(since, until, _dcWantedKeys());
+        // Days the sheet has not reached, filled from the same live sources
+        // the cards use. A sheet row always wins: only days with no row at
+        // all are asked for.
+        const haveDays = new Set(rows.map(r => String(r.day).slice(0, 10)));
+        const live = await _dcLiveRows(since, until, haveDays);
+        if (live.length) {
+          liveDays = new Set(live.map(r => r.day)).size;
+          rows = rows.concat(live);
+        }
       } catch (e) {
         console.warn('[charts]', e.message || e);
         _dcNote('The charts could not be loaded just now. The figures below are unaffected.');
@@ -11940,7 +12038,10 @@
       // knowing, and is the difference between a quiet two days and a drop.
       const lastFilled = days[days.length - 1];
       const window = `${_dcDay(since)} → ${_dcDay(until)}`
-        + (lastFilled && lastFilled < until ? ` · filled to ${_dcDay(lastFilled)}` : '');
+        + (lastFilled && lastFilled < until ? ` · filled to ${_dcDay(lastFilled)}` : '')
+        // Say it on the chart, not only in a tooltip: these days are Meta and
+        // the tracker speaking, not the figures the team has confirmed.
+        + (liveDays ? ` · last ${liveDays} day${liveDays === 1 ? '' : 's'} live, not yet confirmed` : '');
       const cur = currency || '';
 
       const section = document.createElement('div');
