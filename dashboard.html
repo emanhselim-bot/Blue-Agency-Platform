@@ -11634,6 +11634,28 @@
      * are long template literals, and prepending keeps this to one call each
      * instead of editing both.
      */
+    // When there is nothing to draw, say so where the charts would have been.
+    //
+    // They used to just not appear, which reads as "the charts are broken"
+    // rather than "this account has no figures" — and the difference matters,
+    // because the second one is fixable by linking the account's Notion sheet.
+    function _dcNote(text) {
+      const existing = document.getElementById('dash-charts');
+      if (existing) existing.remove();
+      const host = document.getElementById('content');
+      const container = document.getElementById('kpi-sections-container') || host;
+      if (!container) return;
+      const section = document.createElement('div');
+      section.className = 'dc-row';
+      section.id = 'dash-charts';
+      section.innerHTML = `
+        <div class="section-label">Overview</div>
+        <div class="dc-card" style="cursor:default">
+          <div class="dc-empty" style="padding:18px 4px;font-size:13px;line-height:1.6">${_dcEsc(text)}</div>
+        </div>`;
+      container.insertBefore(section, container.firstChild);
+    }
+
     async function dashCharts(currency = '') {
       const host = document.getElementById('content');
       if (!host || !currentOrgId || !sel?.value) return;
@@ -11656,15 +11678,25 @@
         rows = data || [];
       } catch (e) {
         console.warn('[charts]', e.message || e);
+        _dcNote('The charts could not be loaded just now. The figures below are unaffected.');
         return;   // Charts are an addition. They must never take the page down.
       }
 
+      const label = accountMap[sel.value]?.account_name || 'This account';
       const clients = _dcScopeKeys(rows);
-      if (!clients.length) return;
+      if (!clients.length) {
+        _dcNote(`No daily figures for ${label} in this period, so there is nothing to chart. `
+          + `The charts read the Notion sheet; link one to this account and they fill in.`);
+        return;
+      }
 
       const mine = new Set(clients.flatMap(c => c.key));
       const scoped = rows.filter(r => mine.has(String(r.account_key)));
-      if (!scoped.length) return;
+      if (!scoped.length) {
+        _dcNote(`No daily figures for ${label} in this period, so there is nothing to chart. `
+          + `Either the sheet has not been filled in for these days, or this account has no Notion sheet linked yet.`);
+        return;
+      }
 
       // ── Series: one point per day across the whole selection ──
       const byDay = {};
