@@ -11904,7 +11904,23 @@
       // showed two different date ranges at once and the charts were the ones
       // lying. Same helpers the website figures use, so there is one answer to
       // "what does this period mean" rather than two.
-      const since = _webRangeStart(), until = _webRangeEnd();
+      // A single day is not a chart. Today and Yesterday are one point, and
+      // the panel that drew them said as much — useful, but not what you
+      // open the charts for. So a one-day choice is widened to the month
+      // that day falls in, while the cards below stay on the day you picked.
+      let since = _webRangeStart(), until = _webRangeEnd(), dayPicked = null;
+      if (since === until) {
+        dayPicked = since;
+        const d = new Date(since + 'T12:00:00');
+        const first = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+        // To the end of that month, but never past today — a month in
+        // progress charts to today, a past month charts whole.
+        const lastOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        const today = new Date();
+        const endDate = lastOfMonth < today ? lastOfMonth : today;
+        since = first;
+        until = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+      }
 
       let rows = [], liveDays = 0;
       try {
@@ -12087,7 +12103,11 @@
         + (lastFilled && lastFilled < until ? ` · filled to ${_dcDay(lastFilled)}` : '')
         // Say it on the chart, not only in a tooltip: these days are Meta and
         // the tracker speaking, not the figures the team has confirmed.
-        + (liveDays ? ` · last ${liveDays} day${liveDays === 1 ? '' : 's'} live, not yet confirmed` : '');
+        + (liveDays ? ` · last ${liveDays} day${liveDays === 1 ? '' : 's'} live, not yet confirmed` : '')
+        // The cards below are showing one day; the charts are showing its
+        // month. Unsaid, that is two date ranges on one screen with no hint
+        // that they differ.
+        + (dayPicked ? ` · month of ${_dcDay(dayPicked)}` : '');
       const cur = currency || '';
 
       const section = document.createElement('div');
