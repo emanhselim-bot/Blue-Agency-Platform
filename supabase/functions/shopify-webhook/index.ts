@@ -16,11 +16,11 @@
  *
  * Signature verification:
  *   Shopify signs every webhook with HMAC-SHA256 of the raw request body
- *   using SHOPIFY_CLIENT_SECRET as the key. The result is base64-encoded and
- *   sent in the X-Shopify-Hmac-Sha256 header. We read the raw bytes BEFORE
- *   any JSON parsing, compute the HMAC, and compare with constant-time logic
- *   to prevent timing-based oracle attacks. Invalid signatures → 401 before
- *   any DB operation runs.
+ *   using the secret of the app that registered it. The result is
+ *   base64-encoded and sent in the X-Shopify-Hmac-Sha256 header. We read the
+ *   raw bytes BEFORE any JSON parsing, compute the HMAC, and compare with
+ *   constant-time logic to prevent timing-based oracle attacks. Invalid
+ *   signatures → 401 before any DB operation runs.
  *
  * Shopify retry behavior:
  *   Shopify retries on any non-2xx response, with exponential backoff up to
@@ -88,7 +88,7 @@ async function secretsFor(shopDomain: string): Promise<string[]> {
 }
 
 // ── HMAC signature verification ───────────────────────────────────────────────
-// Shopify signs webhooks as: base64( HMAC-SHA256(SHOPIFY_CLIENT_SECRET, raw_body) )
+// Shopify signs webhooks as: base64( HMAC-SHA256(app secret, raw_body) )
 // We MUST verify against the raw bytes — parsing and re-serializing JSON changes
 // whitespace and can break the signature.
 async function verifyWebhookHmac(
