@@ -51,17 +51,55 @@ const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
+
+/**
+ * Which secret signed this webhook.
+ *
+ * Shopify signs with the secret of the app the webhook was registered by. Five
+ * of the seven stores here were connected through a per-client custom app
+ * (Partners access), each with its own secret, while this function only ever
+ * checked the platform app's SHOPIFY_CLIENT_SECRET. Their HMAC therefore never
+ * matched, every order was answered 401 and dropped, and the only store with
+ * any orders at all was the one on the default app.
+ *
+ * Nothing in the logs said so either: a rejected webhook looks exactly like a
+ * forged one, which is why six stores sat at zero orders for months.
+ */
+async function secretsFor(shopDomain: string): Promise<string[]> {
+  const platform = Deno.env.get("SHOPIFY_CLIENT_SECRET") ?? "";
+  const out: string[] = [];
+  try {
+    const { data } = await supabaseAdmin
+      .from("shopify_stores")
+      .select("app_id, shopify_apps ( client_secret )")
+      .eq("shop_domain", shopDomain)
+      .eq("is_active", true)
+      .maybeSingle();
+    // deno-lint-ignore no-explicit-any
+    const appSecret = (data as any)?.shopify_apps?.client_secret;
+    if (appSecret) out.push(appSecret);
+  } catch (e) {
+    console.warn("Could not read the store's app secret:", (e as Error).message);
+  }
+  // The platform secret stays in the list: stores on the default app, and the
+  // app/uninstalled webhook of a store whose row has already gone.
+  if (platform) out.push(platform);
+  return out;
+}
+
 // ── HMAC signature verification ───────────────────────────────────────────────
 // Shopify signs webhooks as: base64( HMAC-SHA256(SHOPIFY_CLIENT_SECRET, raw_body) )
 // We MUST verify against the raw bytes — parsing and re-serializing JSON changes
 // whitespace and can break the signature.
 async function verifyWebhookHmac(
   rawBody: Uint8Array,
-  providedBase64: string
+  providedBase64: string,
+  secret: string
 ): Promise<boolean> {
+  if (!secret) return false;
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(Deno.env.get("SHOPIFY_CLIENT_SECRET")!),
+    new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -394,17 +432,25 @@ Deno.serve(async (req: Request) => {
     console.warn("Webhook missing X-Shopify-Hmac-Sha256 header — rejected");
     return new Response("Unauthorized", { status: 401 });
   }
-  if (!await verifyWebhookHmac(rawBodyBytes, providedHmac)) {
-    console.warn("Webhook HMAC verification failed — rejected");
-    return new Response("Unauthorized", { status: 401 });
-  }
-
   // ── Step 3: Parse headers ──
+  // Read before verifying: which secret to check against depends on which
+  // shop sent this, and that is in the headers.
   const topic      = req.headers.get("X-Shopify-Topic")       ?? "";
   const shopDomain = req.headers.get("X-Shopify-Shop-Domain") ?? "";
 
   if (!topic || !shopDomain) {
     return new Response("Missing required headers", { status: 400 });
+  }
+
+  let verified = false;
+  for (const secret of await secretsFor(shopDomain)) {
+    if (await verifyWebhookHmac(rawBodyBytes, providedHmac, secret)) { verified = true; break; }
+  }
+  if (!verified) {
+    // Name the shop. Silent rejection is what hid this for months.
+    console.warn(`Webhook HMAC verification failed for ${shopDomain} (${topic}) — rejected. ` +
+      `If this store was connected with a custom app, check shopify_apps.client_secret for it.`);
+    return new Response("Unauthorized", { status: 401 });
   }
 
   // ── Step 4: Parse body ──
