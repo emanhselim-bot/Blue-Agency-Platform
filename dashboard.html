@@ -4515,6 +4515,8 @@
               to   <input type="date" id="fn-to"   class="connect-input" onchange="fnDatesPicked()" style="min-width:auto;padding:7px 9px">
               <button onclick="fnClearRange()" style="padding:6px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Clear</button>
             </span>
+            <button onclick="fnExpandAll(true)" class="connect-input" style="cursor:pointer;min-width:auto;padding:7px 12px">▾ Show all payments</button>
+            <button onclick="fnExpandAll(false)" class="connect-input" style="cursor:pointer;min-width:auto;padding:7px 12px">▴ Collapse</button>
           </div>
         </div>
         <div id="fn-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 18px"></div>
@@ -21907,21 +21909,42 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       hubShowView('cards');
     }
 
+
+    // PostgREST returns at most 1000 rows and says nothing about it. Finance
+    // is at 506 payments and 545 expenses — half the ceiling, and growing
+    // every month. Truncation here would not look like an error: the totals
+    // would simply be too low, and nobody would know which rows were missing.
+    async function _fnPageAll(table, columns) {
+      const PAGE = 1000, out = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await sb.from(table).select(columns)
+          .eq('organization_id', currentOrgId)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < PAGE || out.length >= 50000) return out;
+      }
+    }
+
     async function fnInit() {
       const box = document.getElementById('fn-clients');
       if (!await _hubWaitOrg()) {
         box.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">No organisation loaded — open the Media Buying Dashboard once, then come back.</div>';
         return;
       }
-      const [{ data: cs, error }, { data: ex }, { data: pm }] = await Promise.all([
-        sb.from('fin_client_summary').select('*').eq('organization_id', currentOrgId)
-          .eq('archived', false).order('name'),
-        sb.from('fin_expenses').select('amount_base, category, client_id, spent_on')
-          .eq('organization_id', currentOrgId),
-        sb.from('fin_payments').select('amount_base, client_id, paid_on, due_on, status')
-          .eq('organization_id', currentOrgId),
-      ]);
-      if (error) { box.innerHTML = `<div style="color:#e53e3e;font-size:13px">${escHtml(error.message)}</div>`; return; }
+      let cs, ex, pm;
+      try {
+        [cs, ex, pm] = await Promise.all([
+          sb.from('fin_client_summary').select('*').eq('organization_id', currentOrgId)
+            .eq('archived', false).order('name').then(r => { if (r.error) throw r.error; return r.data; }),
+          _fnPageAll('fin_expenses', 'amount_base, category, client_id, spent_on'),
+          _fnPageAll('fin_payments', 'amount_base, amount, currency, client_id, paid_on, due_on, status, kind, method, reference'),
+        ]);
+      } catch (e) {
+        box.innerHTML = `<div style="color:#e53e3e;font-size:13px">${escHtml(e.message || String(e))}</div>`;
+        return;
+      }
       _fnClients  = cs || [];
       _fnExpenses = ex || [];
       _fnPayments = pm || [];
@@ -22149,15 +22172,68 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <span style="display:flex;gap:6px">
               <button onclick="fnOpenPayment('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Payment</button>
               <button onclick="fnOpenExpense('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Expense</button>
-              <button onclick="fnLedger('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">📑 Payments &amp; expenses</button>
+              <button onclick="fnToggleRow('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">${_fnOpenRows.has(c.id) ? '▴ Hide' : '▾ Payments'} (${(_fnPayments || []).filter(p => p.client_id === c.id).length})</button>
+              <button onclick="fnLedger('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">📑 Full</button>
               <button onclick="fnOpenClient('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Edit</button>
             </span>
           </div>
+          ${_fnOpenRows.has(c.id) ? `<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:4px">${fnRowPayments(c.id)}</div>` : ''}
         </div>`;
       }).join('');
     }
 
 
+
+
+    // ── Payments inside the client row ──────────────────────────────────
+    //
+    // Opening each client one at a time to see their payments means losing
+    // the list you were reading. The payments are already loaded for every
+    // client, so they unfold under the card instead — no extra query, and
+    // the comparison between clients stays on screen.
+    const _fnOpenRows = new Set();
+
+    function fnToggleRow(id) {
+      if (_fnOpenRows.has(id)) _fnOpenRows.delete(id); else _fnOpenRows.add(id);
+      fnRender();
+    }
+
+    function fnExpandAll(open) {
+      _fnOpenRows.clear();
+      if (open) fnFiltered().forEach(c => _fnOpenRows.add(c.id));
+      fnRender();
+    }
+
+    function fnRowPayments(clientId) {
+      const pays = (_fnPayments || []).filter(p => p.client_id === clientId)
+        .sort((a, b) => String(b.paid_on || b.due_on || '').localeCompare(String(a.paid_on || a.due_on || '')));
+      if (!pays.length) {
+        return '<div style="padding:10px 2px;font-size:12px;color:var(--text-muted)">No payments recorded for this client.</div>';
+      }
+      const paid = pays.filter(p => p.paid_on).reduce((t, p) => t + (Number(p.amount_base) || 0), 0);
+      const due  = pays.filter(p => !p.paid_on).reduce((t, p) => t + (Number(p.amount_base) || 0), 0);
+      return `
+        <table style="width:100%;border-collapse:collapse;margin:8px 0 2px">
+          <tr>${['Date', 'Amount', 'Kind', 'Status', 'Method', 'Reference'].map(h =>
+            `<th style="padding:6px 8px;text-align:left;font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)">${h}</th>`).join('')}</tr>
+          ${pays.map(p => {
+            // An unpaid row is a promise, not money. It is marked rather than
+            // sitting in the same colour as cash that actually arrived.
+            const isPaid = !!p.paid_on;
+            return `<tr style="${isPaid ? '' : 'opacity:.75'}">
+              <td style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">${escHtml(fnDate(p.paid_on || p.due_on) || '—')}${isPaid ? '' : ' <span style="color:#E7B91C">· due</span>'}</td>
+              <td style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px"><strong style="color:${isPaid ? '#16A34A' : 'inherit'}">${escHtml(fnMoney(p.amount_base ?? p.amount))}</strong></td>
+              <td style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">${escHtml(p.kind || '—')}</td>
+              <td style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">${escHtml(p.status || '—')}</td>
+              <td style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">${escHtml(p.method || '—')}</td>
+              <td style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-muted)">${escHtml(p.reference || '—')}</td>
+            </tr>`;
+          }).join('')}
+        </table>
+        <div style="font-size:11.5px;color:var(--text-muted);padding:2px">
+          ${pays.length} payment${pays.length === 1 ? '' : 's'} · received ${escHtml(fnMoney(paid))}${due > 0 ? ` · <span style="color:#E7B91C">still due ${escHtml(fnMoney(due))}</span>` : ''}
+        </div>`;
+    }
 
     // ── Summary: Active / Inactive / Total ───────────────────────────────
     //

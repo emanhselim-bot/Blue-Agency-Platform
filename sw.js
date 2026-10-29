@@ -9,7 +9,7 @@
 // Bump this on any deploy that changes dashboard.html. The old caches are
 // deleted on activate, so an installed app that was holding a stale shell
 // drops it instead of serving yesterday's dashboard indefinitely.
-const VERSION    = 'v123';
+const VERSION    = 'v124';
 const SHELL      = `blue-ad-shell-${VERSION}`;
 const VENDOR     = `blue-ad-vendor-${VERSION}`;
 
