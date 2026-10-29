@@ -29,9 +29,9 @@ PROJECT_REF="thtteysputwjiddqchcp"
 # with no Authorization header, so JWT checking would reject the callback. It
 # does its own auth instead -- every route verifies org membership before it
 # touches anything.
-NO_JWT="notion-sync notion-discover telegram-report tiktok-oauth notion-tasks-sync telegram-web-watch"
+NO_JWT="notion-sync notion-discover telegram-report tiktok-oauth notion-tasks-sync telegram-web-watch expenses-due-watch"
 
-ALL="notion-sync notion-discover telegram-report meta-data meta-platform tiktok-ads-data tiktok-oauth notion-tasks-sync ai-chat meta-campaigns-sync telegram-web-watch"
+ALL="notion-sync notion-discover telegram-report meta-data meta-platform tiktok-ads-data tiktok-oauth notion-tasks-sync ai-chat meta-campaigns-sync telegram-web-watch expenses-due-watch"
 
 TARGETS="${*:-$ALL}"
 
