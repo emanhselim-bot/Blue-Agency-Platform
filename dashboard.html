@@ -4475,16 +4475,16 @@
       <div id="hub-finance-view" style="display:none">
         <div class="mod-sticky" style="position:sticky;top:0;z-index:20;background:var(--page-bg,#1B2A6B);padding:6px 0 10px">
           <div class="hub-mod-head" style="margin-bottom:10px">
-            <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
-            <h2>💰 Finance</h2>
-            <button class="hub-mod-btn" onclick="fnOpenClient()">＋ Client</button>
-            <button class="hub-mod-btn" onclick="fnOpenPayment()">＋ Payment</button>
-            <button class="hub-mod-btn" onclick="fnOpenExpense()">＋ Expense</button>
-            <button class="hub-mod-btn" id="fn-sync-btn" onclick="fnSyncZoho()">⟳ Sync Zoho</button>
+            <button class="hub-mod-back" id="fn-back" onclick="fnBack()">← Home</button>
+            <h2 id="fn-title">💰 Finance</h2>
+            <button class="hub-mod-btn fn-summary-only" onclick="fnOpenClient()">＋ Client</button>
+            <button class="hub-mod-btn fn-summary-only" onclick="fnOpenPayment()">＋ Payment</button>
+            <button class="hub-mod-btn fn-summary-only" onclick="fnOpenExpense()">＋ Expense</button>
+            <button class="hub-mod-btn fn-summary-only" id="fn-sync-btn" onclick="fnSyncZoho()">⟳ Sync Zoho</button>
             <button class="hub-mod-btn msx-open" onclick="openModuleSettings('finance')" style="display:none">⚙ Settings</button>
           </div>
           <div id="fn-sync-status" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div id="fn-filters" style="display:flex;gap:8px;flex-wrap:wrap">
             <input id="fn-search" class="connect-input" placeholder="Search client…" oninput="fnRender()" style="min-width:170px">
             <select id="fn-f-pay" class="connect-input" onchange="fnRender()" style="min-width:140px">
               <option value="">All payment states</option>
@@ -4519,6 +4519,28 @@
         </div>
         <div id="fn-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 18px"></div>
         <div id="fn-clients"><div style="font-size:13px;color:var(--text-muted)">Loading…</div></div>
+
+        <!-- Finance opens on a choice: the payments summary that was here
+             before, or the monthly billing run. -->
+        <div id="fn-landing">
+          <div class="cln-grid" style="margin-top:6px">
+            <div class="cln-card" onclick="fnShowPane('summary')">
+              <div class="cln-card-top"><span class="cln-card-icon">📊</span>
+                <span class="cln-card-name">Summary</span></div>
+              <div class="cln-card-sub">Client invoices, collections and outstanding balances — what has been paid and what has not.</div>
+            </div>
+            <div class="cln-card" onclick="fnShowPane('billing')">
+              <div class="cln-card-top"><span class="cln-card-icon">🧾</span>
+                <span class="cln-card-name">Billing &amp; Invoicing</span>
+                <span class="cln-pill">NEW</span></div>
+              <div class="cln-card-sub">Monthly management fees — contracts, ad spend, and the Zoho drafts raised from them.</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="fn-billing" style="display:none">
+          <div id="fn-billing-body"><div class="cln-note">Loading…</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -21780,6 +21802,78 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         : '✗ Last sync failed: ' + (data.message || 'unknown error');
     }
 
+
+
+    // ── Billing & Invoicing ──────────────────────────────────────────────
+    //
+    // The contracts and the billing log live in Notion, and Notion can only
+    // be read with the integration key, which is server-side. So this pane
+    // needs a billing-data edge function before it can show anything real —
+    // it is deliberately empty rather than filled with placeholder numbers
+    // that look like figures.
+    const FN_BILLING_NOTION = 'https://app.notion.com/p/4082fae6c8598122b7e6d3b800b59718';
+
+    async function fnBillingInit() {
+      const box = document.getElementById('fn-billing-body');
+      if (!box) return;
+      box.innerHTML = `
+        <div class="cln-card" style="cursor:default;max-width:720px">
+          <div class="cln-card-top"><span class="cln-card-icon">🧾</span>
+            <span class="cln-card-name">Not connected yet</span></div>
+          <div class="cln-card-sub" style="margin-top:8px;line-height:1.7">
+            The contracts and the billing log live in Notion, and reading them needs the
+            integration key, which only the server has. This pane stays empty until the
+            billing-data function exists — showing invented numbers here would be worse
+            than showing none.
+          </div>
+          <div class="cln-card-sub" style="margin-top:12px;line-height:1.7">
+            What it will show: Active clients due today, the ad spend for each one's
+            period, the fee computed from their billing model, the Zoho draft raised
+            against it, and anything overdue.
+          </div>
+          <a class="cln-open" style="display:block;text-align:center;text-decoration:none;margin-top:14px"
+             href="${FN_BILLING_NOTION}" target="_blank" rel="noopener">Open Billing &amp; Invoicing in Notion →</a>
+        </div>`;
+    }
+
+    // ── Finance: Summary or Billing ──────────────────────────────────────
+    //
+    // Finance used to open straight onto the payments summary. It now opens
+    // on a choice, because the monthly billing run is a different job with a
+    // different audience: the summary answers "who owes us", billing answers
+    // "what do we invoice this month".
+    let _fnPane = 'landing';
+
+    function fnShowPane(pane) {
+      _fnPane = pane;
+      const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+      show('fn-landing', pane === 'landing');
+      show('fn-filters', pane === 'summary');
+      show('fn-kpis',    pane === 'summary');
+      show('fn-clients', pane === 'summary');
+      show('fn-billing', pane === 'billing');
+      const sync = document.getElementById('fn-sync-status');
+      if (sync) sync.style.display = pane === 'summary' ? '' : 'none';
+      // The ＋ Client / ＋ Payment / Sync buttons act on the summary only.
+      document.querySelectorAll('.fn-summary-only').forEach(b => {
+        b.style.display = pane === 'summary' ? '' : 'none';
+      });
+      const title = document.getElementById('fn-title');
+      if (title) title.textContent = pane === 'billing' ? '🧾 Billing & Invoicing'
+                                   : pane === 'summary' ? '📊 Finance · Summary'
+                                   : '💰 Finance';
+      const back = document.getElementById('fn-back');
+      if (back) back.textContent = pane === 'landing' ? '← Home' : '← Finance';
+
+      if (pane === 'summary') fnInit();
+      if (pane === 'billing') fnBillingInit();
+    }
+
+    function fnBack() {
+      if (_fnPane !== 'landing') { fnShowPane('landing'); return; }
+      hubShowView('cards');
+    }
+
     async function fnInit() {
       const box = document.getElementById('fn-clients');
       if (!await _hubWaitOrg()) {
@@ -22299,7 +22393,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.querySelector('#home-hub .hub-inner').classList.toggle('wide', v !== 'cards');
       document.querySelector('#home-hub .hub-inner').classList.toggle('tasks-fullscreen', v === 'tasks');
       if (v === 'pipeline') cpmInit();
-      if (v === 'finance')  fnInit();
+      if (v === 'finance')  fnShowPane('landing');
       if (v === 'activity') renderHubActivity();
       if (v === 'access')   acxInit();
       if (v === 'meetings') mtInit();
