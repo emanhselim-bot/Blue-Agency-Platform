@@ -349,6 +349,9 @@
     [data-theme="dark"] .kpi-card.c-purple.solid { background: #7C3AED !important; }
     .kpi-icon { font-size: 20px; margin-bottom: 10px; }
     .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 6px; }
+    .kpi-card.kpi-blank-hidden { display: none !important; }
+    .kpi-section.kpi-section-empty { display: none !important; }
+    .kpi-hidden-note { margin-top: 10px; font-size: 11.5px; color: var(--text-muted); opacity: .85; }
     .kpi-value { font-size: 22px; font-weight: 700; color: var(--text-main); line-height: 1.1; letter-spacing: -0.5px; }
     .kpi-sub { font-size: 10px; color: var(--text-muted); margin-top: 5px; font-weight: 400; }
 
@@ -5649,6 +5652,9 @@
     function toggleLayoutEdit() {
       _layoutEditMode = !_layoutEditMode;
       document.body.classList.toggle('layout-edit-mode', _layoutEditMode);
+      // Editing shows every card, including the empty ones, so they can be
+      // moved; leaving editing hides them again.
+      try { hideEmptyKpiCards(); } catch (e) { console.warn('[kpi]', e); }
       const btn    = document.getElementById('layout-edit-btn');
       const rstBtn = document.getElementById('layout-reset-btn');
       const undoBtn = document.getElementById('layout-undo-btn');
@@ -5964,6 +5970,9 @@
       // ── Inject edit controls & "Add Section" button ───────────────────────────
       _injectEditControls(container);
       _injectAddSectionButton(container);
+
+      // Last, so it sees the finished grid including custom cards.
+      hideEmptyKpiCards();
     }
 
     // ── Custom section DOM builder ────────────────────────────────────────────
@@ -8962,6 +8971,65 @@
       if (period === 'custom' && customFrom && customTo)
         return `SINCE ${customFrom} UNTIL ${customTo}`;
       return 'SINCE today UNTIL today';
+    }
+
+
+    // ── Hide cards with nothing in them ──────────────────────────────────
+    //
+    // A card reading "—" tells you nothing except that the dashboard has no
+    // figure for it, and a grid two-thirds full of them buries the cards that
+    // do say something.
+    //
+    // A zero is NOT empty. "Spent nothing today" and "not tracked" are
+    // different facts, and collapsing them is the mistake that made the
+    // charts read 0.00x for clients whose sheets simply were not filled in.
+    // Only a genuinely absent value is hidden.
+    const KPI_BLANK = new Set(['', '—', '–', '-', '--', 'n/a', 'na', 'null', 'undefined', 'nan']);
+
+    function kpiValueIsBlank(card) {
+      const el = card.querySelector('.kpi-value');
+      if (!el) return false;
+      // A card you type into is empty on purpose — that is the prompt.
+      if (el.querySelector('input') || card.querySelector('.custom-card-input')) return false;
+      const raw = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (KPI_BLANK.has(raw.toLowerCase())) return true;
+      // "EGP —" and "— %" are blanks wearing a unit.
+      const stripped = raw.replace(/[A-Za-z%$£€،,]/g, '').replace(/\s+/g, '').trim();
+      return KPI_BLANK.has(stripped.toLowerCase());
+    }
+
+    function hideEmptyKpiCards() {
+      const container = document.getElementById('kpi-sections-container');
+      if (!container) return;
+      // While the layout is being edited every card has to be reachable,
+      // otherwise you cannot drag back something you cannot see.
+      const editing = document.body.classList.contains('layout-edit-mode');
+      let hidden = 0;
+      container.querySelectorAll('.kpi-card').forEach(card => {
+        const blank = !editing && kpiValueIsBlank(card);
+        card.classList.toggle('kpi-blank-hidden', blank);
+        if (blank) hidden++;
+      });
+      // A section whose every card went is just a heading over nothing.
+      container.querySelectorAll('.kpi-section').forEach(sec => {
+        const cards = [...sec.querySelectorAll('.kpi-card')];
+        const allGone = cards.length > 0 && cards.every(c => c.classList.contains('kpi-blank-hidden'));
+        sec.classList.toggle('kpi-section-empty', allGone);
+      });
+      // Say how many went, so a card you expected to see is explained rather
+      // than just missing.
+      let note = document.getElementById('kpi-hidden-note');
+      if (hidden && !editing) {
+        if (!note) {
+          note = document.createElement('div');
+          note.id = 'kpi-hidden-note';
+          note.className = 'kpi-hidden-note';
+          container.appendChild(note);
+        }
+        note.textContent = `${hidden} card${hidden === 1 ? '' : 's'} hidden — no figure for this period. Open Edit Layout to see them all.`;
+      } else if (note) {
+        note.remove();
+      }
     }
 
     function kpi(colorClass, icon, label, value, sub, rawVal, targetVal, higherIsBetter, valueId) {
