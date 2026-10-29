@@ -4541,6 +4541,10 @@
         <div id="fn-billing" style="display:none">
           <div id="fn-billing-body"><div class="cln-note">Loading…</div></div>
         </div>
+
+        <div id="fn-ledger" style="display:none">
+          <div id="fn-ledger-body"><div class="cln-note">Loading…</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -21852,6 +21856,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       show('fn-kpis',    pane === 'summary');
       show('fn-clients', pane === 'summary');
       show('fn-billing', pane === 'billing');
+      show('fn-ledger',  pane === 'ledger');
       const sync = document.getElementById('fn-sync-status');
       if (sync) sync.style.display = pane === 'summary' ? '' : 'none';
       // The ＋ Client / ＋ Payment / Sync buttons act on the summary only.
@@ -21861,15 +21866,21 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const title = document.getElementById('fn-title');
       if (title) title.textContent = pane === 'billing' ? '🧾 Billing & Invoicing'
                                    : pane === 'summary' ? '📊 Finance · Summary'
+                                   : pane === 'ledger'  ? '📑 Client'
                                    : '💰 Finance';
       const back = document.getElementById('fn-back');
-      if (back) back.textContent = pane === 'landing' ? '← Home' : '← Finance';
+      if (back) back.textContent = pane === 'landing' ? '← Home'
+                                 : pane === 'ledger' ? '← Clients'
+                                 : '← Finance';
 
       if (pane === 'summary') fnInit();
       if (pane === 'billing') fnBillingInit();
     }
 
     function fnBack() {
+      // The ledger is opened from a client in the summary, so back belongs
+      // there rather than at the top.
+      if (_fnPane === 'ledger') { fnShowPane('summary'); return; }
       if (_fnPane !== 'landing') { fnShowPane('landing'); return; }
       hubShowView('cards');
     }
@@ -22116,11 +22127,109 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <span style="display:flex;gap:6px">
               <button onclick="fnOpenPayment('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Payment</button>
               <button onclick="fnOpenExpense('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">＋ Expense</button>
+              <button onclick="fnLedger('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">📑 Payments &amp; expenses</button>
               <button onclick="fnOpenClient('${escHtml(c.id)}')" style="padding:3px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Edit</button>
             </span>
           </div>
         </div>`;
       }).join('');
+    }
+
+
+    // ── One client: every payment, every expense, and whether it paid ────
+    //
+    // The summary card answers "how much" — this answers "from what". A
+    // margin on its own does not tell you whether a client is worth keeping;
+    // the rows behind it do, because one big expense or one unpaid invoice
+    // is usually the whole story.
+    let _fnLedgerId = null;
+
+    async function fnLedger(clientId) {
+      _fnLedgerId = clientId;
+      fnShowPane('ledger');
+      const box = document.getElementById('fn-ledger-body');
+      if (!box) return;
+      box.innerHTML = '<div class="cln-note">Loading…</div>';
+
+      const [{ data: c }, { data: pays }, { data: exps }] = await Promise.all([
+        sb.from('fin_client_summary').select('*').eq('id', clientId).maybeSingle(),
+        sb.from('fin_payments').select('*').eq('client_id', clientId).order('paid_on', { ascending: false }),
+        sb.from('fin_expenses').select('*').eq('client_id', clientId).order('spent_on', { ascending: false }),
+      ]);
+      if (!c) { box.innerHTML = '<div class="cln-note">That client could not be loaded.</div>'; return; }
+
+      const title = document.getElementById('fn-title');
+      if (title) title.textContent = '📑 ' + (c.name || 'Client');
+
+      const received = Number(c.received_base) || 0;
+      const spent    = Number(c.expenses_base) || 0;
+      const profit   = received - spent;            // cash in minus cash out, not the contract
+      const margin   = received > 0 ? (profit / received) * 100 : null;
+
+      // The verdict is on money actually received, not on what was contracted:
+      // an unpaid contract is not profit, and treating it as one is how a
+      // client looks healthy right up until they never pay.
+      let verdict, vcol;
+      if (!received && !spent)      { verdict = 'Nothing recorded yet'; vcol = '#64748B'; }
+      else if (!received)           { verdict = 'Spent, nothing received'; vcol = '#E53E3E'; }
+      else if (margin >= 60)        { verdict = 'Strong'; vcol = '#16A34A'; }
+      else if (margin >= 30)        { verdict = 'Healthy'; vcol = '#16A34A'; }
+      else if (margin >= 10)        { verdict = 'Thin'; vcol = '#E7B91C'; }
+      else if (margin >= 0)         { verdict = 'Barely breaking even'; vcol = '#F97316'; }
+      else                          { verdict = 'Losing money'; vcol = '#E53E3E'; }
+
+      const owed = Number(c.remaining_base) || 0;
+      const row = (cells) => '<tr>' + cells.map(x => `<td style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:12.5px">${x}</td>`).join('') + '</tr>';
+      const head = (cells) => '<tr>' + cells.map(x => `<th style="padding:7px 10px;text-align:left;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)">${x}</th>`).join('') + '</tr>';
+
+      box.innerHTML = `
+        <div class="cln-card" style="cursor:default;margin-bottom:16px">
+          <div class="cln-card-top">
+            <span class="cln-card-name">${escHtml(c.name || '')}</span>
+            <span class="cln-pill" style="background:${vcol}22;color:${vcol};border:1px solid ${vcol}55">${escHtml(verdict)}</span>
+          </div>
+          <div class="cln-stats">
+            <div><div class="cln-stat-k">Received</div><div class="cln-stat-v">${escHtml(fnMoney(received))}</div></div>
+            <div><div class="cln-stat-k">Spent on them</div><div class="cln-stat-v">${escHtml(fnMoney(spent))}</div></div>
+            <div><div class="cln-stat-k">Kept</div><div class="cln-stat-v" style="color:${vcol}">${escHtml(fnMoney(profit))}</div></div>
+            <div><div class="cln-stat-k">Margin</div><div class="cln-stat-v" style="color:${vcol}">${margin == null ? '—' : margin.toFixed(1) + '%'}</div></div>
+            ${owed > 0 ? `<div><div class="cln-stat-k">Still owed</div><div class="cln-stat-v" style="color:#E53E3E">${escHtml(fnMoney(owed))}</div></div>` : ''}
+          </div>
+          <div class="cln-card-sub" style="margin-top:11px">
+            Margin is on money actually received, not on the contract — an unpaid contract is not profit.
+            ${owed > 0 ? ` <strong>${escHtml(fnMoney(owed))} is still outstanding</strong>, so the real margin depends on whether that arrives.` : ''}
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px">
+          <div class="cln-card" style="cursor:default">
+            <div class="cln-card-top"><span class="cln-card-name">Payments in</span>
+              <span class="cln-pill">${(pays || []).length}</span></div>
+            ${(pays || []).length ? `<table style="width:100%;border-collapse:collapse;margin-top:8px">
+              ${head(['Date', 'Amount', 'Kind', 'Status'])}
+              ${(pays || []).map(p => row([
+                  escHtml(fnDate(p.paid_on || p.due_on) || '—'),
+                  '<strong>' + escHtml(fnMoney(p.amount_base ?? p.amount)) + '</strong>',
+                  escHtml(p.kind || '—'),
+                  escHtml(p.status || '—'),
+                ])).join('')}
+            </table>` : '<div class="cln-card-sub" style="margin-top:8px">No payments recorded.</div>'}
+          </div>
+
+          <div class="cln-card" style="cursor:default">
+            <div class="cln-card-top"><span class="cln-card-name">Expenses out</span>
+              <span class="cln-pill">${(exps || []).length}</span></div>
+            ${(exps || []).length ? `<table style="width:100%;border-collapse:collapse;margin-top:8px">
+              ${head(['Date', 'Amount', 'Category', 'Paid to'])}
+              ${(exps || []).map(e => row([
+                  escHtml(fnDate(e.spent_on) || '—'),
+                  '<strong>' + escHtml(fnMoney(e.amount_base ?? e.amount)) + '</strong>',
+                  escHtml(e.category || '—'),
+                  escHtml(e.paid_to || '—'),
+                ])).join('')}
+            </table>` : '<div class="cln-card-sub" style="margin-top:8px">No expenses recorded against this client.</div>'}
+          </div>
+        </div>`;
     }
 
     // ── Entry forms ───────────────────────────────────────────────
