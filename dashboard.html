@@ -4545,6 +4545,12 @@
         <div id="fn-ledger" style="display:none">
           <div id="fn-ledger-body"><div class="cln-note">Loading…</div></div>
         </div>
+
+        <!-- Summary opens on Active / Inactive / Total rather than one list
+             of eighty clients, most of which are finished. -->
+        <div id="fn-groups" style="display:none">
+          <div class="cln-grid" style="margin-top:6px" id="fn-groups-grid"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -21849,12 +21855,19 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     let _fnPane = 'landing';
 
     function fnShowPane(pane) {
+      // Leaving the summary forgets the group, so coming back shows the
+      // three cards rather than whichever list was open last time.
+      if (pane === 'landing') _fnGroup = null;
       _fnPane = pane;
       const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+      // Inside the summary there is one more step: the three groups, then
+      // the list for whichever was picked.
+      const listing = pane === 'summary' && _fnGroup !== null;
       show('fn-landing', pane === 'landing');
-      show('fn-filters', pane === 'summary');
-      show('fn-kpis',    pane === 'summary');
-      show('fn-clients', pane === 'summary');
+      show('fn-groups',  pane === 'summary' && _fnGroup === null);
+      show('fn-filters', listing);
+      show('fn-kpis',    listing);
+      show('fn-clients', listing);
       show('fn-billing', pane === 'billing');
       show('fn-ledger',  pane === 'ledger');
       const sync = document.getElementById('fn-sync-status');
@@ -21864,16 +21877,24 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         b.style.display = pane === 'summary' ? '' : 'none';
       });
       const title = document.getElementById('fn-title');
+      const groupName = _fnGroup === 'active' ? ' · Active' : _fnGroup === 'inactive' ? ' · Inactive'
+                      : _fnGroup === '' ? ' · Total' : '';
       if (title) title.textContent = pane === 'billing' ? '🧾 Billing & Invoicing'
-                                   : pane === 'summary' ? '📊 Finance · Summary'
+                                   : pane === 'summary' ? '📊 Finance · Summary' + groupName
                                    : pane === 'ledger'  ? '📑 Client'
                                    : '💰 Finance';
       const back = document.getElementById('fn-back');
       if (back) back.textContent = pane === 'landing' ? '← Home'
                                  : pane === 'ledger' ? '← Clients'
+                                 : listing ? '← Groups'
                                  : '← Finance';
 
-      if (pane === 'summary') fnInit();
+      if (pane === 'summary') {
+        // fnInit loads the clients; the group cards count them, so they are
+        // drawn once that has finished rather than from an empty list.
+        fnInit().then(() => { if (_fnGroup === null) fnGroupsRender(); })
+                .catch(e => console.warn('[finance]', e));
+      }
       if (pane === 'billing') fnBillingInit();
     }
 
@@ -21881,6 +21902,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // The ledger is opened from a client in the summary, so back belongs
       // there rather than at the top.
       if (_fnPane === 'ledger') { fnShowPane('summary'); return; }
+      if (_fnPane === 'summary' && _fnGroup !== null) { _fnGroup = null; fnShowPane('summary'); return; }
       if (_fnPane !== 'landing') { fnShowPane('landing'); return; }
       hubShowView('cards');
     }
@@ -22135,6 +22157,54 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }).join('');
     }
 
+
+
+    // ── Summary: Active / Inactive / Total ───────────────────────────────
+    //
+    // Eighty clients in one list, fifty-five of them inactive, means the
+    // ones you are actually working with are buried. The summary opens on
+    // the three groups and the list follows the one you pick.
+    let _fnGroup = null;   // null = the chooser, otherwise the status filter
+
+    function fnGroupsRender() {
+      const grid = document.getElementById('fn-groups-grid');
+      if (!grid) return;
+      const all = (_fnClients || []);
+      const of = st => all.filter(c => String(c.project_status || '').toLowerCase() === st);
+      const sum = rows => rows.reduce((t, c) => t + (Number(c.received_base) || 0), 0);
+      const owed = rows => rows.reduce((t, c) => t + (Number(c.remaining_base) || 0), 0);
+
+      const groups = [
+        { key: 'active',   icon: '🟢', name: 'Active clients',   rows: of('active'),
+          note: 'Currently running — the ones worth watching.' },
+        { key: 'inactive', icon: '⚪', name: 'Inactive clients', rows: of('inactive'),
+          note: 'Stopped or finished. Still counted in the totals.' },
+        { key: '',         icon: '📊', name: 'Total',            rows: all,
+          note: 'Every client on the books, whatever their status.' },
+      ];
+
+      grid.innerHTML = groups.map(g => `
+        <div class="cln-card" onclick="fnPickGroup('${g.key}')">
+          <div class="cln-card-top">
+            <span class="cln-card-icon">${g.icon}</span>
+            <span class="cln-card-name">${escHtml(g.name)}</span>
+            <span class="cln-pill">${g.rows.length}</span>
+          </div>
+          <div class="cln-card-sub">${escHtml(g.note)}</div>
+          <div class="cln-stats">
+            <div><div class="cln-stat-k">Received</div><div class="cln-stat-v">${escHtml(fnMoney(sum(g.rows)))}</div></div>
+            <div><div class="cln-stat-k">Outstanding</div>
+                 <div class="cln-stat-v" style="${owed(g.rows) > 0 ? 'color:#E53E3E' : ''}">${escHtml(fnMoney(owed(g.rows)))}</div></div>
+          </div>
+        </div>`).join('');
+    }
+
+    function fnPickGroup(key) {
+      _fnGroup = key;
+      const sel2 = document.getElementById('fn-f-proj');
+      if (sel2) sel2.value = key;            // drives the list through the filter that already exists
+      fnShowPane('summary');
+    }
 
     // ── One client: every payment, every expense, and whether it paid ────
     //
