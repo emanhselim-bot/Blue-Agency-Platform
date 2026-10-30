@@ -21880,6 +21880,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       });
       const title = document.getElementById('fn-title');
       const groupName = _fnGroup === 'active' ? ' · Active' : _fnGroup === 'inactive' ? ' · Inactive'
+                      : _fnGroup === 'completed' ? ' · Finished'
                       : _fnGroup === '' ? ' · Total' : '';
       if (title) title.textContent = pane === 'billing' ? '🧾 Billing & Invoicing'
                                    : pane === 'summary' ? '📊 Finance · Summary' + groupName
@@ -22255,6 +22256,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           note: 'Currently running — the ones worth watching.' },
         { key: 'inactive', icon: '⚪', name: 'Inactive clients', rows: of('inactive'),
           note: 'Stopped or finished. Still counted in the totals.' },
+        { key: 'completed', icon: '🏁', name: 'Finished',        rows: of('completed'),
+          note: 'Stopped or delivered, and settled. Kept out of Active so the live list stays honest.' },
         { key: '',         icon: '📊', name: 'Total',            rows: all,
           note: 'Every client on the books, whatever their status.' },
       ];
