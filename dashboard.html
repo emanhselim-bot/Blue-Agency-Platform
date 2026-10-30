@@ -8695,7 +8695,7 @@
 
       nav.innerHTML = agencies.map(a => {
         const count = countForAgency(a.id);
-        const isActive = !_alMode && !_ppMode && currentAgencyId === a.id;
+        const isActive = !_alMode && !_ppMode && !_anMode && currentAgencyId === a.id;
         return `<button class="agency-tab${isActive ? ' active' : ''}" onclick="leaveAdsLibrary();leaveProposalTab();setActiveAgency('${escHtml(a.id)}')" title="Switch to ${escHtml(a.name)}">
           ${a.icon ? `<span class="agency-tab-icon">${a.icon}</span>` : ''}
           <span class="agency-tab-name">${escHtml(a.name)}</span>
@@ -8760,7 +8760,7 @@
       const platformBtns = Object.keys(PLATFORM_DEFS).filter(canSeeMediaTab).map(p => {
         const def = PLATFORM_DEFS[p];
         const connected = orgPlatforms.includes(p);
-        const on = !_alMode && !_ppMode && currentPlatformTab === p;
+        const on = !_alMode && !_ppMode && !_anMode && currentPlatformTab === p;
         return `<button class="platform-tab${on ? ' active' : ''}" onclick="setPlatformTab('${p}')"
                         style="${connected ? '' : 'opacity:.55'}"
                         title="${connected ? '' : def.label + ' — not connected yet'}">${def.icon} ${def.label}</button>`;
@@ -8777,6 +8777,7 @@
       // is what is on screen.
       const toolBtns = [
         canSeeMediaTab('ads_library')   ? `<button class="platform-tab${_alMode ? ' active' : ''}" onclick="openAdsLibraryTab()" title="Competitor ads from Meta's Ad Library">🔎 Ads Library</button>` : '',
+        `<button class="platform-tab${_anMode ? ' active' : ''}" onclick="openAnalysisTab()" title="The month's numbers, the unit economics behind them, and what they imply">📈 Analysis</button>`,
       ].filter(Boolean).join('');
 
       bar.innerHTML = platformBtns + (toolBtns ? '<span class="platform-sep"></span>' + toolBtns : '');
@@ -8784,7 +8785,7 @@
 
     function setPlatformTab(platform) {
       if (!requireMediaTab(platform)) return;
-      _alMode = false; _ppMode = false;
+      _alMode = false; _ppMode = false; _anMode = false;
       currentPlatformTab = platform;
       localStorage.setItem(`dash_platform_${currentOrgId}`, platform);
       saveAgencySettings(currentOrgId, currentAgencyId, { platform });
@@ -14654,6 +14655,276 @@
                    status: _alQuery.status, media: _alQuery.media };
       _alRender('loading');
       await _alRunQuery(c.page_id ? { page_ids: c.page_id } : { search_terms: c.search_term });
+    }
+
+
+    // ═══════════════════════════════════════════════════════════
+    // ANALYSIS — the month's numbers and the economics behind them
+    //
+    // The strategy template this came from fills most of its tables with
+    // benchmarks: 2% conversion rate, 8% add-to-cart, a 60/25/15 budget
+    // split. Printing those against a client's name would read as analysis
+    // of that client when it is nothing of the kind.
+    //
+    // So every figure here is computed from the account's own months, and
+    // anything that cannot be is named as missing rather than filled in.
+    // ═══════════════════════════════════════════════════════════
+    let _anMode = false, _anBusy = false;
+
+    // Selim's defaults, applied until an account says otherwise:
+    //   gross margin 50%  →  break-even ROAS 2.0x
+    //   ads at 20% of revenue  →  target ROAS 5.0x
+    const AN_MARGIN = 0.50;
+    const AN_AD_SHARE = 0.20;
+
+    const anMoney = n => (n == null || !isFinite(n)) ? '—'
+      : Math.round(Number(n)).toLocaleString('en-US');
+    const anNum = n => (n == null || !isFinite(n)) ? '—'
+      : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+    function anMonthKey(d) { return String(d).slice(0, 7); }
+
+    /** Roll a set of notion_daily rows into the figures the month is judged on. */
+    function anRollup(rows) {
+      let spend = 0, revenue = 0, orders = 0, webOrders = 0, msgOrders = 0;
+      let webRev = 0, msgRev = 0, days = new Set();
+      for (const r of rows) {
+        spend   += _dcTotalSpend(r) ?? 0;
+        revenue += _dcRevenue(r) ?? 0;
+        webOrders += _dcWebOrders(r);
+        msgOrders += _dcMsgOrders(r);
+        webRev += _dcNum(r.web_revenue_confirmed) ?? _dcNum(r.web_revenue) ?? 0;
+        msgRev += _dcNum(r.msg_revenue) ?? 0;
+        days.add(String(r.day).slice(0, 10));
+      }
+      orders = webOrders + msgOrders;
+      return {
+        spend, revenue, orders, webOrders, msgOrders, webRev, msgRev,
+        days: days.size,
+        aov:  orders > 0 ? revenue / orders : null,
+        roas: spend  > 0 ? revenue / spend  : null,
+        cpa:  orders > 0 ? spend / orders   : null,
+      };
+    }
+
+    function anDelta(now, before) {
+      if (before == null || !isFinite(before) || before === 0 || now == null) return null;
+      return ((now - before) / Math.abs(before)) * 100;
+    }
+
+    function anArrow(pct, higherIsBetter = true) {
+      if (pct == null) return '<span style="color:var(--text-muted)">—</span>';
+      const good = higherIsBetter ? pct >= 0 : pct < 0;
+      const col = Math.abs(pct) < 2 ? 'var(--text-muted)' : (good ? '#16A34A' : '#E53E3E');
+      return `<span style="color:${col}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</span>`;
+    }
+
+    async function openAnalysisTab() {
+      if (!canOpenModule('media')) return;
+      _anMode = true; _alMode = false; _ppMode = false;
+      renderPlatformTabs();
+      await anRender();
+    }
+
+    function leaveAnalysis() { if (_anMode) { _anMode = false; renderPlatformTabs(); loadData(); } }
+
+    async function anRender() {
+      const host = document.getElementById('content');
+      if (!host) return;
+      if (!sel?.value) {
+        host.innerHTML = '<div class="no-data"><strong>Pick an account first.</strong><br>The analysis is built from that account\'s own months.</div>';
+        return;
+      }
+      host.innerHTML = '<div class="loading-state">Reading this account\'s months…</div>';
+
+      // Twelve months back, so a month can be read against the one before it
+      // and against the year behind it.
+      const until = _dcDay ? new Date() : new Date();
+      const end = new Date();
+      const start = new Date(end.getFullYear(), end.getMonth() - 11, 1);
+      const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+      let rows = [];
+      try {
+        rows = await _dcFetchRows(iso(start), iso(end), _dcWantedKeys());
+      } catch (e) {
+        host.innerHTML = `<div class="error-state">Could not load the figures: ${escHtml(e.message || String(e))}</div>`;
+        return;
+      }
+      if (!rows.length) {
+        host.innerHTML = `<div class="no-data"><strong>No daily figures for this account.</strong><br>
+          The analysis reads the Notion sheet; once one is linked and filled in, it fills in too.</div>`;
+        return;
+      }
+
+      // Group by month, newest first.
+      const byMonth = {};
+      for (const r of rows) (byMonth[anMonthKey(r.day)] ||= []).push(r);
+      const months = Object.keys(byMonth).sort().reverse();
+      const thisKey = months[0], prevKey = months[1];
+      const cur = anRollup(byMonth[thisKey]);
+      const prev = prevKey ? anRollup(byMonth[prevKey]) : null;
+
+      const label = accountMap[sel.value]?.account_name || 'This account';
+      const cur_ = (accountMap[sel.value]?.currency || 'EGP');
+
+      // ── Unit economics, from the margin and ad-share defaults ──
+      const beRoas = 1 / AN_MARGIN;                 // 2.0x at a 50% margin
+      const tgtRoas = 1 / AN_AD_SHARE;              // 5.0x at ads = 20% of revenue
+      const beCpa  = cur.aov ? cur.aov * AN_MARGIN : null;
+      const tgtCpa = cur.aov ? cur.aov * AN_AD_SHARE : null;
+      const grossProfit = cur.revenue * AN_MARGIN;
+      const afterAds = grossProfit - cur.spend;
+
+      const verdict =
+        cur.roas == null            ? ['No spend recorded', '#64748B']
+        : cur.roas >= tgtRoas       ? ['Above target — room to scale', '#16A34A']
+        : cur.roas >= beRoas        ? ['Profitable, below target', '#E7B91C']
+        : cur.roas >= 1             ? ['Below break-even — ads cost more than the margin they bring', '#E53E3E']
+        :                             ['Losing money on every order', '#E53E3E'];
+
+      const monthName = k => new Date(k + '-01T12:00:00')
+        .toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+      const kpi = (label2, val, sub, delta, higherBetter) => `
+        <div class="dc-card" style="cursor:default">
+          <div class="cln-stat-k">${escHtml(label2)}</div>
+          <div style="font-size:22px;font-weight:800;margin:4px 0 2px">${val}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${sub}${delta !== undefined ? ' · ' + anArrow(delta, higherBetter) : ''}</div>
+        </div>`;
+
+      host.innerHTML = `
+        <div class="dc-row">
+          <div class="section-label">📈 ${escHtml(label)} · ${escHtml(monthName(thisKey))}
+            <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:8px">
+              ${cur.days} recorded day${cur.days === 1 ? '' : 's'}${prevKey ? ` · compared with ${escHtml(monthName(prevKey))}` : ' · no earlier month to compare'}
+            </span>
+          </div>
+
+          <div class="dc-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+            ${kpi('Revenue', anMoney(cur.revenue) + ' ' + escHtml(cur_), 'from the sheet', prev ? anDelta(cur.revenue, prev.revenue) : undefined, true)}
+            ${kpi('Ad spend', anMoney(cur.spend) + ' ' + escHtml(cur_), 'all platforms', prev ? anDelta(cur.spend, prev.spend) : undefined, false)}
+            ${kpi('Orders', anMoney(cur.orders), `${anMoney(cur.webOrders)} web · ${anMoney(cur.msgOrders)} messages`, prev ? anDelta(cur.orders, prev.orders) : undefined, true)}
+            ${kpi('AOV', cur.aov ? anMoney(cur.aov) + ' ' + escHtml(cur_) : '—', 'revenue ÷ orders', prev ? anDelta(cur.aov, prev.aov) : undefined, true)}
+            ${kpi('ROAS', cur.roas ? anNum(cur.roas) + 'x' : '—', `break-even ${beRoas.toFixed(1)}x · target ${tgtRoas.toFixed(1)}x`, prev ? anDelta(cur.roas, prev.roas) : undefined, true)}
+            ${kpi('CPA', cur.cpa ? anMoney(cur.cpa) + ' ' + escHtml(cur_) : '—', tgtCpa ? `target ${anMoney(tgtCpa)}` : 'spend ÷ orders', prev ? anDelta(cur.cpa, prev.cpa) : undefined, false)}
+          </div>
+
+          <div class="dc-card" style="cursor:default;margin-top:16px;border-left:3px solid ${verdict[1]}">
+            <div style="font-size:14px;font-weight:700;color:${verdict[1]}">${escHtml(verdict[0])}</div>
+            <div class="cln-card-sub" style="margin-top:8px;line-height:1.7">
+              At a ${(AN_MARGIN * 100).toFixed(0)}% gross margin, every order has to cover its own cost before the ad that won it.
+              Break-even is <strong>${beRoas.toFixed(1)}x</strong>; anything under that loses money however good it looks in Ads Manager.
+              Target is <strong>${tgtRoas.toFixed(1)}x</strong>, which is ads at ${(AN_AD_SHARE * 100).toFixed(0)}% of revenue.
+            </div>
+          </div>
+
+          <div class="dc-grid" style="margin-top:16px">
+            <div class="dc-card" style="cursor:default">
+              <div class="section-label" style="margin:0 0 10px">Where the money went</div>
+              <table style="width:100%;border-collapse:collapse;font-size:13px">
+                ${[['Revenue', anMoney(cur.revenue), ''],
+                   ['Cost of goods (' + (100 - AN_MARGIN * 100).toFixed(0) + '%)', '−' + anMoney(cur.revenue * (1 - AN_MARGIN)), 'color:var(--text-muted)'],
+                   ['Gross profit', anMoney(grossProfit), 'font-weight:700'],
+                   ['Ad spend', '−' + anMoney(cur.spend), 'color:var(--text-muted)'],
+                   ['Left after ads', anMoney(afterAds), `font-weight:800;color:${afterAds >= 0 ? '#16A34A' : '#E53E3E'}`],
+                  ].map(([k, v, st]) => `<tr>
+                    <td style="padding:7px 0;border-bottom:1px solid var(--border)">${escHtml(k)}</td>
+                    <td style="padding:7px 0;border-bottom:1px solid var(--border);text-align:right;${st}">${escHtml(v)} ${escHtml(cur_)}</td>
+                  </tr>`).join('')}
+              </table>
+              <div class="cln-card-sub" style="margin-top:10px">
+                Before fixed costs, salaries and anything else outside the margin.
+              </div>
+            </div>
+
+            <div class="dc-card" style="cursor:default">
+              <div class="section-label" style="margin:0 0 10px">Website against messages</div>
+              <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <tr><th style="text-align:left;padding:6px 0;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted)">Channel</th>
+                    <th style="text-align:right;padding:6px 0;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted)">Orders</th>
+                    <th style="text-align:right;padding:6px 0;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted)">Revenue</th>
+                    <th style="text-align:right;padding:6px 0;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted)">AOV</th></tr>
+                ${[['Website', cur.webOrders, cur.webRev], ['Messages', cur.msgOrders, cur.msgRev]].map(([n, o, rv]) => `
+                  <tr><td style="padding:7px 0;border-bottom:1px solid var(--border)">${n}</td>
+                      <td style="padding:7px 0;border-bottom:1px solid var(--border);text-align:right">${anMoney(o)}</td>
+                      <td style="padding:7px 0;border-bottom:1px solid var(--border);text-align:right">${anMoney(rv)}</td>
+                      <td style="padding:7px 0;border-bottom:1px solid var(--border);text-align:right">${o > 0 && rv > 0 ? anMoney(rv / o) : '—'}</td></tr>`).join('')}
+              </table>
+              <div class="cln-card-sub" style="margin-top:10px">
+                A channel with a higher AOV deserves a bigger share of the budget than its order count suggests.
+              </div>
+            </div>
+          </div>
+
+          <div class="dc-card" style="cursor:default;margin-top:16px">
+            <div class="section-label" style="margin:0 0 10px">Month by month</div>
+            <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+              <tr>${['Month', 'Spend', 'Revenue', 'Orders', 'AOV', 'ROAS', 'CPA'].map(h =>
+                `<th style="text-align:${h === 'Month' ? 'left' : 'right'};padding:6px 8px;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)">${h}</th>`).join('')}</tr>
+              ${months.map(k => { const m = anRollup(byMonth[k]); return `
+                <tr${k === thisKey ? ' style="background:rgba(255,255,255,.04)"' : ''}>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border)">${escHtml(monthName(k))}</td>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${anMoney(m.spend)}</td>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${anMoney(m.revenue)}</td>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${anMoney(m.orders)}</td>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${m.aov ? anMoney(m.aov) : '—'}</td>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;color:${m.roas == null ? 'inherit' : m.roas >= tgtRoas ? '#16A34A' : m.roas >= beRoas ? '#E7B91C' : '#E53E3E'}">${m.roas ? anNum(m.roas) + 'x' : '—'}</td>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${m.cpa ? anMoney(m.cpa) : '—'}</td>
+                </tr>`; }).join('')}
+            </table>
+          </div>
+
+          <div class="dc-card" style="cursor:default;margin-top:16px">
+            <div class="section-label" style="margin:0 0 10px">✦ Claude's reading</div>
+            <div id="an-ai" class="cln-card-sub" style="line-height:1.8">
+              <button class="cln-open" style="max-width:260px" onclick="anAskClaude()">Read this month →</button>
+            </div>
+          </div>
+
+          <div class="cln-note" style="padding-top:14px">
+            Not shown, because this account has no data for it: website sessions, add-to-cart and checkout rates,
+            new against returning customers, and product-level margin. The funnel percentages in the strategy
+            template are benchmarks, not this brand's — they would read as analysis while being guesses.
+          </div>
+        </div>`;
+
+      window._anCur = { cur, prev, thisKey, prevKey, label, beRoas, tgtRoas, months: months.slice(0, 6).map(k => ({ k, ...anRollup(byMonth[k]) })) };
+    }
+
+    /** Hands the month's real figures to Claude and asks for the reading. */
+    async function anAskClaude() {
+      const box = document.getElementById('an-ai');
+      if (!box || _anBusy || !window._anCur) return;
+      _anBusy = true;
+      box.innerHTML = '<em>Reading…</em>';
+      const d = window._anCur;
+      const brief = [
+        `Account: ${d.label}. Month: ${d.thisKey}.`,
+        `Spend ${Math.round(d.cur.spend)}, revenue ${Math.round(d.cur.revenue)}, orders ${d.cur.orders}, ` +
+        `AOV ${d.cur.aov ? Math.round(d.cur.aov) : 'n/a'}, ROAS ${d.cur.roas ? d.cur.roas.toFixed(2) : 'n/a'}, ` +
+        `CPA ${d.cur.cpa ? Math.round(d.cur.cpa) : 'n/a'}.`,
+        d.prev ? `Previous month ${d.prevKey}: spend ${Math.round(d.prev.spend)}, revenue ${Math.round(d.prev.revenue)}, ` +
+          `orders ${d.prev.orders}, ROAS ${d.prev.roas ? d.prev.roas.toFixed(2) : 'n/a'}.` : 'No previous month.',
+        `Website orders ${d.cur.webOrders} (revenue ${Math.round(d.cur.webRev)}), message orders ${d.cur.msgOrders} (revenue ${Math.round(d.cur.msgRev)}).`,
+        `Break-even ROAS ${d.beRoas.toFixed(1)}x at a 50% gross margin; target ${d.tgtRoas.toFixed(1)}x.`,
+        `Last months: ${d.months.map(m => `${m.k} spend ${Math.round(m.spend)} revenue ${Math.round(m.revenue)} roas ${m.roas ? m.roas.toFixed(2) : 'n/a'}`).join('; ')}.`,
+        '',
+        'Read this month in 4-6 short bullets: what changed and why it likely changed, what is working,',
+        'what is at risk, and the single most useful next action. Use only the figures above — do not invent',
+        'conversion rates, sessions or benchmarks. If something important cannot be judged from these figures, say so.',
+      ].join('\n');
+
+      try {
+        const r = await callEdgeFunction('ai-chat', {
+          organization_id: currentOrgId, message: brief, account_hint: sel.value, history: [],
+        }, 90000);
+        box.innerHTML = r?.error
+          ? `<span style="color:#e53e3e">${escHtml(r.error)}</span>`
+          : escHtml(r.reply || 'No answer came back.').replace(/\n/g, '<br>');
+      } catch (e) {
+        box.innerHTML = `<span style="color:#e53e3e">${escHtml(e.message || String(e))}</span>`;
+      } finally { _anBusy = false; }
     }
 
     async function openAdsLibraryTab() {
