@@ -14719,6 +14719,120 @@
       return `<span style="color:${col}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</span>`;
     }
 
+
+    /**
+     * The funnel, from the sources this account actually has.
+     *
+     * Shopify answers sessions, carts and checkouts for the month; Clarity
+     * answers behaviour. Where neither is linked the step stays null and is
+     * shown as missing — the strategy template's 2% conversion and 8%
+     * add-to-cart are market averages, and printing them here would read as
+     * this brand's numbers.
+     */
+    async function anFunnel(from, to) {
+      const acc = accountMap[sel.value];
+      const out = { sessions: null, carts: null, checkouts: null, purchases: null, source: null, clarity: null };
+      if (!acc) return out;
+
+      if (acc.shopify_store_id) {
+        try {
+          const dr = `SINCE ${from} UNTIL ${to}`;
+          const r = await callEdgeFunction('shopify-data', { store_id: acc.shopify_store_id, query: `FROM all ${dr}` });
+          const rows = k => r?.[k]?.rows ?? null;
+          const n = v => { const x = parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, '')); return isFinite(x) ? x : null; };
+          const ses = rows('sessions');
+          if (ses?.[0]) out.sessions = n(ses[0][0]);
+          const cart = rows('cart');
+          if (cart?.[0]?.[0] != null) out.carts = n(cart[0][0]);
+          const ck = rows('checkouts');
+          if (ck?.[0]) {
+            const started = n(ck[0][0]);
+            const completed = n(ck[0][2]);
+            if (started) out.checkouts = started;
+            if (completed) out.purchases = completed;
+          }
+          if (out.sessions != null) out.source = 'Shopify';
+        } catch (e) { console.warn('[analysis] shopify', e); }
+      }
+
+      if (acc.clarity_project_id) {
+        try {
+          const days = Math.min(30, Math.max(1,
+            Math.round((new Date(to) - new Date(from)) / 86400000) + 1));
+          const c = await callEdgeFunction('clarity-data', {
+            numOfDays: days, orgId: currentOrgId, clarityProjectId: acc.clarity_project_id });
+          if (c && !c.error) {
+            // The fields clarity-data actually returns, checked against the
+            // function rather than assumed: sessions, pageViews, addToCart,
+            // checkout, removeFromCart.
+            const mine = (c.projects || []).find(p =>
+              String(p.clarity_project_id) === String(acc.clarity_project_id)) || c;
+            out.clarity = {
+              sessions: mine.sessions ?? null,
+              pageViews: mine.pageViews ?? null,
+              addToCart: mine.addToCart ?? null,
+              checkout: mine.checkout ?? null,
+              removeFromCart: mine.removeFromCart ?? null,
+              days,
+            };
+            // Clarity is the fallback for every step Shopify did not answer,
+            // which is the whole funnel for an account with no Shopify store.
+            if (out.sessions == null && out.clarity.sessions != null) {
+              out.sessions = out.clarity.sessions;
+              out.source = 'Clarity';
+            }
+            if (out.carts == null && out.clarity.addToCart != null) out.carts = out.clarity.addToCart;
+            if (out.checkouts == null && out.clarity.checkout != null) out.checkouts = out.clarity.checkout;
+          }
+        } catch (e) { console.warn('[analysis] clarity', e); }
+      }
+      return out;
+    }
+
+    function anFunnelCard(f, orders, cur_) {
+      const pct = (a, b) => (a != null && b) ? (a / b) * 100 : null;
+      const purchases = orders || f.purchases;
+      const steps = [
+        ['Sessions',          f.sessions,  null],
+        ['Added to cart',     f.carts,     pct(f.carts, f.sessions)],
+        ['Reached checkout',  f.checkouts, pct(f.checkouts, f.sessions)],
+        ['Purchased',         purchases,   pct(purchases, f.sessions)],
+      ];
+      const known = steps.filter(x => x[1] != null).length;
+      if (!known) {
+        return `<div class="dc-card" style="cursor:default">
+          <div class="section-label" style="margin:0 0 10px">Funnel</div>
+          <div class="cln-card-sub" style="line-height:1.7">
+            No Shopify store or Clarity project is linked to this account, so sessions,
+            carts and checkout steps cannot be measured. Link one and this fills in —
+            it is left blank rather than filled with market averages.
+          </div></div>`;
+      }
+      return `<div class="dc-card" style="cursor:default">
+        <div class="section-label" style="margin:0 0 10px">Funnel
+          ${f.source ? `<span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">● from ${escHtml(f.source)}</span>` : ''}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          ${steps.map(([k, v, p]) => `<tr>
+            <td style="padding:7px 0;border-bottom:1px solid var(--border)">${escHtml(k)}</td>
+            <td style="padding:7px 0;border-bottom:1px solid var(--border);text-align:right;font-weight:700">${v == null ? '—' : anMoney(v)}</td>
+            <td style="padding:7px 0;border-bottom:1px solid var(--border);text-align:right;color:var(--text-muted);width:84px">${p == null ? '' : p.toFixed(2) + '%'}</td>
+          </tr>`).join('')}
+        </table>
+        ${f.clarity && (f.clarity.pageViews != null || f.clarity.removeFromCart != null) ? `
+          <div class="cln-card-sub" style="margin-top:10px">
+            Clarity, last ${f.clarity.days} days:
+            ${f.clarity.pageViews != null ? `${anMoney(f.clarity.pageViews)} page views` : ''}
+            ${f.clarity.sessions ? ` · ${anNum(f.clarity.pageViews / f.clarity.sessions)} per session` : ''}
+            ${f.clarity.removeFromCart != null ? ` · ${anMoney(f.clarity.removeFromCart)} removed from cart` : ''}
+          </div>` : ''}
+        ${f.purchases != null && orders && Math.abs(f.purchases - orders) / Math.max(orders, 1) > 0.1
+          ? `<div class="cln-card-sub" style="margin-top:10px;color:#E7B91C">
+               Shopify counts ${anMoney(f.purchases)} completed checkouts against ${anMoney(orders)} orders in the sheet —
+               worth checking which is right before acting on the conversion rate.
+             </div>` : ''}
+      </div>`;
+    }
+
     async function openAnalysisTab() {
       if (!canOpenModule('media')) return;
       _anMode = true; _alMode = false; _ppMode = false;
@@ -14820,6 +14934,10 @@
           </div>
 
           <div class="dc-grid" style="margin-top:16px">
+            <div id="an-funnel" class="dc-card" style="cursor:default">
+              <div class="section-label" style="margin:0 0 10px">Funnel</div>
+              <div class="cln-card-sub">Reading Shopify and Clarity…</div>
+            </div>
             <div class="dc-card" style="cursor:default">
               <div class="section-label" style="margin:0 0 10px">Where the money went</div>
               <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -14883,13 +15001,27 @@
           </div>
 
           <div class="cln-note" style="padding-top:14px">
-            Not shown, because this account has no data for it: website sessions, add-to-cart and checkout rates,
-            new against returning customers, and product-level margin. The funnel percentages in the strategy
-            template are benchmarks, not this brand's — they would read as analysis while being guesses.
+            Still not measurable here: new against returning customers, and product-level margin.
+            The funnel above is this account's own Shopify and Clarity data — where a step is blank,
+            nothing measured it, and it is left blank rather than filled with a market average.
           </div>
         </div>`;
 
       window._anCur = { cur, prev, thisKey, prevKey, label, beRoas, tgtRoas, months: months.slice(0, 6).map(k => ({ k, ...anRollup(byMonth[k]) })) };
+
+      // The funnel needs two network calls, so it fills in after the figures
+      // rather than holding the whole page behind it.
+      const mStart = thisKey + '-01';
+      const mEnd = iso(new Date(Number(thisKey.slice(0, 4)), Number(thisKey.slice(5, 7)), 0));
+      anFunnel(mStart, mEnd > iso(end) ? iso(end) : mEnd).then(f => {
+        const box = document.getElementById('an-funnel');
+        if (box) box.outerHTML = anFunnelCard(f, cur.orders, cur_);
+        window._anCur.funnel = f;
+      }).catch(e => {
+        const box = document.getElementById('an-funnel');
+        if (box) box.innerHTML = `<div class="section-label" style="margin:0 0 10px">Funnel</div>
+          <div class="cln-card-sub">Could not be read: ${escHtml(e.message || String(e))}</div>`;
+      });
     }
 
     /** Hands the month's real figures to Claude and asks for the reading. */
@@ -14909,6 +15041,12 @@
         `Website orders ${d.cur.webOrders} (revenue ${Math.round(d.cur.webRev)}), message orders ${d.cur.msgOrders} (revenue ${Math.round(d.cur.msgRev)}).`,
         `Break-even ROAS ${d.beRoas.toFixed(1)}x at a 50% gross margin; target ${d.tgtRoas.toFixed(1)}x.`,
         `Last months: ${d.months.map(m => `${m.k} spend ${Math.round(m.spend)} revenue ${Math.round(m.revenue)} roas ${m.roas ? m.roas.toFixed(2) : 'n/a'}`).join('; ')}.`,
+        d.funnel && d.funnel.sessions != null
+          ? `Funnel from ${d.funnel.source}: ${d.funnel.sessions} sessions` +
+            (d.funnel.carts != null ? `, ${d.funnel.carts} added to cart` : '') +
+            (d.funnel.checkouts != null ? `, ${d.funnel.checkouts} reached checkout` : '') +
+            `, conversion ${((d.cur.orders / d.funnel.sessions) * 100).toFixed(2)}%.`
+          : 'No session or funnel data for this account.',
         '',
         'Read this month in 4-6 short bullets: what changed and why it likely changed, what is working,',
         'what is at risk, and the single most useful next action. Use only the figures above — do not invent',
