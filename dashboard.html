@@ -4510,11 +4510,6 @@
             <select id="fn-f-month" class="connect-input" onchange="fnMonthPicked()" style="min-width:150px" title="Show one month only">
               <option value="">All time</option>
             </select>
-            <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-muted)">
-              from <input type="date" id="fn-from" class="connect-input" onchange="fnDatesPicked()" style="min-width:auto;padding:7px 9px">
-              to   <input type="date" id="fn-to"   class="connect-input" onchange="fnDatesPicked()" style="min-width:auto;padding:7px 9px">
-              <button onclick="fnClearRange()" style="padding:6px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-main);cursor:pointer">Clear</button>
-            </span>
             <button onclick="fnExpandAll(true)" class="connect-input" style="cursor:pointer;min-width:auto;padding:7px 12px">▾ Show all payments</button>
             <button onclick="fnExpandAll(false)" class="connect-input" style="cursor:pointer;min-width:auto;padding:7px 12px">▴ Collapse</button>
           </div>
@@ -22743,36 +22738,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
-    // Picking a month fills the date boxes; picking dates clears the month.
-    // One source of truth either way — the range below.
-    function fnMonthPicked() {
-      const m = document.getElementById('fn-f-month').value;
-      const from = document.getElementById('fn-from'), to = document.getElementById('fn-to');
-      if (m) {
-        const [y, mo] = m.split('-').map(Number);
-        // Build the string from parts: toISOString() would shift to UTC and
-        // land on the previous day for anyone east of Greenwich.
-        const last = new Date(y, mo, 0).getDate();
-        from.value = m + '-01';
-        to.value   = `${m}-${String(last).padStart(2, '0')}`;
-      } else { from.value = ''; to.value = ''; }
-      fnRender();
-    }
-    function fnDatesPicked() {
-      document.getElementById('fn-f-month').value = '';
-      fnRender();
-    }
-    function fnClearRange() {
-      document.getElementById('fn-f-month').value = '';
-      document.getElementById('fn-from').value = '';
-      document.getElementById('fn-to').value = '';
-      fnRender();
-    }
+    // Finance is read a month at a time — a billing cycle, a payroll run, a
+    // set of invoices — so the month is the whole control. There used to be a
+    // free from/to beside it, kept in step with the dropdown in both
+    // directions, which bought the ability to ask for 3 March to 19 April:
+    // a question nobody here asks, at the cost of two more boxes and a Clear
+    // button on a bar that already has five filters.
+    function fnMonthPicked() { fnRender(); }
 
     function fnRange() {
-      const from = document.getElementById('fn-from').value;
-      const to   = document.getElementById('fn-to').value;
-      return (from || to) ? { from: from || '0000-01-01', to: to || '9999-12-31' } : null;
+      const m = document.getElementById('fn-f-month')?.value;
+      if (!m) return null;                       // "All time"
+      const [y, mo] = m.split('-').map(Number);
+      // Built from the parts: toISOString() shifts to UTC and lands on the
+      // previous day for anyone east of Greenwich, which is everyone here.
+      const last = new Date(y, mo, 0).getDate();
+      return { from: `${m}-01`, to: `${m}-${String(last).padStart(2, '0')}` };
     }
 
     // Money received / spent inside the chosen range, per client.
