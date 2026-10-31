@@ -14670,6 +14670,9 @@
     // anything that cannot be is named as missing rather than filled in.
     // ═══════════════════════════════════════════════════════════
     let _anMode = false, _anBusy = false;
+    // Which month the pane is showing. Empty means the newest one there is.
+    let _anMonth = '';
+    function anPickMonth(k) { _anMonth = k || ''; anRender(); }
 
     // Selim's defaults, applied until an account says otherwise:
     //   gross margin 50%  →  break-even ROAS 2.0x
@@ -14705,6 +14708,48 @@
         roas: spend  > 0 ? revenue / spend  : null,
         cpa:  orders > 0 ? spend / orders   : null,
       };
+    }
+
+    /**
+     * The four ratios a month is judged on, from one rollup.
+     *
+     * POAS is the one that is missing everywhere else: ROAS counts revenue,
+     * which includes the cost of the goods. POAS counts only the gross
+     * profit, so 1.0x is the real break-even — below it the ads cost more
+     * than the margin they brought, however healthy the ROAS looks.
+     */
+    function anPerf(m) {
+      return {
+        roas:  m.roas,
+        poas:  m.spend > 0 ? (m.revenue * AN_MARGIN) / m.spend : null,
+        cpa:   m.cpa,
+        share: m.revenue > 0 ? m.spend / m.revenue : null,
+      };
+    }
+
+    /**
+     * The best this account has actually reached, month by month.
+     *
+     * The target comes from the margin and is the same arithmetic for every
+     * brand. The best month is this brand's own, which is the more useful
+     * number of the two: it has already been done once, so it cannot be
+     * dismissed as a spreadsheet figure.
+     */
+    function anBest(monthRollups) {
+      const out = {};
+      for (const [key, dir] of [['roas', 1], ['poas', 1], ['cpa', -1], ['share', -1]]) {
+        let bv = null, bk = null;
+        for (const m of monthRollups) {
+          // A month with no spend has no ratios, and a month with a handful
+          // of recorded days is noise, not a record.
+          if (!m.spend || !m.revenue || m.days < 10) continue;
+          const v = anPerf(m)[key];
+          if (v == null || !isFinite(v)) continue;
+          if (bv == null || (dir > 0 ? v > bv : v < bv)) { bv = v; bk = m.k; }
+        }
+        out[key] = { value: bv, month: bk };
+      }
+      return out;
     }
 
     function anDelta(now, before) {
@@ -14875,9 +14920,16 @@
       const byMonth = {};
       for (const r of rows) (byMonth[anMonthKey(r.day)] ||= []).push(r);
       const months = Object.keys(byMonth).sort().reverse();
-      const thisKey = months[0], prevKey = months[1];
+
+      // The month shown is the one picked, not whichever is newest. Before
+      // the picker existed this pane always read the latest month while the
+      // period buttons above said something else — two different months on
+      // one screen, with nothing to say which was which.
+      const idx = Math.max(0, months.indexOf(_anMonth));
+      const thisKey = months[idx], prevKey = months[idx + 1];
       const cur = anRollup(byMonth[thisKey]);
       const prev = prevKey ? anRollup(byMonth[prevKey]) : null;
+      const allMonths = months.map(k => ({ k, ...anRollup(byMonth[k]) }));
 
       const label = accountMap[sel.value]?.account_name || 'This account';
       const cur_ = (accountMap[sel.value]?.currency || 'EGP');
@@ -14907,9 +14959,72 @@
           <div style="font-size:11px;color:var(--text-muted)">${sub}${delta !== undefined ? ' · ' + anArrow(delta, higherBetter) : ''}</div>
         </div>`;
 
+      // ── Targets ──
+      //
+      // Selim asked for the targets to come from the data rather than be
+      // typed in. Two honest sources for that: the economics (a 50% margin
+      // and ads at 20% of revenue fix what the ratios have to be), and the
+      // best month this account has actually recorded. The first says what
+      // is required, the second says what has already been managed.
+      const perf = anPerf(cur);
+      const best = anBest(allMonths);
+      const tgt = {
+        roas:  tgtRoas,
+        poas:  AN_MARGIN / AN_AD_SHARE,
+        cpa:   tgtCpa,
+        share: AN_AD_SHARE,
+      };
+      const brk = { roas: beRoas, poas: 1, cpa: beCpa, share: AN_MARGIN };
+
+      const fmt = {
+        roas:  v => v == null ? '—' : anNum(v) + 'x',
+        poas:  v => v == null ? '—' : anNum(v) + 'x',
+        cpa:   v => v == null ? '—' : anMoney(v) + ' ' + cur_,
+        share: v => v == null ? '—' : (v * 100).toFixed(1) + '%',
+      };
+      const TARGET_ROWS = [
+        ['roas',  'ROAS',           'revenue ÷ ad spend',                 1],
+        ['poas',  'POAS',           'gross profit ÷ ad spend',            1],
+        ['cpa',   'Cost per order', 'ad spend ÷ orders',                 -1],
+        ['share', 'Ads % of revenue', 'what the ads are costing the brand', -1],
+      ];
+
+      const targetRow = ([key, name, note, dir]) => {
+        const a = perf[key], t = tgt[key], b = brk[key], bb = best[key];
+        const hit = (a == null || t == null) ? null : (dir > 0 ? a >= t : a <= t);
+        const alive = (a == null || b == null) ? null : (dir > 0 ? a >= b : a <= b);
+        const col = hit === null ? 'var(--text-muted)' : hit ? '#16A34A' : alive ? '#E7B91C' : '#E53E3E';
+        // The gap stated as the thing that has to change, not as a ratio of
+        // ratios: "needs 0.55x more" is actionable, "at 89% of target" is not.
+        const gap = (a == null || t == null) ? '—'
+          : hit ? 'met'
+          : key === 'share' || key === 'cpa'
+            ? `${fmt[key](a - t)} too high`
+            : `${fmt[key](t - a)} short`;
+        return `
+          <tr>
+            <td style="padding:9px 8px;border-bottom:1px solid var(--border)">
+              <div style="font-weight:600">${escHtml(name)}</div>
+              <div style="font-size:10.5px;color:var(--text-muted)">${escHtml(note)}</div>
+            </td>
+            <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right;font-weight:800;color:${col}">${fmt[key](a)}</td>
+            <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right">${fmt[key](t)}</td>
+            <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right;color:var(--text-muted)">${fmt[key](b)}</td>
+            <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right">
+              ${fmt[key](bb.value)}
+              ${bb.month ? `<div style="font-size:10px;color:var(--text-muted)">${escHtml(monthName(bb.month))}</div>` : ''}
+            </td>
+            <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right;color:${col}">${escHtml(gap)}</td>
+          </tr>`;
+      };
+
       host.innerHTML = `
         <div class="dc-row">
-          <div class="section-label">📈 ${escHtml(label)} · ${escHtml(monthName(thisKey))}
+          <div class="section-label">📈 ${escHtml(label)} ·
+            <select onchange="anPickMonth(this.value)"
+                    style="font:inherit;color:inherit;background:transparent;border:1px solid var(--border);border-radius:6px;padding:2px 6px;cursor:pointer">
+              ${months.map(k => `<option value="${k}"${k === thisKey ? ' selected' : ''}>${escHtml(monthName(k))}</option>`).join('')}
+            </select>
             <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:8px">
               ${cur.days} recorded day${cur.days === 1 ? '' : 's'}${prevKey ? ` · compared with ${escHtml(monthName(prevKey))}` : ' · no earlier month to compare'}
             </span>
@@ -14930,6 +15045,26 @@
               At a ${(AN_MARGIN * 100).toFixed(0)}% gross margin, every order has to cover its own cost before the ad that won it.
               Break-even is <strong>${beRoas.toFixed(1)}x</strong>; anything under that loses money however good it looks in Ads Manager.
               Target is <strong>${tgtRoas.toFixed(1)}x</strong>, which is ads at ${(AN_AD_SHARE * 100).toFixed(0)}% of revenue.
+            </div>
+          </div>
+
+          <div class="dc-card" style="cursor:default;margin-top:16px">
+            <div class="section-label" style="margin:0 0 10px">Target against actual</div>
+            <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:620px">
+              <tr>${['', 'Actual', 'Target', 'Break-even', 'Best month', 'Gap'].map((h, i) =>
+                `<th style="text-align:${i ? 'right' : 'left'};padding:6px 8px;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)">${h}</th>`).join('')}</tr>
+              ${TARGET_ROWS.map(targetRow).join('')}
+            </table>
+            </div>
+            <div class="cln-card-sub" style="margin-top:10px;line-height:1.7">
+              <strong>Target</strong> is what a ${(AN_MARGIN * 100).toFixed(0)}% margin with ads at
+              ${(AN_AD_SHARE * 100).toFixed(0)}% of revenue requires. <strong>Break-even</strong> is where
+              the ads stop paying for themselves. <strong>Best month</strong> is this account's own record
+              over the months on file — it has been reached once, so it is not a hypothetical.
+              POAS is the honest one: ROAS counts revenue, POAS counts only the
+              ${(AN_MARGIN * 100).toFixed(0)}% that is actually profit, so 1.0x is where ads start costing
+              more than they bring.
             </div>
           </div>
 
@@ -14978,16 +15113,18 @@
           <div class="dc-card" style="cursor:default;margin-top:16px">
             <div class="section-label" style="margin:0 0 10px">Month by month</div>
             <table style="width:100%;border-collapse:collapse;font-size:12.5px">
-              <tr>${['Month', 'Spend', 'Revenue', 'Orders', 'AOV', 'ROAS', 'CPA'].map(h =>
+              <tr>${['Month', 'Spend', 'Revenue', 'Orders', 'AOV', 'ROAS', 'POAS', 'CPA'].map(h =>
                 `<th style="text-align:${h === 'Month' ? 'left' : 'right'};padding:6px 8px;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)">${h}</th>`).join('')}</tr>
-              ${months.map(k => { const m = anRollup(byMonth[k]); return `
-                <tr${k === thisKey ? ' style="background:rgba(255,255,255,.04)"' : ''}>
+              ${months.map(k => { const m = anRollup(byMonth[k]); const mp = anPerf(m); return `
+                <tr onclick="anPickMonth('${k}')" title="Show this month above"
+                    style="cursor:pointer${k === thisKey ? ';background:rgba(255,255,255,.04)' : ''}">
                   <td style="padding:7px 8px;border-bottom:1px solid var(--border)">${escHtml(monthName(k))}</td>
                   <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${anMoney(m.spend)}</td>
                   <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${anMoney(m.revenue)}</td>
                   <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${anMoney(m.orders)}</td>
                   <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${m.aov ? anMoney(m.aov) : '—'}</td>
                   <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;color:${m.roas == null ? 'inherit' : m.roas >= tgtRoas ? '#16A34A' : m.roas >= beRoas ? '#E7B91C' : '#E53E3E'}">${m.roas ? anNum(m.roas) + 'x' : '—'}</td>
+                  <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;color:${mp.poas == null ? 'inherit' : mp.poas >= tgt.poas ? '#16A34A' : mp.poas >= 1 ? '#E7B91C' : '#E53E3E'}">${mp.poas ? anNum(mp.poas) + 'x' : '—'}</td>
                   <td style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right">${m.cpa ? anMoney(m.cpa) : '—'}</td>
                 </tr>`; }).join('')}
             </table>
@@ -15007,7 +15144,9 @@
           </div>
         </div>`;
 
-      window._anCur = { cur, prev, thisKey, prevKey, label, beRoas, tgtRoas, months: months.slice(0, 6).map(k => ({ k, ...anRollup(byMonth[k]) })) };
+      window._anCur = { cur, prev, thisKey, prevKey, label, beRoas, tgtRoas,
+                        actual: perf, target: tgt, breakEven: brk, best,
+                        months: allMonths.slice(0, 6) };
 
       // The funnel needs two network calls, so it fills in after the figures
       // rather than holding the whole page behind it.
