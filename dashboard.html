@@ -27076,7 +27076,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     (function () {
       var mine = (window.__SW_BUILD__ || '?');
       var el = document.getElementById('build-stamp');
-      var asked = false;
+      // When a reload would lose work the page asks instead of reloading.
+      // That ask used to happen once per page load, so "Later" — or simply
+      // not noticing it — meant sitting on the old build for the rest of the
+      // day. It now asks again after ten minutes, every time, until the tab
+      // is actually current.
+      var askedAt = 0;
+      var ASK_AGAIN = 10 * 60 * 1000;
+
+      // The stamp already says the build is old. Making it the button saves
+      // explaining Cmd+Shift+R to anyone: the thing that tells you you are
+      // behind is the thing that fixes it.
+      function goLive(live) {
+        var u = new URL(location.href);
+        u.searchParams.set('b', live || String(Date.now()));
+        location.replace(u.toString());
+      }
 
       // /build is one short line; sw.js is the fallback for a server deployed
       // before /build existed, so this keeps working during that one rollout.
@@ -27104,18 +27119,23 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           var stale = live !== '?' && mine !== '?' && live !== mine;
           if (el) {
             el.textContent = stale ? ('build ' + mine + ' \u2014 OLD, ' + live + ' is live') : ('build ' + mine);
-            el.title = stale ? 'This page is a stored copy. Reload to get ' + live : 'Up to date';
+            el.title = stale ? 'This page is a stored copy. Click to load ' + live : 'Up to date';
             el.style.color       = stale ? '#FCB900' : '';
             el.style.borderColor = stale ? 'rgba(252,185,0,.6)' : '';
             el.style.background  = stale ? 'rgba(252,185,0,.14)' : '';
+            el.style.cursor      = stale ? 'pointer' : '';
+            el.onclick           = stale ? function () { goLive(live); } : null;
           }
-          if (!stale || asked) return;
-          if (pwaBusy()) { asked = true; pwaOfferReload(); return; }
+          if (!stale) return;
+          if (pwaBusy()) {
+            if (Date.now() - askedAt < ASK_AGAIN) return;
+            askedAt = Date.now();
+            pwaOfferReload();
+            return;
+          }
           // Drop the old ?b= so the server's redirect sends this tab to the
           // current build rather than back to the URL it already has.
-          var u = new URL(location.href);
-          u.searchParams.set('b', live);
-          location.replace(u.toString());
+          goLive(live);
         }).catch(function () {
           if (el && el.textContent === '') el.textContent = 'build ' + mine;
         });
