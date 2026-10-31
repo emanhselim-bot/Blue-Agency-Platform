@@ -8789,6 +8789,9 @@
       currentPlatformTab = platform;
       localStorage.setItem(`dash_platform_${currentOrgId}`, platform);
       saveAgencySettings(currentOrgId, currentAgencyId, { platform });
+      // Leaving Analysis or the Ads Library is a navigation too, so the
+      // remembered tab stops pointing at the one that was just left.
+      _navSave({ v: 'media', tab: platform });
       renderPlatformTabs();
       filterAccountsByAgency();
       // Reset account selection and clear content when switching platforms
@@ -14928,6 +14931,10 @@
       if (!canOpenModule('media')) return;
       _anMode = true; _alMode = false; _ppMode = false;
       renderPlatformTabs();
+      // Which tab inside the dashboard, not just that the dashboard was open.
+      // Without this a refresh from Analysis came back on Meta Ads, which
+      // reads as the tab having been lost rather than simply not restored.
+      _navSave({ v: 'media', tab: 'analysis' });
       await anRender();
     }
 
@@ -15252,8 +15259,9 @@
 
     async function openAdsLibraryTab() {
       if (!requireMediaTab('ads_library')) return;
-      _alMode = true; _ppMode = false;
+      _alMode = true; _ppMode = false; _anMode = false;
       renderPlatformTabs();
+      _navSave({ v: 'media', tab: 'ads_library' });
       _alRender();
       await alLoadCompetitors();
       _alRender();
@@ -25815,6 +25823,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           // "select an account above".
           if (sel && sel.value) {
             document.getElementById('home-hub').classList.add('hidden');
+            // The tab inside the dashboard, where one was recorded. Only the
+            // two that are a different view are reopened: a platform tab is
+            // already back from the agency settings, and calling
+            // setPlatformTab here would clear the account that was just put
+            // back in the picker.
+            if (s.tab === 'analysis')          await openAnalysisTab();
+            else if (s.tab === 'ads_library')  await openAdsLibraryTab();
           } else {
             await mbpOpen();
           }
@@ -26448,7 +26463,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       sel.dispatchEvent(new Event('change'));
       document.getElementById('home-hub').classList.add('hidden');
       mbpClose();
-      _navSave({ v: 'media' });
+      _navSave({ v: 'media', tab: currentPlatformTab });
       loadDataWithRefresh();
       return true;
     }
