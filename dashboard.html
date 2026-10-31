@@ -22245,6 +22245,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       'minimum-provisional': ['#EA8C00', 'minimum (no spend yet)'],
       'no-spend':            ['#E53E3E', 'no spend figure'],
       'no-model':            ['#E53E3E', 'no billing model'],
+      'on-delivery':         ['#6B7280', 'quoted'],
     };
 
     const _fnDate = d => d ? new Date(d + 'T00:00:00')
@@ -22287,10 +22288,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         return;
       }
 
-      // "This cycle" is every active contract: each one bills exactly once in
-      // any 30-day stretch, so the sum is one month of fees.
-      const total = rows.reduce((t, r) => t + (r.fee || 0), 0);
-      const soon  = rows.filter(r => (r.days_until ?? 99) <= 7);
+      // Project work is quoted once and invoiced on delivery, so it is not
+      // money arriving in the next 30 days and is not added to the forecast.
+      // Mixing the two would overstate a month by whatever happened to be in
+      // production at the time.
+      const monthly = rows.filter(r => r.trigger !== 'On delivery');
+      const project = rows.filter(r => r.trigger === 'On delivery');
+
+      const total = monthly.reduce((t, r) => t + (r.fee || 0), 0);
+      const soon  = monthly.filter(r => (r.days_until ?? 99) <= 7);
       const soonTotal = soon.reduce((t, r) => t + (r.fee || 0), 0);
 
       const card = (label, value, sub, colour) => `
@@ -22302,11 +22308,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       const head = `
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-          ${card('Next 30 days', fnMoney(total), `${rows.length} active contract${rows.length === 1 ? '' : 's'}`)}
+          ${card('Next 30 days', fnMoney(total), `${monthly.length} monthly contract${monthly.length === 1 ? '' : 's'}`)}
           ${card('Due within 7 days', fnMoney(soonTotal), soon.length ? soon.map(r => escHtml(r.client)).join(' · ') : 'nothing due', soon.length ? '#EA8C00' : '')}
         </div>`;
 
-      const body = rows.map(r => {
+      const line = r => {
         const [bc, bl] = FN_BASIS[r.basis] || ['#6B7280', r.basis || '—'];
         const pct = r.percentage != null ? (r.percentage * 100).toFixed(r.percentage * 100 % 1 ? 1 : 0) + '%' : null;
         const due = r.days_until === 0 ? 'today'
@@ -22315,31 +22321,38 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
         // The working, not just the result. A percentage fee is only
         // trustworthy if you can see which account the spend came from.
-        const working = r.model === 'Fixed'
-          ? 'fixed fee'
-          : r.spend == null
-            ? `no spend found${r.matched_account ? '' : ' — no account matched to this client'}`
-            : `${pct} of ${fnMoney(r.spend)} = ${fnMoney(r.spend * (r.percentage || 0))}` +
-              (r.minimum ? ` · floor ${fnMoney(r.minimum)}` : '');
+        const working = r.trigger === 'On delivery'
+          ? 'invoiced when the work is delivered'
+          : r.model === 'Fixed'
+            ? 'fixed fee'
+            : r.spend == null
+              ? `no spend found${r.matched_account ? '' : ' — no account matched to this client'}`
+              : `${pct} of ${fnMoney(r.spend)} = ${fnMoney(r.spend * (r.percentage || 0))}` +
+                (r.minimum ? ` · floor ${fnMoney(r.minimum)}` : '');
+
+        const when = r.trigger === 'On delivery'
+          ? 'no date until delivered'
+          : `${_fnDate(r.billing_date)} · ${due}`;
+        const period = r.trigger === 'On delivery'
+          ? (r.notes ? escHtml(r.notes.slice(0, 110)) + (r.notes.length > 110 ? '…' : '') : '')
+          : `${_fnDate(r.period_start)} – ${_fnDate(r.period_end)}${r.matched_account ? ` · ${escHtml(r.matched_account)}` : ''}`;
 
         return `
-          <div class="fn-row" style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border-bottom:1px solid var(--border)">
             <div style="flex:1;min-width:0">
               <div style="font-weight:600">${escHtml(r.client)}${r.service ? `<span style="font-weight:400;color:var(--text-muted)"> · ${escHtml(r.service)}</span>` : ''}</div>
               <div class="cln-card-sub" style="margin-top:3px">
                 ${escHtml(working)}
               </div>
-              <div class="cln-card-sub" style="margin-top:3px;opacity:.75">
-                ${_fnDate(r.period_start)} – ${_fnDate(r.period_end)}${r.matched_account ? ` · ${escHtml(r.matched_account)}` : ''}
-              </div>
+              <div class="cln-card-sub" style="margin-top:3px;opacity:.75">${period}</div>
             </div>
             <div style="text-align:right;white-space:nowrap">
               <div style="font-weight:700;font-size:15px">${r.fee == null ? '—' : fnMoney(r.fee, r.currency)}</div>
               <div class="cln-card-sub" style="color:${bc}">${escHtml(bl)}</div>
-              <div class="cln-card-sub" style="opacity:.75">${_fnDate(r.billing_date)} · ${due}</div>
+              <div class="cln-card-sub" style="opacity:.75">${when}</div>
             </div>
           </div>`;
-      }).join('');
+      };
 
       const attention = (data.needs_attention || []).length ? `
         <div class="cln-card-sub" style="margin-top:14px;line-height:1.7;color:#EA8C00">
@@ -22347,12 +22360,22 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           account to read spend from: ${(data.needs_attention).map(escHtml).join(' · ')}
         </div>` : '';
 
-      box.innerHTML = head + `
-        <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">${body}</div>
-        <div class="cln-card-sub" style="margin-top:14px;line-height:1.7">
-          The fee is the higher of the minimum and the percentage, over the 30 days
-          ending the day before the billing date. Nothing here is raised in Zoho —
-          this is what the contract implies, not an invoice.
+      const section = (title, note, list) => !list.length ? '' : `
+        <div style="margin-top:22px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">${title}</div>
+          <div class="cln-card-sub" style="margin-bottom:10px;line-height:1.7">${note}</div>
+          <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">${list.map(line).join('')}</div>
+        </div>`;
+
+      box.innerHTML = head
+        + section('Monthly contracts',
+            'The fee is the higher of the minimum and the percentage, over the 30 days '
+          + 'ending the day before the billing date.', monthly)
+        + section('Billed on delivery',
+            'Content, AI media and article work: quoted once and invoiced when it is '
+          + 'handed over, so these carry no date and are not in the 30-day total above.', project)
+        + `<div class="cln-card-sub" style="margin-top:14px;line-height:1.7">
+          Nothing here is raised in Zoho — this is what the contract implies, not an invoice.
         </div>
         ${attention}
         <a class="cln-open" style="display:block;text-align:center;text-decoration:none;margin-top:14px;max-width:360px"

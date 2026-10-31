@@ -62,6 +62,7 @@ type Contract = {
   client: string;
   service: string;
   status: string;
+  trigger: string;
   model: string;
   minimum: number | null;
   percentage: number | null;   // 0.2 for 20%
@@ -102,6 +103,11 @@ async function readContracts(token: string): Promise<Contract[]> {
         client: plain(q["Client"]) || "(untitled)",
         service: q["Service"]?.select?.name ?? "",
         status: q["Status"]?.select?.name ?? "",
+        // A row with no trigger set is read from its billing day: a date
+        // means it recurs, no date means somebody invoices it when the work
+        // is handed over. Guessing beats dropping the row.
+        trigger: q["Billing Trigger"]?.select?.name
+              ?? (q["Billing Day"]?.number ? "Monthly" : "On delivery"),
         model: q["Billing Model"]?.select?.name ?? "",
         minimum: q["Minimum Fees"]?.number ?? null,
         percentage: q["Percentage"]?.number ?? null,
@@ -264,10 +270,15 @@ Deno.serve(async (req: Request) => {
   ];
 
   // One spend query for the whole pane rather than one per contract.
-  const matched = live.map(c => ({ c, m: bestMatch(c.client, cands) }));
+  // Project work — content shoots, AI reels, SEO articles — is invoiced when
+  // it is delivered, not on a day of the month. It has no window and no
+  // spend, so it is matched to nothing and costs no query.
+  const isMonthly = (c: Contract) => c.trigger === "Monthly" && !!c.billing_day;
+
+  const matched = live.map(c => ({ c, m: isMonthly(c) ? bestMatch(c.client, cands) : null }));
   const keys = [...new Set(matched.map(x => x.m?.key).filter(Boolean))] as string[];
   const earliest = matched
-    .map(x => x.c.billing_day ? windowFor(today, x.c.billing_day).period_start : null)
+    .map(x => isMonthly(x.c) ? windowFor(today, x.c.billing_day!).period_start : null)
     .filter(Boolean).sort()[0] as string | undefined;
 
   type Row = { account_key: string; day: string; sp: number };
@@ -312,13 +323,19 @@ Deno.serve(async (req: Request) => {
   };
 
   const out = matched.map(({ c, m }) => {
-    const w = c.billing_day ? windowFor(today, c.billing_day) : null;
+    const monthly = isMonthly(c);
+    const w = monthly ? windowFor(today, c.billing_day!) : null;
     const spend = w ? spendIn(m?.key, w.period_start, w.period_end) : null;
-    const { fee, basis } = feeFor(c.model, c.minimum, c.percentage, spend);
+    const { fee, basis } = monthly
+      ? feeFor(c.model, c.minimum, c.percentage, spend)
+      // Delivered work is worth what was quoted. There is no spend to take a
+      // percentage of, and no date to put against it until it is handed over.
+      : { fee: c.minimum, basis: "on-delivery" as const };
     return {
       page_id: c.page_id,
       client: c.client,
       service: c.service,
+      trigger: c.trigger,
       currency: c.currency,
       zoho_customer_id: c.zoho_customer_id,
       zoho_org: c.zoho_org,
@@ -342,10 +359,11 @@ Deno.serve(async (req: Request) => {
     today,
     contracts: out,
     skipped: contracts.filter(c => c.status !== "Active").length,
-    // Said plainly rather than left for the reader to notice: a contract with
-    // no billing day has no window, so it has no spend and no fee.
+    // Said plainly rather than left for the reader to notice. Only monthly
+    // contracts are judged: project work is meant to have no billing day.
     needs_attention: out.filter(r =>
-      !r.billing_day || !r.model || (r.percentage != null && !r.matched_account)
+      r.trigger === "Monthly" &&
+      (!r.billing_day || !r.model || (r.percentage != null && !r.matched_account))
     ).map(r => r.client),
   });
 });
