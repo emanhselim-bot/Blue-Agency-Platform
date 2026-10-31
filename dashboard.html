@@ -6520,7 +6520,7 @@
     const TGT_FALLBACK_KPIS = [
       ['📘 Meta Ads', ['Total Spend', 'Reach', 'Impressions', 'Clicks', 'CTR', 'CPC',
                        'Daily Budget', 'Ad Account Fund']],
-      ['🎯 Combined', ['Total Orders', 'Total Pieces', 'Total Revenue', 'ROAS',
+      ['🎯 Combined', ['Total Orders', 'Total Pieces', 'Total Revenue', 'ROAS', 'POAS',
                        'Total Conversion Rate', 'Avg Cost per Order', 'Avg Cost per Piece']],
       ['🌐 Website',  ['Website Orders', 'Website Pieces', 'Website Revenue', 'Website Sessions']],
       ['💬 Messages', ['Number of Orders', 'Number of Pieces']],
@@ -12966,6 +12966,29 @@
       const _profitSub = _profitPct == null
         ? 'Type a profit % to see this'
         : `${fmt(totalRevenue, curr)} revenue${_retPct ? ' after returns' : ''} × ${_profitPct}%`;
+
+      // POAS — profit on ad spend.
+      //
+      // ROAS divides by revenue, and most of a revenue figure is the cost of
+      // the goods. So the ROAS that breaks even moves with the margin: 2.0x
+      // at 50%, 5.0x at 20%. Two brands can show the same 3x and one of them
+      // is losing money. POAS divides the gross profit instead, so 1.00x is
+      // break-even for every brand and nothing has to be reconciled in your
+      // head before reading it.
+      //
+      // Same denominator as ROAS — conversion spend, branding excluded —
+      // so the two cards sit beside each other and agree.
+      // Until a brand's own margin is typed, 50% is used — Selim's standing
+      // default, and the same one the Analysis tab works from. The card says
+      // which it used, because a POAS on an assumed margin and a POAS on the
+      // brand's real one are not the same claim.
+      const POAS_DEFAULT_MARGIN = 50;
+      const _poasMargin = _profitPct != null ? _profitPct : POAS_DEFAULT_MARGIN;
+      const _poasProfit = totalRevenue ? totalRevenue * _poasMargin / 100 : null;
+      const poas = (_poasProfit != null && _spendForMetrics) ? _poasProfit / _spendForMetrics : null;
+      const _poasSub = _profitPct == null
+        ? `Assumes ${POAS_DEFAULT_MARGIN}% margin — set Profit % ←`
+        : `Profit ÷ ${_spendBasisLabel} · break-even 1.00x`;
       // Say so on the card, otherwise a net figure looks like missing revenue.
       const _revSubLabel = returnedAmount > 0
         ? `Net of ${fmt(returnedAmount, curr)} returns (${_retPct}%)`
@@ -13103,6 +13126,11 @@
                   ? `<span style="color:${profit >= 0 ? '#34D399' : '#F87171'}">${fmt(profit, curr)}</span>`
                   : '—',
                 _profitSub, profit, null, true, 'kpi-profit-val')}
+            ${kpi('c-sky solid', '📊', 'POAS',
+                poas != null
+                  ? `<span style="color:${poas >= 1 ? '#34D399' : '#F87171'}">${fmt(poas, '', 2)}x</span>`
+                  : '—',
+                _poasSub, poas, _t.poas, true, 'kpi-poas-val')}
             ${kpi('c-purple solid', '🎯', 'Total Conversion Rate', sfmt(adConversionRate, v => fmt(v,'',2) + '%'), sfmtSub('Total Orders ÷ Link Clicks'), adConversionRate, _t.cvr, true, 'kpi-total-cr-val')}
               ${kpi('c-teal solid', '🧾', 'Average Order Value',
                   (totalRevenue && totalOrders) ? fmt(totalRevenue / totalOrders, curr) : '—',
@@ -13913,14 +13941,31 @@
         if (profitPctInput) {
           const pSub = profitPctInput.parentElement.querySelector('.kpi-sub');
           const pVal = document.getElementById('kpi-profit-val');
+          // POAS is the margin restated against the ad spend, so it has to
+          // move with the number being typed rather than wait for a reload.
+          const qVal = document.getElementById('kpi-poas-val');
+          const qSub = qVal?.closest('.kpi-card')?.querySelector('.kpi-sub');
+          const paintPoas = pct => {
+            if (!qVal) return;
+            const m = pct != null ? pct : POAS_DEFAULT_MARGIN;
+            const p = totalRevenue ? totalRevenue * m / 100 : null;
+            const q = (p != null && _spendForMetrics) ? p / _spendForMetrics : null;
+            qVal.innerHTML = q == null ? '—'
+              : `<span style="color:${q >= 1 ? '#34D399' : '#F87171'}">${fmt(q, '', 2)}x</span>`;
+            if (qSub) qSub.textContent = pct == null
+              ? `Assumes ${POAS_DEFAULT_MARGIN}% margin — set Profit % ←`
+              : `Profit ÷ ${_spendBasisLabel} · break-even 1.00x`;
+          };
           const paint = () => {
             const raw = profitPctInput.value.trim();
             if (raw === '') {
               localStorage.removeItem(_profitPctKey);
               if (pSub) pSub.textContent = 'Manual entry';
               if (pVal) { pVal.textContent = '—'; pVal.style.color = ''; }
+              paintPoas(null);
               return;
             }
+            /* value read below, then handed to paintPoas as a percentage */
             let v = parseFloat(raw);
             if (isNaN(v)) return;
             // Over 100% of revenue is a typo, not a margin.
@@ -13932,6 +13977,7 @@
               pVal.textContent = p != null ? fmt(p, curr) : '—';
               pVal.style.color = p == null ? '' : (p >= 0 ? '#34D399' : '#F87171');
             }
+            paintPoas(v);
             if (pSub) pSub.textContent = 'Manual ✎ · shared across this brand';
           };
           profitPctInput.addEventListener('input', paint);
