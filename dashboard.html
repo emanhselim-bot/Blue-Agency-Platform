@@ -24043,8 +24043,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         // Only people still here. Someone who has left is archived rather
         // than deleted, so their old tasks still carry a name, but they are
         // not offered when assigning new ones.
-        sb.from('blue_ad_task_assignees').select('id, full_name, email, department, job_title')
-          .eq('organization_id', currentOrgId).eq('archived', false)
+        // Archived people are fetched too, and left out of the picker below.
+        // Their names have to be known here: somebody who has left still
+        // appears on the tasks they did, and the task rows are read as a
+        // source of names, so without the archive list they walk straight
+        // back into the list the moment the roster stops naming them.
+        sb.from('blue_ad_task_assignees').select('id, full_name, email, department, job_title, archived')
+          .eq('organization_id', currentOrgId)
           .order('department').order('full_name'),
       ]);
       if (error) {
@@ -24079,9 +24084,11 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       // Merge into whoever is already there, keeping the fullest spelling of
       // the name as the label: "Yara Ammar" reads better than "Yara", and is
       // what the task rows say.
+      const gone = _batNotionRoster.filter(m => m.archived);
+      const hasLeft = name => gone.some(m => batSamePerson(m.full_name, name));
       const absorb = (name, extra = {}) => {
         const clean = String(name || '').trim();
-        if (!clean) return null;
+        if (!clean || hasLeft(clean)) return null;
         const existing = assignees.find(p =>
           batSamePerson(p.full_name, clean) ||
           (extra.email && p.email && p.email.toLowerCase() === extra.email.toLowerCase()));
@@ -24102,7 +24109,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
       _batMembers.forEach(m => absorb(m.full_name || m.email,
         { id: m.id, email: m.email, taskPersonKey: `member:${m.id}` }));
-      _batNotionRoster.forEach(m => absorb(m.full_name,
+      _batNotionRoster.filter(m => !m.archived).forEach(m => absorb(m.full_name,
         { email: m.email, department: m.department, job_title: m.job_title,
           taskPersonKey: `notion-directory:${m.id || m.full_name}` }));
       // Finally the names the tasks themselves carry. These are the fullest
