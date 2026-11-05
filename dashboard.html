@@ -3744,12 +3744,12 @@
 
     /* Blue Ad Tasks shares the dashboard's navy shell, blue controls and
        surface tokens while keeping its compact board and status tints. */
-    /* The board is light in both themes. It is a working surface people stare
-       at all day and compare against each other's screens, and the colour of
-       a category chip has to mean the same thing on every one of them; the
-       dark repaint turned four differently tinted columns into one grey. The
-       colours below are therefore literal rather than theme tokens, and the
-       dark overrides that used to follow are gone. */
+    /* The board's day colours. They are literal rather than theme tokens
+       because the night set below is a designed counterpart, not the same
+       sheet with the lights turned down: every colour that carries meaning —
+       the four column tints, the eleven category chips — is restated there in
+       a hue that survives on a dark ground. The old dark mode flattened all
+       of it to one grey, which is what made the board unreadable at night. */
     .bat-shell { background:#F7F9FC;border-color:#E3E9F2;color:#17233B;box-shadow:0 10px 30px rgba(1,28,105,.16); }
     .bat-rail { background:linear-gradient(180deg,#011C69 0%,#083BBF 100%); }
     .bat-brand-mark { background:#0573F5;box-shadow:0 0 0 3px rgba(255,255,255,.12); }
@@ -3827,6 +3827,104 @@
     .bat-check-drop:hover { color:#C03A3A; }
     .bat-check-add { border:1px dashed #CBD5E3;background:#fff;color:#51607A;border-radius:8px;padding:7px 9px;font:inherit;font-size:11.5px;cursor:pointer;text-align:left; }
     .bat-check-add:hover { border-color:#0573F5;color:#0573F5; }
+
+    /* ── Night mode ───────────────────────────────────────────────────────
+       A dark board that still reads as a board. Two things had to survive
+       the dark ground: the four columns stay distinguishable from one
+       another, each keeping the hue it has by day, and every category chip
+       keeps its own colour rather than collapsing into grey — a chip is
+       identified by hue before it is read. Each chip is therefore a deep
+       wash of its daytime hue with a light tint of the same hue as text,
+       which holds contrast without glowing. */
+    [data-theme="dark"] .bat-shell { background:#050F2B;border-color:#17284F;color:#E7EEF9;box-shadow:0 10px 30px rgba(0,0,0,.45); }
+    [data-theme="dark"] .bat-main-head h2 { color:#EAF1FB; }
+    [data-theme="dark"] .bat-main-head .hub-mod-back,
+    [data-theme="dark"] .bat-main-head .hub-mod-btn { background:#0E1D42;color:#C6D5EC;border-color:#223460; }
+    [data-theme="dark"] .bat-main-head .hub-mod-back:hover,
+    [data-theme="dark"] .bat-main-head .hub-mod-btn:hover { background:#16275A; }
+    [data-theme="dark"] .bat-search,
+    [data-theme="dark"] .bat-filter { background:#0D1C3F;border-color:#22345E;color:#DCE6F5; }
+    [data-theme="dark"] .bat-search::placeholder { color:#7589A9; }
+    [data-theme="dark"] .bat-summary-line { color:#8699B8; }
+
+    [data-theme="dark"] .bat-column { background:#0A1734;border-color:#17284F; }
+    [data-theme="dark"] .bat-column[data-status="todo"] { background:#0A1734; }
+    [data-theme="dark"] .bat-column[data-status="in_progress"] { background:#091B42; }
+    [data-theme="dark"] .bat-column[data-status="review"] { background:#1E1807; }
+    [data-theme="dark"] .bat-column[data-status="done"] { background:#09200F; }
+    [data-theme="dark"] .bat-column[data-status="todo"] .bat-column-head { color:#C3D2E8; }
+    [data-theme="dark"] .bat-column[data-status="in_progress"] .bat-column-head { color:#8FB6FF; }
+    [data-theme="dark"] .bat-column[data-status="review"] .bat-column-head { color:#E8BE6B; }
+    [data-theme="dark"] .bat-column[data-status="done"] .bat-column-head { color:#7FC98B; }
+    [data-theme="dark"] .bat-count { background:rgba(255,255,255,.09);color:#C3D2E8; }
+    [data-theme="dark"] .bat-col-menu { color:#7589A9; }
+
+    [data-theme="dark"] .bat-card { background:#11214A;border-color:#1E3062;box-shadow:0 2px 5px rgba(0,0,0,.3); }
+    [data-theme="dark"] .bat-card:hover { border-color:#4D8CF5;box-shadow:0 6px 16px rgba(0,0,0,.45); }
+    [data-theme="dark"] .bat-card-title { color:#EAF1FB; }
+    [data-theme="dark"] .bat-card-client,
+    [data-theme="dark"] .bat-card-meta { color:#8EA2C2; }
+    [data-theme="dark"] .bat-check { background:transparent;border-color:#4A5E86; }
+    [data-theme="dark"] .bat-check:hover,
+    [data-theme="dark"] .bat-card[data-done="true"] .bat-check { background:#2F7DF6;border-color:#2F7DF6; }
+    [data-theme="dark"] .bat-card-person { background:#1C2F5E;color:#C8D8F2; }
+    [data-theme="dark"] .bat-empty,
+    [data-theme="dark"] .bat-shell .hub-loading { color:#7589A9; }
+
+    [data-theme="dark"] .bat-chip { background:#1B2B51;color:#B9C9E4; }
+    [data-theme="dark"] .bat-category { background:#2F2458;color:#C8B6F7; }
+    [data-theme="dark"] .bat-category[data-category="Design"] { background:#38215A;color:#DCBDFB; }
+    [data-theme="dark"] .bat-category[data-category="Content"] { background:#11375C;color:#A8D3F8; }
+    [data-theme="dark"] .bat-category[data-category="Media Buying"] { background:#152C66;color:#AFC6FF; }
+    [data-theme="dark"] .bat-category[data-category="Social Media"] { background:#4A2026;color:#FFB8BF; }
+    [data-theme="dark"] .bat-category[data-category="Strategy"] { background:#0F363E;color:#9FDDE9; }
+    [data-theme="dark"] .bat-category[data-category="Reporting"] { background:#0F3728;color:#9CE2C2; }
+    [data-theme="dark"] .bat-category[data-category="Video"] { background:#471B31;color:#FFB3D1; }
+    [data-theme="dark"] .bat-category[data-category="Production"] { background:#4A2713;color:#FFBE96; }
+    [data-theme="dark"] .bat-category[data-category="SEO"] { background:#263D18;color:#CBE9A6; }
+    [data-theme="dark"] .bat-category[data-category="Meeting"] { background:#202D45;color:#BCCCE6; }
+    [data-theme="dark"] .bat-category[data-category="Website"] { background:#0D343D;color:#9FDFEE; }
+    [data-theme="dark"] .bat-category[data-category="Other"] { background:#20283A;color:#AEBACD; }
+    [data-theme="dark"] .bat-chip-due { background:#17254280;color:#9FB2D0; }
+    [data-theme="dark"] .bat-chip-due[data-when="today"] { background:#45191B;color:#FFAFAA; }
+    [data-theme="dark"] .bat-chip-due[data-when="overdue"] { background:#4C1611;color:#FFA99E; }
+    [data-theme="dark"] .bat-chip-due[data-when="tomorrow"] { background:#3F3110;color:#F6D189; }
+    [data-theme="dark"] .bat-chip-check { background:#1C2A48;color:#A9BBD6; }
+    [data-theme="dark"] .bat-priority-high,
+    [data-theme="dark"] .bat-priority-urgent { background:#45181B;color:#FFAEA8; }
+    [data-theme="dark"] .bat-priority-medium { background:#3D2F10;color:#F2CF86; }
+    [data-theme="dark"] .bat-priority-low { background:#15351C;color:#9BD9A6; }
+
+    [data-theme="dark"] .bat-stat,
+    [data-theme="dark"] .bat-list,
+    [data-theme="dark"] .bat-calendar-wrap { background:#0C1A3C;border-color:#1B2C56; }
+    [data-theme="dark"] .bat-stat-label,
+    [data-theme="dark"] .bat-calendar-dow { color:#8294B3; }
+    [data-theme="dark"] .bat-stat-value,
+    [data-theme="dark"] .bat-list-title,
+    [data-theme="dark"] .bat-calendar-day { color:#EAF1FB; }
+    [data-theme="dark"] .bat-list-row { border-bottom-color:#18284B;color:#9FB1CE; }
+    [data-theme="dark"] .bat-calendar-dow,
+    [data-theme="dark"] .bat-calendar-cell { border-color:#18284B; }
+    [data-theme="dark"] .bat-calendar-event { background:#12306E;color:#BBD5FF; }
+    [data-theme="dark"] .bat-calendar-event[data-status="review"] { background:#3B2C0C;color:#F3D08C; }
+    [data-theme="dark"] .bat-calendar-event[data-status="done"] { background:#14321B;color:#A6DCAF; }
+
+    [data-theme="dark"] #bat-modal .hub-modal-box { background:#0C1A3C;color:#E7EEF9;border-color:#1E3062; }
+    [data-theme="dark"] #bat-modal h3 { color:#EAF1FB; }
+    [data-theme="dark"] #bat-modal label { color:#8EA2C2; }
+    [data-theme="dark"] #bat-modal .hub-input { background:#0A1734;color:#E2EAF7;border-color:#23355F; }
+    [data-theme="dark"] #bat-modal .hub-input::placeholder { color:#6F84A5; }
+    [data-theme="dark"] #bat-modal .hub-modal-actions { border-top-color:#1B2C56; }
+    [data-theme="dark"] #bat-modal .ghost { background:#101F46;color:#B9C9E4;border-color:#23355F; }
+    [data-theme="dark"] #bat-modal .primary { background:#2F7DF6; }
+    [data-theme="dark"] #bat-modal .primary:hover { background:#1E66DA; }
+    [data-theme="dark"] .bat-check-row { background:#0A1734;border-color:#1E3062; }
+    [data-theme="dark"] .bat-check-row input[type="text"] { color:#E2EAF7; }
+    [data-theme="dark"] .bat-check-row[data-done="true"] input[type="text"],
+    [data-theme="dark"] .bat-check-row input[type="text"]:disabled { color:#7589A9; }
+    [data-theme="dark"] .bat-check-add { background:transparent;border-color:#2A3D68;color:#9FB2D0; }
+    [data-theme="dark"] .bat-check-add:hover { border-color:#2F7DF6;color:#8FB6FF; }
     .hub-inner.wide.tasks-fullscreen { width:100%;max-width:none;height:100vh;min-height:100vh;margin:0;padding:16px;text-align:left; }
     .hub-inner.tasks-fullscreen #hub-tasks-view { height:100%; }
     .hub-inner.tasks-fullscreen .bat-shell { width:100%;height:100%;min-height:calc(100vh - 32px);border-radius:18px; }
