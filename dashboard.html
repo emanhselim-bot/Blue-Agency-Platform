@@ -3744,40 +3744,89 @@
 
     /* Blue Ad Tasks shares the dashboard's navy shell, blue controls and
        surface tokens while keeping its compact board and status tints. */
-    .bat-shell { background:var(--surface);border-color:var(--border);color:var(--text-main);box-shadow:0 10px 30px rgba(1,28,105,.16); }
+    /* The board is light in both themes. It is a working surface people stare
+       at all day and compare against each other's screens, and the colour of
+       a category chip has to mean the same thing on every one of them; the
+       dark repaint turned four differently tinted columns into one grey. The
+       colours below are therefore literal rather than theme tokens, and the
+       dark overrides that used to follow are gone. */
+    .bat-shell { background:#F7F9FC;border-color:#E3E9F2;color:#17233B;box-shadow:0 10px 30px rgba(1,28,105,.16); }
     .bat-rail { background:linear-gradient(180deg,#011C69 0%,#083BBF 100%); }
     .bat-brand-mark { background:#0573F5;box-shadow:0 0 0 3px rgba(255,255,255,.12); }
     .bat-nav-label { color:rgba(226,237,255,.62); }
     .bat-nav-btn { color:rgba(255,255,255,.82); }
     .bat-nav-btn:hover,.bat-nav-btn.active { background:rgba(5,115,245,.34);color:#fff; }
     .bat-rail-bottom { border-top-color:rgba(255,255,255,.2);color:rgba(255,255,255,.65); }
-    .bat-main-head h2 { color:var(--blue-navy); }
-    .bat-main-head .hub-mod-back { color:var(--blue-navy);border-color:var(--border); }
-    .bat-main-head .hub-mod-back:hover { background:var(--well); }
-    .bat-search,.bat-filter { background:var(--surface);border-color:var(--border);color:var(--text-main); }
-    .bat-search:focus,.bat-filter:focus { outline:2px solid rgba(5,115,245,.22);border-color:var(--blue-light); }
-    .bat-action { background:linear-gradient(135deg,#0573F5,#083BBF)!important;box-shadow:0 2px 6px rgba(8,59,191,.2); }
+    .bat-main-head h2 { color:#0B1B3F; }
+    .bat-main-head .hub-mod-back { color:#334155;border-color:#DCE3EE;background:#fff; }
+    .bat-main-head .hub-mod-back:hover { background:#EEF2F8; }
+    .bat-main-head .hub-mod-btn { background:#fff;color:#334155;border-color:#DCE3EE; }
+    .bat-search,.bat-filter { background:#fff;border-color:#DCE3EE;color:#17233B; }
+    .bat-search::placeholder { color:#93A1B5; }
+    .bat-search:focus,.bat-filter:focus { outline:2px solid rgba(5,115,245,.22);border-color:#0573F5; }
+    .bat-action { background:linear-gradient(135deg,#0573F5,#083BBF)!important;color:#fff!important;box-shadow:0 2px 6px rgba(8,59,191,.2); }
     .bat-action:hover { background:#083BBF!important; }
-    .bat-card { border-color:var(--border); }
+    .bat-card { background:#fff;border-color:#E6EBF3; }
     .bat-card:hover { border-color:#0573F5;box-shadow:0 5px 14px rgba(5,115,245,.14); }
+    .bat-check { background:#fff;border-color:#AAB4C2; }
     .bat-check:hover,.bat-card[data-done="true"] .bat-check { border-color:#0573F5;background:#0573F5; }
-    .bat-card-title { color:var(--text-main); }
-    .bat-card-client,.bat-card-meta { color:var(--text-muted); }
-    .bat-stat,.bat-list,.bat-calendar-wrap { background:var(--surface);border-color:var(--border); }
-    .bat-stat-label,.bat-calendar-dow { color:var(--text-muted); }
-    .bat-stat-value,.bat-list-title,.bat-calendar-day { color:var(--text-main); }
-    .bat-list-row { border-bottom-color:var(--border);color:var(--text-muted); }
-    .bat-calendar-dow,.bat-calendar-cell { border-color:var(--border); }
+    .bat-card-title { color:#1B2740; }
+    .bat-card-client,.bat-card-meta { color:#7B8797; }
+    .bat-card-person { background:#E6EDF8;color:#31425A; }
+    .bat-summary-line { color:#748198; }
+    .bat-stat,.bat-list,.bat-calendar-wrap { background:#fff;border-color:#E6EBF3; }
+    .bat-stat-label,.bat-calendar-dow { color:#748198; }
+    .bat-stat-value,.bat-list-title,.bat-calendar-day { color:#17233B; }
+    .bat-list-row { border-bottom-color:#EDF0F4;color:#52627A; }
+    .bat-calendar-dow,.bat-calendar-cell { border-color:#EDF0F4; }
     .bat-calendar-event { background:#EAF2FE;color:#083BBF; }
-    [data-theme="dark"] .bat-main-head h2 { color:var(--text-main); }
-    [data-theme="dark"] .bat-main-head .hub-mod-back { color:var(--text-main); }
-    [data-theme="dark"] .bat-column { background:var(--well)!important;border-color:var(--border); }
-    [data-theme="dark"] .bat-column-head,
-    [data-theme="dark"] .bat-column[data-status] .bat-column-head { color:var(--text-main); }
-    [data-theme="dark"] .bat-count { color:var(--text-main);background:var(--surface-2); }
-    [data-theme="dark"] .bat-card { background:var(--surface); }
-    [data-theme="dark"] .bat-card-person { background:var(--surface-2);color:var(--text-main); }
-    [data-theme="dark"] .bat-calendar-event { background:#0A3590;color:#BFDBFE; }
+    .bat-empty,.bat-shell .hub-loading { color:#8994A3; }
+
+    /* One colour per kind of work. A chip is read at a glance from across a
+       desk, so each pair is a light wash of its own hue with text dark enough
+       to stay legible on it; two kinds of work never share a hue. */
+    .bat-category { background:#ECE6FF;color:#5A33A8; }
+    .bat-category[data-category="Design"] { background:#F3E8FF;color:#6B27A8; }
+    .bat-category[data-category="Content"] { background:#E0EFFB;color:#1F5C96; }
+    .bat-category[data-category="Media Buying"] { background:#DEE8FF;color:#2450B2; }
+    .bat-category[data-category="Social Media"] { background:#FCE6E7;color:#9B3943; }
+    .bat-category[data-category="Strategy"] { background:#D9EDF1;color:#1F5A66; }
+    .bat-category[data-category="Reporting"] { background:#DCF2E6;color:#1C6B47; }
+    .bat-category[data-category="Video"] { background:#FFE6EF;color:#9C2C5B; }
+    .bat-category[data-category="Production"] { background:#FFE3D6;color:#9E4517; }
+    .bat-category[data-category="SEO"] { background:#E4F3D4;color:#44701B; }
+    .bat-category[data-category="Meeting"] { background:#E7ECF4;color:#44546F; }
+    .bat-category[data-category="Website"] { background:#DDEFF3;color:#176273; }
+    .bat-category[data-category="Other"] { background:#EDF0F5;color:#5A687D; }
+    .bat-chip-due { background:#F0F3F8;color:#56657C; }
+    .bat-chip-due[data-when="today"] { background:#FFEAEA;color:#C03A3A; }
+    .bat-chip-due[data-when="overdue"] { background:#FDE4E2;color:#B3291F; }
+    .bat-chip-due[data-when="tomorrow"] { background:#FFF4DC;color:#8C6212; }
+    .bat-chip-check { background:#EEF2F8;color:#52627A; }
+
+    /* The task sheet is light too, for the same reason the board is, and it
+       sits outside .bat-shell so it has to say so itself. */
+    #bat-modal .hub-modal-box { background:#fff;color:#17233B;border:1px solid #E6EBF3;border-radius:16px; }
+    #bat-modal h3 { color:#0B1B3F; }
+    #bat-modal label { display:block;color:#5B6A80;font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;margin:11px 0 5px; }
+    #bat-modal .hub-input { background:#fff;color:#17233B;border:1px solid #DCE3EE;border-radius:9px;font-size:13px; }
+    #bat-modal .hub-input:focus { outline:2px solid rgba(5,115,245,.18);border-color:#0573F5; }
+    #bat-modal .hub-input::placeholder { color:#9AA7B8; }
+    #bat-modal .hub-modal-actions { border-top:1px solid #EDF0F4;margin-top:16px;padding-top:14px; }
+    #bat-modal .ghost { background:#fff;color:#51607A;border:1px solid #DCE3EE; }
+    #bat-modal .primary { background:#14253A;border:0;color:#fff; }
+    #bat-modal .primary:hover { background:#203D5E; }
+    .bat-check-list { display:flex;flex-direction:column;gap:5px;margin-top:2px; }
+    .bat-check-row { display:flex;align-items:center;gap:8px;background:#F7F9FC;border:1px solid #E6EBF3;border-radius:8px;padding:7px 9px; }
+    .bat-check-row input[type="text"] { flex:1;border:0;background:transparent;color:#17233B;font:inherit;font-size:12px;padding:0;min-width:0; }
+    .bat-check-row input[type="text"]:focus { outline:none; }
+    .bat-check-row input[type="text"]:disabled { color:#8A97A9; }
+    .bat-check-row input[type="checkbox"] { width:15px;height:15px;accent-color:#0573F5;flex:0 0 auto;cursor:pointer; }
+    .bat-check-row[data-done="true"] input[type="text"] { color:#8A97A9;text-decoration:line-through; }
+    .bat-check-drop { border:0;background:transparent;color:#9AA7B8;font-size:16px;line-height:1;cursor:pointer;padding:0 2px; }
+    .bat-check-drop:hover { color:#C03A3A; }
+    .bat-check-add { border:1px dashed #CBD5E3;background:#fff;color:#51607A;border-radius:8px;padding:7px 9px;font:inherit;font-size:11.5px;cursor:pointer;text-align:left; }
+    .bat-check-add:hover { border-color:#0573F5;color:#0573F5; }
     .hub-inner.wide.tasks-fullscreen { width:100%;max-width:none;height:100vh;min-height:100vh;margin:0;padding:16px;text-align:left; }
     .hub-inner.tasks-fullscreen #hub-tasks-view { height:100%; }
     .hub-inner.tasks-fullscreen .bat-shell { width:100%;height:100%;min-height:calc(100vh - 32px);border-radius:18px; }
@@ -4378,9 +4427,12 @@
             <div class="bat-field"><label>ASSIGN TO</label><select class="hub-input" id="bat-assignee"><option value="">Unassigned</option></select></div>
             <div class="bat-field"><label>DUE DATE</label><input class="hub-input" id="bat-due" type="date"></div>
             <div class="bat-field"><label>PRIORITY</label><select class="hub-input" id="bat-priority"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
-            <div class="bat-field"><label>CATEGORY</label><select class="hub-input" id="bat-category"><option>Media Buying</option><option>Design</option><option>Content</option><option>Social Media</option><option>Website</option><option>Strategy</option><option>Other</option></select></div>
+            <div class="bat-field"><label>CATEGORY</label><select class="hub-input" id="bat-category"><option>Media Buying</option><option>Design</option><option>Content</option><option>Social Media</option><option>Video</option><option>Production</option><option>Reporting</option><option>Strategy</option><option>SEO</option><option>Meeting</option><option>Website</option><option>Other</option></select></div>
           </div>
           <label>STATUS</label><select class="hub-input" id="bat-status"><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="done">Done</option></select>
+          <label>CHECKLIST</label>
+          <div class="bat-check-list" id="bat-checklist"></div>
+          <button type="button" class="bat-check-add" onclick="batChecklistAdd()">＋ Add a step</button>
           <div class="hub-modal-actions">
             <button class="ghost" onclick="batCloseTask()">Cancel</button>
             <button class="primary" id="bat-save" onclick="batSaveTask()">Save task</button>
@@ -23970,6 +24022,50 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       ? new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric' })
       : 'No due date';
 
+    // How a due date reads on a card. "Oct 12" makes you work out whether that
+    // has passed; the three dates that matter say so themselves.
+    function batDueChip(task, today) {
+      if (!task.due_date) return null;
+      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth()+1).padStart(2,'0')}-${String(tomorrow.getDate()).padStart(2,'0')}`;
+      if (task.status !== 'done' && task.due_date < today) return { when: 'overdue', label: 'Overdue' };
+      if (task.due_date === today) return { when: 'today', label: 'Today' };
+      if (task.due_date === tomorrowKey) return { when: 'tomorrow', label: 'Tomorrow' };
+      return { when: 'later', label: batDateLabel(task.due_date) };
+    }
+
+    // Tasks arrive from Notion with no category — the boards there have no
+    // such property, so every imported row says "Other" and the board loses
+    // the one chip that tells work apart at a glance. The wording is read
+    // instead. This is a guess and is treated as one: it is used for display
+    // and filtering only, never written back, so a category typed by hand
+    // always wins and nothing has to be un-guessed later.
+    const BAT_CATEGORY_RULES = [
+      ['Reporting', /report|insight|analys|analyz|تقرير|تقارير/i],
+      ['Media Buying', /\bads?\b|campaign|media (buy|plan)|targeting|\bbudget|spend|roas|\bcpa\b|boost|pixel|retarget|optimi[sz]e|اعلان|إعلان|ميديا/i],
+      ['Production', /shoot|photograph|\bphotos?\b|product shot|studio|تصوير/i],
+      // "creative" and "brand" need their word boundaries: the client list
+      // has an AlCreative in it, and a task called "ALcreative" is not a
+      // design job, it is that client's name.
+      ['Design', /design|\bposts?\b|poster|\bcreatives?\b|banner|thumbnail|logo|carousel|visual|mockup|\b(re)?brand(ing|s)?\b|تصميم/i],
+      ['Video', /\breels?\b|video|montage|edits?\b|editing|hook|voice ?over|musical|interview|podcast|فيديو|مونتاج|ريل|بودكاست/i],
+      ['Content', /caption|\bcopy\b|content|script|article|blog|topic|writing|brief|\btov\b|كتابة|محتوى|كابشن/i],
+      ['SEO', /\bseo\b|keyword|backlink|ranking|serp|search console/i],
+      ['Meeting', /meeting|\bcall\b|approval|presentation|اجتماع/i],
+      ['Strategy', /strateg|\bplans?\b|planning|roadmap|خطة|استراتيج/i],
+      ['Website', /website|landing page|wordpress|shopify|domain|موقع/i],
+      ['Social Media', /instagram|\big\b|facebook|linkedin|snapchat|community|stor(y|ies)/i],
+    ];
+    function batCategoryOf(task) {
+      const given = String(task.category || '').trim();
+      if (given && given.toLowerCase() !== 'other') return given;
+      const text = `${task.title || ''} ${task.description || ''}`;
+      const hit = BAT_CATEGORY_RULES.find(([, pattern]) => pattern.test(text));
+      return hit ? hit[0] : (given || 'Other');
+    }
+
+    const batChecklistOf = task => Array.isArray(task?.checklist) ? task.checklist : [];
+
     function batSetScope(scope) {
       _batScope = scope;
       batRender();
@@ -24195,7 +24291,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           batNamePieces(t.assignee_name).some(nm => batSamePerson(nm, person.full_name)) ||
           Boolean(person.email && String(t.assignee_email || '').trim().toLowerCase() === person.email.toLowerCase());
       });
-      if (query) rows = rows.filter(t => [t.title, t.description, t.client_name, t.assignee_name, t.category].some(v => String(v || '').toLowerCase().includes(query)));
+      if (query) rows = rows.filter(t => [t.title, t.description, t.client_name, t.assignee_name, batCategoryOf(t)].some(v => String(v || '').toLowerCase().includes(query)));
       if (dueFilter === 'today') rows = rows.filter(t => t.due_date === today);
       if (dueFilter === 'week') { const end = new Date(); end.setDate(end.getDate() + 7); const until = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`; rows = rows.filter(t => t.due_date && t.due_date >= today && t.due_date <= until); }
       if (dueFilter === 'overdue') rows = rows.filter(t => t.status !== 'done' && t.due_date && t.due_date < today);
@@ -24206,7 +24302,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         const cards = rows.filter(t => t.status === status);
         return `<section class="bat-column" data-status="${status}"><div class="bat-column-head">${label}<span class="bat-count">${cards.length}</span><span class="bat-col-menu">···</span></div>` +
           (cards.length ? cards.map(t => {
-            const late = t.status !== 'done' && t.due_date && t.due_date < today;
+            const due = batDueChip(t, today);
+            const category = batCategoryOf(t);
+            const steps = batChecklistOf(t);
+            const doneSteps = steps.filter(s => s && s.done).length;
             const initials = (t.assignee_name || '?').split(/\s+/).map(p => p[0]).slice(0,2).join('').toUpperCase();
             return `<article class="bat-card" data-done="${t.status === 'done'}" onclick="batOpenTask('${batEsc(t.id)}')">
               <div class="bat-card-top"><button class="bat-check" aria-label="Mark ${batEsc(t.title)} ${t.status === 'done' ? 'not done' : 'done'}" onclick="event.stopPropagation();batToggleDone('${batEsc(t.id)}')">${t.status === 'done' ? '✓' : ''}</button><div class="bat-card-title">${batEsc(t.title)}</div>
@@ -24214,9 +24313,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
               </div>
               ${t.client_name ? `<div class="bat-card-client">${batEsc(t.client_name)}</div>` : ''}
               <div class="bat-card-meta">
-                ${t.category ? `<span class="bat-chip bat-category" data-category="${batEsc(t.category)}">${batEsc(t.category)}</span>` : ''}
-                ${t.due_date ? `<span class="bat-chip" style="${late ? 'color:#c43e3e;background:#fde9e8' : ''}">▣ ${late ? 'Overdue' : batDateLabel(t.due_date)}</span>` : ''}
-                ${t.priority ? `<span class="bat-chip bat-priority-${batEsc(t.priority)}">● ${batEsc(t.priority)}</span>` : ''}
+                <span class="bat-chip bat-category" data-category="${batEsc(category)}">${batEsc(category)}</span>
+                ${due ? `<span class="bat-chip bat-chip-due" data-when="${due.when}">▣ ${batEsc(due.label)}</span>` : ''}
+                ${steps.length ? `<span class="bat-chip bat-chip-check" title="Checklist">☑ ${doneSteps}/${steps.length}</span>` : ''}
+                ${t.priority === 'high' || t.priority === 'urgent' ? `<span class="bat-chip bat-priority-${batEsc(t.priority)}">● ${batEsc(t.priority)}</span>` : ''}
                 <span class="bat-card-person" title="${batEsc(t.assignee_name || 'Unassigned')}">${t.assignee_name ? batEsc(initials) : '—'}</span>
               </div>
             </article>`;
@@ -24285,7 +24385,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!batCanEdit()) return;
       _batEditing = id ? _batTasks.find(t => t.id === id) : null;
       const t = _batEditing || {};
-      document.getElementById('bat-modal-title').textContent = _batEditing ? 'Edit task' : 'New task';
+      document.getElementById('bat-modal-title').textContent = _batEditing ? 'Edit Task' : 'Create Task';
+      document.getElementById('bat-save').textContent = _batEditing ? 'Save task' : 'Create Task';
+      _batChecklistDraft = batChecklistOf(t).map(step => ({ text: String(step?.text || ''), done: Boolean(step?.done) }));
+      batChecklistRender();
       document.getElementById('bat-title').value = t.title || '';
       document.getElementById('bat-client').value = t.client_id || '';
       const selectedAssignee = _batAssignees.find(m => m.id
@@ -24294,7 +24397,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.getElementById('bat-assignee').value = selectedAssignee?.taskPersonKey || '';
       document.getElementById('bat-due').value = t.due_date || '';
       document.getElementById('bat-priority').value = t.priority || 'medium';
-      document.getElementById('bat-category').value = t.category || 'Media Buying';
+      // An imported task shows its guessed category rather than "Other", so
+      // opening one and saving it confirms the guess instead of discarding it.
+      document.getElementById('bat-category').value = _batEditing ? batCategoryOf(t) : 'Media Buying';
       document.getElementById('bat-description').value = t.description || '';
       document.getElementById('bat-status').value = t.status || 'todo';
       document.getElementById('bat-error').textContent = '';
@@ -24302,7 +24407,41 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.getElementById('bat-title').focus();
     }
 
-    function batCloseTask() { document.getElementById('bat-modal').classList.add('hidden'); _batEditing = null; }
+    function batCloseTask() { document.getElementById('bat-modal').classList.add('hidden'); _batEditing = null; _batChecklistDraft = []; }
+
+    // The checklist is edited in place rather than through a sub-dialog: it is
+    // three or four short lines, and the draft lives here until the task is
+    // saved so a cancelled edit leaves nothing behind.
+    let _batChecklistDraft = [];
+    function batChecklistRender() {
+      const box = document.getElementById('bat-checklist');
+      if (!box) return;
+      const editable = batCanEdit();
+      box.innerHTML = _batChecklistDraft.map((step, index) => `
+        <div class="bat-check-row" data-done="${step.done ? 'true' : 'false'}">
+          <input type="checkbox" ${step.done ? 'checked' : ''} ${editable ? '' : 'disabled'}
+                 aria-label="Step done" onchange="batChecklistToggle(${index},this.checked)">
+          <input type="text" value="${batEsc(step.text || '')}" maxlength="140" placeholder="What is this step?"
+                 ${editable ? '' : 'disabled'} oninput="batChecklistText(${index},this.value)">
+          ${editable ? `<button type="button" class="bat-check-drop" aria-label="Remove step" onclick="batChecklistDrop(${index})">×</button>` : ''}
+        </div>`).join('');
+    }
+    function batChecklistAdd() {
+      if (!batCanEdit()) return;
+      _batChecklistDraft.push({ text: '', done: false });
+      batChecklistRender();
+      const inputs = document.querySelectorAll('#bat-checklist input[type="text"]');
+      inputs[inputs.length - 1]?.focus();
+    }
+    function batChecklistDrop(index) { _batChecklistDraft.splice(index, 1); batChecklistRender(); }
+    function batChecklistToggle(index, done) {
+      if (_batChecklistDraft[index]) _batChecklistDraft[index].done = Boolean(done);
+      batChecklistRender();
+    }
+    function batChecklistText(index, text) {
+      // No re-render on every keystroke: it would take the caret with it.
+      if (_batChecklistDraft[index]) _batChecklistDraft[index].text = text;
+    }
 
     async function batSaveTask() {
       if (!batCanEdit()) return;
@@ -24321,13 +24460,20 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         priority: document.getElementById('bat-priority').value,
         category: document.getElementById('bat-category').value,
         status: document.getElementById('bat-status').value,
+        // Blank steps are dropped rather than saved: an empty row is somebody
+        // who clicked Add and changed their mind, not a step with no name.
+        checklist: _batChecklistDraft
+          .map(step => ({ text: String(step.text || '').trim(), done: Boolean(step.done) }))
+          .filter(step => step.text),
         updated_at: new Date().toISOString(),
       };
-      const save = document.getElementById('bat-save'); save.disabled = true; save.textContent = 'Saving…';
+      const save = document.getElementById('bat-save');
+      const saveLabel = save.textContent;
+      save.disabled = true; save.textContent = 'Saving…';
       const result = _batEditing
         ? await sb.from('blue_ad_tasks').update(row).eq('id', _batEditing.id).eq('organization_id', currentOrgId)
         : await sb.from('blue_ad_tasks').insert({ ...row, created_by: currentUser?.id || null });
-      save.disabled = false; save.textContent = 'Save task';
+      save.disabled = false; save.textContent = saveLabel;
       if (result.error) { errorBox.textContent = result.error.message; return; }
       batCloseTask(); await batLoad();
     }
