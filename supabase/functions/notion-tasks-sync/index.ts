@@ -362,11 +362,24 @@ Deno.serve(async (req) => {
           "so the member list could not be built.";
       }
       if (teamMembers.length) {
-        const { error: clearRosterError } = await admin.from("blue_ad_task_assignees").delete()
-          .eq("organization_id", orgId);
-        if (clearRosterError) throw new Error(`The old Notion member list could not be cleared. ${clearRosterError.message}`);
+        // The roster used to be deleted and rebuilt from Notion on every run.
+        // That made the Notion boards the definition of who works here, which
+        // they are not: a board exists for whoever had tasks that month, so
+        // the list carried people who had left, missed people who had no
+        // board of their own, and had nowhere to keep a job title — anything
+        // typed in was gone by the next sync.
+        //
+        // The roster is now owned by the dashboard. Notion only adds names it
+        // finds and refreshes their page ids; it never removes anybody and
+        // never touches job_title or archived. Someone who leaves is archived
+        // here, and stays archived even if an old board still mentions them.
+        const rows = teamMembers.map((person) => ({
+          organization_id: orgId,
+          ...person,
+          updated_at: new Date().toISOString(),
+        }));
         const { error: rosterError } = await admin.from("blue_ad_task_assignees").upsert(
-          teamMembers.map((person) => ({ organization_id: orgId, ...person, updated_at: new Date().toISOString() })),
+          rows,
           { onConflict: "organization_id,notion_person_key" },
         );
         if (rosterError) throw new Error(`The Notion team roster could not be saved. Apply migration 20240108000000_blue_ad_notion_team_roster.sql in Supabase, then retry. ${rosterError.message}`);

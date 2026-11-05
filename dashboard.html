@@ -24040,8 +24040,12 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         sb.from('pipeline_clients').select('id, name').eq('organization_id', currentOrgId).order('name'),
         sb.from('cp_members').select('id, full_name, email').eq('organization_id', currentOrgId)
           .eq('archived', false).order('full_name'),
-        sb.from('blue_ad_task_assignees').select('id, full_name, email, department')
-          .eq('organization_id', currentOrgId).order('department').order('full_name'),
+        // Only people still here. Someone who has left is archived rather
+        // than deleted, so their old tasks still carry a name, but they are
+        // not offered when assigning new ones.
+        sb.from('blue_ad_task_assignees').select('id, full_name, email, department, job_title')
+          .eq('organization_id', currentOrgId).eq('archived', false)
+          .order('department').order('full_name'),
       ]);
       if (error) {
         board.innerHTML = `<div class="hub-loading">${batEsc(error.message)}<br><span style="font-size:12px">If the task table is not set up yet, apply the new Supabase migration first.</span></div>`;
@@ -24085,11 +24089,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           if (clean.length > String(existing.full_name || '').length) existing.full_name = clean;
           existing.email = existing.email || extra.email || null;
           existing.department = existing.department || extra.department || '';
+          existing.job_title = existing.job_title || extra.job_title || '';
           existing.id = existing.id || extra.id || null;
           return existing;
         }
         const person = { id: extra.id || null, full_name: clean, email: extra.email || null,
-          department: extra.department || '', taskPersonKey: extra.taskPersonKey || `person:${clean.toLowerCase()}` };
+          department: extra.department || '', job_title: extra.job_title || '',
+          taskPersonKey: extra.taskPersonKey || `person:${clean.toLowerCase()}` };
         assignees.push(person);
         return person;
       };
@@ -24097,7 +24103,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       _batMembers.forEach(m => absorb(m.full_name || m.email,
         { id: m.id, email: m.email, taskPersonKey: `member:${m.id}` }));
       _batNotionRoster.forEach(m => absorb(m.full_name,
-        { email: m.email, department: m.department, taskPersonKey: `notion-directory:${m.id || m.full_name}` }));
+        { email: m.email, department: m.department, job_title: m.job_title,
+          taskPersonKey: `notion-directory:${m.id || m.full_name}` }));
       // Finally the names the tasks themselves carry. These are the fullest
       // and the only ones guaranteed to match a row, so they fill in anyone
       // the roster missed and lengthen the names of everyone it found.
@@ -24116,8 +24123,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const clientSelect = document.getElementById('bat-client');
       clientSelect.innerHTML = '<option value="">Internal / no client</option>' + _batClients.map(c =>
         `<option value="${batEsc(c.id)}">${batEsc(c.name)}</option>`).join('');
+      // The role, not the department, is what tells two people apart when you
+      // are deciding who to give something to: "Manar · Senior Media Buyer"
+      // answers that, "Manar · Media Buying" does not. The department is kept
+      // only for anyone who has no title yet, so they are not left bare.
       const memberOptions = _batAssignees.map(m => {
-        const label = [m.full_name || m.email, m.department].filter(Boolean).join(' · ');
+        const label = [m.full_name || m.email, m.job_title || m.department]
+          .filter(Boolean).join(' · ');
         return `<option value="${batEsc(m.taskPersonKey)}">${batEsc(label)}</option>`;
       }).join('');
       const personFilter = document.getElementById('bat-filter-person');
