@@ -646,7 +646,10 @@
     .bat-calendar-event[data-status="review"] { background:#fff1d6;color:#8f5f13; }
     .bat-calendar-event[data-status="done"] { background:#e4f2e4;color:#397243; }
     @media (max-width: 1100px) { .bat-board { grid-template-columns:repeat(2,minmax(180px,1fr)); } }
-    @media (max-width: 720px) { .bat-shell { grid-template-columns:1fr;min-height:0; } .bat-rail { padding:9px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px; } .bat-brand,.bat-nav-label,.bat-rail-bottom { display:none; } .bat-nav-btn { justify-content:center;padding:8px 3px;font-size:10px;flex-direction:column;gap:3px; } .bat-nav-btn .bat-nav-icon { font-size:16px; } .bat-main { padding:14px 10px 22px; } .bat-main-head { flex-wrap:wrap; } .bat-main-head h2 { font-size:19px; } .bat-board { grid-template-columns:1fr; } .bat-column { min-height:120px; } .bat-view-summary { grid-template-columns:repeat(2,1fr); } .bat-list-row { grid-template-columns:minmax(120px,1.4fr) 1fr 75px; } .bat-list-row > :nth-child(3) { display:none; } }
+    @media (max-width: 720px) { .bat-shell { grid-template-columns:1fr;min-height:0; } .bat-rail { padding:9px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px; } .bat-brand,.bat-nav-label,.bat-rail-bottom { display:none; } .bat-nav-btn { justify-content:center;padding:8px 3px;font-size:10px;flex-direction:column;gap:3px; } .bat-nav-btn .bat-nav-icon { font-size:16px; } .bat-main { padding:14px 10px 22px; } .bat-main-head { flex-wrap:wrap; } .bat-main-head h2 { font-size:19px; } .bat-board { grid-template-columns:1fr; } .bat-column { min-height:120px; } .bat-view-summary { grid-template-columns:repeat(2,1fr); } /* On a phone a row keeps the task and when it is due; the priority chip
+         is the one of the three that can be read on the card instead. */
+      .bat-list-row { grid-template-columns:minmax(120px,1.6fr) 104px; } .bat-list-row > :nth-child(2) { display:none; }
+      .bat-load-row { grid-template-columns:minmax(80px,1fr) minmax(0,1.4fr) 52px;gap:8px; } .bat-load-row > :nth-child(4) { display:none; } }
     @media (max-width: 500px) { .bat-form-grid { grid-template-columns:1fr;gap:0; } }
     .pipe-col-total { color: var(--text-muted); font-size: 11px; margin-bottom: 10px; min-height: 14px; }
     .pipe-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: grab; transition: transform .12s, border-color .12s; }
@@ -3828,6 +3831,58 @@
     .bat-check-add { border:1px dashed #CBD5E3;background:#fff;color:#51607A;border-radius:8px;padding:7px 9px;font:inherit;font-size:11.5px;cursor:pointer;text-align:left; }
     .bat-check-add:hover { border-color:#0573F5;color:#0573F5; }
 
+    /* My Day opens with the greeting rather than with numbers: the page is
+       read first thing in the morning, by one person, about their own day. */
+    .bat-hero { display:flex;align-items:flex-start;gap:14px;background:#fff;border:1px solid #E6EBF3;border-radius:14px;padding:16px 18px;margin:0 0 12px; }
+    .bat-hero-greet { font-size:19px;font-weight:800;color:#0B1B3F;letter-spacing:-.2px; }
+    .bat-hero-sub { font-size:12px;color:#7B8797;margin-top:3px; }
+    .bat-hero-date { margin-left:auto;text-align:right;font-size:12px;font-weight:700;color:#52627A;white-space:nowrap; }
+    .bat-rail-me { display:flex;align-items:center;gap:8px;padding:0 0 12px; }
+    .bat-rail-me .bat-card-person { margin:0;width:26px;height:26px;background:rgba(255,255,255,.16);color:#fff; }
+    .bat-rail-me-name { font-size:11px;font-weight:700;color:#fff;line-height:1.3; }
+    .bat-rail-me-role { font-size:9.5px;color:rgba(255,255,255,.62); }
+
+    /* The four tiles carry an icon in the colour of what they count, so the
+       one that matters — Overdue — is found without reading the labels. */
+    .bat-stat { display:flex;align-items:center;gap:11px; }
+    .bat-stat-icon { flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:14px;background:#EAF1FB;color:#2457B2; }
+    .bat-stat[data-tone="progress"] .bat-stat-icon { background:#F1E9FE;color:#6B35B8; }
+    .bat-stat[data-tone="review"] .bat-stat-icon { background:#FFF2DB;color:#95670F; }
+    .bat-stat[data-tone="overdue"] .bat-stat-icon { background:#FDE7E5;color:#B92F23; }
+    .bat-stat[data-tone="done"] .bat-stat-icon { background:#E3F4E6;color:#2C7138; }
+    .bat-stat-value { margin-top:1px; }
+
+    .bat-list-row { grid-template-columns:minmax(170px,2fr) 96px 104px; }
+    .bat-list-row.bat-row-click { cursor:pointer; }
+    .bat-list-row.bat-row-click:hover { background:#F7F9FC; }
+    .bat-row-sub { font-size:9.5px;font-weight:400;color:#7B8797;margin-top:3px; }
+
+    .bat-report-grid { display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:12px;align-items:start; }
+    .bat-panel { background:#fff;border:1px solid #E6EBF3;border-radius:12px;padding:14px 16px 16px; }
+    .bat-panel-head { font-size:12px;font-weight:800;color:#17233B;margin-bottom:12px; }
+    .bat-load-row { display:grid;grid-template-columns:minmax(96px,1.1fr) minmax(0,2fr) 58px 42px;align-items:center;gap:10px;padding:7px 0;font-size:11px;color:#52627A; }
+    .bat-load-who { display:flex;align-items:center;gap:8px;min-width:0; }
+    .bat-load-who .bat-card-person { margin:0; }
+    .bat-load-name { font-weight:700;color:#1D293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .bat-load-track { height:7px;border-radius:99px;background:#EDF1F7;overflow:hidden; }
+    .bat-load-fill { height:100%;border-radius:99px;background:linear-gradient(90deg,#4D8CF5,#0573F5); }
+    .bat-load-row[data-pressure="high"] .bat-load-fill { background:linear-gradient(90deg,#F6A33C,#E1761B); }
+    .bat-load-row[data-pressure="over"] .bat-load-fill { background:linear-gradient(90deg,#F2685C,#D32F21); }
+    .bat-load-count { text-align:right;font-variant-numeric:tabular-nums;color:#52627A; }
+    .bat-load-pct { text-align:right;font-weight:700;color:#1D293B;font-variant-numeric:tabular-nums; }
+    .bat-donut { display:flex;align-items:center;gap:14px;flex-wrap:wrap; }
+    .bat-donut-hole { font-size:17px;font-weight:800;fill:#17233B; }
+    .bat-donut-hole-sub { font-size:7px;font-weight:700;fill:#7B8797;letter-spacing:.6px; }
+    .bat-legend { flex:1;min-width:130px;display:flex;flex-direction:column;gap:5px; }
+    .bat-legend-row { display:flex;align-items:center;gap:7px;font-size:11px;color:#52627A; }
+    .bat-legend-dot { width:8px;height:8px;border-radius:50%;flex:0 0 auto; }
+    .bat-legend-name { flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1D293B; }
+    .bat-legend-count { font-variant-numeric:tabular-nums;font-weight:700; }
+    .bat-calendar-cell[data-today="true"] { background:#F2F7FF;box-shadow:inset 0 0 0 1px #BBD4FB; }
+    .bat-calendar-cell[data-today="true"] .bat-calendar-day { color:#0573F5; }
+    .bat-calendar-more { font-size:9px;color:#778397;padding-left:2px; }
+    @media (max-width: 900px) { .bat-report-grid { grid-template-columns:1fr; } }
+
     /* ── Night mode ───────────────────────────────────────────────────────
        A dark board that still reads as a board. Two things had to survive
        the dark ground: the four columns stay distinguishable from one
@@ -3925,6 +3980,31 @@
     [data-theme="dark"] .bat-check-row input[type="text"]:disabled { color:#7589A9; }
     [data-theme="dark"] .bat-check-add { background:transparent;border-color:#2A3D68;color:#9FB2D0; }
     [data-theme="dark"] .bat-check-add:hover { border-color:#2F7DF6;color:#8FB6FF; }
+    [data-theme="dark"] .bat-hero,
+    [data-theme="dark"] .bat-panel { background:#0C1A3C;border-color:#1B2C56; }
+    [data-theme="dark"] .bat-hero-greet,
+    [data-theme="dark"] .bat-panel-head,
+    [data-theme="dark"] .bat-load-name,
+    [data-theme="dark"] .bat-load-pct,
+    [data-theme="dark"] .bat-legend-name { color:#EAF1FB; }
+    [data-theme="dark"] .bat-hero-sub { color:#8EA2C2; }
+    [data-theme="dark"] .bat-hero-date,
+    [data-theme="dark"] .bat-load-row,
+    [data-theme="dark"] .bat-load-count,
+    [data-theme="dark"] .bat-legend-row,
+    [data-theme="dark"] .bat-row-sub,
+    [data-theme="dark"] .bat-calendar-more { color:#9FB1CE; }
+    [data-theme="dark"] .bat-load-track { background:#17254A; }
+    [data-theme="dark"] .bat-stat-icon { background:#15295A;color:#9FC2FF; }
+    [data-theme="dark"] .bat-stat[data-tone="progress"] .bat-stat-icon { background:#2D1F55;color:#CFB4FB; }
+    [data-theme="dark"] .bat-stat[data-tone="review"] .bat-stat-icon { background:#3B2C0C;color:#F3D08C; }
+    [data-theme="dark"] .bat-stat[data-tone="overdue"] .bat-stat-icon { background:#45181B;color:#FFAEA8; }
+    [data-theme="dark"] .bat-stat[data-tone="done"] .bat-stat-icon { background:#14321B;color:#A6DCAF; }
+    [data-theme="dark"] .bat-list-row.bat-row-click:hover { background:#11214A; }
+    [data-theme="dark"] .bat-donut-hole { fill:#EAF1FB; }
+    [data-theme="dark"] .bat-donut-hole-sub { fill:#8EA2C2; }
+    [data-theme="dark"] .bat-calendar-cell[data-today="true"] { background:#10254F;box-shadow:inset 0 0 0 1px #27477F; }
+    [data-theme="dark"] .bat-calendar-cell[data-today="true"] .bat-calendar-day { color:#8FB6FF; }
     .hub-inner.wide.tasks-fullscreen { width:100%;max-width:none;height:100vh;min-height:100vh;margin:0;padding:16px;text-align:left; }
     .hub-inner.tasks-fullscreen #hub-tasks-view { height:100%; }
     .hub-inner.tasks-fullscreen .bat-shell { width:100%;height:100%;min-height:calc(100vh - 32px);border-radius:18px; }
@@ -4480,7 +4560,10 @@
             <button class="bat-nav-btn" id="bat-nav-reports" onclick="batSetPage('reports')"><span class="bat-nav-icon">▥</span>Team & Reports</button>
             <div class="bat-nav-label">Manage</div>
             <button class="bat-nav-btn" id="bat-import-notion-btn" onclick="batOpenNotionImport()"><span class="bat-nav-icon">↥</span>Import from Notion</button>
-            <div class="bat-rail-bottom">Blue Ad Task Workspace</div>
+            <div class="bat-rail-bottom">
+              <div class="bat-rail-me" id="bat-rail-me"></div>
+              Blue Ad Task Workspace
+            </div>
           </aside>
           <main class="bat-main">
             <div class="bat-main-head">
@@ -4500,6 +4583,7 @@
               <div class="bat-board" id="bat-board"><div class="hub-loading">Open Blue Ad Tasks to load your work.</div></div>
             </section>
             <section class="bat-view" id="bat-view-day">
+              <div class="bat-hero" id="bat-day-hero"></div>
               <div class="bat-view-summary" id="bat-day-summary"></div>
               <div class="bat-list" id="bat-day-list"></div>
             </section>
@@ -4509,7 +4593,16 @@
             </section>
             <section class="bat-view" id="bat-view-reports">
               <div class="bat-view-summary" id="bat-report-summary"></div>
-              <div class="bat-list" id="bat-report-list"></div>
+              <div class="bat-report-grid">
+                <div class="bat-panel">
+                  <div class="bat-panel-head">Team Workload</div>
+                  <div id="bat-report-list"></div>
+                </div>
+                <div class="bat-panel">
+                  <div class="bat-panel-head">Tasks by Client</div>
+                  <div id="bat-report-clients"></div>
+                </div>
+              </div>
             </section>
           </main>
         </div>
@@ -24428,21 +24521,73 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (task) batUpdateStatus(id, task.status === 'done' ? 'todo' : 'done');
     }
 
+    // A row in My Day and the reports: the task, who or what it is for, then
+    // the two things that decide whether it is picked up now — how urgent it
+    // is and when it is due.
     function batListRows(rows, empty = 'No tasks to show') {
-      return rows.length ? rows.map(t => `<div class="bat-list-row"><div class="bat-list-title">${batEsc(t.title)}<div style="font-size:9px;font-weight:400;color:#7b8797;margin-top:3px">${batEsc(t.client_name || 'Internal task')}</div></div><div>${batEsc(t.assignee_name || 'Unassigned')}</div><div>${batEsc(t.priority || 'medium')}</div><div>${t.due_date ? batDateLabel(t.due_date) : 'No due date'}</div></div>`).join('') : `<div class="bat-empty">${empty}</div>`;
+      const today = batToday();
+      if (!rows.length) return `<div class="bat-empty">${empty}</div>`;
+      return rows.map(t => {
+        const due = batDueChip(t, today);
+        const priority = t.priority || 'medium';
+        return `<div class="bat-list-row bat-row-click" onclick="batOpenTask('${batEsc(t.id)}')">
+          <div class="bat-list-title">${batEsc(t.title)}<div class="bat-row-sub">${batEsc(t.client_name || 'Internal task')}</div></div>
+          <div><span class="bat-chip bat-priority-${batEsc(priority)}">● ${batEsc(priority)}</span></div>
+          <div>${due ? `<span class="bat-chip bat-chip-due" data-when="${due.when}">▣ ${batEsc(due.label)}</span>` : '<span class="bat-chip">No due date</span>'}</div>
+        </div>`;
+      }).join('');
     }
+
+    const batStatTile = (label, value, tone, icon) =>
+      `<div class="bat-stat" data-tone="${tone}"><div class="bat-stat-icon">${icon}</div><div><div class="bat-stat-label">${label}</div><div class="bat-stat-value">${value}</div></div></div>`;
+
+    // Whoever is signed in, by the name the team would use. The roster is
+    // asked first so it reads "Hager", not "hager.hamdy" out of an address.
+    function batMe() {
+      const email = String(currentUser?.email || '').toLowerCase();
+      const person = _batAssignees.find(m => m.email && m.email.toLowerCase() === email);
+      const name = person?.full_name || currentUser?.user_metadata?.full_name ||
+        (email ? email.split('@')[0].replace(/[._-]+/g, ' ') : '');
+      const pretty = name.replace(/\b\w/g, c => c.toUpperCase());
+      return { email, name: pretty, first: pretty.split(' ')[0] || 'there', role: person?.job_title || person?.department || '' };
+    }
+    const batMine = () => {
+      const me = batMe();
+      return _batTasks.filter(t =>
+        (me.email && String(t.assignee_email || '').toLowerCase() === me.email) ||
+        (me.name && batNamePieces(t.assignee_name).some(nm => batSamePerson(nm, me.name))));
+    };
 
     function batRenderDay() {
       const today = batToday();
-      const mine = _batTasks.filter(t => (t.assignee_email || '').toLowerCase() === (currentUser?.email || '').toLowerCase());
+      const me = batMe();
+      const hour = new Date().getHours();
+      const part = hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening';
+      const hero = document.getElementById('bat-day-hero');
+      if (hero) hero.innerHTML = `<div><div class="bat-hero-greet">Good ${part}, ${batEsc(me.first)}! ☀</div>
+        <div class="bat-hero-sub">Here are your tasks for today</div></div>
+        <div class="bat-hero-date">${new Date().toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric', year:'numeric' })}</div>`;
+      const railMe = document.getElementById('bat-rail-me');
+      if (railMe) railMe.innerHTML = me.name
+        ? `<span class="bat-card-person">${batEsc(me.name.split(/\s+/).map(p => p[0]).slice(0,2).join('').toUpperCase())}</span>
+           <span><span class="bat-rail-me-name">${batEsc(me.name)}</span><br><span class="bat-rail-me-role">${batEsc(me.role || 'Team')}</span></span>` : '';
+
+      const mine = batMine();
       const due = mine.filter(t => t.due_date === today && t.status !== 'done');
-      const active = due.filter(t => t.status === 'in_progress').length;
-      const review = due.filter(t => t.status === 'review').length;
+      const active = mine.filter(t => t.status === 'in_progress').length;
+      const review = mine.filter(t => t.status === 'review').length;
       const overdue = mine.filter(t => t.status !== 'done' && t.due_date && t.due_date < today).length;
       document.getElementById('bat-day-summary').innerHTML = [
-        ['Tasks Today', due.length], ['In Progress', active], ['In Review', review], ['Overdue', overdue],
-      ].map(([label, value]) => `<div class="bat-stat"><div class="bat-stat-label">${label}</div><div class="bat-stat-value">${value}</div></div>`).join('');
-      document.getElementById('bat-day-list').innerHTML = batListRows([...due, ...mine.filter(t => !t.due_date && t.status !== 'done')].sort((a,b) => (a.due_date || '9999').localeCompare(b.due_date || '9999')),'You’re all caught up for today.');
+        ['Tasks Today', due.length, 'today', '▤'], ['In Progress', active, 'progress', '◴'],
+        ['In Review', review, 'review', '◇'], ['Overdue', overdue, 'overdue', '⚑'],
+      ].map(([label, value, tone, icon]) => batStatTile(label, value, tone, icon)).join('');
+      // Today first, then anything already late, then the undated work — the
+      // order someone actually picks things up in.
+      const late = mine.filter(t => t.status !== 'done' && t.due_date && t.due_date < today);
+      const undated = mine.filter(t => !t.due_date && t.status !== 'done');
+      document.getElementById('bat-day-list').innerHTML = batListRows(
+        [...due, ...late, ...undated], mine.length ? 'You’re all caught up for today.'
+          : 'Nothing is assigned to you yet.');
     }
 
     function batCalendarShift(amount) {
@@ -24460,23 +24605,98 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         if (!due.has(t.due_date)) due.set(t.due_date, []);
         due.get(t.due_date).push(t);
       });
-      const cells = Array.from({length:first.getDay()+last.getDate()},(_,index) => {
+      // Whole weeks, so the grid ends on a Saturday rather than mid-row.
+      const today = batToday();
+      const span = Math.ceil((first.getDay() + last.getDate()) / 7) * 7;
+      const cells = Array.from({ length: span }, (_, index) => {
         const day = index-first.getDay()+1;
         if (day < 1 || day > last.getDate()) return '<div class="bat-calendar-cell" aria-hidden="true"></div>';
         const events = due.get(key(day)) || [];
-        return `<div class="bat-calendar-cell"><div class="bat-calendar-day">${day}</div>${events.slice(0,4).map(t=>`<div class="bat-calendar-event" data-status="${batEsc(t.status)}" title="${batEsc(t.title)} · ${batEsc(t.assignee_name||'Unassigned')}" onclick="batOpenTask('${batEsc(t.id)}')">${batEsc(t.title)}</div>`).join('')}${events.length>4?`<div style="font-size:9px;color:#778397">+${events.length-4} more</div>`:''}</div>`;
+        // Events are tinted by what kind of work they are, the same colours
+        // the board uses, so a glance down a week shows its shape.
+        return `<div class="bat-calendar-cell" data-today="${key(day) === today}"><div class="bat-calendar-day">${day}</div>${
+          events.slice(0,4).map(t => `<div class="bat-calendar-event bat-category" data-category="${batEsc(batCategoryOf(t))}" title="${batEsc(t.title)} · ${batEsc(t.assignee_name||'Unassigned')}" onclick="batOpenTask('${batEsc(t.id)}')">${batEsc(t.title)}</div>`).join('')
+        }${events.length > 4 ? `<div class="bat-calendar-more">+${events.length-4} more</div>` : ''}</div>`;
       }).join('');
       document.getElementById('bat-calendar-list').innerHTML = `<div class="bat-calendar-grid">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=>`<div class="bat-calendar-dow">${day}</div>`).join('')}${cells}</div>`;
     }
 
+    // Every task somebody is named on, however they are named on it.
+    const batTasksFor = person => _batTasks.filter(t =>
+      (person.id && t.assignee_member_id === person.id) ||
+      batNamePieces(t.assignee_name).some(nm => batSamePerson(nm, person.full_name)) ||
+      Boolean(person.email && String(t.assignee_email || '').trim().toLowerCase() === person.email.toLowerCase()));
+
+    const BAT_DONUT_COLOURS = ['#0573F5','#6B35B8','#2C9E63','#E1761B','#C9346B','#17869B','#B9472F','#4F6AD6'];
+
     function batRenderReports() {
-      const open = _batTasks.filter(t=>t.status !== 'done').length;
-      const done = _batTasks.filter(t=>t.status === 'done').length;
-      const overdue = _batTasks.filter(t=>t.status !== 'done' && t.due_date && t.due_date < batToday()).length;
-      document.getElementById('bat-report-summary').innerHTML = [['Open Tasks',open],['Completed',done],['Overdue',overdue],['Team Members',_batAssignees.length]].map(([label,value])=>`<div class="bat-stat"><div class="bat-stat-label">${label}</div><div class="bat-stat-value">${value}</div></div>`).join('');
-      const head = `<div class="bat-list-row" style="font-weight:800;background:#f7f8fb"><div>Team member</div><div>Open tasks</div><div>Review</div><div>Overdue</div></div>`;
-      const memberRows = _batAssignees.map(m=>{const tasks=_batTasks.filter(t=>(m.id && t.assignee_member_id===m.id || String(t.assignee_name||'').trim().toLowerCase()===String(m.full_name||'').toLowerCase() || Boolean(m.email&&String(t.assignee_email||'').trim().toLowerCase()===m.email.toLowerCase())) && t.status!=='done');const label=[m.full_name||m.email,m.department].filter(Boolean).join(' · ');return `<div class="bat-list-row"><div class="bat-list-title">${batEsc(label)}</div><div>${tasks.length}</div><div>${tasks.filter(t=>t.status==='review').length}</div><div>${tasks.filter(t=>t.due_date&&t.due_date<batToday()).length}</div></div>`;});
-      document.getElementById('bat-report-list').innerHTML = head + (memberRows.join('') || '<div class="bat-empty">No team members found.</div>');
+      const today = batToday();
+      const open = _batTasks.filter(t => t.status !== 'done').length;
+      const done = _batTasks.filter(t => t.status === 'done').length;
+      const overdue = _batTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < today).length;
+      document.getElementById('bat-report-summary').innerHTML = [
+        ['Open Tasks', open, 'today', '▤'], ['Completed', done, 'done', '✓'],
+        ['Overdue', overdue, 'overdue', '⚑'], ['Team Members', _batAssignees.length, 'progress', '☺'],
+      ].map(([label, value, tone, icon]) => batStatTile(label, value, tone, icon)).join('');
+
+      // Workload is finished-over-assigned, not a count of what is left: two
+      // people with nine open tasks each are not in the same position if one
+      // of them has closed twenty this month and the other none. The bar
+      // turns amber then red as the open pile grows, which is the part worth
+      // noticing from across the room.
+      const loads = _batAssignees.map(person => {
+        const tasks = batTasksFor(person);
+        const finished = tasks.filter(t => t.status === 'done').length;
+        const openTasks = tasks.length - finished;
+        return { person, total: tasks.length, finished, openTasks,
+          pct: tasks.length ? Math.round(finished / tasks.length * 100) : 0 };
+      }).filter(row => row.total).sort((a, b) => b.openTasks - a.openTasks);
+      document.getElementById('bat-report-list').innerHTML = loads.length ? loads.map(row => {
+        const initials = String(row.person.full_name || '?').split(/\s+/).map(p => p[0]).slice(0,2).join('').toUpperCase();
+        const pressure = row.openTasks >= 25 ? 'over' : row.openTasks >= 12 ? 'high' : 'normal';
+        return `<div class="bat-load-row" data-pressure="${pressure}" title="${batEsc(row.person.full_name)} · ${row.openTasks} open">
+          <div class="bat-load-who"><span class="bat-card-person">${batEsc(initials)}</span>
+            <span class="bat-load-name">${batEsc(row.person.full_name || row.person.email || 'Unassigned')}</span></div>
+          <div class="bat-load-track"><div class="bat-load-fill" style="width:${Math.max(row.pct, 2)}%"></div></div>
+          <div class="bat-load-count">${row.finished}/${row.total}</div>
+          <div class="bat-load-pct">${row.pct}%</div>
+        </div>`;
+      }).join('') : '<div class="bat-empty">No team members found.</div>';
+
+      // Open work only: a client finished with last year would otherwise own
+      // the biggest slice of a chart about what is on the team's plate.
+      const byClient = new Map();
+      _batTasks.filter(t => t.status !== 'done').forEach(t => {
+        const name = t.client_name || 'Internal';
+        byClient.set(name, (byClient.get(name) || 0) + 1);
+      });
+      const ranked = [...byClient.entries()].sort((a, b) => b[1] - a[1]);
+      const top = ranked.slice(0, 7);
+      const rest = ranked.slice(7).reduce((sum, [, count]) => sum + count, 0);
+      if (rest) top.push(['Other clients', rest]);
+      const total = top.reduce((sum, [, count]) => sum + count, 0);
+      const R = 52, C = 2 * Math.PI * R;
+      let offset = 0;
+      const arcs = top.map(([, count], index) => {
+        const length = total ? count / total * C : 0;
+        const arc = `<circle cx="64" cy="64" r="${R}" fill="none" stroke="${BAT_DONUT_COLOURS[index % BAT_DONUT_COLOURS.length]}"
+          stroke-width="19" stroke-dasharray="${length.toFixed(2)} ${(C - length).toFixed(2)}"
+          stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 64 64)"></circle>`;
+        offset += length;
+        return arc;
+      }).join('');
+      document.getElementById('bat-report-clients').innerHTML = total ? `<div class="bat-donut">
+        <svg viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Open tasks by client">
+          <circle cx="64" cy="64" r="${R}" fill="none" stroke="rgba(127,145,175,.18)" stroke-width="19"></circle>
+          ${arcs}
+          <text class="bat-donut-hole" x="64" y="62" text-anchor="middle">${total}</text>
+          <text class="bat-donut-hole-sub" x="64" y="76" text-anchor="middle">OPEN TASKS</text>
+        </svg>
+        <div class="bat-legend">${top.map(([name, count], index) => `<div class="bat-legend-row">
+          <span class="bat-legend-dot" style="background:${BAT_DONUT_COLOURS[index % BAT_DONUT_COLOURS.length]}"></span>
+          <span class="bat-legend-name">${batEsc(name)}</span>
+          <span class="bat-legend-count">${count}</span></div>`).join('')}</div>
+      </div>` : '<div class="bat-empty">Nothing open right now.</div>';
     }
 
     function batOpenTask(id = null) {
