@@ -24030,13 +24030,18 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const board = document.getElementById('bat-board');
       if (!board) return;
       board.innerHTML = '<div class="hub-loading">Loading tasks…</div>';
+      // The board asked for every task in one request. PostgREST answers with
+      // the first 1000 rows and no hint that it stopped, and there are now
+      // close to 2000 — so the board was showing the oldest 1000, which is
+      // every task from 2024 and the first half of 2025 and almost nothing
+      // current. That did not look broken, it looked like a team hopelessly
+      // behind: 118 open tasks, all of them overdue.
       if (!await _hubWaitOrg()) {
         board.innerHTML = '<div class="hub-loading">No organisation loaded. Please sign in again and retry.</div>';
         return;
       }
       const [{ data: tasks, error }, { data: clients }, { data: members }, { data: notionRoster }] = await Promise.all([
-        sb.from('blue_ad_tasks').select('*').eq('organization_id', currentOrgId)
-          .order('due_date', { ascending:true, nullsFirst:false }).order('created_at', { ascending:false }),
+        batFetchTasks(),
         sb.from('pipeline_clients').select('id, name').eq('organization_id', currentOrgId).order('name'),
         sb.from('cp_members').select('id, full_name, email').eq('organization_id', currentOrgId)
           .eq('archived', false).order('full_name'),
@@ -24078,6 +24083,28 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (!x || !y) return false;
       return x === y || x.startsWith(y + ' ') || y.startsWith(x + ' ');
     };
+
+    // Every task, a page at a time. Ordered by id, which is unique, so a row
+    // cannot be served twice or skipped between pages the way it can under an
+    // ordering with ties; the board sorts by date itself afterwards.
+    async function batFetchTasks() {
+      const PAGE = 1000, out = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await sb.from('blue_ad_tasks').select('*')
+          .eq('organization_id', currentOrgId)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) return { data: null, error };
+        out.push(...(data || []));
+        if (!data || data.length < PAGE || out.length >= 50000) break;
+      }
+      out.sort((a, b) => {
+        const x = a.due_date || '9999-12-31', y = b.due_date || '9999-12-31';
+        if (x !== y) return x < y ? -1 : 1;
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+      });
+      return { data: out, error: null };
+    }
 
     function batBuildAssignees() {
       const assignees = [];
