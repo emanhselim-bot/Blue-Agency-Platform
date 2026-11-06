@@ -32,6 +32,31 @@ function propText(prop: any): string {
   return "";
 }
 const norm = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Notion names that belong to somebody else here.
+ *
+ * The Notion account "Eman Selim" is Amy's: the workspace was set up on her
+ * address and her own task board is titled after it. Eman who runs operations
+ * joined later and owns none of that history, so without this the import
+ * hands Amy's two years of work to a new colleague — and does it again after
+ * every correction, because the sync takes the assignee straight from Notion.
+ *
+ * Matching is on the whole name. A task shared by several people arrives as
+ * "Eman Selim, Hager Hamdy", so each name is renamed in place and the rest of
+ * the field is left alone.
+ */
+const NOTION_NAME_ALIASES: Record<string, string> = {
+  "emanselim": "Amy",
+};
+/** Same correction for the board titles the roster is built from. */
+const BOARD_TITLE_ALIASES: Record<string, string> = {
+  "eman": "Amy",
+  "emanselim": "Amy",
+};
+const aliasName = (name: string) => NOTION_NAME_ALIASES[norm(name)] || name.trim();
+const aliasNameField = (field: string) => String(field || "")
+  .split(",").map((part) => aliasName(part)).filter(Boolean).join(", ");
 function pick(props: Record<string, any>, pattern: RegExp, types?: string[]) {
   return Object.entries(props).find(([name, value]) => pattern.test(name) && (!types || types.includes(value.type)))?.[1];
 }
@@ -180,7 +205,11 @@ function rosterFromDatabases(
 ) {
   const people = new Map<string, any>();
   for (const database of databases) {
-    const name = memberNameFromDatabaseTitle(plain(database.title));
+    // "Eman Tasks" is Amy's board, named after the account it was made on.
+    // A board that belongs to the operations manager needs a title of its
+    // own, or it folds into this one.
+    const name = BOARD_TITLE_ALIASES[norm(memberNameFromDatabaseTitle(plain(database.title)) || "")] ||
+      memberNameFromDatabaseTitle(plain(database.title));
     if (!name) continue;
     const key = name.toLowerCase();
     const team = byDatabase.get(database.id);
@@ -411,7 +440,7 @@ Deno.serve(async (req) => {
       const person = pick(props, /assignee|owner|assigned|person/i, ["people", "email", "rich_text", "select"]);
       const clientProp = pick(props, /client|account|brand/i, ["select", "rich_text", "title"]);
       const description = propText(pick(props, /description|notes|details|brief/i, ["rich_text"]));
-      const personName = propText(person);
+      const personName = aliasNameField(propText(person));
       const matchMember = memberMap.get(norm(personName));
       const matchNotionPerson = notionPersonMap.get(norm(personName));
       const clientName = propText(clientProp);
