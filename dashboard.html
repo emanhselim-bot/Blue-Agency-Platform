@@ -3878,6 +3878,31 @@
     .bat-legend-dot { width:8px;height:8px;border-radius:50%;flex:0 0 auto; }
     .bat-legend-name { flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1D293B; }
     .bat-legend-count { font-variant-numeric:tabular-nums;font-weight:700; }
+    /* Who's on what: one block per person, so a day is read down the team
+       rather than down a list of tasks. */
+    .bat-panel-head-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .bat-daytabs { margin-left:auto;display:inline-flex;gap:3px;background:#EEF2F8;border-radius:9px;padding:3px; }
+    .bat-daytab { border:0;background:transparent;color:#51607A;font:inherit;font-size:11px;font-weight:700;padding:5px 10px;border-radius:7px;cursor:pointer; }
+    .bat-daytab:hover { color:#17233B; }
+    .bat-daytab.active { background:#fff;color:#0B1B3F;box-shadow:0 1px 3px rgba(15,23,42,.12); }
+    .bat-crew { display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px; }
+    .bat-crew-block { border:1px solid #E6EBF3;border-radius:11px;padding:10px 11px;background:#FBFCFE; }
+    .bat-crew-block[data-idle="true"] { background:#F7F9FC;opacity:.72; }
+    .bat-crew-head { display:flex;align-items:center;gap:8px;margin-bottom:8px; }
+    .bat-crew-name { font-size:11.5px;font-weight:800;color:#1D293B;line-height:1.25; }
+    .bat-crew-role { font-size:9.5px;color:#7B8797; }
+    .bat-crew-count { margin-left:auto;font-size:10px;font-weight:800;color:#51607A;background:#EEF2F8;border-radius:9px;padding:3px 8px; }
+    .bat-crew-count[data-heavy="true"] { background:#FDE7E5;color:#B3291F; }
+    .bat-mini { display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid #EDF0F4;cursor:pointer; }
+    .bat-mini:first-of-type { border-top:0; }
+    .bat-mini:hover .bat-mini-title { color:#0573F5; }
+    .bat-mini-dot { width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:#9AA7B8; }
+    .bat-mini-dot[data-status="in_progress"] { background:#2F7DF6; }
+    .bat-mini-dot[data-status="review"] { background:#E0A33C; }
+    .bat-mini-dot[data-status="done"] { background:#3D9E57; }
+    .bat-mini-title { flex:1;min-width:0;font-size:11px;color:#28364E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .bat-mini-when { font-size:9px;color:#7B8797;white-space:nowrap; }
+    .bat-crew-idle { font-size:10.5px;color:#8994A3;padding:3px 0 1px; }
     .bat-calendar-cell[data-today="true"] { background:#F2F7FF;box-shadow:inset 0 0 0 1px #BBD4FB; }
     .bat-calendar-cell[data-today="true"] .bat-calendar-day { color:#0573F5; }
     .bat-calendar-more { font-size:9px;color:#778397;padding-left:2px; }
@@ -4003,6 +4028,21 @@
     [data-theme="dark"] .bat-list-row.bat-row-click:hover { background:#11214A; }
     [data-theme="dark"] .bat-donut-hole { fill:#EAF1FB; }
     [data-theme="dark"] .bat-donut-hole-sub { fill:#8EA2C2; }
+    [data-theme="dark"] .bat-daytabs { background:#0A1734; }
+    [data-theme="dark"] .bat-daytab { color:#9FB1CE; }
+    [data-theme="dark"] .bat-daytab:hover { color:#EAF1FB; }
+    [data-theme="dark"] .bat-daytab.active { background:#1A2D5C;color:#EAF1FB;box-shadow:none; }
+    [data-theme="dark"] .bat-crew-block { background:#0A1734;border-color:#1B2C56; }
+    [data-theme="dark"] .bat-crew-block[data-idle="true"] { background:#08142D; }
+    [data-theme="dark"] .bat-crew-name { color:#EAF1FB; }
+    [data-theme="dark"] .bat-crew-role,
+    [data-theme="dark"] .bat-mini-when,
+    [data-theme="dark"] .bat-crew-idle { color:#8EA2C2; }
+    [data-theme="dark"] .bat-crew-count { background:#17254A;color:#B9C9E4; }
+    [data-theme="dark"] .bat-crew-count[data-heavy="true"] { background:#45181B;color:#FFAEA8; }
+    [data-theme="dark"] .bat-mini { border-top-color:#17254A; }
+    [data-theme="dark"] .bat-mini-title { color:#CFDCEF; }
+    [data-theme="dark"] .bat-mini:hover .bat-mini-title { color:#8FB6FF; }
     [data-theme="dark"] .bat-calendar-cell[data-today="true"] { background:#10254F;box-shadow:inset 0 0 0 1px #27477F; }
     [data-theme="dark"] .bat-calendar-cell[data-today="true"] .bat-calendar-day { color:#8FB6FF; }
     .hub-inner.wide.tasks-fullscreen { width:100%;max-width:none;height:100vh;min-height:100vh;margin:0;padding:16px;text-align:left; }
@@ -4593,6 +4633,18 @@
             </section>
             <section class="bat-view" id="bat-view-reports">
               <div class="bat-view-summary" id="bat-report-summary"></div>
+              <div class="bat-panel" style="margin:0 0 12px">
+                <div class="bat-panel-head bat-panel-head-row">
+                  <span>Who’s on what</span>
+                  <span class="bat-daytabs" id="bat-daytabs">
+                    <button class="bat-daytab active" data-day="today" onclick="batTeamDay('today')">Today</button>
+                    <button class="bat-daytab" data-day="tomorrow" onclick="batTeamDay('tomorrow')">Tomorrow</button>
+                    <button class="bat-daytab" data-day="week" onclick="batTeamDay('week')">Next 7 days</button>
+                    <button class="bat-daytab" data-day="overdue" onclick="batTeamDay('overdue')">Overdue</button>
+                  </span>
+                </div>
+                <div id="bat-team-day"></div>
+              </div>
               <div class="bat-report-grid">
                 <div class="bat-panel">
                   <div class="bat-panel-head">Team Workload</div>
@@ -24637,6 +24689,71 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
 
     const BAT_DONUT_COLOURS = ['#0573F5','#6B35B8','#2C9E63','#E1761B','#C9346B','#17869B','#B9472F','#4F6AD6'];
 
+    // Who's on what, a day at a time.
+    //
+    // The workload bars answer "is anyone buried"; this answers the question
+    // that comes next — buried in what, and who has nothing. It is laid out
+    // by person rather than by task because that is the direction the day is
+    // supervised in: down the team, not down a list. Everybody on the roster
+    // gets a block, including the ones with nothing on, since an empty block
+    // is information too.
+    let _batTeamDay = 'today';
+    function batTeamDay(which) {
+      _batTeamDay = which;
+      document.querySelectorAll('#bat-daytabs .bat-daytab').forEach(tab =>
+        tab.classList.toggle('active', tab.dataset.day === which));
+      batRenderTeamDay();
+    }
+    function batDayWindow(which) {
+      const today = batToday();
+      const shift = days => {
+        const d = new Date(); d.setDate(d.getDate() + days);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      };
+      if (which === 'tomorrow') return { from: shift(1), to: shift(1), label: 'due tomorrow' };
+      if (which === 'week') return { from: today, to: shift(7), label: 'due in the next 7 days' };
+      if (which === 'overdue') return { from: null, to: shift(-1), label: 'overdue' };
+      return { from: today, to: today, label: 'due today' };
+    }
+    function batRenderTeamDay() {
+      const box = document.getElementById('bat-team-day');
+      if (!box) return;
+      const span = batDayWindow(_batTeamDay);
+      const inWindow = t => t.status !== 'done' && t.due_date &&
+        (!span.from || t.due_date >= span.from) && t.due_date <= span.to;
+      const matching = _batTasks.filter(inWindow);
+
+      const blocks = _batAssignees.map(person => ({
+        person, tasks: matching.filter(t =>
+          (person.id && t.assignee_member_id === person.id) ||
+          batNamePieces(t.assignee_name).some(nm => batSamePerson(nm, person.full_name)) ||
+          Boolean(person.email && String(t.assignee_email || '').trim().toLowerCase() === person.email.toLowerCase())),
+      }));
+      const spoken = new Set(blocks.flatMap(b => b.tasks.map(t => t.id)));
+      const loose = matching.filter(t => !spoken.has(t.id));
+      if (loose.length) blocks.push({ person: { full_name: 'Unassigned', job_title: 'Nobody has taken these' }, tasks: loose });
+      // Busiest first; whoever is free drops to the bottom of the panel.
+      blocks.sort((a, b) => b.tasks.length - a.tasks.length);
+
+      box.innerHTML = `<div class="bat-crew">${blocks.map(({ person, tasks }) => {
+        const initials = String(person.full_name || '?').split(/\s+/).map(p => p[0]).slice(0,2).join('').toUpperCase();
+        return `<div class="bat-crew-block" data-idle="${!tasks.length}">
+          <div class="bat-crew-head">
+            <span class="bat-card-person">${batEsc(initials)}</span>
+            <span><span class="bat-crew-name">${batEsc(person.full_name || person.email || '—')}</span><br>
+              <span class="bat-crew-role">${batEsc(person.job_title || person.department || '')}</span></span>
+            <span class="bat-crew-count" data-heavy="${tasks.length >= 5}">${tasks.length}</span>
+          </div>
+          ${tasks.length ? tasks.slice(0, 8).map(t => `<div class="bat-mini" onclick="batOpenTask('${batEsc(t.id)}')" title="${batEsc(t.title)}">
+              <span class="bat-mini-dot" data-status="${batEsc(t.status)}"></span>
+              <span class="bat-mini-title">${batEsc(t.title)}</span>
+              <span class="bat-mini-when">${batEsc(t.client_name || batCategoryOf(t))}</span>
+            </div>`).join('') + (tasks.length > 8 ? `<div class="bat-crew-idle">+${tasks.length - 8} more</div>` : '')
+            : `<div class="bat-crew-idle">Nothing ${batEsc(span.label)}</div>`}
+        </div>`;
+      }).join('')}</div>`;
+    }
+
     function batRenderReports() {
       const today = batToday();
       const open = _batTasks.filter(t => t.status !== 'done').length;
@@ -24670,6 +24787,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <div class="bat-load-pct">${row.pct}%</div>
         </div>`;
       }).join('') : '<div class="bat-empty">No team members found.</div>';
+      batRenderTeamDay();
 
       // Open work only: a client finished with last year would otherwise own
       // the biggest slice of a chart about what is on the team's plate.
