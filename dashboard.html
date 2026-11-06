@@ -24407,7 +24407,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           batSamePerson(p.full_name, clean) ||
           (extra.email && p.email && p.email.toLowerCase() === extra.email.toLowerCase()));
         if (existing) {
-          if (clean.length > String(existing.full_name || '').length) existing.full_name = clean;
+          // The roster is the list of who works here and what they are
+          // called, so its spelling wins outright. Otherwise the longest
+          // spelling does — "Yara Ammar" over "Yara". That rule alone once
+          // relabelled Amy as "Eman Selim", which is the sign-in address her
+          // account was made on, not a longer version of her name.
+          if (extra.authoritative) existing.full_name = clean;
+          else if (!existing.authoritative && clean.length > String(existing.full_name || '').length) existing.full_name = clean;
+          existing.authoritative = existing.authoritative || Boolean(extra.authoritative);
           existing.email = existing.email || extra.email || null;
           existing.department = existing.department || extra.department || '';
           existing.job_title = existing.job_title || extra.job_title || '';
@@ -24416,6 +24423,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         }
         const person = { id: extra.id || null, full_name: clean, email: extra.email || null,
           department: extra.department || '', job_title: extra.job_title || '',
+          authoritative: Boolean(extra.authoritative),
           taskPersonKey: extra.taskPersonKey || `person:${clean.toLowerCase()}` };
         assignees.push(person);
         return person;
@@ -24424,7 +24432,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       _batMembers.forEach(m => absorb(m.full_name || m.email,
         { id: m.id, email: m.email, taskPersonKey: `member:${m.id}` }));
       _batNotionRoster.filter(m => !m.archived).forEach(m => absorb(m.full_name,
-        { email: m.email, department: m.department, job_title: m.job_title,
+        { email: m.email, department: m.department, job_title: m.job_title, authoritative: true,
           taskPersonKey: `notion-directory:${m.id || m.full_name}` }));
       // Finally the names the tasks themselves carry. These are the fullest
       // and the only ones guaranteed to match a row, so they fill in anyone
