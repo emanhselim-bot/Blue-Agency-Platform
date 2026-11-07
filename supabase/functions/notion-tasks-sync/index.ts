@@ -54,6 +54,47 @@ const BOARD_TITLE_ALIASES: Record<string, string> = {
   "eman": "Amy",
   "emanselim": "Amy",
 };
+/**
+ * What kind of work a task is, read from its wording.
+ *
+ * The Notion boards have no category property, so every imported task would
+ * otherwise be "Other". The order matters: "2 Posts Edits" is design work,
+ * "Edits" on its own is video, so Design is tried before Video. The same
+ * ladder is implemented on the dashboard for display; here it exists so a
+ * task can find its owner (below).
+ */
+const CATEGORY_RULES: [string, RegExp][] = [
+  ["Reporting", /report|insight|analys|analyz|تقرير|تقارير/i],
+  ["Media Buying", /\bads?\b|campaign|media (buy|plan)|targeting|\bbudget|spend|roas|\bcpa\b|boost|pixel|retarget|optimi[sz]e|اعلان|إعلان|ميديا/i],
+  ["Production", /shoot|photograph|\bphotos?\b|product shot|studio|تصوير/i],
+  ["Design", /design|\bposts?\b|poster|\bcreatives?\b|banner|thumbnail|logo|carousel|visual|mockup|\b(re)?brand(ing|s)?\b|تصميم/i],
+  ["Video", /\breels?\b|video|montage|edits?\b|editing|hook|voice ?over|musical|interview|podcast|فيديو|مونتاج|ريل|بودكاست/i],
+  ["Content", /caption|\bcopy\b|content|script|article|blog|topic|writing|brief|\btov\b|كتابة|محتوى|كابشن/i],
+  ["SEO", /\bseo\b|keyword|backlink|ranking|serp|search console/i],
+  ["Meeting", /meeting|\bcall\b|approval|presentation|اجتماع/i],
+  ["Strategy", /strateg|\bplans?\b|planning|roadmap|خطة|استراتيج/i],
+  ["Website", /website|landing page|wordpress|shopify|domain|موقع/i],
+  ["Social Media", /instagram|\big\b|facebook|linkedin|snapchat|community|stor(y|ies)/i],
+];
+function categoryFor(given: string, text: string): string {
+  if (given && given.toLowerCase() !== "other") return given;
+  return CATEGORY_RULES.find(([, pattern]) => pattern.test(text))?.[0] || given || "Other";
+}
+
+/**
+ * Who a task belongs to when Notion names nobody.
+ *
+ * Most of the boards are filled in without the person field, and work that
+ * arrives owned by no one is work nobody picks up. Two of the categories have
+ * exactly one person doing them, so those can be answered: writing is
+ * Nouran's, design is Raneem's. Everything else is left unassigned rather
+ * than guessed at, and an explicit name in Notion is never overridden.
+ */
+const CATEGORY_OWNERS: Record<string, string> = {
+  "Content": "Nouran",
+  "Design": "Raneem",
+};
+
 const aliasName = (name: string) => NOTION_NAME_ALIASES[norm(name)] || name.trim();
 const aliasNameField = (field: string) => String(field || "")
   .split(",").map((part) => aliasName(part)).filter(Boolean).join(", ");
@@ -445,13 +486,18 @@ Deno.serve(async (req) => {
       const matchNotionPerson = notionPersonMap.get(norm(personName));
       const clientName = propText(clientProp);
       const matchClient = clientMap.get(norm(clientName));
+      const kind = categoryFor(category, `${title} ${description}`);
+      // Only when Notion left the field empty.
+      const owner = matchMember?.full_name || personName || CATEGORY_OWNERS[kind] || null;
+      const ownerPerson = notionPersonMap.get(norm(owner || ""));
       return {
         organization_id: orgId, title: title.slice(0, 180), description: description.slice(0, 2000) || null,
         client_id: matchClient?.id || null, client_name: clientName || matchClient?.name || null,
-        assignee_member_id: matchMember?.id || null, assignee_name: matchMember?.full_name || personName || null,
-        assignee_email: matchMember?.email || matchNotionPerson?.email || (person?.type === "email" ? person.email : null),
+        assignee_member_id: matchMember?.id || null, assignee_name: owner,
+        assignee_email: matchMember?.email || matchNotionPerson?.email || ownerPerson?.email ||
+          (person?.type === "email" ? person.email : null),
         due_date: due?.date?.start ? String(due.date.start).slice(0, 10) : null,
-        category: (category || "Other").slice(0, 80), priority: priorityValue(priority), status: statusValue(status),
+        category: kind.slice(0, 80), priority: priorityValue(priority), status: statusValue(status),
         created_by: auth.user!.id, notion_page_id: page.id,
         notion_database_id: taskDatabaseIds.get(page.id) || databases[0].id,
       };

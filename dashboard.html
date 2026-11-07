@@ -4637,8 +4637,10 @@
                 <div class="bat-panel-head bat-panel-head-row">
                   <span>Who’s on what</span>
                   <span class="bat-daytabs" id="bat-daytabs">
+                    <button class="bat-daytab" data-day="yesterday" onclick="batTeamDay('yesterday')">Yesterday</button>
                     <button class="bat-daytab active" data-day="today" onclick="batTeamDay('today')">Today</button>
                     <button class="bat-daytab" data-day="tomorrow" onclick="batTeamDay('tomorrow')">Tomorrow</button>
+                    <button class="bat-daytab" data-day="lastweek" onclick="batTeamDay('lastweek')">Last 7 days</button>
                     <button class="bat-daytab" data-day="week" onclick="batTeamDay('week')">Next 7 days</button>
                     <button class="bat-daytab" data-day="overdue" onclick="batTeamDay('overdue')">Overdue</button>
                   </span>
@@ -24713,13 +24715,17 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (which === 'tomorrow') return { from: shift(1), to: shift(1), label: 'due tomorrow' };
       if (which === 'week') return { from: today, to: shift(7), label: 'due in the next 7 days' };
       if (which === 'overdue') return { from: null, to: shift(-1), label: 'overdue' };
+      // Looking back answers a different question — what was meant to happen
+      // and did not — so the days behind include what was finished on them.
+      if (which === 'yesterday') return { from: shift(-1), to: shift(-1), label: 'on yesterday', past: true };
+      if (which === 'lastweek') return { from: shift(-7), to: shift(-1), label: 'in the last 7 days', past: true };
       return { from: today, to: today, label: 'due today' };
     }
     function batRenderTeamDay() {
       const box = document.getElementById('bat-team-day');
       if (!box) return;
       const span = batDayWindow(_batTeamDay);
-      const inWindow = t => t.status !== 'done' && t.due_date &&
+      const inWindow = t => (span.past || t.status !== 'done') && t.due_date &&
         (!span.from || t.due_date >= span.from) && t.due_date <= span.to;
       const matching = _batTasks.filter(inWindow);
 
