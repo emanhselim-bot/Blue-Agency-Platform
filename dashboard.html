@@ -4738,7 +4738,6 @@
             <div class="bat-field"><label>MESSAGES SENT</label><input class="hub-input" id="tc-sent" type="number" min="0" step="1" placeholder="0"></div>
             <div class="bat-field"><label>OPENED</label><input class="hub-input" id="tc-opened" type="number" min="0" step="1" placeholder="leave blank if unknown"></div>
             <div class="bat-field"><label>ORDERS</label><input class="hub-input" id="tc-orders" type="number" min="0" step="1" placeholder="0"></div>
-            <div class="bat-field"><label>PIECES</label><input class="hub-input" id="tc-pieces" type="number" min="0" step="1" placeholder="0"></div>
             <div class="bat-field"><label>REVENUE</label><input class="hub-input" id="tc-revenue" type="number" min="0" step="any" placeholder="0.00"></div>
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:10px">CR% and AOV are worked out from these, so they are never typed.</div>
@@ -24360,16 +24359,35 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
     const tcInt = v => v == null ? '—' : Math.round(Number(v)).toLocaleString('en');
 
+    // A campaign belongs to the shop, not to an ad account. Nuya runs three
+    // ad accounts against one Shopify store; the Friday mail went out once,
+    // so keying it to an account would hide it from the other two and count
+    // it three times when they are viewed together. Every account pointing
+    // at the store sees the same campaign, once.
+    function tcStoreIds() {
+      const keys = _dcWantedKeys();
+      const accounts = keys
+        ? keys.map(k => accountMap[k]).filter(Boolean)
+        : Object.values(accountMap || {});
+      return [...new Set(accounts.map(a => a.shopify_store_id).filter(Boolean))];
+    }
+
     async function tcLoad() {
       const box = document.getElementById('tc-boxes');
       if (!box) return;                       // template without the section
       const keys = _dcWantedKeys();
+      const stores = tcStoreIds();
       try {
         let q = sb.from('tool_campaigns').select('*')
           .eq('organization_id', currentOrgId)
           .gte('day', _webRangeStart()).lte('day', _webRangeEnd())
           .order('day', { ascending: false });
-        if (keys && keys.length) q = q.in('account_key', keys);
+        // Either the campaign is on one of the stores in view, or it is on an
+        // account in view that has no store linked.
+        const scope = [];
+        if (stores.length) scope.push(`shopify_store_id.in.(${stores.join(',')})`);
+        if (keys && keys.length) scope.push(`account_key.in.(${keys.map(k => `"${k}"`).join(',')})`);
+        if (scope.length) q = q.or(scope.join(','));
         const { data, error } = await q;
         if (error) throw error;
         _tcRows = data || [];
@@ -24390,7 +24408,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const sent = sum('sent'), orders = sum('orders'), revenue = sum('revenue');
       const openedRows = rows.filter(r => r.opened != null);
       const opened = openedRows.length ? openedRows.reduce((n, r) => n + Number(r.opened || 0), 0) : null;
-      return { n: rows.length, sent, opened, orders, pieces: sum('pieces'), revenue,
+      return { n: rows.length, sent, opened, orders, revenue,
         cr: sent ? orders / sent * 100 : null, aov: orders ? revenue / orders : null };
     }
 
@@ -24413,7 +24431,6 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             ${fig('Opened', t.opened == null ? '—' : tcInt(t.opened))}
             ${fig('CR%', t.cr == null ? '—' : t.cr.toFixed(2) + '%')}
             ${fig('Orders', tcInt(t.orders))}
-            ${fig('Pieces', tcInt(t.pieces))}
             ${fig('AOV', t.aov == null ? '—' : tcMoney(t.aov))}
             ${fig('Revenue', tcMoney(t.revenue), true)}
           </div>
@@ -24433,7 +24450,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
           <th>Campaign</th><th>Tool</th><th>Channel</th><th>Date</th>
           <th style="text-align:right">Sent</th><th style="text-align:right">Opened</th>
           <th style="text-align:right">CR%</th><th style="text-align:right">Orders</th>
-          <th style="text-align:right">Pieces</th><th style="text-align:right">Revenue</th>
+          <th style="text-align:right">Revenue</th>
           <th style="text-align:right">AOV</th><th></th>
         </tr></thead><tbody>
         ${_tcRows.map(r => {
@@ -24447,7 +24464,6 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <td class="num">${r.opened == null ? '—' : tcInt(r.opened)}</td>
             <td class="num">${t.cr == null ? '—' : t.cr.toFixed(2) + '%'}</td>
             <td class="num">${tcInt(t.orders)}</td>
-            <td class="num">${tcInt(t.pieces)}</td>
             <td class="num">${tcMoney(t.revenue)}</td>
             <td class="num">${t.aov == null ? '—' : tcMoney(t.aov)}</td>
             <td class="num"><button class="tc-act" title="Edit" onclick="tcOpen('${escHtml(r.id)}')">✎</button></td>
@@ -24474,7 +24490,6 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       document.getElementById('tc-sent').value = r.sent ?? '';
       document.getElementById('tc-opened').value = r.opened ?? '';
       document.getElementById('tc-orders').value = r.orders ?? '';
-      document.getElementById('tc-pieces').value = r.pieces ?? '';
       document.getElementById('tc-revenue').value = r.revenue ?? '';
       document.getElementById('tc-error').textContent = '';
       document.getElementById('tc-delete').style.display = _tcEditing ? '' : 'none';
@@ -24487,9 +24502,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       const err = document.getElementById('tc-error');
       const day = document.getElementById('tc-day').value;
       if (!day) { err.textContent = 'Pick the date the campaign went out.'; return; }
+      // Attach to the shop when the account has one, so every ad account on
+      // that shop sees it; fall back to the account itself when it has none.
+      const account = accountMap?.[sel?.value];
+      const storeId = _tcEditing ? _tcEditing.shopify_store_id : (account?.shopify_store_id || null);
       const row = {
         organization_id: currentOrgId,
-        account_key: String(_tcEditing?.account_key || sel?.value || ''),
+        shopify_store_id: storeId,
+        account_key: storeId ? null : String(_tcEditing?.account_key || sel?.value || ''),
         day,
         tool: document.getElementById('tc-tool').value,
         channel: document.getElementById('tc-channel').value,
@@ -24497,11 +24517,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
         sent: tcNum(document.getElementById('tc-sent').value) || 0,
         opened: tcNum(document.getElementById('tc-opened').value),
         orders: tcNum(document.getElementById('tc-orders').value) || 0,
-        pieces: tcNum(document.getElementById('tc-pieces').value) || 0,
         revenue: tcNum(document.getElementById('tc-revenue').value) || 0,
         updated_at: new Date().toISOString(),
       };
-      if (!row.account_key) { err.textContent = 'No account selected.'; return; }
+      if (!row.shopify_store_id && !row.account_key) { err.textContent = 'No account selected.'; return; }
       const btn = document.getElementById('tc-save');
       btn.disabled = true; btn.textContent = 'Saving…';
       const res = _tcEditing
