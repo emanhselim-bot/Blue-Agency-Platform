@@ -27206,6 +27206,15 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       }
       try {
         if (!Object.keys(accountMap || {}).length) await loadAccounts(false);
+        // A reload that lands straight on this page can get here before the
+        // Supabase session is attached. That is not an error: row-level
+        // security simply returns nothing, so the page drew itself empty and
+        // announced there were no accounts with 99 of them in the table.
+        // Wait for the session and ask once more.
+        if (!Object.keys(accountMap || {}).length) {
+          await sb.auth.getSession();
+          await loadAccounts(false);
+        }
         if (!_acctGroups || !_acctGroups.length) await loadAccountGroups();
         if (!_agencies) await loadAgencies();
         await clnLoadRunning();
@@ -27428,7 +27437,14 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             ${mbpStats(mbpTotals(a.accounts))}
           </div>`;
         }).join('')}
-      </div>` : `<div class="cln-note">Nothing matches “${escHtml(q)}”.</div>`;
+      </div>` : q
+        ? `<div class="cln-note">Nothing matches “${escHtml(q)}”.</div>`
+        // Nothing and no search is a different thing entirely, and saying
+        // 'Nothing matches ""' for it told nobody anything. Either the list
+        // has not arrived or this account genuinely has none; both are worth
+        // a retry, so offer one rather than leaving a dead page.
+        : `<div class="cln-note">No ad accounts loaded for this organisation.
+             <button class="hub-mod-btn" style="margin-left:8px" onclick="mbpOpen()">Try again</button></div>`;
     }
 
     function mbpPick(agencyId) {
