@@ -119,6 +119,10 @@
     [data-theme="dark"] .data-table th { background: var(--bg); }
     [data-theme="dark"] .data-table tfoot td { background: var(--bg); }
     [data-theme="dark"] .data-table tbody tr:hover { background: var(--table-hover); }
+    /* The header keeps its gradient in daylight; at night a bright blue band
+       across the top is the first thing the eye lands on and the last thing
+       that should be. */
+    [data-theme="dark"] .header { background: #0E1526; border-bottom: 1px solid var(--border); }
     [data-theme="dark"] .controls-bar { background: var(--surface); border-bottom-color: var(--border); }
     [data-theme="dark"] .period-tabs { background: var(--bg); }
     [data-theme="dark"] .period-btn.active { background: var(--surface); color: var(--text-main); }
@@ -3228,12 +3232,13 @@
 
        Dark theme only, which is what the app opens in. */
 [data-theme="dark"] .kpi-card.kpi-card.kpi-card {
-      /* Sampled off the corner wedge rather than guessed: in the zoomed
-         screenshot it is #263678 against a #081B65 card. The whole card is
-         that colour now, which also lifts it off the #011C69 page instead of
-         disappearing into it. */
-      background: #263678 !important;
-      border: 1px solid #38488F;
+      /* A metric card is a panel like any other: the same near-black surface
+         and hairline border as the charts beside it. It used to be #263678, a
+         saturated blue chosen to lift the card off the old royal-navy page —
+         on the near-black page it is the brightest thing on screen, which
+         puts all the emphasis on the containers instead of the numbers. */
+      background: var(--surface) !important;
+      border: 1px solid var(--border);
     }
 
     /* The wedge has to go with it. It is white at 12% over the card, so on the
