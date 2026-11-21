@@ -3841,6 +3841,37 @@
     .bat-check-add { border:1px dashed #CBD5E3;background:#fff;color:#51607A;border-radius:8px;padding:7px 9px;font:inherit;font-size:11.5px;cursor:pointer;text-align:left; }
     .bat-check-add:hover { border-color:#0573F5;color:#0573F5; }
 
+    /* ── Tools Results (Yozo / GetBlu) ──────────────────────────────────
+       One box per tool and channel, then the campaigns that make them up.
+       The boxes are a fixed four: a channel with nothing in it this period
+       still shows, because "GetBlu mail sent nothing" is an answer. */
+    .tc-add { margin-left:auto;background:var(--blue-light);color:#fff;border:0;border-radius:8px;padding:6px 12px;font:inherit;font-size:11px;font-weight:700;cursor:pointer; }
+    .tc-add:hover { background:var(--blue-mid); }
+    .tc-boxes { display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:14px; }
+    .tc-box { background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px 12px; }
+    .tc-box[data-empty="true"] { opacity:.62; }
+    .tc-box-top { display:flex;align-items:center;gap:7px;margin-bottom:10px; }
+    .tc-tool { font-size:12.5px;font-weight:800;color:var(--text-main); }
+    .tc-chan { font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:3px 7px; }
+    .tc-chan[data-c="whatsapp"] { background:#DCF2E6;color:#1C6B47; }
+    .tc-chan[data-c="mail"] { background:#DEE8FF;color:#2450B2; }
+    .tc-count { margin-left:auto;font-size:9.5px;color:var(--text-muted); }
+    .tc-figs { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px; }
+    .tc-fig-k { font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted); }
+    .tc-fig-v { font-size:14px;font-weight:800;color:var(--text-main);font-variant-numeric:tabular-nums;line-height:1.25; }
+    .tc-fig.wide { grid-column:1 / -1; }
+    .tc-wrap { overflow-x:auto;border-radius:11px; }
+    .tc-table { width:100%;min-width:900px;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:11px;overflow:hidden;font-size:11.5px; }
+    .tc-table th { text-align:left;padding:9px 11px;font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);background:var(--table-hover); }
+    .tc-table td { padding:9px 11px;border-top:1px solid var(--border);color:var(--text-main); }
+    .tc-table td.num { text-align:right;font-variant-numeric:tabular-nums; }
+    .tc-table tr:hover td { background:var(--table-hover); }
+    .tc-act { border:0;background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px;padding:0 4px; }
+    .tc-act:hover { color:var(--blue-light); }
+    .tc-none { background:var(--surface);border:1px dashed var(--border);border-radius:11px;padding:16px;text-align:center;color:var(--text-muted);font-size:11.5px; }
+    [data-theme="dark"] .tc-chan[data-c="whatsapp"] { background:#0F3728;color:#9CE2C2; }
+    [data-theme="dark"] .tc-chan[data-c="mail"] { background:#152C66;color:#AFC6FF; }
+
     /* My Day opens with the greeting rather than with numbers: the page is
        read first thing in the morning, by one person, about their own day. */
     .bat-hero { display:flex;align-items:flex-start;gap:14px;background:#fff;border:1px solid #E6EBF3;border-radius:14px;padding:16px 18px;margin:0 0 12px; }
@@ -4693,6 +4724,30 @@
             <button class="primary" id="bat-save" onclick="batSaveTask()">Save task</button>
           </div>
           <div class="auth-error" id="bat-error"></div>
+        </div>
+      </div>
+
+      <div class="hub-modal hidden" id="tc-modal">
+        <div class="hub-modal-box" style="width:480px;max-width:92vw">
+          <div class="bat-modal-head"><h3 id="tc-modal-title">Add campaign</h3><button class="bat-modal-close" onclick="tcClose()" aria-label="Close">×</button></div>
+          <label>CAMPAIGN NAME</label><input class="hub-input" id="tc-name" maxlength="120" placeholder="Black Friday blast">
+          <div class="bat-form-grid">
+            <div class="bat-field"><label>TOOL</label><select class="hub-input" id="tc-tool"><option value="yozo">Yozo</option><option value="getblu">GetBlu</option></select></div>
+            <div class="bat-field"><label>CHANNEL</label><select class="hub-input" id="tc-channel"><option value="whatsapp">WhatsApp</option><option value="mail">Mail</option></select></div>
+            <div class="bat-field"><label>DATE</label><input class="hub-input" id="tc-day" type="date"></div>
+            <div class="bat-field"><label>MESSAGES SENT</label><input class="hub-input" id="tc-sent" type="number" min="0" step="1" placeholder="0"></div>
+            <div class="bat-field"><label>OPENED</label><input class="hub-input" id="tc-opened" type="number" min="0" step="1" placeholder="leave blank if unknown"></div>
+            <div class="bat-field"><label>ORDERS</label><input class="hub-input" id="tc-orders" type="number" min="0" step="1" placeholder="0"></div>
+            <div class="bat-field"><label>PIECES</label><input class="hub-input" id="tc-pieces" type="number" min="0" step="1" placeholder="0"></div>
+            <div class="bat-field"><label>REVENUE</label><input class="hub-input" id="tc-revenue" type="number" min="0" step="any" placeholder="0.00"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:10px">CR% and AOV are worked out from these, so they are never typed.</div>
+          <div class="hub-modal-actions">
+            <button class="ghost" id="tc-delete" onclick="tcDelete()" style="margin-right:auto;display:none">Delete</button>
+            <button class="ghost" onclick="tcClose()">Cancel</button>
+            <button class="primary" id="tc-save" onclick="tcSave()">Save campaign</button>
+          </div>
+          <div class="auth-error" id="tc-error"></div>
         </div>
       </div>
 
@@ -6089,6 +6144,7 @@
       { id: 'website-results',    cards: [] },
       { id: 'messages-analysis',  cards: [] },
       { id: 'totals',          cards: [] },
+      { id: 'tools-results',   cards: [] },
       { id: 'revenue',         cards: [] }
     ];
 
@@ -13997,6 +14053,15 @@
             </div>
           </div>
 
+          <div class="kpi-section" data-section-id="tools-results">
+            <div class="section-label">Tools Results <span class="section-drag-handle" title="Drag to reorder section">⠿</span>
+              <span style="font-size:10px;color:var(--text-muted);font-weight:500;margin-left:6px">Yozo &amp; GetBlu · WhatsApp and mail campaigns</span>
+              <button class="tc-add" onclick="tcOpen()">＋ Add campaign</button>
+            </div>
+            <div class="tc-boxes" id="tc-boxes"></div>
+            <div id="tc-list"></div>
+          </div>
+
           <div class="kpi-section" data-section-id="website-results">
             <div class="section-label">Website Analysis <span class="section-drag-handle" title="Drag to reorder section">⠿</span></div>
             <div class="kpi-grid" data-grid-id="website-results">
@@ -14454,6 +14519,10 @@
           }
         });
       }
+
+      // The tool figures are ours, not Meta's, so they are fetched after the
+      // page is on screen rather than held up with it.
+      tcLoad();
 
       // ── Init drag-and-drop layout ──
       await _syncLayoutFromServer(); // pull server record → localStorage (cross-device sync)
@@ -24268,6 +24337,190 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function mtDelTask(taskId, meetingId) {
       await sb.from('meeting_tasks').delete().eq('id', taskId);
       mtLoadDetail(meetingId);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // TOOLS RESULTS — Yozo and GetBlu campaign figures
+    //
+    // Neither app reports into anything the dashboard can read, so the
+    // numbers are typed in once per campaign and kept per account and date,
+    // the same way the daily sheet is. CR% and AOV are derived here and not
+    // stored: a stored ratio goes stale the moment one of its parts is
+    // corrected, and these get corrected.
+    // ══════════════════════════════════════════════════════════════
+    const TC_TOOLS = [['yozo', 'Yozo'], ['getblu', 'GetBlu']];
+    const TC_CHANNELS = [['whatsapp', 'WhatsApp'], ['mail', 'Mail']];
+    let _tcRows = [], _tcEditing = null;
+
+    const tcCurrency = () => accountMap?.[sel?.value]?.currency || 'EGP';
+    const tcNum = v => (v == null || v === '' || isNaN(v)) ? null : Number(v);
+    function tcMoney(v) {
+      if (v == null) return '—';
+      return tcCurrency() + ' ' + Number(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    const tcInt = v => v == null ? '—' : Math.round(Number(v)).toLocaleString('en');
+
+    async function tcLoad() {
+      const box = document.getElementById('tc-boxes');
+      if (!box) return;                       // template without the section
+      const keys = _dcWantedKeys();
+      try {
+        let q = sb.from('tool_campaigns').select('*')
+          .eq('organization_id', currentOrgId)
+          .gte('day', _webRangeStart()).lte('day', _webRangeEnd())
+          .order('day', { ascending: false });
+        if (keys && keys.length) q = q.in('account_key', keys);
+        const { data, error } = await q;
+        if (error) throw error;
+        _tcRows = data || [];
+      } catch (e) {
+        console.warn('[tools]', e.message || e);
+        _tcRows = [];
+        box.innerHTML = `<div class="tc-none">Could not load the tool results: ${escHtml(e.message || String(e))}</div>`;
+        return;
+      }
+      tcRender();
+    }
+
+    // Sent, Opened, Orders, Pieces and Revenue add up across campaigns; CR%
+    // and AOV cannot be averaged from the rows and are recomputed from the
+    // totals, or a hundred-order campaign would count the same as a one.
+    function tcTotals(rows) {
+      const sum = k => rows.reduce((n, r) => n + (Number(r[k]) || 0), 0);
+      const sent = sum('sent'), orders = sum('orders'), revenue = sum('revenue');
+      const openedRows = rows.filter(r => r.opened != null);
+      const opened = openedRows.length ? openedRows.reduce((n, r) => n + Number(r.opened || 0), 0) : null;
+      return { n: rows.length, sent, opened, orders, pieces: sum('pieces'), revenue,
+        cr: sent ? orders / sent * 100 : null, aov: orders ? revenue / orders : null };
+    }
+
+    function tcRender() {
+      const box = document.getElementById('tc-boxes');
+      const list = document.getElementById('tc-list');
+      if (!box || !list) return;
+      box.innerHTML = TC_TOOLS.flatMap(([tool, toolName]) => TC_CHANNELS.map(([chan, chanName]) => {
+        const rows = _tcRows.filter(r => r.tool === tool && r.channel === chan);
+        const t = tcTotals(rows);
+        const fig = (k, v, wide) => `<div class="tc-fig${wide ? ' wide' : ''}"><div class="tc-fig-k">${k}</div><div class="tc-fig-v">${v}</div></div>`;
+        return `<div class="tc-box" data-empty="${!rows.length}">
+          <div class="tc-box-top">
+            <span class="tc-tool">${toolName}</span>
+            <span class="tc-chan" data-c="${chan}">${chanName}</span>
+            <span class="tc-count">${t.n} campaign${t.n === 1 ? '' : 's'}</span>
+          </div>
+          <div class="tc-figs">
+            ${fig('Sent', tcInt(t.sent))}
+            ${fig('Opened', t.opened == null ? '—' : tcInt(t.opened))}
+            ${fig('CR%', t.cr == null ? '—' : t.cr.toFixed(2) + '%')}
+            ${fig('Orders', tcInt(t.orders))}
+            ${fig('Pieces', tcInt(t.pieces))}
+            ${fig('AOV', t.aov == null ? '—' : tcMoney(t.aov))}
+            ${fig('Revenue', tcMoney(t.revenue), true)}
+          </div>
+        </div>`;
+      })).join('');
+
+      if (!_tcRows.length) {
+        list.innerHTML = `<div class="tc-none">No Yozo or GetBlu campaigns recorded for this account and period.
+          <button class="tc-add" style="margin:8px auto 0;display:block" onclick="tcOpen()">＋ Add the first one</button></div>`;
+        return;
+      }
+      const label = (pairs, v) => (pairs.find(p => p[0] === v) || [, v])[1];
+      // Twelve columns do not fit a laptop at this font size, let alone a
+      // phone, so the table scrolls sideways inside the section rather than
+      // squeezing the names into two words a line.
+      list.innerHTML = `<div class="tc-wrap"><table class="tc-table"><thead><tr>
+          <th>Campaign</th><th>Tool</th><th>Channel</th><th>Date</th>
+          <th style="text-align:right">Sent</th><th style="text-align:right">Opened</th>
+          <th style="text-align:right">CR%</th><th style="text-align:right">Orders</th>
+          <th style="text-align:right">Pieces</th><th style="text-align:right">Revenue</th>
+          <th style="text-align:right">AOV</th><th></th>
+        </tr></thead><tbody>
+        ${_tcRows.map(r => {
+          const t = tcTotals([r]);
+          return `<tr>
+            <td>${escHtml(r.name || 'Untitled campaign')}</td>
+            <td>${escHtml(label(TC_TOOLS, r.tool))}</td>
+            <td><span class="tc-chan" data-c="${escHtml(r.channel)}">${escHtml(label(TC_CHANNELS, r.channel))}</span></td>
+            <td>${escHtml(String(r.day))}</td>
+            <td class="num">${tcInt(t.sent)}</td>
+            <td class="num">${r.opened == null ? '—' : tcInt(r.opened)}</td>
+            <td class="num">${t.cr == null ? '—' : t.cr.toFixed(2) + '%'}</td>
+            <td class="num">${tcInt(t.orders)}</td>
+            <td class="num">${tcInt(t.pieces)}</td>
+            <td class="num">${tcMoney(t.revenue)}</td>
+            <td class="num">${t.aov == null ? '—' : tcMoney(t.aov)}</td>
+            <td class="num"><button class="tc-act" title="Edit" onclick="tcOpen('${escHtml(r.id)}')">✎</button></td>
+          </tr>`;
+        }).join('')}
+        </tbody></table></div>`;
+    }
+
+    function tcOpen(id = null) {
+      const key = sel?.value;
+      if (!id && (!key || key === '__all__' || String(key).startsWith('__group__'))) {
+        alert('Pick a single account first — a campaign belongs to one account.');
+        return;
+      }
+      _tcEditing = id ? _tcRows.find(r => r.id === id) : null;
+      const r = _tcEditing || {};
+      document.getElementById('tc-modal-title').textContent = _tcEditing ? 'Edit campaign' : 'Add campaign';
+      document.getElementById('tc-name').value = r.name || '';
+      document.getElementById('tc-tool').value = r.tool || 'yozo';
+      document.getElementById('tc-channel').value = r.channel || 'whatsapp';
+      // A new campaign defaults to the last day of the period on screen,
+      // which is the day somebody is almost always typing up.
+      document.getElementById('tc-day').value = r.day || _webRangeEnd();
+      document.getElementById('tc-sent').value = r.sent ?? '';
+      document.getElementById('tc-opened').value = r.opened ?? '';
+      document.getElementById('tc-orders').value = r.orders ?? '';
+      document.getElementById('tc-pieces').value = r.pieces ?? '';
+      document.getElementById('tc-revenue').value = r.revenue ?? '';
+      document.getElementById('tc-error').textContent = '';
+      document.getElementById('tc-delete').style.display = _tcEditing ? '' : 'none';
+      document.getElementById('tc-modal').classList.remove('hidden');
+      document.getElementById('tc-name').focus();
+    }
+    function tcClose() { document.getElementById('tc-modal').classList.add('hidden'); _tcEditing = null; }
+
+    async function tcSave() {
+      const err = document.getElementById('tc-error');
+      const day = document.getElementById('tc-day').value;
+      if (!day) { err.textContent = 'Pick the date the campaign went out.'; return; }
+      const row = {
+        organization_id: currentOrgId,
+        account_key: String(_tcEditing?.account_key || sel?.value || ''),
+        day,
+        tool: document.getElementById('tc-tool').value,
+        channel: document.getElementById('tc-channel').value,
+        name: document.getElementById('tc-name').value.trim() || null,
+        sent: tcNum(document.getElementById('tc-sent').value) || 0,
+        opened: tcNum(document.getElementById('tc-opened').value),
+        orders: tcNum(document.getElementById('tc-orders').value) || 0,
+        pieces: tcNum(document.getElementById('tc-pieces').value) || 0,
+        revenue: tcNum(document.getElementById('tc-revenue').value) || 0,
+        updated_at: new Date().toISOString(),
+      };
+      if (!row.account_key) { err.textContent = 'No account selected.'; return; }
+      const btn = document.getElementById('tc-save');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      const res = _tcEditing
+        ? await sb.from('tool_campaigns').update(row).eq('id', _tcEditing.id).eq('organization_id', currentOrgId)
+        : await sb.from('tool_campaigns').insert({ ...row, created_by: currentUser?.id || null });
+      btn.disabled = false; btn.textContent = 'Save campaign';
+      if (res.error) { err.textContent = res.error.message; return; }
+      tcClose();
+      await tcLoad();
+    }
+
+    async function tcDelete() {
+      if (!_tcEditing) return;
+      if (!confirm(`Delete “${_tcEditing.name || 'this campaign'}”? This cannot be undone.`)) return;
+      const { error } = await sb.from('tool_campaigns').delete()
+        .eq('id', _tcEditing.id).eq('organization_id', currentOrgId);
+      if (error) { document.getElementById('tc-error').textContent = error.message; return; }
+      tcClose();
+      await tcLoad();
     }
 
     // ══════════════════════════════════════════════════════════════
