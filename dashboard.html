@@ -5692,6 +5692,18 @@
       // this, anyone whose machine was in light mode never saw the dark theme
       // at all and reasonably concluded the dashboard had not changed.
       // The toggle still wins, and the choice is still remembered.
+      //
+      // The BLU palette is a new look rather than a tweak to the old one, so
+      // it is shown to everybody once, including the people who had switched
+      // to light before it existed and would otherwise never see it. That is
+      // a single reset, keyed by the name below: after it, the toggle wins
+      // again and the choice sticks as it always did. Renaming the key is how
+      // a future repaint gets the same one-time introduction.
+      const LOOK = 'blu';
+      if (localStorage.getItem('theme-look') !== LOOK) {
+        localStorage.setItem('theme-look', LOOK);
+        localStorage.removeItem('theme');
+      }
       const saved = localStorage.getItem('theme');
       const dark = saved ? saved === 'dark' : true;
       if (dark) document.documentElement.setAttribute('data-theme', 'dark');
