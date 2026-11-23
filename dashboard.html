@@ -3841,6 +3841,24 @@
     .bat-check-add { border:1px dashed #CBD5E3;background:#fff;color:#51607A;border-radius:8px;padding:7px 9px;font:inherit;font-size:11.5px;cursor:pointer;text-align:left; }
     .bat-check-add:hover { border-color:#0573F5;color:#0573F5; }
 
+    /* ── Agents ─────────────────────────────────────────────────────── */
+    .ag-card { background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin:0 0 14px; }
+    .ag-head { display:flex;align-items:center;gap:11px;margin-bottom:10px;flex-wrap:wrap; }
+    .ag-face { width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--well);font-size:17px; }
+    .ag-name { font-size:16px;font-weight:800;color:var(--text-main);display:block;line-height:1.2; }
+    .ag-role { font-size:11px;color:var(--text-muted); }
+    .ag-state { margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;border-radius:20px;padding:4px 10px;background:#3B2C0C;color:#F3D08C; }
+    .ag-state[data-on="true"] { background:#0F3728;color:#9CE2C2; }
+    .ag-what { font-size:12px;line-height:1.65;color:var(--text-muted);max-width:760px; }
+    .ag-meta { display:flex;gap:16px;flex-wrap:wrap;margin-top:11px;font-size:11px;color:var(--text-muted); }
+    .ag-meta b { color:var(--text-main); }
+    .ag-list-head { font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin:18px 0 9px; }
+    .ag-kind { font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase; }
+    .ag-msg { font-size:11px;color:var(--text-muted);margin-top:3px;max-width:520px; }
+    .ag-preview { margin-top:12px;background:var(--well);border:1px solid var(--border);border-radius:10px;padding:11px 13px; }
+    .ag-preview-head { font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:7px; }
+    .ag-preview pre { margin:0;white-space:pre-wrap;font-family:inherit;font-size:11.5px;line-height:1.6;color:var(--text-main); }
+
     /* ── Tools Results (Yozo / GetBlu) ──────────────────────────────────
        One box per tool and channel, then the campaigns that make them up.
        The boxes are a fixed four: a channel with nothing in it this period
@@ -4542,6 +4560,12 @@
             <div class="hub-card-desc">Plan today’s work, assign tasks to your team, and track every deadline in one place.</div>
             <div class="hub-card-badge" style="background:#EAF2FE;color:#0573F5">NEW</div>
           </div>
+          <div class="hub-card" data-mod="media" onclick="hubOpen('agents')">
+            <div class="hub-card-icon">🧭</div>
+            <div class="hub-card-title">Agents</div>
+            <div class="hub-card-desc">Selim watches every account's results three times a day and says in Telegram when one slips.</div>
+            <div class="hub-card-badge" style="background:#EAF2FE;color:#0573F5">NEW</div>
+          </div>
           <!-- Proposal lives inside the media dashboard as a tab. This opens
                that tab directly, so it does not have to be found two clicks
                in. data-mod is what applyModuleAccess() hides cards by, and
@@ -4626,6 +4650,16 @@
         </div>
         <div id="cln-crumb" class="cln-crumb"></div>
         <div id="cln-body"><div class="cln-note">Loading…</div></div>
+      </div>
+
+      <!-- Agents -->
+      <div id="hub-agents-view" style="display:none">
+        <div class="hub-mod-head">
+          <button class="hub-mod-back" onclick="hubShowView('cards')">← Home</button>
+          <h2>🧭 Agents</h2>
+          <button class="hub-mod-btn" onclick="agLoad()" title="Refresh">↻</button>
+        </div>
+        <div id="ag-body"><div class="cln-note">Loading…</div></div>
       </div>
 
       <!-- Blue Ad Tasks -->
@@ -23763,6 +23797,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (mv) mv.style.display = v === 'meetings' ? '' : 'none';
       const tv = document.getElementById('hub-tasks-view');
       if (tv) tv.style.display = v === 'tasks' ? '' : 'none';
+      const agv = document.getElementById('hub-agents-view');
+      if (agv) agv.style.display = v === 'agents' ? '' : 'none';
       const batNew = document.getElementById('bat-new-task-btn');
       if (batNew) batNew.style.display = batCanEdit() ? '' : 'none';
       const batImport = document.getElementById('bat-import-notion-btn');
@@ -23779,6 +23815,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       if (v === 'access')   acxInit();
       if (v === 'meetings') mtInit();
       if (v === 'tasks') batLoad();
+      if (v === 'agents') agLoad();
       if (v === 'clients') clnInit();
       // Remembered so a refresh comes back here instead of the home screen.
       _navSave({ v: v === 'cards' ? 'home' : v });
@@ -24336,6 +24373,121 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     async function mtDelTask(taskId, meetingId) {
       await sb.from('meeting_tasks').delete().eq('id', taskId);
       mtLoadDetail(meetingId);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AGENTS — watchers that read the dashboard so nobody has to
+    //
+    // The page shows what an agent is for, when it last looked, and what it
+    // has said recently. "Run now" is a dry run on purpose: it shows exactly
+    // what the agent would send without sending it, so the page can be opened
+    // and poked at as often as you like without filling Telegram.
+    // ══════════════════════════════════════════════════════════════
+    let _agAgents = [], _agAlerts = [];
+
+    async function agLoad() {
+      const body = document.getElementById('ag-body');
+      if (!body) return;
+      body.innerHTML = '<div class="cln-note">Loading…</div>';
+      if (!await _hubWaitOrg()) { body.innerHTML = '<div class="cln-note">No organisation loaded yet.</div>'; return; }
+      const [{ data: agents, error }, { data: alerts }] = await Promise.all([
+        sb.from('agents').select('*').eq('organization_id', currentOrgId).order('name'),
+        sb.from('agent_alerts').select('*').eq('organization_id', currentOrgId)
+          .order('day', { ascending: false }).order('created_at', { ascending: false }).limit(120),
+      ]);
+      if (error) { body.innerHTML = `<div class="cln-note">${escHtml(error.message)}</div>`; return; }
+      _agAgents = agents || []; _agAlerts = alerts || [];
+      agRender();
+    }
+
+    const AG_KIND = {
+      waste: ['Spend with no results', '#B3291F'],
+      drop:  ['Results down', '#B3291F'],
+      cost:  ['Cost per result up', '#9E4517'],
+      roas:  ['ROAS below floor', '#B3291F'],
+      trend: ['Sliding over weeks', '#8C6212'],
+    };
+
+    function agRender() {
+      const body = document.getElementById('ag-body');
+      if (!_agAgents.length) {
+        body.innerHTML = '<div class="cln-note">No agents yet.</div>';
+        return;
+      }
+      const when = iso => iso
+        ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : 'never';
+      body.innerHTML = _agAgents.map(a => {
+        const s = a.settings || {};
+        const mine = _agAlerts.filter(x => x.agent_slug === a.slug);
+        const bad = mine.filter(x => x.severity === 'bad').length;
+        return `<div class="ag-card">
+          <div class="ag-head">
+            <span class="ag-face">🧭</span>
+            <span>
+              <span class="ag-name">${escHtml(a.name)}</span>
+              <span class="ag-role">${escHtml(a.role || '')}</span>
+            </span>
+            <span class="ag-state" data-on="${a.enabled !== false}">${a.enabled === false ? 'Paused' : 'Watching'}</span>
+            <button class="hub-mod-btn" onclick="agDryRun('${escHtml(a.slug)}')">Run now</button>
+          </div>
+          <div class="ag-what">
+            Reads every active account's daily figures three times a day and compares yesterday with
+            the last ${s.short_days || 14} days and with the ${Math.round((s.long_days || 180) / 30)}-month average.
+            Alarms go to Telegram when results fall ${s.drop_pct || 35}% below the fortnight, when the cost per
+            result rises ${s.cost_rise_pct || 35}%, when ROAS drops under ${s.roas_floor ?? 1}x, or when spend
+            buys nothing at all.
+          </div>
+          <div class="ag-meta">
+            <span>Last run <b>${escHtml(when(a.last_run_at))}</b></span>
+            ${a.last_run_note ? `<span>${escHtml(a.last_run_note)}</span>` : ''}
+            <span>${bad} open alarm${bad === 1 ? '' : 's'} in the last few days</span>
+          </div>
+          <div id="ag-preview-${escHtml(a.slug)}"></div>
+        </div>`;
+      }).join('') + agAlertsHtml();
+    }
+
+    function agAlertsHtml() {
+      if (!_agAlerts.length) return '<div class="cln-note">Nothing flagged yet.</div>';
+      return `<div class="ag-list-head">Recent alarms</div><div class="tc-wrap"><table class="tc-table"><thead><tr>
+          <th>Account</th><th>Day</th><th>What</th><th>Reading</th><th style="text-align:right">vs 14 days</th>
+          <th style="text-align:right">vs 6 months</th><th>Sent</th>
+        </tr></thead><tbody>
+        ${_agAlerts.map(x => {
+          const [label, colour] = AG_KIND[x.kind] || [x.kind, '#5A687D'];
+          const d = (v) => v == null ? '—' : Number(v).toLocaleString('en', { maximumFractionDigits: 2 });
+          return `<tr>
+            <td>${escHtml(x.account_name || x.account_key)}</td>
+            <td>${escHtml(String(x.day))}</td>
+            <td><span class="ag-kind" style="color:${colour}">${escHtml(label)}</span>
+              <div class="ag-msg">${escHtml(x.message)}</div></td>
+            <td class="num">${d(x.value)}</td>
+            <td class="num">${d(x.baseline)}</td>
+            <td class="num">${d(x.baseline_long)}</td>
+            <td>${x.sent_at ? '✓' : '—'}</td>
+          </tr>`;
+        }).join('')}
+        </tbody></table></div>`;
+    }
+
+    // The preview calls the agent with dry_run, which writes nothing and
+    // sends nothing — it is the one call the page is allowed to make.
+    async function agDryRun(slug) {
+      const box = document.getElementById('ag-preview-' + slug);
+      if (!box) return;
+      box.innerHTML = '<div class="ag-preview">Looking…</div>';
+      try {
+        // Six months of rows for every account takes longer than the default.
+        const r = await callEdgeFunction('agent-' + slug, { dry_run: true }, 90000);
+        if (r?.error) throw new Error(r.error);
+        const text = String(r?.preview || 'No answer.');
+        box.innerHTML = `<div class="ag-preview"><div class="ag-preview-head">What he would send right now · `
+          + `${r?.checked ?? 0} accounts checked${r?.stale ? ` · ${r.stale} sheets too far behind to judge` : ''}</div>`
+          + `<pre>${escHtml(text.replace(/<\/?b>|<\/?i>/g, ''))}</pre></div>`;
+      } catch (e) {
+        box.innerHTML = `<div class="ag-preview">Could not run: ${escHtml(e.message || String(e))}</div>`;
+      }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -27733,7 +27885,9 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     }
 
     function hubOpen(section) {
-      const permissionSection = section === 'tasks' ? 'pipeline' : section;
+      // Agents watch the media accounts, so they answer to the same gate.
+      const permissionSection = section === 'tasks' ? 'pipeline'
+        : section === 'agents' ? 'media' : section;
       if (!canOpenModule(permissionSection)) { alert('You do not have access to this section.'); return; }
       if (section === 'media' || section === 'proposal') {
         document.getElementById('home-hub').classList.add('hidden');
