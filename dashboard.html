@@ -24405,7 +24405,7 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
       drop:  ['Results down', '#B3291F'],
       cost:  ['Cost per result up', '#9E4517'],
       roas:  ['ROAS below floor', '#B3291F'],
-      trend: ['Sliding over weeks', '#8C6212'],
+      trend: ['No baseline to judge', '#8C6212'],
     };
 
     function agRender() {
@@ -24432,11 +24432,13 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             <button class="hub-mod-btn" onclick="agDryRun('${escHtml(a.slug)}')">Run now</button>
           </div>
           <div class="ag-what">
-            Reads every active account's daily figures three times a day and compares yesterday with
-            the last ${s.short_days || 14} days and with the ${Math.round((s.long_days || 180) / 30)}-month average.
-            Alarms go to Telegram when results fall ${s.drop_pct || 35}% below the fortnight, when the cost per
-            result rises ${s.cost_rise_pct || 35}%, when ROAS drops under ${s.roas_floor ?? 1}x, or when spend
-            buys nothing at all.
+            Three times a day he reads what every live account has done <b>today</b>, straight from Meta,
+            and compares it with that account's own ${Math.round((s.base_days || 90) / 30)}-month average.
+            Alarms go to Telegram when the cost per result is ${s.cost_rise_pct || 35}% above the
+            ${Math.round((s.base_days || 90) / 30)}-month figure, when results are ${s.drop_pct || 35}% below
+            what the day should have produced by that hour, or when spend has bought nothing at all.
+            Volume is measured against the share of the day that has passed, so a morning check does not
+            read every account as down.
           </div>
           <div class="ag-meta">
             <span>Last run <b>${escHtml(when(a.last_run_at))}</b></span>
@@ -24451,8 +24453,8 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
     function agAlertsHtml() {
       if (!_agAlerts.length) return '<div class="cln-note">Nothing flagged yet.</div>';
       return `<div class="ag-list-head">Recent alarms</div><div class="tc-wrap"><table class="tc-table"><thead><tr>
-          <th>Account</th><th>Day</th><th>What</th><th>Reading</th><th style="text-align:right">vs 14 days</th>
-          <th style="text-align:right">vs 6 months</th><th>Sent</th>
+          <th>Account</th><th>Day</th><th>What</th><th style="text-align:right">Today</th>
+          <th style="text-align:right">Expected</th><th style="text-align:right">3-month</th><th>Sent</th>
         </tr></thead><tbody>
         ${_agAlerts.map(x => {
           const [label, colour] = AG_KIND[x.kind] || [x.kind, '#5A687D'];
