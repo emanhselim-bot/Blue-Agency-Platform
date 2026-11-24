@@ -3850,6 +3850,9 @@
     .ag-state { margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;border-radius:20px;padding:4px 10px;background:#3B2C0C;color:#F3D08C; }
     .ag-state[data-on="true"] { background:#0F3728;color:#9CE2C2; }
     .ag-what { font-size:12px;line-height:1.65;color:var(--text-muted);max-width:760px; }
+    .ag-watch { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:12px; }
+    .ag-watch-k { font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-right:3px; }
+    .ag-watch-chip { font-size:10.5px;border-radius:7px;padding:3px 8px;background:var(--well);color:var(--text-main);border:1px solid var(--border); }
     .ag-meta { display:flex;gap:16px;flex-wrap:wrap;margin-top:11px;font-size:11px;color:var(--text-muted); }
     .ag-meta b { color:var(--text-main); }
     .ag-list-head { font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin:18px 0 9px; }
@@ -24440,6 +24443,10 @@ Placements: ${(ad.platforms || []).join(', ') || '—'}`,
             Volume is measured against the share of the day that has passed, so a morning check does not
             read every account as down.
           </div>
+          ${Array.isArray(s.watch_names) && s.watch_names.length ? `<div class="ag-watch">
+            <span class="ag-watch-k">Watching ${s.watch_names.length}</span>
+            ${s.watch_names.map(n => `<span class="ag-watch-chip">${escHtml(String(n).trim())}</span>`).join('')}
+          </div>` : ''}
           <div class="ag-meta">
             <span>Last run <b>${escHtml(when(a.last_run_at))}</b></span>
             ${a.last_run_note ? `<span>${escHtml(a.last_run_note)}</span>` : ''}

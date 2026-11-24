@@ -208,7 +208,9 @@ Deno.serve(async (req: Request) => {
   const { data: agent } = await admin.from("agents")
     .select("*").eq("organization_id", orgId).eq("slug", "selim").maybeSingle();
   if (agent && agent.enabled === false) return json({ ok: true, skipped: true, reason: "Selim is switched off" });
-  const s = (agent?.settings ?? {}) as Record<string, number>;
+  const settings = (agent?.settings ?? {}) as Record<string, unknown>;
+  const s = settings as Record<string, number>;
+  const s_watch = settings.watch as unknown[] | undefined;
   const DROP = s.drop_pct ?? 35;          // results under the expected share
   const RISE = s.cost_rise_pct ?? 35;     // cost per result over the baseline
   const MIN_RESULTS = s.min_orders ?? 3;  // results/day in the baseline to judge volume
@@ -245,16 +247,23 @@ Deno.serve(async (req: Request) => {
     if (from > 60000) break;
   }
 
-  // ── Today, live from Meta ─────────────────────────────────────────
+  // ── Who gets watched ──────────────────────────────────────────────
   //
-  // Only the accounts that have traded at some point in the baseline window.
-  // The organisation keeps 99 active ad accounts and roughly a quarter of
-  // them are working in any given quarter; asking Meta about all 99 three
-  // times a day took most of the answers past their timeout, and an account
-  // that cannot be read looks exactly like an account that is behaving.
-  // Dormant ones are counted and named in the message instead, so a client
-  // that starts spending without a sheet shows up rather than vanishing.
-  const watch = live.filter(a => (base.get(String(a.id))?.days ?? 0) > 0);
+  // The list on the agent, which is the agency's own list of live clients.
+  // That is a judgement nobody can infer from the data: an account with no
+  // rows this quarter may be a client who starts next week, and one with
+  // plenty of rows may have left. It is settings rather than code so the
+  // list can change without a deploy.
+  //
+  // Falling back to "anything the sheet has touched" matters: it is what
+  // stops a cleared or mistyped list leaving Selim watching nothing at all.
+  // Either way the fan-out stays small — asking Meta about all 99 active
+  // accounts three times a day pushed most answers past their timeout, and
+  // an account that cannot be read looks exactly like one that is behaving.
+  const chosen = Array.isArray(s_watch) ? s_watch.map(String) : [];
+  const watch = chosen.length
+    ? live.filter(a => chosen.includes(String(a.id)))
+    : live.filter(a => (base.get(String(a.id))?.days ?? 0) > 0);
   const dormant = live.length - watch.length;
 
   const todays = new Map<string, Today>();
@@ -353,7 +362,7 @@ Deno.serve(async (req: Request) => {
     blocks.push(`<i>Meta would not answer for (${unreadable.length}):</i>\n` + esc(unreadable.join(", ")));
   }
   if (dormant) {
-    blocks.push(`<i>${dormant} accounts not watched — nothing in the sheet for three months.</i>`);
+    blocks.push(`<i>${dormant} other active ad accounts are not on the watch list.</i>`);
   }
 
   if (body.dry_run) {
