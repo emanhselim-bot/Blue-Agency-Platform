@@ -262,7 +262,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const { data: accountRows } = await admin.from("meta_ad_accounts")
-    .select("id, account_name, currency, meta_account_id, meta_business_managers ( access_token )")
+    .select("id, account_name, currency, meta_account_id, shopify_store_id, notion_url,"
+      + " meta_business_managers ( access_token )")
     .eq("organization_id", orgId).eq("is_active", true);
   const live = (accountRows ?? []) as Row[];
 
@@ -272,9 +273,81 @@ Deno.serve(async (req: Request) => {
   const dormant = live.length - watch.length;
   const watchIds = new Set(watch.map(a => String(a.id)));
 
+  /* ── Brands, not ad accounts ──────────────────────────────────────
+     Nuya runs three ad accounts against one shop. Reported separately
+     they look like three half-sized clients, each one "down" against a
+     baseline that belongs to all three; the client only cares what Nuya
+     did today. Accounts are joined when the dashboard already groups
+     them, or when they point at the same Shopify store — the two ways
+     the rest of the system already knows they are one client. */
+  const { data: groupRows } = await admin.from("account_groups")
+    .select("id, name, account_ids, notion_url").eq("organization_id", orgId);
+  const groups = (groupRows ?? []) as Row[];
+
+  type Brand = { name: string; ids: string[]; keys: string[]; currency: string;
+                 sheetOf: Map<string, string> };   // sheet key -> which sheet it is
+  const parent = new Map<string, string>();          // account id -> brand key
+  const find = (id: string): string => {
+    const p = parent.get(id);
+    if (!p || p === id) return id;
+    const root = find(p); parent.set(id, root); return root;
+  };
+  const join = (a: string, b: string) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(rb, ra); };
+  for (const a of watch) parent.set(String(a.id), String(a.id));
+  for (const g of groups) {
+    const ids = ((g.account_ids ?? []) as unknown[]).map(String).filter(id => watchIds.has(id));
+    for (let i = 1; i < ids.length; i++) join(ids[0], ids[i]);
+  }
+  const byStore = new Map<string, string[]>();
+  for (const a of watch) {
+    const store = a.shopify_store_id ? String(a.shopify_store_id) : "";
+    if (!store) continue;
+    if (!byStore.has(store)) byStore.set(store, []);
+    byStore.get(store)!.push(String(a.id));
+  }
+  for (const ids of byStore.values()) for (let i = 1; i < ids.length; i++) join(ids[0], ids[i]);
+
+  const brands = new Map<string, Brand>();
+  for (const a of watch) {
+    const root = find(String(a.id));
+    if (!brands.has(root)) {
+      brands.set(root, { name: "", ids: [], keys: [], currency: String(a.currency ?? ""), sheetOf: new Map() });
+    }
+    const brand = brands.get(root)!;
+    brand.ids.push(String(a.id));
+    brand.keys.push(String(a.id));
+    // Which Notion sheet this key's figures come out of. Two accounts on the
+    // same sheet do not hold half the client's numbers each — they both hold
+    // the client's whole total, which is how the dashboard reads them too.
+    // Adding them up would have reported Nuya at three times its real size.
+    brand.sheetOf.set(String(a.id), String(a.notion_url ?? "").trim() || `acct:${a.id}`);
+    brand.currency = brand.currency || String(a.currency ?? "");
+  }
+  // The group's name is the client's real name ("Nuya", not "Nuya BlueAd2"),
+  // and the sheet may be filed under the group as well as the accounts.
+  for (const g of groups) {
+    const ids = ((g.account_ids ?? []) as unknown[]).map(String).filter(id => watchIds.has(id));
+    if (!ids.length) continue;
+    const brand = brands.get(find(ids[0]));
+    if (!brand) continue;
+    brand.name = String(g.name ?? "").trim() || brand.name;
+    const gk = "__group__" + String(g.id);
+    brand.keys.push(gk);
+    brand.sheetOf.set(gk, String(g.notion_url ?? "").trim() || `group:${g.id}`);
+  }
+  for (const [root, brand] of brands) {
+    if (brand.name) continue;
+    // Otherwise the shortest member name, which is the one without the
+    // "- BlueAd2" sort of suffix.
+    const names = brand.ids.map(id => String(live.find(a => String(a.id) === id)?.account_name ?? id).trim());
+    brand.name = names.sort((x, y) => x.length - y.length)[0] || root;
+  }
+
   // ── History: a year of the sheet, so the window can widen when the
   //    last three months are thin ──────────────────────────────────
   const byAccount = new Map<string, Day[]>();
+  const sheetKeys = new Set<string>();
+  for (const b of brands.values()) for (const k of b.keys) sheetKeys.add(k);
   const since = shift(today, -400);
   for (let from = 0; ; from += 1000) {
     const { data, error } = await admin.from("notion_daily")
@@ -289,7 +362,7 @@ Deno.serve(async (req: Request) => {
     if (error) return json({ error: error.message }, 500);
     for (const r of data ?? []) {
       const key = String(r.account_key);
-      if (!watchIds.has(key)) continue;
+      if (!sheetKeys.has(key)) continue;
       const d: Day = {
         day: String(r.day).slice(0, 10),
         spend: spendOf(r as Row), results: resultsOf(r as Row), revenue: revenueOf(r as Row),
@@ -332,17 +405,49 @@ Deno.serve(async (req: Request) => {
   type Card = { name: string; lines: string[]; bad: number; spend: number };
   const cards: Card[] = [];
 
-  for (const a of watch) {
-    const key = String(a.id);
-    const name = String(a.account_name ?? key).trim();
-    const cur = String(a.currency ?? "");
-    const t = todays.get(key);
-    if (!t) continue;
-    if (!t.ok) { unreadable.push(name); continue; }
+  for (const [key, brand] of brands) {
+    const name = brand.name;
+    const cur = brand.currency;
+    // One brand, however many ad accounts are behind it.
+    const parts = brand.ids.map(id => todays.get(id)).filter(Boolean) as Today[];
+    if (!parts.length) continue;
+    if (parts.every(p => !p.ok)) { unreadable.push(name); continue; }
+    const t: Today = {
+      spend: parts.filter(p => p.ok).reduce((n, p) => n + p.spend, 0),
+      results: parts.filter(p => p.ok).reduce((n, p) => n + p.results, 0),
+      revenue: parts.filter(p => p.ok).reduce((n, p) => n + p.revenue, 0),
+      kind: parts.find(p => p.ok && p.kind)?.kind ?? "",
+      ok: true,
+    };
     if (t.spend <= 0) continue;              // a paused account is a decision
-    spending++;
 
-    const history = byAccount.get(key) ?? [];
+    // The sheet is filed per account and sometimes under the group as well,
+    // so a brand's history is every key's rows folded together by day.
+    // Keys that read the same sheet are mirrors of one another, so the
+    // biggest of them is the day's figure; genuinely separate sheets add up.
+    const perSheet = new Map<string, Map<string, Day>>();
+    for (const k of brand.keys) {
+      const sheet = brand.sheetOf.get(k) ?? k;
+      if (!perSheet.has(sheet)) perSheet.set(sheet, new Map());
+      const days = perSheet.get(sheet)!;
+      for (const d of byAccount.get(k) ?? []) {
+        const seen = days.get(d.day);
+        if (!seen) { days.set(d.day, { ...d }); continue; }
+        seen.spend = Math.max(seen.spend, d.spend);
+        seen.results = Math.max(seen.results, d.results);
+        seen.revenue = Math.max(seen.revenue, d.revenue);
+      }
+    }
+    const merged = new Map<string, Day>();
+    for (const days of perSheet.values()) {
+      for (const d of days.values()) {
+        const agg = merged.get(d.day) ?? { day: d.day, spend: 0, results: 0, revenue: 0 };
+        agg.spend += d.spend; agg.results += d.results; agg.revenue += d.revenue;
+        merged.set(d.day, agg);
+      }
+    }
+    const history = [...merged.values()].sort((x, y) => x.day.localeCompare(y.day));
+    spending++;
     // The last three months, or — when those are thin — however many of the
     // most recent days with figures can be found, back to a year.
     let window = history.filter(d => d.day >= shift(today, -BASE_DAYS));
@@ -387,6 +492,20 @@ Deno.serve(async (req: Request) => {
       }
     } else {
       lines.push(`▫️ <b>Results</b> ${t.results} so far · no history to compare with`);
+    }
+
+    // What the dashboard says, for the clients Meta cannot see.
+    //
+    // A lead that arrives by WhatsApp, or an order confirmed on the phone,
+    // never reaches Meta's conversion count — those clients would read as
+    // "0 results" forever. The sheet is the team's own record of them, so
+    // its latest filled day is reported too, with the same comparison. It
+    // is labelled by date, because it is not today.
+    const lastFilled = history.filter(d => d.results > 0).slice(-1)[0];
+    if (t.results === 0 && lastFilled && avgResults > 0) {
+      const p = pct(lastFilled.results, avgResults);
+      lines.push(`▫️ <b>Dashboard</b> ${lastFilled.results} on ${esc(niceDay(lastFilled.day))}`
+        + `${p != null ? ` (${delta(p)} on ${one(avgResults)}/day)` : ""}`);
     }
 
     // Cost per result: the comparison that holds at any hour.
