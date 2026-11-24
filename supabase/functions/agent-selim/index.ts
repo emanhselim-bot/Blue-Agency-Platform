@@ -1,11 +1,11 @@
 /**
  * agent-selim — Supabase Edge Function
  *
- * Selim is the performance media buyer who never goes home. Three times a day
- * he reads what every live account has done **today** and compares it with
- * what that account normally does, over the previous three months. When today
- * is off — fewer results, or each result costing more — he says so in
- * Telegram, with the two numbers side by side.
+ * Selim is the performance media buyer who never goes home. Twice a day —
+ * 13:00 and 23:00 Cairo — he reads what every live account has done
+ * **today** and compares it with what that account normally does, over the
+ * previous three months. When today is off — fewer results, or each result
+ * costing more — he says so in Telegram, with the two numbers side by side.
  *
  * ── Why today, and why live ───────────────────────────────────────
  *
@@ -31,7 +31,7 @@
  *   15:00 an account that normally does 12 orders a day is expected to be
  *   around 6, not 12.
  *
- * That is also why the evening run is the one that matters most: by 21:00
+ * That is also why the late run is the one that matters most: by 23:00
  * the day is nearly complete and the comparison is nearly exact.
  *
  * ── What counts as a result ───────────────────────────────────────
@@ -166,7 +166,7 @@ type Finding = {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  let body: { cron_secret?: string; dry_run?: boolean; day?: string; chat_lookup?: boolean };
+  let body: { cron_secret?: string; dry_run?: boolean; force?: boolean; day?: string; chat_lookup?: boolean };
   try { body = await req.json(); } catch { body = {}; }
 
   // Two ways in: the cron secret for the scheduled run, or a signed-in member
@@ -219,7 +219,7 @@ Deno.serve(async (req: Request) => {
   // day's orders at ten past midnight — every account "down 100%" before
   // anyone was awake. Instead the volume comparison is simply not made
   // before a third of the day has passed; the scheduled runs are at 10:00,
-  // 15:00 and 21:00, so they all clear it.
+  // 13:00 and 23:00, so both clear it.
   const dayShare = Math.min(1, (now.hour + now.minute / 60) / 24);
   const VOLUME_FROM = 1 / 3;
 
@@ -239,6 +239,18 @@ Deno.serve(async (req: Request) => {
   const MIN_RESULTS = s.min_orders ?? 3;  // results/day in the baseline to judge volume
   const MIN_SPEND = s.min_spend ?? 300;   // today's spend worth an alarm
   const BASE_DAYS = s.base_days ?? 90;    // the three months behind today
+
+  // The hours he reports at, in Cairo.
+  //
+  // Egypt puts its clocks forward in summer, so a UTC cron cannot name a
+  // Cairo hour on its own. The job fires at both UTC hours each slot can
+  // fall on across the year and this is what decides whether it is really
+  // one of them — the same arrangement the older Telegram jobs use. A dry
+  // run ignores it, because a preview is asked for by a person.
+  const hours = (Array.isArray(settings.hours) ? settings.hours : [13, 23]).map(Number);
+  if (!body.dry_run && !body.force && !hours.includes(now.hour)) {
+    return json({ ok: true, skipped: true, reason: `Cairo hour is ${now.hour}, not one of ${hours.join(", ")}` });
+  }
 
   const { data: accounts } = await admin.from("meta_ad_accounts")
     .select("id, account_name, currency").eq("organization_id", orgId).eq("is_active", true);
@@ -281,7 +293,7 @@ Deno.serve(async (req: Request) => {
   // Falling back to "anything the sheet has touched" matters: it is what
   // stops a cleared or mistyped list leaving Selim watching nothing at all.
   // Either way the fan-out stays small — asking Meta about all 99 active
-  // accounts three times a day pushed most answers past their timeout, and
+  // accounts on every run pushed most answers past their timeout, and
   // an account that cannot be read looks exactly like one that is behaving.
   const chosen = Array.isArray(s_watch) ? s_watch.map(String) : [];
   const watch = chosen.length
@@ -417,7 +429,7 @@ Deno.serve(async (req: Request) => {
 
   const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
   // Selim has his own chat. The agency channel carries the daily report and
-  // the website watch; performance alarms three times a day on top of that
+  // the website watch; performance alarms on top of those
   // is how a channel stops being read. The id lives in settings beside the
   // watch list — it is not a credential, and keeping it there means the
   // chat can be changed without touching the project's secrets. Falls back
