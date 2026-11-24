@@ -166,7 +166,7 @@ type Finding = {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  let body: { cron_secret?: string; dry_run?: boolean; day?: string };
+  let body: { cron_secret?: string; dry_run?: boolean; day?: string; chat_lookup?: boolean };
   try { body = await req.json(); } catch { body = {}; }
 
   // Two ways in: the cron secret for the scheduled run, or a signed-in member
@@ -186,6 +186,29 @@ Deno.serve(async (req: Request) => {
     if (!byUser || !body.dry_run) return json({ error: "Unauthorized" }, 401);
   }
   if (!secret) return json({ error: "No cron secret configured" }, 500);
+
+  // Finding the id of Selim's own chat, without anybody handling the bot
+  // token. Create the group, add the bot, say anything in it, then call this:
+  // Telegram hands back the recent conversations and the id goes into the
+  // agent's settings. Cron secret only, and it reads nothing but chat names.
+  if (byCron && body.chat_lookup) {
+    const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    if (!token) return json({ error: "NO_TELEGRAM_TOKEN" }, 422);
+    const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=50`);
+    const j = await r.json();
+    const seen = new Map<string, { id: number; type: string; title: string }>();
+    for (const u of (j.result ?? []) as Row[]) {
+      const msg = (u.message ?? u.channel_post ?? u.my_chat_member) as Row | undefined;
+      const chat = msg?.chat as Row | undefined;
+      if (!chat) continue;
+      seen.set(String(chat.id), {
+        id: Number(chat.id),
+        type: String(chat.type ?? ""),
+        title: String(chat.title ?? chat.username ?? chat.first_name ?? ""),
+      });
+    }
+    return json({ ok: true, chats: [...seen.values()] });
+  }
 
   const now = cairoNow();
   const today = body.day || now.date;
@@ -393,7 +416,13 @@ Deno.serve(async (req: Request) => {
   }
 
   const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
+  // Selim has his own chat. The agency channel carries the daily report and
+  // the website watch; performance alarms three times a day on top of that
+  // is how a channel stops being read. The id lives in settings beside the
+  // watch list — it is not a credential, and keeping it there means the
+  // chat can be changed without touching the project's secrets. Falls back
+  // to the shared channel only if no chat of his own has been set.
+  const chatId = String(settings.telegram_chat_id ?? "") || Deno.env.get("TELEGRAM_CHAT_ID");
   let sent = 0;
   if (fresh.length && token && chatId) {
     const fbad = fresh.filter(f => f.severity === "bad");
@@ -437,5 +466,6 @@ Deno.serve(async (req: Request) => {
 
   return json({ ok: true, checked, spending, findings: findings.length, new: fresh.length,
     unreadable: unreadable.length, messages: sent,
+    chat: settings.telegram_chat_id ? "own" : "shared",
     telegram: token && chatId ? "configured" : "missing" });
 });
